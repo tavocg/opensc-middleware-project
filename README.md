@@ -149,7 +149,28 @@ make inspect/jcop3-pkcs11
 Utiliza la compilación existente y guarda el informe en `local/`. Consulta
 metadatos de llaves y PIN, slots, mecanismos y objetos. `READER=0` selecciona
 el lector PC/SC y `SLOT_INDEX=0` el slot PKCS#11; estos índices pueden diferir.
-Todavía no se ha producido una firma ni validado el firmador con OpenSC.
+La consulta PKCS#11 ya publica certificados y llaves públicas y anuncia
+`SHA256-RSA-PKCS`. Para probar una firma con `LlaveDeFirma`:
+
+```bash
+make sign/jcop3
+```
+
+Solicita el PIN en la terminal, firma un texto técnico y verifica el resultado
+con OpenSSL usando la llave pública del certificado. Guarda los archivos en
+`local/jcop3-signature-*`, con depuración APDU desactivada y sin reintentar el
+PIN. Todavía no se ha producido una firma ni validado el firmador con OpenSC.
+
+El primer intento de firma falló en `C_Login`. La enumeración previa también
+mostró que la selección del contexto `0001` del PIN devuelve `6A82`. Antes de
+otra autenticación, ejecutar el diagnóstico sin PIN:
+
+```bash
+make inspect/jcop3-pin-context
+```
+
+Compara selecciones y consulta metadatos en los dos AID observados, utilizando
+la compilación existente. Guarda el informe en `local/`.
 
 Después:
 

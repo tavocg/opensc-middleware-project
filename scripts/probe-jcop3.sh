@@ -3,8 +3,8 @@ set -euo pipefail
 umask 077
 
 task_mode=${2:---probe}
-if (( $# > 2 )) || [[ ! ${1:-0} =~ ^[0-9]+$ ]] || [[ $task_mode != --probe && $task_mode != --inspect && $task_mode != --read-dir && $task_mode != --pkcs11 ]]; then
-    printf 'Uso: bash scripts/probe-jcop3.sh [índice de lector] [--probe|--inspect|--read-dir|--pkcs11]\n' >&2
+if (( $# > 2 )) || [[ ! ${1:-0} =~ ^[0-9]+$ ]] || [[ $task_mode != --probe && $task_mode != --inspect && $task_mode != --read-dir && $task_mode != --pkcs11 && $task_mode != --pin-context ]]; then
+    printf 'Uso: bash scripts/probe-jcop3.sh [índice de lector] [--probe|--inspect|--read-dir|--pkcs11|--pin-context]\n' >&2
     exit 2
 fi
 
@@ -39,6 +39,8 @@ elif [[ $task_mode == --read-dir ]]; then
     task_report=$(mktemp "$task_root/local/jcop3-dir-XXXXXXXX.txt")
 elif [[ $task_mode == --pkcs11 ]]; then
     task_report=$(mktemp "$task_root/local/jcop3-pkcs11-XXXXXXXX.txt")
+elif [[ $task_mode == --pin-context ]]; then
+    task_report=$(mktemp "$task_root/local/jcop3-pin-context-XXXXXXXX.txt")
 else
     task_report=$(mktemp "$task_root/local/jcop3-inventory-XXXXXXXX.txt")
 fi
@@ -112,18 +114,50 @@ if [[ $task_mode == --read-dir ]] && (( task_failed == 0 )); then
         --send-apdu 00B0000080 \
         --send-apdu 00B0008080 || task_failed=1
 
+fi
+
+if [[ $task_mode == --pin-context ]] && (( task_failed == 0 )); then
+    # Solo SELECT y GET DATA de metadatos DOCP del PIN 1. No hay VERIFY,
+    # autenticación, firma ni consultas del valor del PIN.
+    for task_aid in F0496173456363526F6F74 E828BD080FD25047656E65726963; do
+        if [[ $task_aid == F0496173456363526F6F74 ]]; then
+            task_select_aid=00A404040BF0496173456363526F6F7400
+        else
+            task_select_aid=00A404040EE828BD080FD25047656E6572696300
+        fi
+        for task_select_file in 00A4020402000100 00A4010402000100 00A4000402000100; do
+            # Reiniciar el contexto antes de cada comparación: EF, DF, cualquiera.
+            printf '\ncontext_aid=%s\nselect_0001=%s\n' "$task_aid" "$task_select_file" >> "$task_report"
+            task_record env OPENSC_DEBUG=9 opensc-tool --reader "$task_reader" --card-driver default \
+                --send-apdu "$task_select_aid" --send-apdu "$task_select_file" || task_failed=1
+        done
+        printf '\ncontext_aid=%s\nquery=CHV_1_DOCP_metadata\n' "$task_aid" >> "$task_report"
+        # Mismo formato que iasecc_sdo_get_tagged_data(), clase CHV=1,
+        # referencia=1 y tag DOCP=A0; describe condiciones y contadores.
+        task_record env OPENSC_DEBUG=9 opensc-tool --reader "$task_reader" --card-driver default \
+            --send-apdu "$task_select_aid" \
+            --send-apdu 00CB3FFF0A4D087006BF810102A08000 || task_failed=1
+    done
+fi
+
+if [[ $task_mode == --read-dir || $task_mode == --pin-context ]]; then
     # opensc-tool puede devolver 0 aunque una APDU devuelva un SW de error.
+    # En el diagnóstico de contexto, los SW negativos también son evidencia.
+    task_expected_responses=4
+    if [[ $task_mode == --pin-context ]]; then
+        task_expected_responses=16
+    fi
     task_responses=0
     while IFS= read -r task_line; do
         if [[ $task_line == 'Received (SW1='* ]]; then
             task_responses=$((task_responses + 1))
             printf '%s\n' "$task_line"
-            if [[ $task_line != 'Received (SW1=0x90, SW2=0x00)'* ]]; then
+            if [[ $task_mode == --read-dir && $task_line != 'Received (SW1=0x90, SW2=0x00)'* ]]; then
                 task_failed=1
             fi
         fi
     done < "$task_report"
-    if (( task_responses != 4 )); then
+    if (( task_responses != task_expected_responses )); then
         task_failed=1
     fi
 fi

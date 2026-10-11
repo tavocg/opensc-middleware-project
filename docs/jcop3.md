@@ -48,8 +48,9 @@ Git; el script ahora usa `--info` para registrar la versión y funciones habilit
 - [x] Corrección validada con la tarjeta y una compilación con PC/SC.
 - [ ] AID y APDU comparados con IAS/ECC y eOI.
 - [ ] Enumeración pública de Idopte capturada y documentada.
-- [ ] Certificado y referencia de llave encontrados.
+- [x] Certificado y referencia de llave encontrados.
 - [x] Ambos certificados leídos sin PIN; algoritmo y tamaño corroborados.
+- [x] PKCS#11 publica certificados, llaves públicas y mecanismos de firma.
 - [ ] OpenSC enumera los objetos correctamente.
 - [ ] Una firma con el mecanismo observado se verifica externamente.
 - [ ] Firma reproducida sin cargar Idopte.
@@ -201,3 +202,87 @@ de biblioteca, slots, mecanismos y objetos mediante el módulo compilado
 por informe. `READER` selecciona el lector de PKCS#15 y `SLOT_INDEX` selecciona
 el slot de PKCS#11; son índices distintos y ambos valen cero por defecto.
 El informe y su configuración se guardan en `local/`.
+
+## Enumeración PKCS#11: 2026-10-11
+
+`local/jcop3-pkcs11-QWvNuNAk.txt`, generado a las 20:48:25 UTC, confirma que
+el módulo compilado inicializa correctamente, anuncia Cryptoki 3.0 y publica
+el slot 0 con un token que requiere login. Todas las consultas devuelven cero,
+con caché de archivos desactivada.
+
+PKCS#15 describe ambas llaves privadas RSA de 2048 bits:
+
+| Etiqueta | Referencia | Archivo / referencia dentro de ChipDoc | Uso |
+| --- | --- | --- | --- |
+| `LlaveDeAutenticacion` | `2` | `0002` | decrypt, sign, signRecover, unwrap |
+| `LlaveDeFirma` | `3` | `0003` | sign, signRecover |
+
+Ambas se asocian al objeto `Card PIN`, con referencia 1 e ID
+`436172642050494e`. Son llaves nativas, sensibles y no extraíbles según los
+metadatos. No se intentó exportar ninguna llave privada ni verificar el PIN.
+
+PKCS#11 enumera los dos certificados y dos objetos de llave pública RSA con
+los IDs correspondientes. Las llaves privadas no aparecen en la consulta sin
+login. El error de decodificación de `7004` persiste, pero no impide inicializar
+el módulo ni construir las llaves públicas a partir de los certificados.
+
+Se anuncian `RSA-PKCS`, `SHA1-RSA-PKCS` y `SHA256-RSA-PKCS`, entre otros. Los
+mecanismos combinados con hash no llevan la marca `hw`, mientras `RSA-PKCS`
+sí la lleva: el anuncio no demuestra que el hash se ejecute en la tarjeta.
+Tampoco se han probado las operaciones de descifrado o generación anunciadas.
+
+La siguiente prueba utiliza únicamente `LlaveDeFirma`, identificada por
+`4c6c61766544654669726d61`, con `SHA256-RSA-PKCS`:
+
+```bash
+make sign/jcop3
+```
+
+Requiere una terminal interactiva. Crea un texto técnico con fecha UTC, lee el
+certificado asociado, pide el PIN mediante `pkcs11-tool` y solicita una firma.
+No reintenta un error de PIN. Verifica la firma fuera del módulo con
+`openssl dgst -sha256 -verify` y guarda texto, certificado, llave pública,
+firma, configuración e informe en un nuevo directorio `local/jcop3-signature-*`.
+La depuración OpenSC/APDU se desactiva antes de autenticar; el PIN no se pasa
+como argumento ni se registra. La salida estándar permanece conectada a la
+terminal porque el lector de PIN de la herramienta la necesita para desactivar
+el eco. El primer intento en tarjeta falló durante el login, como se describe
+a continuación.
+
+## Primer intento de firma: 2026-10-11
+
+`local/jcop3-signature-S8Pd9rPG/report.txt`, generado a las 20:58:01 UTC,
+confirma que se leyó el certificado y se extrajo su llave pública. La operación
+autenticada terminó con `C_Login failed: CKR_GENERAL_ERROR (0x5)` y código 1.
+No se generó `signature.bin` ni se llegó a la verificación externa. La
+depuración APDU permaneció desactivada durante este intento.
+
+El código genérico no demuestra un PIN incorrecto. La captura anterior, sin
+autenticación, ya mostraba un fallo al consultar su estado: el AODF declara
+`path=0001`, y `sc_pkcs15_get_pin_info()` intenta seleccionarlo como EF con
+`00 A4 02 04 02 00 01 00`; recibe `6A82` y devuelve `SC_ERROR_FILE_NOT_FOUND`.
+Este resultado no se reflejó en el estado final de la enumeración.
+
+`sc_pkcs15_verify_pin_with_session_pin()` también selecciona esa ruta antes de
+llamar a `sc_pin_cmd()`. El mapeo PKCS#11 de `SC_ERROR_FILE_NOT_FOUND` produce
+`CKR_GENERAL_ERROR`. Por ello, la selección del contexto es la primera causa
+que debe comprobarse. El informe de firma sin depuración no permite confirmar
+su secuencia APDU ni establecer si se transmitió un VERIFY con el PIN.
+
+Para investigar sin otra autenticación:
+
+```bash
+make inspect/jcop3-pin-context
+```
+
+Usa el driver `default` y compara la selección de `0001` como EF, DF o archivo
+de cualquier tipo, empezando cada vez desde el AID raíz IAS/ECC y desde
+`ChipDoc`. Consulta también los metadatos DOCP del objeto CHV de referencia 1
+en ambos contextos con el formato GET DATA del driver IAS/ECC. No transmite
+VERIFY ni solicita el valor del PIN; solo SELECT y GET DATA de metadatos.
+No modifica los contadores de intentos mediante autenticación.
+
+Guarda el informe en `local/jcop3-pin-context-*`. Los SW negativos forman parte
+de la comparación y no se consideran por sí solos un fallo del diagnóstico.
+La corrección del contexto y un nuevo intento autenticado quedan pendientes
+de revisar esas respuestas.
