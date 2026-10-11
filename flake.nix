@@ -14,13 +14,24 @@
           pkgs = nixpkgs.legacyPackages.${system};
         in
         {
-          default = pkgs.mkShellNoCC {
+          default = pkgs.mkShell {
             packages = with pkgs; [
               bash
               git
               gnumake
               opensc
               pcsc-tools
+            ];
+            nativeBuildInputs = with pkgs; [
+              autoconf
+              automake
+              libtool
+              pkg-config
+            ];
+            buildInputs = with pkgs; [
+              openssl
+              pcsclite
+              zlib
             ];
           };
         });

@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+task_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+task_build=${1:-"$task_root/build/opensc"}
+task_build=$(cd -- "$task_build" && pwd)
+if [[ ! -f "$task_build/config.h" || ! -f "$task_build/src/libopensc/.libs/libopensc.so" ]]; then
+    printf 'Falta una compilación de OpenSC; ejecutar make build/opensc.\n' >&2
+    exit 1
+fi
+
+read -r -a task_crypto_cflags <<< "$(pkg-config --cflags libcrypto)"
+read -r -a task_crypto_libs <<< "$(pkg-config --libs libcrypto)"
+"${CC:-cc}" -std=c99 -D_GNU_SOURCE -DHAVE_CONFIG_H \
+    -ffunction-sections -fdata-sections -Wall -Wextra -Werror \
+    -Wno-unused-function -Wno-unused-parameter -Wno-deprecated-declarations \
+    -I"$task_build" -I"$task_root/vendor/opensc/src" "${task_crypto_cflags[@]}" \
+    "$task_root/tests/iasecc-fci.c" \
+    -L"$task_build/src/libopensc/.libs" \
+    -Wl,-rpath,"$task_build/src/libopensc/.libs" -Wl,--gc-sections \
+    -lopensc "${task_crypto_libs[@]}" -o "$task_build/iasecc-fci-regression"
+"$task_build/iasecc-fci-regression"
