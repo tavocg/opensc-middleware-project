@@ -16,7 +16,7 @@
 | AID raíz IAS/ECC | `F0496173456363526F6F74` (`F0` seguido de `IasEccRoot`), leído de EF.ATR y seleccionado con éxito |
 | AID de aplicación anunciado en EF.DIR | `E828BD080FD25047656E65726963`, etiqueta `ChipDoc`; OpenSC lo identifica como `ECC Generic PKI` |
 | Versión de aplicación | Pendiente |
-| Tipo y tamaño de llave del certificado | Pendiente |
+| Tipo y tamaño de llave del certificado | RSA de 2048 bits en ambos certificados, comprobado con OpenSSL sobre los DER leídos |
 | Mecanismo de firma usado por el firmador | Pendiente |
 
 Un ATR o AID coincidente es una pista, no una demostración de compatibilidad.
@@ -45,10 +45,11 @@ Git; el script ahora usa `--info` para registrar la versión y funciones habilit
 - [x] Driver IAS/ECC inicializa la tarjeta y selecciona su AID raíz.
 - [x] EF.DIR leído por APDU y aplicación `ChipDoc` identificada.
 - [x] Fallo del parser de ACL reproducido y corregido en pruebas locales.
-- [ ] Corrección validada con la tarjeta y una compilación con PC/SC.
+- [x] Corrección validada con la tarjeta y una compilación con PC/SC.
 - [ ] AID y APDU comparados con IAS/ECC y eOI.
 - [ ] Enumeración pública de Idopte capturada y documentada.
 - [ ] Certificado y referencia de llave encontrados.
+- [x] Ambos certificados leídos sin PIN; algoritmo y tamaño corroborados.
 - [ ] OpenSC enumera los objetos correctamente.
 - [ ] Una firma con el mecanismo observado se verifica externamente.
 - [ ] Firma reproducida sin cargar Idopte.
@@ -160,3 +161,43 @@ APDU o estructura incompatible del nuevo informe.
 Antes de preparar un reporte para OpenSC, actualizar desde `master` y repetir
 la compilación y verificación, según `vendor/opensc/AGENTS.md`. Todavía no se
 ha enviado un reporte ni una propuesta upstream.
+
+## Validación con tarjeta: 2026-10-11
+
+`local/jcop3-inspection-WAZLkGL7.txt`, generado a las 20:44:32 UTC, corresponde
+al commit `6226bd25614025a52e71f0146687beffed73e4ac`, con el submódulo limpio.
+La compilación anuncia PC/SC, OpenSSL y zlib. Todas las consultas terminaron
+con código cero. EF.DIR se leyó con IAS/ECC y se seleccionó `ChipDoc` para
+enlazar su estructura PKCS#15.
+
+OpenSC enumeró y leyó dos certificados:
+
+| Etiqueta | Archivo dentro de ChipDoc | Llave pública | Uso declarado en X.509 |
+| --- | --- | --- | --- |
+| `LlaveDeFirma` | `001C` | RSA, 2048 bits | Digital Signature, Non Repudiation |
+| `LlaveDeAutenticacion` | `001D` | RSA, 2048 bits | Digital Signature, Key Encipherment |
+
+El algoritmo y tamaño se corroboraron reconstruyendo los DER de las respuestas
+READ BINARY del informe y analizándolos con OpenSSL. Los datos identificables
+del certificado permanecen en `local/`. El ID PKCS#15 de cada certificado es
+su etiqueta codificada en bytes; la referencia de la llave privada aún no se
+ha consultado. El uso declarado no demuestra que una firma ya funcione.
+
+El informe también contiene un error al decodificar el directorio de llaves
+públicas `7004`: `SC_ERROR_ASN1_OBJECT_NOT_FOUND` (`-1402`). No se imprimieron
+objetos de llave pública independientes. Este error no se reflejó en el código
+de salida final. Aún hay que determinar si afecta a la construcción de objetos
+PKCS#11; el certificado sí contiene una llave pública RSA válida.
+
+La siguiente consulta, sin PIN ni firma y aprovechando la compilación existente:
+
+```bash
+make inspect/jcop3-pkcs11
+```
+
+Registra metadatos de llaves privadas y PIN mediante PKCS#15, y luego información
+de biblioteca, slots, mecanismos y objetos mediante el módulo compilado
+`opensc-pkcs11.so`. La caché de archivos se desactiva con una configuración local
+por informe. `READER` selecciona el lector de PKCS#15 y `SLOT_INDEX` selecciona
+el slot de PKCS#11; son índices distintos y ambos valen cero por defecto.
+El informe y su configuración se guardan en `local/`.

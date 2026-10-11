@@ -139,6 +139,18 @@ informe en `local/`. No instala OpenSC en el sistema ni solicita PIN.
 El módulo Idopte utilizado por el firmador instalado y el motivo del fallo al
 cargar el archivo del instalador están documentados en `docs/idopte.md`.
 
+La inspección con la tarjeta ya confirmó la lectura de ambos certificados RSA
+de 2048 bits. El siguiente paso es consultar la interfaz PKCS#11, sin PIN:
+
+```bash
+make inspect/jcop3-pkcs11
+```
+
+Utiliza la compilación existente y guarda el informe en `local/`. Consulta
+metadatos de llaves y PIN, slots, mecanismos y objetos. `READER=0` selecciona
+el lector PC/SC y `SLOT_INDEX=0` el slot PKCS#11; estos índices pueden diferir.
+Todavía no se ha producido una firma ni validado el firmador con OpenSC.
+
 Después:
 
 1. Validar la corrección en la tarjeta y registrar el resultado en `docs/jcop3.md`.

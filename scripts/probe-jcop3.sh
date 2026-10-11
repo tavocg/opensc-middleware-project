@@ -3,8 +3,8 @@ set -euo pipefail
 umask 077
 
 task_mode=${2:---probe}
-if (( $# > 2 )) || [[ ! ${1:-0} =~ ^[0-9]+$ ]] || [[ $task_mode != --probe && $task_mode != --inspect && $task_mode != --read-dir ]]; then
-    printf 'Uso: bash scripts/probe-jcop3.sh [índice de lector] [--probe|--inspect|--read-dir]\n' >&2
+if (( $# > 2 )) || [[ ! ${1:-0} =~ ^[0-9]+$ ]] || [[ $task_mode != --probe && $task_mode != --inspect && $task_mode != --read-dir && $task_mode != --pkcs11 ]]; then
+    printf 'Uso: bash scripts/probe-jcop3.sh [índice de lector] [--probe|--inspect|--read-dir|--pkcs11]\n' >&2
     exit 2
 fi
 
@@ -13,18 +13,32 @@ if ! command -v opensc-tool >/dev/null 2>&1; then
     exit 1
 fi
 
-if [[ $task_mode == --inspect ]] && ! command -v pkcs15-tool >/dev/null 2>&1; then
+if [[ $task_mode == --inspect || $task_mode == --pkcs11 ]] && ! command -v pkcs15-tool >/dev/null 2>&1; then
     printf 'Falta pkcs15-tool. Ejecutar nix develop antes de make inspect/jcop3.\n' >&2
     exit 1
 fi
 
 task_reader=${1:-0}
 task_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+if [[ $task_mode == --pkcs11 ]]; then
+    task_module="$task_root/build/opensc/src/pkcs11/.libs/opensc-pkcs11.so"
+    task_slot_index=${SLOT_INDEX:-0}
+    if [[ ! $task_slot_index =~ ^[0-9]+$ ]]; then
+        printf 'SLOT_INDEX debe ser un índice numérico de slot PKCS#11.\n' >&2
+        exit 2
+    fi
+    if ! command -v pkcs11-tool >/dev/null 2>&1 || [[ ! -f "$task_module" ]]; then
+        printf 'Falta OpenSC compilado; ejecutar make build/opensc.\n' >&2
+        exit 1
+    fi
+fi
 mkdir -p -- "$task_root/local"
 if [[ $task_mode == --inspect ]]; then
     task_report=$(mktemp "$task_root/local/jcop3-inspection-XXXXXXXX.txt")
 elif [[ $task_mode == --read-dir ]]; then
     task_report=$(mktemp "$task_root/local/jcop3-dir-XXXXXXXX.txt")
+elif [[ $task_mode == --pkcs11 ]]; then
+    task_report=$(mktemp "$task_root/local/jcop3-pkcs11-XXXXXXXX.txt")
 else
     task_report=$(mktemp "$task_root/local/jcop3-inventory-XXXXXXXX.txt")
 fi
@@ -66,6 +80,27 @@ if [[ $task_mode == --inspect ]] && (( task_failed == 0 )); then
     task_record env OPENSC_DEBUG=9 pkcs15-tool --reader "$task_reader" --no-cache --list-certificates --list-public-keys || task_failed=1
 fi
 
+if [[ $task_mode == --pkcs11 ]] && (( task_failed == 0 )); then
+    # Solo metadatos de llaves/PIN y consultas PKCS#11; no autenticar ni firmar.
+    task_config="$task_report.opensc.conf"
+    cat > "$task_config" <<'CONFIG'
+app default {
+    framework pkcs15 {
+        use_file_caching = no;
+    }
+}
+CONFIG
+    printf 'pkcs11_module=%s\nslot_index=%s\nopensc_conf=%s\n' \
+        "$task_module" "$task_slot_index" "$task_config" >> "$task_report"
+    task_record env OPENSC_DEBUG=9 pkcs15-tool --reader "$task_reader" --no-cache --list-keys --list-pins || task_failed=1
+    task_record env OPENSC_DEBUG=9 OPENSC_CONF="$task_config" pkcs11-tool \
+        --module "$task_module" --show-info --list-slots || task_failed=1
+    task_record env OPENSC_DEBUG=9 OPENSC_CONF="$task_config" pkcs11-tool \
+        --module "$task_module" --slot-index "$task_slot_index" --list-mechanisms || task_failed=1
+    task_record env OPENSC_DEBUG=9 OPENSC_CONF="$task_config" pkcs11-tool \
+        --module "$task_module" --slot-index "$task_slot_index" --list-objects || task_failed=1
+fi
+
 if [[ $task_mode == --read-dir ]] && (( task_failed == 0 )); then
     # Selecciones observadas en la captura de esta JCOP3 y lectura de EF.DIR.
     # El driver default evita la interpretación de ACL del driver IAS/ECC;
@@ -103,4 +138,4 @@ if (( task_failed )); then
     exit 1
 fi
 
-printf '\nConsultas terminadas. Revisar que haya lector, tarjeta y ATR en el informe.\n'
+printf '\nConsultas terminadas. Revisar el informe antes del siguiente paso.\n'

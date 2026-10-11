@@ -4,8 +4,10 @@ READER ?= 0
 export READER
 JOBS ?= 2
 export JOBS
+SLOT_INDEX ?= 0
+export SLOT_INDEX
 
-.PHONY: help probe/jcop3 inspect/jcop3 read-dir/jcop3 build/opensc test/iasecc inspect/jcop3-built
+.PHONY: help probe/jcop3 inspect/jcop3 read-dir/jcop3 build/opensc test/iasecc inspect/jcop3-built inspect/jcop3-pkcs11
 
 help:
 	@printf '%s\n' \
@@ -15,7 +17,8 @@ help:
 		'make read-dir/jcop3        Lee EF.DIR por APDU conocidas, sin PIN.' \
 		'make build/opensc          Compila el submódulo con PC/SC en build/opensc/.' \
 		'make test/iasecc           Comprueba el parser con datos capturados, sin tarjeta.' \
-		'make inspect/jcop3-built   Compila e inspecciona con el OpenSC modificado, sin PIN.'
+		'make inspect/jcop3-built   Compila e inspecciona con el OpenSC modificado, sin PIN.' \
+		'make inspect/jcop3-pkcs11  Consulta llaves, slots, mecanismos y objetos, sin PIN.'
 
 probe/jcop3:
 	@bash scripts/probe-jcop3.sh "$$READER"
@@ -34,3 +37,6 @@ test/iasecc: build/opensc
 
 inspect/jcop3-built: build/opensc
 	@PATH="$(CURDIR)/build/opensc/src/tools:$$PATH" bash scripts/probe-jcop3.sh "$$READER" --inspect
+
+inspect/jcop3-pkcs11:
+	@PATH="$(CURDIR)/build/opensc/src/tools:$$PATH" bash scripts/probe-jcop3.sh "$$READER" --pkcs11
