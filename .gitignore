@@ -1,0 +1,10 @@
+# Capturas originales y datos de tarjetas: conservar fuera del historial.
+/local/
+
+# Artefactos de desarrollo.
+/build/
+/.direnv/
+/result
+/result-*
+__pycache__/
+*.pyc
