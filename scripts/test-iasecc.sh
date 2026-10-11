@@ -15,12 +15,14 @@ task_build=$(cd -- "$task_build" && pwd)
 
 read -r -a task_crypto_cflags <<< "$(pkg-config --cflags libcrypto)"
 read -r -a task_crypto_libs <<< "$(pkg-config --libs libcrypto)"
-"${CC:-cc}" -std=c99 -D_GNU_SOURCE -DHAVE_CONFIG_H \
-    -ffunction-sections -fdata-sections -Wall -Wextra -Werror \
-    -Wno-unused-function -Wno-unused-parameter -Wno-deprecated-declarations \
-    -I"$task_build" -I"$task_root/vendor/opensc/src" "${task_crypto_cflags[@]}" \
-    "$task_root/tests/iasecc-fci.c" \
-    -L"$task_build/src/libopensc/.libs" \
-    -Wl,-rpath,"$task_build/src/libopensc/.libs" -Wl,--gc-sections \
-    -lopensc "${task_crypto_libs[@]}" -o "$task_build/iasecc-fci-regression"
-"$task_build/iasecc-fci-regression"
+for task_test in iasecc-fci iasecc-pin-path; do
+    "${CC:-cc}" -std=c99 -D_GNU_SOURCE -DHAVE_CONFIG_H \
+        -ffunction-sections -fdata-sections -Wall -Wextra -Werror \
+        -Wno-unused-function -Wno-unused-parameter -Wno-deprecated-declarations \
+        -I"$task_build" -I"$task_root/vendor/opensc/src" "${task_crypto_cflags[@]}" \
+        "$task_root/tests/$task_test.c" \
+        -L"$task_build/src/libopensc/.libs" \
+        -Wl,-rpath,"$task_build/src/libopensc/.libs" -Wl,--gc-sections \
+        -lopensc "${task_crypto_libs[@]}" -o "$task_build/$task_test-regression"
+    "$task_build/$task_test-regression"
+done

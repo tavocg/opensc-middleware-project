@@ -286,3 +286,58 @@ Guarda el informe en `local/jcop3-pin-context-*`. Los SW negativos forman parte
 de la comparación y no se consideran por sí solos un fallo del diagnóstico.
 La corrección del contexto y un nuevo intento autenticado quedan pendientes
 de revisar esas respuestas.
+
+## Contexto global del PIN: 2026-10-11
+
+`local/jcop3-pin-context-6Hd0jGpP.txt`, generado a las 21:04:50 UTC, contiene
+las 16 respuestas esperadas. La selección de `0001` como EF o DF devuelve
+`6A82` tanto desde la raíz como desde `ChipDoc`; la selección sin especificar
+tipo devuelve `6A86` en ambos contextos.
+
+GET DATA del DOCP del CHV 1 devuelve `9000` desde la raíz IAS/ECC y `6A88`
+desde `ChipDoc`. La respuesta de la raíz declara máximo 7 intentos (`9A 01 07`),
+7 restantes (`9B 01 07`) y tamaño almacenado 14 (`80 02 00 0E`). Este último
+campo no permite deducir la longitud que debe escribir el usuario. No se
+consultó ni transmitió el valor del PIN.
+
+La evidencia sitúa el CHV global en MF. El precedente de `pkcs15-eoi.c` y
+`card-eoi.c` también distingue rutas declaradas de PIN de archivos seleccionables.
+Nuestra corrección se aplica a los metadatos PKCS#15: para la combinación
+IAS/ECC Amos, AID Generic PKI, PIN global de referencia 1 y ruta `0001`, cambia
+el contexto a MF (`3F00`). Conserva referencias, condiciones de autenticación
+y rutas de los otros objetos; no modifica archivos de la tarjeta.
+
+El ajuste reside en `pkcs15-iasecc.c` y se aplica al cargar el AODF mediante
+su callback de emulación. Las configuraciones locales de enumeración y firma
+activan `try_emulation_first = yes`, porque el enlace nativo por defecto
+termina antes de ejecutar ese callback. Es una configuración experimental del
+proyecto; todavía no se activa automáticamente para ese perfil en OpenSC.
+
+`tests/iasecc-pin-path.c` comprueba el ajuste con los metadatos observados y
+que otros perfiles, AID, rutas, referencias, PIN locales y objetos AuthKey
+conservan su contexto. Pasan estas nueve comprobaciones y las once anteriores.
+La compilación completa en `build/opensc-offline/`, sin PC/SC, también terminó
+correctamente. Falta validar este ajuste en tarjeta.
+
+Además, el DOCP contiene `C9 01 01`, campo no reconocido por el parser actual.
+Una reproducción local de sus 45 bytes con `iasecc_sdo_parse()` devuelve
+`SC_ERROR_UNKNOWN_DATA_RECEIVED` (`-1213`). El significado de `C9` queda por
+investigar; la corrección de ruta no modifica ese parser ni omite ese campo.
+Las ACL de ese objeto también contienen grupos adicionales que habrá que
+interpretar antes de considerar completa la política del PIN.
+
+La siguiente comprobación usa la corrección de ruta para observar hasta dónde
+llega el driver al consultar el estado:
+
+```bash
+make test/iasecc JOBS="$(nproc)"
+make inspect/jcop3-pkcs11
+```
+
+No pide el PIN ni realiza login o firma. A diferencia del diagnóstico de APDU
+directas, la consulta de estado de OpenSC puede enviar VERIFY sin datos:
+es la consulta ISO de estado, sin proporcionar un PIN para autenticarse.
+Revisar el informe para confirmar que se usa MF, se leen los metadatos y se
+localiza el siguiente fallo. Un código de salida cero no demuestra que el
+estado del PIN se haya consultado correctamente. La autenticación sigue
+pendiente de interpretar la política completa.

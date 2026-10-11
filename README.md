@@ -172,6 +172,21 @@ make inspect/jcop3-pin-context
 Compara selecciones y consulta metadatos en los dos AID observados, utilizando
 la compilación existente. Guarda el informe en `local/`.
 
+Esa consulta confirmó que el CHV 1 es global y accesible desde la raíz, mientras
+`0001` no es seleccionable. Se agregó una corrección de los metadatos PKCS#15
+para usar MF en ese perfil. Para compilarla, ejecutar las veinte comprobaciones
+locales y consultar el estado sin introducir PIN:
+
+```bash
+make test/iasecc JOBS="$(nproc)"
+make inspect/jcop3-pkcs11
+```
+
+La configuración local activa el callback IAS/ECC con `try_emulation_first`.
+La política del PIN contiene además un campo `C9` que el parser todavía no
+reconoce. Revisar el nuevo informe antes de repetir una firma. La investigación
+y el alcance de la corrección están registrados en `docs/jcop3.md`.
+
 Después:
 
 1. Validar la corrección en la tarjeta y registrar el resultado en `docs/jcop3.md`.

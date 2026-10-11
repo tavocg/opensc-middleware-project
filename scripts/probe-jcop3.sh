@@ -89,12 +89,14 @@ if [[ $task_mode == --pkcs11 ]] && (( task_failed == 0 )); then
 app default {
     framework pkcs15 {
         use_file_caching = no;
+        # Apply the scoped IAS/ECC PKCS#15 metadata correction.
+        try_emulation_first = yes;
     }
 }
 CONFIG
     printf 'pkcs11_module=%s\nslot_index=%s\nopensc_conf=%s\n' \
         "$task_module" "$task_slot_index" "$task_config" >> "$task_report"
-    task_record env OPENSC_DEBUG=9 pkcs15-tool --reader "$task_reader" --no-cache --list-keys --list-pins || task_failed=1
+    task_record env OPENSC_DEBUG=9 OPENSC_CONF="$task_config" pkcs15-tool --reader "$task_reader" --no-cache --list-keys --list-pins || task_failed=1
     task_record env OPENSC_DEBUG=9 OPENSC_CONF="$task_config" pkcs11-tool \
         --module "$task_module" --show-info --list-slots || task_failed=1
     task_record env OPENSC_DEBUG=9 OPENSC_CONF="$task_config" pkcs11-tool \

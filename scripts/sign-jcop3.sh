@@ -38,6 +38,7 @@ app default {
     debug = 0;
     framework pkcs15 {
         use_file_caching = no;
+        try_emulation_first = yes;
     }
 }
 CONFIG
