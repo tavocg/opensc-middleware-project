@@ -76,10 +76,9 @@ OpenSC, la lista de lectores y el ATR. No solicita PIN ni envía comandos de
 firma o administración. Esta primera observación no demuestra todavía que
 OpenSC pueda leer certificados o firmar con la tarjeta.
 
-`nix develop` proporciona herramientas empaquetadas, no una compilación del
-submódulo. Registrar ambas versiones por separado. Una vez identificado el
-perfil de la tarjeta, preparar un entorno de compilación y pruebas para el
-OpenSC modificado.
+Los objetivos `probe/jcop3`, `inspect/jcop3` y `read-dir/jcop3` utilizan las
+herramientas empaquetadas de OpenSC. El entorno también incluye compilador y
+dependencias para compilar el submódulo. Registrar ambas versiones por separado.
 
 ## Después del ATR
 
@@ -109,9 +108,33 @@ lee dos bloques de 128 bytes. No verifica PIN ni modifica la tarjeta. Guarda
 la captura en `local/jcop3-dir-*.txt` e imprime los estados de respuesta.
 El diagnóstico y la evidencia están documentados en `docs/jcop3.md`.
 
+## Comprobar la corrección de IAS/ECC
+
+La lectura directa de EF.DIR funcionó. Contiene la aplicación `ChipDoc`, con un
+AID que OpenSC ya reconoce como `ECC Generic PKI`. El primer fallo se reprodujo
+en el parser de permisos de IAS/ECC y se corrigió para procesar todos los grupos
+del formato compacto. Aún falta validar la enumeración en la tarjeta.
+
+Volver a entrar al entorno si la shell actual se abrió antes de agregar las
+dependencias de compilación:
+
+```bash
+nix develop
+make test/iasecc
+make inspect/jcop3-built
+```
+
+`make test/iasecc` compila OpenSC con PC/SC en `build/opensc/` y ejecuta las
+pruebas del parser real, sin tarjeta. `make inspect/jcop3-built` utiliza las
+herramientas de esa compilación para repetir la inspección pública y guarda el
+informe en `local/`. No instala OpenSC en el sistema ni solicita PIN.
+
+El módulo Idopte utilizado por el firmador instalado y el motivo del fallo al
+cargar el archivo del instalador están documentados en `docs/idopte.md`.
+
 Después:
 
-1. Completar el inventario y evaluar el resultado de OpenSC en `docs/jcop3.md`.
+1. Validar la corrección en la tarjeta y registrar el resultado en `docs/jcop3.md`.
 2. Si la enumeración falla, comparar el APDU o estructura incompatible con una
    captura de Idopte, anotando su versión y el estado de la caché.
 3. Documentar selección de aplicación, certificados y referencias de llaves.

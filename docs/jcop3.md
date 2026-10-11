@@ -9,12 +9,12 @@
 | Modelo de lector | HID Global OMNIKEY 3x21 Smart Card Reader; índice PC/SC 0 |
 | Sistema y arquitectura | Linux 6.18.55 x86_64 |
 | Versión de OpenSC empaquetado | 0.27.1; corroborado con `opensc-tool --info` y la ruta del ejecutable |
-| Commit del submódulo OpenSC | `c7a377af971df03f879c1697e91ebac1f7e28c56`; sin cambios en la captura |
-| Versión y ruta del módulo Idopte | Pendiente |
+| Commit base del submódulo OpenSC | `c7a377af971df03f879c1697e91ebac1f7e28c56`; sin cambios en las capturas originales |
+| Versión y ruta del módulo Idopte | Biblioteca 6.23; paquete instalado `6.23.50.5-1`; `/run/current-system/sw/lib/SCMiddleware/libidop11.so`; véase `idopte.md` |
 | ATR por contacto | `3b:df:18:ff:81:91:fe:1f:c3:00:31:b8:64:0c:01:ec:c1:73:94:01:80:82:90:00:b3` |
 | Entrada coincidente en OpenSC | `IAS/ECC v1.0.1 Amos`, tipo `SC_CARD_TYPE_IASECC_AMOS`, driver `iasecc` |
 | AID raíz IAS/ECC | `F0496173456363526F6F74` (`F0` seguido de `IasEccRoot`), leído de EF.ATR y seleccionado con éxito |
-| AID de aplicación PKCS#15 | Pendiente de leer EF.DIR |
+| AID de aplicación anunciado en EF.DIR | `E828BD080FD25047656E65726963`, etiqueta `ChipDoc`; OpenSC lo identifica como `ECC Generic PKI` |
 | Versión de aplicación | Pendiente |
 | Tipo y tamaño de llave del certificado | Pendiente |
 | Mecanismo de firma usado por el firmador | Pendiente |
@@ -30,11 +30,9 @@ ATR. El ATR completo coincide con la entrada Amos en
 `vendor/opensc/src/libopensc/card-iasecc.c`, línea 93 del commit registrado.
 No coincide con los ATR de `card-eoi.c` de ese commit.
 
-La coincidencia estática no demuestra que la inicialización IAS/ECC, el mapa
-PKCS#15 o la firma sean compatibles. El siguiente paso es probar identificación
-y enumeración pública con OpenSC, sin PIN, mediante `make inspect/jcop3`.
-Si falla, el informe con depuración permitirá localizar el primer comando o
-estructura incompatible antes de comparar con Idopte.
+La coincidencia estática no demuestra que el mapa PKCS#15 o la firma sean
+compatibles. La inspección posterior sí confirmó la inicialización IAS/ECC;
+el fallo de enumeración y la lectura directa se describen más abajo.
 
 En esta captura `opensc-tool --version` devuelve solo la información de revisión
 Git; el script ahora usa `--info` para registrar la versión y funciones habilitadas.
@@ -45,6 +43,9 @@ Git; el script ahora usa `--info` para registrar la versión y funciones habilit
 - [x] ATR registrado mediante el script de observación.
 - [x] ATR comparado con las tablas de IAS/ECC y eOI.
 - [x] Driver IAS/ECC inicializa la tarjeta y selecciona su AID raíz.
+- [x] EF.DIR leído por APDU y aplicación `ChipDoc` identificada.
+- [x] Fallo del parser de ACL reproducido y corregido en pruebas locales.
+- [ ] Corrección validada con la tarjeta y una compilación con PC/SC.
 - [ ] AID y APDU comparados con IAS/ECC y eOI.
 - [ ] Enumeración pública de Idopte capturada y documentada.
 - [ ] Certificado y referencia de llave encontrados.
@@ -60,7 +61,10 @@ Guardar los originales en `local/` y publicar únicamente ejemplos revisados.
 
 | Operación | Estado previo | APDU documentada | Respuesta / SW | Evidencia |
 | --- | --- | --- | --- | --- |
-| Seleccionar aplicación | Pendiente | Pendiente | Pendiente | Pendiente |
+| Seleccionar raíz IAS/ECC | Tarjeta conectada por contacto | `00 A4 04 04 0B F0496173456363526F6F74 00` | `9000` | `jcop3-dir-97OiAqpB.txt` |
+| Seleccionar EF.DIR | Raíz IAS/ECC seleccionada | `00 A4 09 04 02 2F00 00` | FCP, `9000` | Mismo informe |
+| Leer EF.DIR | EF.DIR seleccionado | `00 B0 00 00 80`, `00 B0 00 80 80` | 256 bytes, ambos `9000` | Mismo informe |
+| Seleccionar aplicación ChipDoc | Pendiente | Pendiente | Pendiente | Pendiente |
 | Leer certificado | Pendiente | Pendiente | Pendiente | Pendiente |
 | Autenticar | Pendiente | Documentar formato; ocultar PIN | Pendiente | Pendiente |
 | Seleccionar llave y algoritmo | Pendiente | Pendiente | Pendiente | Pendiente |
@@ -90,27 +94,69 @@ El FCP de EF.DIR declara un archivo transparente de 256 bytes y contiene:
 A1 0C 8C 04 40 00 01 00 9C 04 40 00 01 00
 ```
 
-En el código revisado, `iasecc_process_fci()` interpreta únicamente el primer
+En el código original, `iasecc_process_fci()` interpreta únicamente el primer
 byte de modos de acceso (`40`) y su condición (`00`); no procesa el grupo
 siguiente (`01 00`). El formato compacto admite varios grupos de modo y
-condiciones. Esto apunta a que la regla de lectura del segundo grupo no se
-incorpora al modelo de ACL de OpenSC.
+condiciones. La prueba local con el FCP capturado confirmó que la regla de
+lectura del segundo grupo no se incorporaba al modelo de ACL de OpenSC.
 
 Referencia para el formato compacto: [ETSI TS 102 221, sección 9.2.5](https://www.etsi.org/deliver/etsi_ts/102200_102299/102221/18.01.00_60/ts_102221v180100p.pdf).
-La aplicabilidad concreta al perfil IAS/ECC de esta tarjeta debe comprobarse.
+La lectura directa confirmó que la tarjeta permite leer este archivo sin PIN.
 
 Al no poder leer EF.DIR, OpenSC intenta las rutas predeterminadas `5015` y
 `5031`, recibe `6A82`, y termina con `PKCS#15 binding failed: Unsupported card`.
 Esto no prueba que falten certificados ni que el mapa sea propietario.
 La ausencia de `/etc/opensc.conf` tampoco impide la inicialización observada.
 
-Siguiente comprobación: `make read-dir/jcop3`. Utiliza el driver `default` para
-seleccionar la raíz observada y EF.DIR, y leer exactamente dos bloques de
-128 bytes. No verifica PIN ni modifica datos. La tarjeta conserva el control
-de acceso: si deniega la lectura, se registra el estado devuelto.
+## Lectura directa de EF.DIR: 2026-10-11
 
-Si la lectura funciona, analizar el directorio y preparar una adaptación que
-procese todos los grupos de permisos, preservando sus condiciones. No sustituir
-la falta de ACL por permiso incondicional. Antes de reportar un problema a
-OpenSC, comprobarlo en una compilación de `master`; esta observación corresponde
-al paquete 0.27.1 y todavía no se ha validado con una compilación del submódulo.
+El informe `local/jcop3-dir-97OiAqpB.txt` contiene las cuatro respuestas `9000`
+de `make read-dir/jcop3`. Los 256 bytes incluyen un registro de aplicación de
+64 bytes y relleno cero. El AID es `E828BD080FD25047656E65726963` y la etiqueta
+es `ChipDoc`, rellenada con espacios. Es distinto del AID raíz IAS/ECC.
+
+La tabla de aplicaciones de `src/libopensc/dir.c` ya contiene ese AID como
+`ECC Generic PKI`. Una prueba con el parser real `parse_dir_record()` acepta
+el registro observado y construye una ruta por nombre de aplicación
+(`SC_PATH_TYPE_DF_NAME`). Esto permite intentar el enlace PKCS#15 dentro de
+la aplicación correcta; no demuestra todavía que los certificados o las
+llaves sean accesibles ni cuál sea su algoritmo.
+
+## Corrección y pruebas locales
+
+La modificación de `src/libopensc/card-iasecc.c` recorre todos los grupos
+compactos de modo/condición. Mantiene las condiciones de autenticación y
+denegación. Acepta reglas repetidas idénticas y devuelve
+`SC_ERROR_NOT_SUPPORTED` para condiciones alternativas distintas de una misma
+operación, cuya semántica OR todavía no se implementa. Los grupos incompletos
+devuelven `SC_ERROR_INVALID_DATA`.
+
+`tests/iasecc-fci.c` ejecuta el parser real, con el FCP y registro de aplicación
+capturados. Las once comprobaciones cubren grupos únicos y múltiples,
+autenticación, denegación, reglas repetidas, alternativas no soportadas,
+truncamiento y el registro `ChipDoc`. Antes de la corrección fallaron siete
+comprobaciones de ACL; después pasan las once comprobaciones, incluyendo el
+registro de aplicación.
+
+La compilación completa del submódulo y las pruebas se ejecutaron localmente
+en `build/opensc-offline/` con PC/SC desactivado porque esta sesión no tiene
+los encabezados de desarrollo de PC/SC ni acceso al lector. Los registros
+de compilación y regresión quedan en ese directorio, excluido de Git.
+Esta validación no sustituye la prueba en tarjeta.
+
+La siguiente comprobación en la terminal del propietario es:
+
+```bash
+nix develop
+make test/iasecc
+make inspect/jcop3-built
+```
+
+La compilación normal sí habilita PC/SC y fija la ruta del proveedor obtenida
+con `pkg-config`. La inspección utiliza esa compilación, desactiva la caché
+de archivos y no verifica PIN. Si aparece otro fallo, investigar el primer
+APDU o estructura incompatible del nuevo informe.
+
+Antes de preparar un reporte para OpenSC, actualizar desde `master` y repetir
+la compilación y verificación, según `vendor/opensc/AGENTS.md`. Todavía no se
+ha enviado un reporte ni una propuesta upstream.
