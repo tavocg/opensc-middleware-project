@@ -16,6 +16,69 @@ static void check(const char *name, int valid)
 	}
 }
 
+static void check_chipdoc(void)
+{
+	struct sc_context ctx = {0};
+	struct sc_card card = {0};
+	struct iasecc_sdo sdo = {0}, copy = {0};
+	unsigned char captured[] = {
+		0x70,0x2B,0xBF,0x81,0x01,0x27,0xA0,0x25,0xC9,0x01,0x01,
+		0x9A,0x01,0x07,0x9B,0x01,0x07,0x80,0x02,0x00,0x0E,
+		0xA1,0x16,0x8C,0x09,0xF3,0xE7,0x00,0xE7,0xFF,0x00,0xD0,0xD3,0xD3,
+		0x9C,0x09,0xF3,0xE7,0x00,0xE7,0xFF,0x00,0xD0,0xD3,0xD3
+	};
+	unsigned char changed[sizeof(captured)];
+	int result;
+
+	ctx.app_name = "iasecc-chipdoc-sdo-regression";
+	card.ctx = &ctx;
+	card.type = SC_CARD_TYPE_IASECC_AMOS;
+	sdo.sdo_class = IASECC_SDO_CLASS_CHV;
+	sdo.sdo_ref = 1;
+	result = iasecc_sdo_parse(&card, captured, sizeof(captured), &sdo);
+	check("captured ChipDoc DOCP parses with its opaque C9 extension", result == SC_SUCCESS &&
+			sdo.docp.chipdoc_c9.size == 1 && sdo.docp.chipdoc_c9.value &&
+			*sdo.docp.chipdoc_c9.value == 1);
+	check("captured ChipDoc retry counts and storage size survive", result == SC_SUCCESS &&
+			sdo.docp.tries_maximum.value && *sdo.docp.tries_maximum.value == 7 &&
+			sdo.docp.tries_remaining.value && *sdo.docp.tries_remaining.value == 7 &&
+			sdo.docp.size.size == 2 && sdo.docp.size.value && sdo.docp.size.value[1] == 14);
+	check("ChipDoc supports only the observed VERIFY and GET DATA conditions", result == SC_SUCCESS &&
+			sdo.docp.amb == 0x21 && sdo.docp.scbs[1] == 0 && sdo.docp.scbs[6] == 0 &&
+			sdo.docp.scbs[0] == 0xFF && sdo.docp.scbs[2] == 0xFF &&
+			sdo.docp.scbs[3] == 0xFF && sdo.docp.scbs[4] == 0xFF && sdo.docp.scbs[5] == 0xFF);
+	check("raw contact and contactless ACLs survive", result == SC_SUCCESS &&
+			sdo.docp.acls_contact.size == 9 && sdo.docp.acls_contactless.size == 9 &&
+			!memcmp(sdo.docp.acls_contact.value, captured+25, 9) &&
+			!memcmp(sdo.docp.acls_contactless.value, captured+36, 9));
+	result = iasecc_docp_copy(&ctx, &sdo.docp, &copy.docp);
+	check("DOCP copy retains an independent C9 field", result == SC_SUCCESS &&
+			copy.docp.chipdoc_c9.value && copy.docp.chipdoc_c9.value != sdo.docp.chipdoc_c9.value &&
+			copy.docp.chipdoc_c9.size == 1 && *copy.docp.chipdoc_c9.value == 1);
+	iasecc_sdo_free_fields(&card, &copy);
+	result = iasecc_parse_acls(&card, &sdo.docp, 1);
+	check("ChipDoc contactless policy remains unsupported", result == SC_ERROR_NOT_SUPPORTED);
+	iasecc_sdo_free_fields(&card, &sdo);
+
+	for (int variant = 0; variant < 4; variant++) {
+		memcpy(changed, captured, sizeof(changed));
+		card.type = SC_CARD_TYPE_IASECC_AMOS;
+		sdo.sdo_class = IASECC_SDO_CLASS_CHV;
+		sdo.sdo_ref = 1;
+		if (variant == 0) changed[27] = 0x11; /* Change VERIFY protection. */
+		if (variant == 1) card.type = SC_CARD_TYPE_IASECC_GEMALTO;
+		if (variant == 2) sdo.sdo_ref = changed[4] = 2;
+		if (variant == 3) changed[10] = 2;
+		result = iasecc_sdo_parse(&card, changed, sizeof(changed), &sdo);
+		check(variant == 0 ? "different ChipDoc ACL is rejected" :
+				variant == 1 ? "C9 on other card types remains rejected" :
+				variant == 2 ? "C9 on other CHV references remains rejected" :
+				"other C9 values remain rejected",
+				result == (variant == 0 ? SC_ERROR_NOT_SUPPORTED : SC_ERROR_UNKNOWN_DATA_RECEIVED));
+		iasecc_sdo_free_fields(&card, &sdo);
+	}
+}
+
 int main(void)
 {
 	struct sc_context ctx = {0};
@@ -68,5 +131,6 @@ int main(void)
 	result = iasecc_sdo_parse(&card, unknown, sizeof(unknown), &sdo);
 	check("unknown CHV data still returns an error", result == SC_ERROR_UNKNOWN_DATA_RECEIVED);
 	iasecc_sdo_free_fields(&card, &sdo);
+	check_chipdoc();
 	return failures ? 1 : 0;
 }

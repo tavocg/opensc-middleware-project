@@ -3,8 +3,8 @@ set -euo pipefail
 umask 077
 
 task_mode=${2:---probe}
-if (( $# > 2 )) || [[ ! ${1:-0} =~ ^[0-9]+$ ]] || [[ $task_mode != --probe && $task_mode != --inspect && $task_mode != --read-dir && $task_mode != --pkcs11 && $task_mode != --pin-context && $task_mode != --pin-policy ]]; then
-    printf 'Uso: bash scripts/probe-jcop3.sh [índice de lector] [--probe|--inspect|--read-dir|--pkcs11|--pin-context|--pin-policy]\n' >&2
+if (( $# > 2 )) || [[ ! ${1:-0} =~ ^[0-9]+$ ]] || [[ $task_mode != --probe && $task_mode != --inspect && $task_mode != --read-dir && $task_mode != --pkcs11 && $task_mode != --pin-context && $task_mode != --pin-policy && $task_mode != --key-policy ]]; then
+    printf 'Uso: bash scripts/probe-jcop3.sh [índice de lector] [--probe|--inspect|--read-dir|--pkcs11|--pin-context|--pin-policy|--key-policy]\n' >&2
     exit 2
 fi
 
@@ -43,6 +43,8 @@ elif [[ $task_mode == --pin-context ]]; then
     task_report=$(mktemp "$task_root/local/jcop3-pin-context-XXXXXXXX.txt")
 elif [[ $task_mode == --pin-policy ]]; then
     task_report=$(mktemp "$task_root/local/jcop3-pin-policy-XXXXXXXX.txt")
+elif [[ $task_mode == --key-policy ]]; then
+    task_report=$(mktemp "$task_root/local/jcop3-key-policy-XXXXXXXX.txt")
 else
     task_report=$(mktemp "$task_root/local/jcop3-inventory-XXXXXXXX.txt")
 fi
@@ -173,7 +175,18 @@ if [[ $task_mode == --pin-policy ]] && (( task_failed == 0 )); then
         --send-apdu "$task_pin_root" --send-apdu "$task_pin_docp" || task_failed=1
 fi
 
-if [[ $task_mode == --read-dir || $task_mode == --pin-context || $task_mode == --pin-policy ]]; then
+if [[ $task_mode == --key-policy ]] && (( task_failed == 0 )); then
+    # Referencias 2 y 3 declaradas en el PrKDF de ChipDoc. Leer únicamente
+    # DOCP (A0) de RSA_PRIVATE (clase 10); no pedir 7F48 ni componentes RSA.
+    for task_key_reference in 02 03; do
+        printf '\nquery=RSA_PRIVATE_%s_DOCP_metadata\n' "$task_key_reference" >> "$task_report"
+        task_record env OPENSC_DEBUG=9 opensc-tool --reader "$task_reader" --card-driver default \
+            --send-apdu 00A404040EE828BD080FD25047656E6572696300 \
+            --send-apdu "00CB3FFF0A4D087006BF90${task_key_reference}02A08000" || task_failed=1
+    done
+fi
+
+if [[ $task_mode == --read-dir || $task_mode == --pin-context || $task_mode == --pin-policy || $task_mode == --key-policy ]]; then
     # opensc-tool puede devolver 0 aunque una APDU devuelva un SW de error.
     # En el diagnóstico de contexto, los SW negativos también son evidencia.
     task_expected_responses=4

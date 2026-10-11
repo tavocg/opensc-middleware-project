@@ -440,3 +440,61 @@ La sintaxis del script, el objetivo Make y la construcción de encabezados se
 comprobaron localmente. Una herramienta simulada validó las longitudes APDU,
 los encabezados CHV 1 y los selectores de metadatos, y produjo las 22 respuestas
 esperadas. Esta comprobación no demuestra que la tarjeta admita esas consultas.
+
+## Resultado de selectores y soporte limitado del PIN: 2026-10-11
+
+`local/jcop3-pin-policy-9U5otg3U.txt`, generado con el repositorio principal
+`da14f65`, contiene las 22 respuestas previstas. Las selecciones directas de
+`9A`, `9B`, `80` y `A1` devuelven `6A80`. Todas las selecciones anidadas bajo
+`A0`, incluida la lista conjunta, devuelven `9000`, pero entregan el DOCP
+completo de 45 bytes. Ninguna de esas formas filtra `C9` ni las ACL adicionales.
+Los controles al principio y al final contienen los mismos bytes y reportan
+7 intentos máximos y 7 restantes.
+
+Se añadió una adaptación experimental al parser para el formato observado:
+
+- Retiene `C9` en `chipdoc_c9`, sin atribuir significado a su valor. Solo se
+  acepta `C9 01 01` en IAS/ECC Amos, clase CHV, referencia 1. Otros perfiles,
+  referencias, valores o campos desconocidos siguen devolviendo error.
+- Conserva las ACL completas de contacto y sin contacto. Para contacto, solo
+  acepta la secuencia exacta observada `F3 E7 00 E7 FF 00 D0 D3 D3` y expone
+  las condiciones `00` de VERIFY y GET DATA. Las otras operaciones permanecen
+  sin soporte; una ACL distinta se rechaza, sin reemplazarla por acceso libre.
+- La política resultante se marca `read_verify_only`. Los caminos de cambio
+  y desbloqueo devuelven `SC_ERROR_NOT_SUPPORTED` antes de autenticar. El
+  soporte de contacto sin PIN todavía debe validarse en tarjeta; tampoco
+  implementa una política contactless.
+
+La condición `00` permite ejecutar el comando VERIFY sin una autenticación
+previa ni un canal protegido exigido por esa ACL; no acredita el PIN ni
+autoriza por sí misma una firma. La tarjeta sigue comprobando el PIN que se
+le envíe. El significado completo de `C9` y las condiciones administrativas
+siguen pendientes, y este ajuste no equivale a soporte completo de ChipDoc.
+
+`tests/iasecc-sdo.c` reproduce el DOCP capturado y verifica contadores,
+conservación/copia de la extensión, ACL originales y rechazo de variantes.
+`tests/iasecc-pin-policy.c` usa el driver y parser reales con transporte
+simulado: comprueba lectura de contadores y que cambio/desbloqueo se detienen
+antes de cualquier autenticación. Pasan 38 comprobaciones. La compilación
+completa en `build/opensc-offline/`, sin PC/SC, terminó correctamente y se
+registró en `chipdoc-policy-build.log`.
+
+Para validar el estado del PIN y consultar el siguiente contexto de firma:
+
+```bash
+make test/iasecc JOBS="$(nproc)"
+make inspect/jcop3-pkcs11
+make inspect/jcop3-key-policy
+```
+
+El último objetivo no recompila ni solicita PIN. Selecciona `ChipDoc` y pide
+solo DOCP (`A0`) de la clase RSA_PRIVATE (`10`) para las referencias 2 y 3
+declaradas en el PrKDF. No solicita la plantilla `7F48` ni componentes de las
+llaves privadas. Guarda cuatro respuestas (dos selecciones, dos GET DATA)
+en `local/jcop3-key-policy-*`. Los SW de error también permiten determinar
+si esas referencias están disponibles en este contexto. Las tramas y el
+recuento se comprobaron con una herramienta simulada, sin tarjeta.
+
+Todavía no se ejecuta otra firma. Revisar primero el nuevo estado del PIN y
+los permisos reales de las llaves; las referencias PKCS#15 no demuestran por
+sí solas cómo se selecciona el objeto criptográfico para una operación RSA.

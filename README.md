@@ -177,7 +177,7 @@ Esa consulta confirmó que el CHV 1 es global y accesible desde la raíz, mientr
 para usar MF en ese perfil y la consulta en tarjeta confirmó ese contexto.
 También se corrigió el parser SDO, que descartaba metadatos válidos y borraba
 la referencia del PIN antes de la siguiente consulta. Para compilar y ejecutar
-las veinticinco comprobaciones locales y consultar el estado sin introducir PIN:
+las comprobaciones locales y consultar el estado sin introducir PIN:
 
 ```bash
 make test/iasecc JOBS="$(nproc)"
@@ -200,6 +200,22 @@ make inspect/jcop3-pin-policy
 Compara selectores de metadatos mediante SELECT y GET DATA. Su compatibilidad
 se determina por las respuestas de la tarjeta y queda registrada en un nuevo
 informe `local/jcop3-pin-policy-*`.
+
+Esa comparación confirmó que la tarjeta entrega el DOCP completo aun con los
+selectores de campos. La adaptación experimental conserva la extensión `C9`
+y reconoce el formato exacto observado para consulta y verificación del PIN;
+cambio, desbloqueo y contactless quedan pendientes. Pasan 38 comprobaciones
+locales. La siguiente validación sigue sin introducir PIN:
+
+```bash
+make test/iasecc JOBS="$(nproc)"
+make inspect/jcop3-pkcs11
+make inspect/jcop3-key-policy
+```
+
+La consulta de llaves pide exclusivamente metadatos DOCP de las referencias
+RSA declaradas; no solicita componentes de las llaves privadas. Primero se
+revisarán estos informes antes de otro intento de firma.
 
 Después:
 
