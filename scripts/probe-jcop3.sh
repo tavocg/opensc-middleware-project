@@ -2,8 +2,9 @@
 set -euo pipefail
 umask 077
 
-if (( $# > 2 )) || [[ ! ${1:-0} =~ ^[0-9]+$ ]] || [[ ${2:---probe} != --probe && ${2:---probe} != --inspect ]]; then
-    printf 'Uso: bash scripts/probe-jcop3.sh [índice de lector] [--probe|--inspect]\n' >&2
+task_mode=${2:---probe}
+if (( $# > 2 )) || [[ ! ${1:-0} =~ ^[0-9]+$ ]] || [[ $task_mode != --probe && $task_mode != --inspect && $task_mode != --read-dir ]]; then
+    printf 'Uso: bash scripts/probe-jcop3.sh [índice de lector] [--probe|--inspect|--read-dir]\n' >&2
     exit 2
 fi
 
@@ -12,7 +13,6 @@ if ! command -v opensc-tool >/dev/null 2>&1; then
     exit 1
 fi
 
-task_mode=${2:---probe}
 if [[ $task_mode == --inspect ]] && ! command -v pkcs15-tool >/dev/null 2>&1; then
     printf 'Falta pkcs15-tool. Ejecutar nix develop antes de make inspect/jcop3.\n' >&2
     exit 1
@@ -23,6 +23,8 @@ task_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 mkdir -p -- "$task_root/local"
 if [[ $task_mode == --inspect ]]; then
     task_report=$(mktemp "$task_root/local/jcop3-inspection-XXXXXXXX.txt")
+elif [[ $task_mode == --read-dir ]]; then
+    task_report=$(mktemp "$task_root/local/jcop3-dir-XXXXXXXX.txt")
 else
     task_report=$(mktemp "$task_root/local/jcop3-inventory-XXXXXXXX.txt")
 fi
@@ -64,10 +66,37 @@ if [[ $task_mode == --inspect ]] && (( task_failed == 0 )); then
     task_record env OPENSC_DEBUG=9 pkcs15-tool --reader "$task_reader" --no-cache --list-certificates --list-public-keys || task_failed=1
 fi
 
+if [[ $task_mode == --read-dir ]] && (( task_failed == 0 )); then
+    # Selecciones observadas en la captura de esta JCOP3 y lectura de EF.DIR.
+    # El driver default evita la interpretación de ACL del driver IAS/ECC;
+    # la tarjeta sigue aplicando sus propias condiciones de acceso.
+    # EF.DIR declara 256 bytes: leer dos bloques de 128 bytes, sin PIN.
+    task_record env OPENSC_DEBUG=9 opensc-tool --reader "$task_reader" --card-driver default \
+        --send-apdu 00A404040BF0496173456363526F6F7400 \
+        --send-apdu 00A40904022F0000 \
+        --send-apdu 00B0000080 \
+        --send-apdu 00B0008080 || task_failed=1
+
+    # opensc-tool puede devolver 0 aunque una APDU devuelva un SW de error.
+    task_responses=0
+    while IFS= read -r task_line; do
+        if [[ $task_line == 'Received (SW1='* ]]; then
+            task_responses=$((task_responses + 1))
+            printf '%s\n' "$task_line"
+            if [[ $task_line != 'Received (SW1=0x90, SW2=0x00)'* ]]; then
+                task_failed=1
+            fi
+        fi
+    done < "$task_report"
+    if (( task_responses != 4 )); then
+        task_failed=1
+    fi
+fi
+
 if [[ $task_mode == --probe ]]; then
     cat -- "$task_report"
 else
-    printf 'Detalle de identificación y enumeración guardado en el informe local.\n'
+    printf 'Detalle de la consulta guardado en el informe local.\n'
 fi
 if (( task_failed )); then
     printf '\nLa observación está incompleta; revisar los errores del informe.\n' >&2

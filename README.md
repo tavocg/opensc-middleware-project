@@ -97,6 +97,18 @@ y depuración APDU. No verifica PIN ni ejecuta firmas. Guarda los resultados en
 revisarse antes de publicarlos. Solo imprime la ubicación del informe y el estado
 de la ejecución, para no volcar la depuración completa en la terminal.
 
+La primera inspección inicializa IAS/ECC pero falla al interpretar los permisos
+de lectura de EF.DIR. Para comprobar su lectura con APDU directas conocidas:
+
+```bash
+make read-dir/jcop3
+```
+
+Este objetivo selecciona la raíz observada y EF.DIR con el driver `default`, y
+lee dos bloques de 128 bytes. No verifica PIN ni modifica la tarjeta. Guarda
+la captura en `local/jcop3-dir-*.txt` e imprime los estados de respuesta.
+El diagnóstico y la evidencia están documentados en `docs/jcop3.md`.
+
 Después:
 
 1. Completar el inventario y evaluar el resultado de OpenSC en `docs/jcop3.md`.
