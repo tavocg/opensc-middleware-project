@@ -1,5 +1,5 @@
 {
-  description = "Herramientas para investigar tarjetas JCOP3 con OpenSC";
+  description = "libjcop3p11: soporte libre para firma digital con IAS/ECC y OpenSC";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
@@ -15,6 +15,14 @@
         in
         {
           default = pkgs.mkShell {
+            name = "libjcop3p11";
+
+            shellHook = ''
+              if [[ $- == *i* ]]; then
+                PS1="(libjcop3p11) $PS1"
+              fi
+            '';
+
             packages = with pkgs; [
               bash
               git

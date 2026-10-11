@@ -1,4 +1,11 @@
-# Middleware libre para firma digital de Costa Rica
+# libjcop3p11
+
+Proyecto de middleware libre para firma digital de Costa Rica, desarrollado
+sobre OpenSC, centrado inicialmente en la aplicación IAS/ECC de la JCOP3
+observada. Su identificador es `libjcop3p11`; el entorno de `nix develop`
+conserva el prompt de Bash y le antepone `(libjcop3p11)`.
+El driver de tarjeta es `iasecc` y el módulo PKCS#11 compilado se llama
+`opensc-pkcs11.so` en GNU/Linux.
 
 Primer objetivo: reconocer una tarjeta JCOP3 emitida en Costa Rica, leer su
 certificado y producir una firma verificable mediante PKCS#11 de OpenSC.
