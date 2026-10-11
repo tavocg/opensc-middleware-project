@@ -8,7 +8,7 @@ if (( $# > 1 )) || [[ ! ${1:-0} =~ ^[0-9]+$ ]]; then
 fi
 
 if ! command -v opensc-tool >/dev/null 2>&1; then
-    printf 'Falta opensc-tool. En NixOS: nix shell nixpkgs#opensc nixpkgs#pcsc-tools\n' >&2
+    printf 'Falta opensc-tool. Ejecutar nix develop y después make probe/jcop3.\n' >&2
     exit 1
 fi
 

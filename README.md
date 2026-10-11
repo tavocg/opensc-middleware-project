@@ -6,7 +6,9 @@ La compatibilidad con su aplicación interna todavía está por comprobar.
 
 ## Organización
 
-- `vendor/opensc/`: submódulo de OpenSC, pendiente de agregar.
+- `vendor/opensc/`: submódulo de OpenSC.
+- `flake.nix`: entorno de herramientas para `nix develop`.
+- `Makefile`: comandos de investigación.
 - `docs/jcop3.md`: inventario, observaciones y próximos hitos.
 - `scripts/probe-jcop3.sh`: inventario inicial del lector y ATR, sin PIN.
 - `local/`: resultados y capturas originales, excluidos de Git.
@@ -25,7 +27,7 @@ y acceso a GitHub:
 git init -b main
 git submodule add https://github.com/OpenSC/OpenSC.git vendor/opensc
 git -C vendor/opensc switch -c cr-jcop3
-git add .gitignore .gitmodules README.md docs scripts vendor/opensc
+git add .gitignore .gitmodules flake.nix Makefile README.md docs scripts vendor/opensc
 git commit -m "Prepare JCOP3 investigation workspace"
 ```
 
@@ -39,17 +41,34 @@ En NixOS, el servicio PC/SC debe estar disponible. Si no está habilitado,
 configurar `services.pcscd.enable = true;` en la configuración del sistema y
 aplicar el cambio desde la terminal del usuario.
 
-Conectar el lector e insertar la tarjeta por contacto. Abrir las herramientas:
+Conectar el lector e insertar la tarjeta por contacto. Entrar al entorno y
+ejecutar la observación:
 
 ```bash
-nix shell nixpkgs#opensc nixpkgs#pcsc-tools
-bash scripts/probe-jcop3.sh
+nix develop
+make probe/jcop3
+```
+
+La primera ejecución de `nix develop` genera `flake.lock`, que debe agregarse
+al repositorio para fijar la versión de las dependencias. Si `flake.nix` es un
+archivo nuevo en un repositorio Git, agregarlo al índice antes de ejecutar Nix:
+
+```bash
+git add flake.nix
+nix develop
+git add flake.lock
+```
+
+También se puede ejecutar la observación sin abrir una shell interactiva:
+
+```bash
+nix develop --command make probe/jcop3
 ```
 
 Si hay varios lectores, identificar el índice en la lista y repetir con él:
 
 ```bash
-bash scripts/probe-jcop3.sh 1
+make probe/jcop3 READER=1
 ```
 
 El script guarda un informe nuevo en `local/`. Solo consulta la versión de
@@ -57,7 +76,7 @@ OpenSC, la lista de lectores y el ATR. No solicita PIN ni envía comandos de
 firma o administración. Esta primera observación no demuestra todavía que
 OpenSC pueda leer certificados o firmar con la tarjeta.
 
-`nix shell` proporciona herramientas empaquetadas, no una compilación del
+`nix develop` proporciona herramientas empaquetadas, no una compilación del
 submódulo. Registrar ambas versiones por separado. Una vez identificado el
 perfil de la tarjeta, preparar un entorno de compilación y pruebas para el
 OpenSC modificado.
