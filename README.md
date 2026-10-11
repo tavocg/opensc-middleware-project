@@ -174,8 +174,10 @@ la compilación existente. Guarda el informe en `local/`.
 
 Esa consulta confirmó que el CHV 1 es global y accesible desde la raíz, mientras
 `0001` no es seleccionable. Se agregó una corrección de los metadatos PKCS#15
-para usar MF en ese perfil. Para compilarla, ejecutar las veinte comprobaciones
-locales y consultar el estado sin introducir PIN:
+para usar MF en ese perfil y la consulta en tarjeta confirmó ese contexto.
+También se corrigió el parser SDO, que descartaba metadatos válidos y borraba
+la referencia del PIN antes de la siguiente consulta. Para compilar y ejecutar
+las veinticinco comprobaciones locales y consultar el estado sin introducir PIN:
 
 ```bash
 make test/iasecc JOBS="$(nproc)"

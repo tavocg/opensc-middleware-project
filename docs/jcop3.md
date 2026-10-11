@@ -341,3 +341,57 @@ Revisar el informe para confirmar que se usa MF, se leen los metadatos y se
 localiza el siguiente fallo. Un código de salida cero no demuestra que el
 estado del PIN se haya consultado correctamente. La autenticación sigue
 pendiente de interpretar la política completa.
+
+## Validación del contexto y parser SDO: 2026-10-11
+
+`local/jcop3-pkcs11-sqj7pvyv.txt`, generado con el commit OpenSC
+`ea864361d` y el repositorio principal `299bfa3`, confirma que se aplica el
+ajuste de ruta. `Card PIN` aparece con contexto `3f00`. La selección de la
+raíz funciona y la consulta de estado `00 20 00 01`, sin datos de PIN,
+devuelve `63 C7`: PIN no verificado, con 7 intentos restantes. No se realizó
+login ni firma.
+
+GET DATA de los atributos públicos CHV de referencia 1 también funciona.
+La respuesta, sin SW final, es:
+
+```text
+70 0D BF 81 01 09 7F 41 06 80 01 0E 81 01 04
+```
+
+Declara longitud máxima 14 y mínima 4. Son atributos de la tarjeta y difieren
+de la longitud máxima 20 del AODF. No contienen el valor del PIN.
+
+El nuevo fallo aparece inmediatamente después: el siguiente GET DATA solicita
+DOCP de clase 0 y referencia 0 (`BF 80 00`), en lugar de CHV 1 (`BF 81 01`),
+y recibe `6A88`. La causa está en `iasecc_sdo_parse()`:
+`iasecc_sdo_parse_data()` devuelve un número positivo de bytes consumidos al
+tener éxito, pero el llamador compara ese resultado con cero y libera todos
+los campos. `iasecc_sdo_free_fields()` también pone a cero clase y referencia.
+El parser termina anunciando éxito después de haber descartado los datos.
+
+La corrección cambia esa comprobación a `rv < 0`, conservando el objeto para
+resultados válidos y manteniendo la liberación y propagación de errores para
+resultados negativos. `tests/iasecc-sdo.c` reproduce la pérdida con la respuesta
+CHV capturada y prueba que se acumulan sus límites con una segunda respuesta
+DOCP estándar. El DOCP de esa prueba es sintético; no sustituye al capturado,
+que todavía contiene el campo desconocido `C9` y ACL adicionales.
+
+Antes del cambio fallaron las cuatro comprobaciones de conservación de datos;
+la comprobación de rechazo de un campo CHV desconocido ya pasaba. Después
+pasan las cinco y las veinte comprobaciones anteriores. La compilación completa
+en `build/opensc-offline/`, sin PC/SC, terminó correctamente; el registro queda
+en `sdo-metadata-build.log` dentro de ese directorio ignorado.
+
+La consulta en tarjeta debe comprobar ahora que el segundo GET DATA conserva
+clase CHV y referencia 1 y recibe el DOCP previamente observado:
+
+```bash
+make test/iasecc JOBS="$(nproc)"
+make inspect/jcop3-pkcs11
+```
+
+Todavía no se solicita una nueva firma. El campo `C9` sigue sin definición
+confirmada: las búsquedas en documentación pública y la revisión estática
+inicial del módulo `libt_ias.so` no permitieron identificar su significado.
+No se modificó el comportamiento del parser ante ese campo ni se capturó
+ninguna sesión autenticada de Idopte.
