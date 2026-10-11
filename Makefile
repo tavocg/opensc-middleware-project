@@ -7,7 +7,7 @@ export JOBS
 SLOT_INDEX ?= 0
 export SLOT_INDEX
 
-.PHONY: help probe/jcop3 inspect/jcop3 read-dir/jcop3 build/opensc test/iasecc inspect/jcop3-built inspect/jcop3-pkcs11 inspect/jcop3-pin-context sign/jcop3
+.PHONY: help probe/jcop3 inspect/jcop3 read-dir/jcop3 build/opensc test/iasecc inspect/jcop3-built inspect/jcop3-pkcs11 inspect/jcop3-pin-context inspect/jcop3-pin-policy sign/jcop3
 
 help:
 	@printf '%s\n' \
@@ -20,6 +20,7 @@ help:
 		'make inspect/jcop3-built   Compila e inspecciona con el OpenSC modificado, sin PIN.' \
 		'make inspect/jcop3-pkcs11  Consulta llaves, slots, mecanismos y objetos, sin PIN.' \
 		'make inspect/jcop3-pin-context  Compara contextos del PIN mediante consultas sin PIN.' \
+		'make inspect/jcop3-pin-policy   Consulta campos estándar de la política, sin PIN.' \
 		'make sign/jcop3            Firma un texto de prueba con PIN y verifica con OpenSSL.'
 
 probe/jcop3:
@@ -45,6 +46,9 @@ inspect/jcop3-pkcs11:
 
 inspect/jcop3-pin-context:
 	@PATH="$(CURDIR)/build/opensc/src/tools:$$PATH" bash scripts/probe-jcop3.sh "$$READER" --pin-context
+
+inspect/jcop3-pin-policy:
+	@PATH="$(CURDIR)/build/opensc/src/tools:$$PATH" bash scripts/probe-jcop3.sh "$$READER" --pin-policy
 
 sign/jcop3:
 	@bash scripts/sign-jcop3.sh

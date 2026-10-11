@@ -3,8 +3,8 @@ set -euo pipefail
 umask 077
 
 task_mode=${2:---probe}
-if (( $# > 2 )) || [[ ! ${1:-0} =~ ^[0-9]+$ ]] || [[ $task_mode != --probe && $task_mode != --inspect && $task_mode != --read-dir && $task_mode != --pkcs11 && $task_mode != --pin-context ]]; then
-    printf 'Uso: bash scripts/probe-jcop3.sh [índice de lector] [--probe|--inspect|--read-dir|--pkcs11|--pin-context]\n' >&2
+if (( $# > 2 )) || [[ ! ${1:-0} =~ ^[0-9]+$ ]] || [[ $task_mode != --probe && $task_mode != --inspect && $task_mode != --read-dir && $task_mode != --pkcs11 && $task_mode != --pin-context && $task_mode != --pin-policy ]]; then
+    printf 'Uso: bash scripts/probe-jcop3.sh [índice de lector] [--probe|--inspect|--read-dir|--pkcs11|--pin-context|--pin-policy]\n' >&2
     exit 2
 fi
 
@@ -41,6 +41,8 @@ elif [[ $task_mode == --pkcs11 ]]; then
     task_report=$(mktemp "$task_root/local/jcop3-pkcs11-XXXXXXXX.txt")
 elif [[ $task_mode == --pin-context ]]; then
     task_report=$(mktemp "$task_root/local/jcop3-pin-context-XXXXXXXX.txt")
+elif [[ $task_mode == --pin-policy ]]; then
+    task_report=$(mktemp "$task_root/local/jcop3-pin-policy-XXXXXXXX.txt")
 else
     task_report=$(mktemp "$task_root/local/jcop3-inventory-XXXXXXXX.txt")
 fi
@@ -142,12 +144,43 @@ if [[ $task_mode == --pin-context ]] && (( task_failed == 0 )); then
     done
 fi
 
-if [[ $task_mode == --read-dir || $task_mode == --pin-context ]]; then
+if [[ $task_mode == --pin-policy ]] && (( task_failed == 0 )); then
+    # GET DATA exclusivamente de metadatos DOCP del CHV 1 en MF.
+    # Comparar encabezados extendidos directos/anidados; la tarjeta puede
+    # rechazar cualquiera de ellos. No consultar el valor CHV (7F41/82).
+    task_pin_root=00A404040BF0496173456363526F6F7400
+    task_pin_docp=00CB3FFF0A4D087006BF810102A08000
+    printf '\nquery=CHV_1_DOCP_before\n' >> "$task_report"
+    task_record env OPENSC_DEBUG=9 opensc-tool --reader "$task_reader" --card-driver default \
+        --send-apdu "$task_pin_root" --send-apdu "$task_pin_docp" || task_failed=1
+    # 9A: máximo de intentos; 9B: restantes; 80: tamaño; A1: permisos.
+    for task_tag in 9A 9B 80 A1; do
+        printf '\nquery=CHV_1_DOCP_tag_%s_direct\n' "$task_tag" >> "$task_report"
+        task_record env OPENSC_DEBUG=9 opensc-tool --reader "$task_reader" --card-driver default \
+            --send-apdu "$task_pin_root" \
+            --send-apdu "00CB3FFF0A4D087006BF810102${task_tag}8000" || task_failed=1
+        printf '\nquery=CHV_1_DOCP_tag_%s_nested\n' "$task_tag" >> "$task_report"
+        task_record env OPENSC_DEBUG=9 opensc-tool --reader "$task_reader" --card-driver default \
+            --send-apdu "$task_pin_root" \
+            --send-apdu "00CB3FFF0C4D0A7008BF810104A002${task_tag}8000" || task_failed=1
+    done
+    printf '\nquery=CHV_1_DOCP_standard_fields_nested\n' >> "$task_report"
+    task_record env OPENSC_DEBUG=9 opensc-tool --reader "$task_reader" --card-driver default \
+        --send-apdu "$task_pin_root" \
+        --send-apdu 00CB3FFF124D10700EBF81010AA0089A809B808080A18000 || task_failed=1
+    printf '\nquery=CHV_1_DOCP_after\n' >> "$task_report"
+    task_record env OPENSC_DEBUG=9 opensc-tool --reader "$task_reader" --card-driver default \
+        --send-apdu "$task_pin_root" --send-apdu "$task_pin_docp" || task_failed=1
+fi
+
+if [[ $task_mode == --read-dir || $task_mode == --pin-context || $task_mode == --pin-policy ]]; then
     # opensc-tool puede devolver 0 aunque una APDU devuelva un SW de error.
     # En el diagnóstico de contexto, los SW negativos también son evidencia.
     task_expected_responses=4
     if [[ $task_mode == --pin-context ]]; then
         task_expected_responses=16
+    elif [[ $task_mode == --pin-policy ]]; then
+        task_expected_responses=22
     fi
     task_responses=0
     while IFS= read -r task_line; do

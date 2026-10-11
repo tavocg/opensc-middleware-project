@@ -189,6 +189,18 @@ La política del PIN contiene además un campo `C9` que el parser todavía no
 reconoce. Revisar el nuevo informe antes de repetir una firma. La investigación
 y el alcance de la corrección están registrados en `docs/jcop3.md`.
 
+La consulta con el parser corregido ya conserva la referencia del PIN y recibe
+su DOCP; se detiene al interpretar `C9`. Para comprobar si la tarjeta permite
+consultar los campos estándar por separado, sin recompilar ni introducir PIN:
+
+```bash
+make inspect/jcop3-pin-policy
+```
+
+Compara selectores de metadatos mediante SELECT y GET DATA. Su compatibilidad
+se determina por las respuestas de la tarjeta y queda registrada en un nuevo
+informe `local/jcop3-pin-policy-*`.
+
 Después:
 
 1. Validar la corrección en la tarjeta y registrar el resultado en `docs/jcop3.md`.

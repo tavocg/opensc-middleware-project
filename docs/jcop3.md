@@ -395,3 +395,48 @@ confirmada: las búsquedas en documentación pública y la revisión estática
 inicial del módulo `libt_ias.so` no permitieron identificar su significado.
 No se modificó el comportamiento del parser ante ese campo ni se capturó
 ninguna sesión autenticada de Idopte.
+
+## Política DOCP y selección de campos: 2026-10-11
+
+`local/jcop3-pkcs11-gYBEWLz8.txt`, generado con OpenSC `512084237` y el
+repositorio principal `0ebb25d`, valida la conservación del objeto SDO. Tras
+leer los límites públicos, el driver mantiene clase CHV y referencia 1. El
+GET DATA siguiente contiene `BF 81 01` y recibe `9000` con el DOCP de 45 bytes
+ya observado. El primer rechazo del parser es ahora `C9 01 01`, con código
+`-1213`. Las consultas de estado siguen recibiendo `63 C7`.
+
+Falta confirmar el significado de esa extensión. Antes de modificar su
+interpretación, se añadió una comparación de selección de campos:
+
+```bash
+make inspect/jcop3-pin-policy
+```
+
+No recompila. Usa el driver `default`, selecciona la raíz y envía exclusivamente
+GET DATA de metadatos del CHV 1. Consulta el DOCP completo al principio y al
+final como control, y compara dos formas de seleccionar cada campo conocido:
+directamente bajo el encabezado del SDO y anidado bajo `A0`.
+
+| Campo | Tag | Propósito |
+| --- | --- | --- |
+| Máximo de intentos | `9A` | Límite de autenticaciones fallidas |
+| Intentos restantes | `9B` | Estado del contador |
+| Tamaño almacenado | `80` | Metadato de longitud del objeto |
+| Permisos | `A1` | Condiciones de acceso por interfaz |
+
+También prueba una solicitud conjunta de esos cuatro campos bajo `A0`. Los
+encabezados siguen la estructura del GET DATA existente; la compatibilidad
+de estas selecciones concretas queda por verificar en tarjeta. La comparación
+permite saber si es posible leer solo los campos estándar que consume el
+driver. No supone que `C9` sea irrelevante ni cambia el parser o la política.
+
+Se esperan 22 respuestas APDU: 11 selecciones y 11 consultas. Los SW negativos
+son evidencia sobre las formas soportadas, sin convertirlos automáticamente
+en fallo de transporte. Revisar que los controles completos se lean y comparar
+sus contadores antes y después. El informe queda en `local/jcop3-pin-policy-*`.
+No envía VERIFY, no solicita valor de PIN y no ejecuta administración.
+
+La sintaxis del script, el objetivo Make y la construcción de encabezados se
+comprobaron localmente. Una herramienta simulada validó las longitudes APDU,
+los encabezados CHV 1 y los selectores de metadatos, y produjo las 22 respuestas
+esperadas. Esta comprobación no demuestra que la tarjeta admita esas consultas.
