@@ -71,7 +71,7 @@ Si hay varios lectores, identificar el índice en la lista y repetir con él:
 make probe/jcop3 READER=1
 ```
 
-El script guarda un informe nuevo en `local/`. Solo consulta la versión de
+El objetivo `probe/jcop3` guarda un informe nuevo en `local/`. Solo consulta la versión de
 OpenSC, la lista de lectores y el ATR. No solicita PIN ni envía comandos de
 firma o administración. Esta primera observación no demuestra todavía que
 OpenSC pueda leer certificados o firmar con la tarjeta.
@@ -83,14 +83,29 @@ OpenSC modificado.
 
 ## Después del ATR
 
-1. Completar el inventario de `docs/jcop3.md`.
-2. Comparar los identificadores y el protocolo con IAS/ECC y eOI.
-3. Capturar la enumeración pública realizada por Idopte, anotando su versión
-   y si la caché está vacía. Revisar los datos antes de compartir la captura.
-4. Documentar selección de aplicación, certificados y referencias de llaves.
-5. Implementar lectura y enumeración en OpenSC.
-6. Capturar una firma controlada con el PIN correcto, implementar la secuencia
-   y verificar el resultado con la llave pública del certificado.
+La primera tarjeta observada tiene un ATR idéntico a la entrada IAS/ECC Amos
+de OpenSC. Probar primero identificación y enumeración con ese soporte:
+
+```bash
+make inspect/jcop3
+```
+
+Acepta también `READER=1`. Consulta el nombre identificado por OpenSC y enumera
+certificados y llaves públicas mediante PKCS#15, con caché de archivos desactivada
+y depuración APDU. No verifica PIN ni ejecuta firmas. Guarda los resultados en
+`local/jcop3-inspection-*.txt`; pueden contener datos identificables y deben
+revisarse antes de publicarlos. Solo imprime la ubicación del informe y el estado
+de la ejecución, para no volcar la depuración completa en la terminal.
+
+Después:
+
+1. Completar el inventario y evaluar el resultado de OpenSC en `docs/jcop3.md`.
+2. Si la enumeración falla, comparar el APDU o estructura incompatible con una
+   captura de Idopte, anotando su versión y el estado de la caché.
+3. Documentar selección de aplicación, certificados y referencias de llaves.
+4. Adaptar lectura y enumeración en OpenSC si es necesario.
+5. Capturar una firma controlada con el PIN correcto, adaptar la secuencia si
+   hace falta y verificar el resultado con la llave pública del certificado.
 
 El PIN debe introducirse de forma interactiva. Las capturas APDU de una sesión
 autenticada pueden contenerlo y no deben publicarse sin una revisión explícita.

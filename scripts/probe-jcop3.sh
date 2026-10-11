@@ -2,8 +2,8 @@
 set -euo pipefail
 umask 077
 
-if (( $# > 1 )) || [[ ! ${1:-0} =~ ^[0-9]+$ ]]; then
-    printf 'Uso: bash scripts/probe-jcop3.sh [índice de lector]\n' >&2
+if (( $# > 2 )) || [[ ! ${1:-0} =~ ^[0-9]+$ ]] || [[ ${2:---probe} != --probe && ${2:---probe} != --inspect ]]; then
+    printf 'Uso: bash scripts/probe-jcop3.sh [índice de lector] [--probe|--inspect]\n' >&2
     exit 2
 fi
 
@@ -12,10 +12,20 @@ if ! command -v opensc-tool >/dev/null 2>&1; then
     exit 1
 fi
 
+task_mode=${2:---probe}
+if [[ $task_mode == --inspect ]] && ! command -v pkcs15-tool >/dev/null 2>&1; then
+    printf 'Falta pkcs15-tool. Ejecutar nix develop antes de make inspect/jcop3.\n' >&2
+    exit 1
+fi
+
 task_reader=${1:-0}
 task_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 mkdir -p -- "$task_root/local"
-task_report=$(mktemp "$task_root/local/jcop3-inventory-XXXXXXXX.txt")
+if [[ $task_mode == --inspect ]]; then
+    task_report=$(mktemp "$task_root/local/jcop3-inspection-XXXXXXXX.txt")
+else
+    task_report=$(mktemp "$task_root/local/jcop3-inventory-XXXXXXXX.txt")
+fi
 
 task_record() {
     local task_status=0
@@ -32,6 +42,7 @@ printf 'Informe: %s\n' "$task_report"
     printf 'date_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     printf 'system=%s\n' "$(uname -srm)"
     printf 'reader_index=%s\n' "$task_reader"
+    printf 'mode=%s\n' "$task_mode"
     printf 'opensc_tool=%s\n' "$(command -v opensc-tool)"
 } > "$task_report"
 
@@ -41,12 +52,23 @@ if command -v git >/dev/null 2>&1 && [[ -f "$task_root/vendor/opensc/.git" || -d
 fi
 
 task_failed=0
-task_record opensc-tool --version || task_failed=1
+task_record opensc-tool --info || task_failed=1
 task_record opensc-tool --list-readers || task_failed=1
 # Solo ATR: opensc-tool termina antes de identificar la aplicación de tarjeta.
 task_record opensc-tool --reader "$task_reader" --atr || task_failed=1
 
-cat -- "$task_report"
+if [[ $task_mode == --inspect ]] && (( task_failed == 0 )); then
+    # Descubrimiento de aplicación y objetos, sin verificar PIN ni firmar.
+    # Los APDU y metadatos pueden identificar al titular: conservar en local/.
+    task_record env OPENSC_DEBUG=9 opensc-tool --reader "$task_reader" --name || task_failed=1
+    task_record env OPENSC_DEBUG=9 pkcs15-tool --reader "$task_reader" --no-cache --list-certificates --list-public-keys || task_failed=1
+fi
+
+if [[ $task_mode == --probe ]]; then
+    cat -- "$task_report"
+else
+    printf 'Detalle de identificación y enumeración guardado en el informe local.\n'
+fi
 if (( task_failed )); then
     printf '\nLa observación está incompleta; revisar los errores del informe.\n' >&2
     exit 1
