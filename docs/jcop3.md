@@ -1033,3 +1033,84 @@ El siguiente paso es cerrar cualquier instancia anterior de firmador y
 ejecutar `make firmador/jcop3` desde `nix develop`, con un PDF de prueba.
 Revisar cualquier fallo antes de otro intento y verificar el PDF si se
 produce. Todavía no hay una firma PDF verificada con el firmador y OpenSC.
+
+## Firmador: autenticación pendiente y diagnóstico de sesiones
+
+Después de verificar el mecanismo combinado, el usuario ejecutó
+`make firmador/jcop3` y recibió `CKR_USER_NOT_LOGGED_IN`, seguido de los
+errores de `signatureValue cannot be null!` y el aviso de sello/revocación.
+Confirma que el programa pidió el PIN, pero no sabe qué certificado estaba
+seleccionado. Pedir el PIN no acredita por sí solo un login exitoso.
+No hay captura de este intento ni una firma PDF válida. No se atribuye
+el fallo a PIN incorrecto, certificado o conectividad.
+
+La revisión estática del JAR instalado muestra varios componentes que usan
+PKCS#11: `PKCS11Manager` enumera certificados con sesiones propias y crea
+proveedores SunPKCS11; `CRSigner` crea además un `Pkcs11SignatureToken` de
+DSS para firmar. Esto justifica observar apertura/cierre, login/logout y
+estado de sesiones; no demuestra que esos componentes causen el fallo.
+
+En OpenSC, `C_GetSessionInfo` consulta `slot_get_logged_in_state`, que ya
+lee el estado del PIN mediante PKCS#15. La lectura selecciona el contexto
+global del PIN; queda pendiente comprobar si esa interacción influye en
+la autenticación de esta tarjeta. También se puede devolver
+`CKR_USER_NOT_LOGGED_IN` al traducir `SC_ERROR_SECURITY_STATUS_NOT_SATISFIED`
+de una operación. Sin la función que devuelve el error no se puede
+distinguir estos caminos. No se cambian selección, autenticación ni cachés
+para probar una hipótesis.
+
+Se agregó un diagnóstico temporal y optativo al módulo PKCS#11:
+`sc_pkcs11_api_trace()` en `debug.c`. Solo acepta un evento de un conjunto
+fijo y cuatro enteros, con salida independiente de los niveles de debug.
+Registra retorno de funciones de sesión, login/logout, búsqueda/atributos
+y firma. `PIN_STATUS` registra el resultado de la consulta de estado ya
+existente; no ejecuta consultas adicionales. `SIGN_KEY` registra metadatos
+públicos de la llave seleccionada por la ruta de firma. No modifica el
+resultado de las llamadas y conserva `errno` ante errores de escritura.
+Algunos retornos tempranos de argumentos/bloqueo no pasan por el registro.
+
+Cada línea usa `evento session=... rv=... a=... b=...`, en hexadecimal:
+
+| Evento | Campo `a` | Campo `b` |
+| --- | --- | --- |
+| `C_OpenSession` | slot | flags de sesión |
+| `C_CloseAllSessions` | slot | 0 |
+| `C_GetSessionInfo` | estado de sesión si retorna OK | 0 |
+| `C_Login` | tipo de usuario | 0 |
+| `C_SignInit` | mecanismo | handle de llave |
+| `C_GetAttributeValue` | handle de objeto | 0 |
+| `C_Sign`, `C_SignFinal` | 1 si hay buffer de salida, 0 si consulta tamaño | 0 |
+| `PIN_STATUS` | flags públicos de estado del PIN | usuario guardado por OpenSC |
+| `SIGN_KEY` | referencia pública de llave (3 firma, 2 autenticación) | bits de módulo RSA |
+
+`rv` es el retorno PKCS#11, excepto `PIN_STATUS`, que conserva el resultado
+interno firmado de OpenSC convertido a entero sin signo. `SIGN_KEY rv=0`
+marca que se seleccionó la llave; no acredita una firma exitosa. El registro
+no contiene PIN, longitud del PIN, atributos, certificados, documentos,
+digest, firma ni APDU. No se habilita con `OPENSC_DEBUG`.
+
+El nuevo objetivo `make firmador/jcop3-diagnose` precrea
+`local/jcop3-firmador-api-*/api.log` con permisos 0600 en un directorio 0700,
+junto con configuración y versión/estado Git. Activa exclusivamente
+`OPENSC_API_TRACE_FILE` y conserva la configuración de la firma verificada:
+debug 0, emulación primero, cachés de archivo/PIN desactivadas. No captura
+stdout/stderr del firmador. `make firmador/jcop3` elimina esa variable del
+entorno y mantiene el registro desactivado.
+
+Pasan **108 comprobaciones** en
+`build/opensc-offline/pkcs11-api-trace-tests.log`, incluidas cuatro para el
+registro real: desactivado por defecto, contenido exacto limitado a
+metadatos, rechazo de eventos desconocidos y conservación de `errno`.
+La compilación completa sin PC/SC pasó y está registrada en
+`pkcs11-api-trace-build.log`. Una aplicación simulada comprobó ambos modos
+del helper, configuración idéntica a la firma, sustitución de variables
+heredadas, permisos y propagación del código de salida. No accedió al lector.
+
+Pendiente: guardar commits primero en el submódulo y luego en el repositorio
+principal, compilar con `make test/iasecc JOBS="$(nproc)"`, cerrar instancias
+anteriores del firmador y hacer **un intento** con
+`make firmador/jcop3-diagnose`. Cerrar el programa y revisar el informe antes
+de repetir login. No se necesita repetir las firmas técnicas verificadas.
+Todavía no se ha capturado este diagnóstico en hardware ni se ha corregido
+el fallo de autenticación. No activar caché de PIN, `atomic` ni `lock_login`
+sin resolver qué interacción falla.

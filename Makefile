@@ -7,7 +7,7 @@ export JOBS
 SLOT_INDEX ?= 0
 export SLOT_INDEX
 
-.PHONY: help probe/jcop3 inspect/jcop3 read-dir/jcop3 build/opensc test/iasecc inspect/jcop3-built inspect/jcop3-pkcs11 inspect/jcop3-pin-context inspect/jcop3-pin-policy inspect/jcop3-key-policy inspect/jcop3-security-env inspect/jcop3-algorithms sign/jcop3 sign/jcop3-sha256 firmador/jcop3
+.PHONY: help probe/jcop3 inspect/jcop3 read-dir/jcop3 build/opensc test/iasecc inspect/jcop3-built inspect/jcop3-pkcs11 inspect/jcop3-pin-context inspect/jcop3-pin-policy inspect/jcop3-key-policy inspect/jcop3-security-env inspect/jcop3-algorithms sign/jcop3 sign/jcop3-sha256 firmador/jcop3 firmador/jcop3-diagnose
 
 help:
 	@printf '%s\n' \
@@ -26,7 +26,8 @@ help:
 		'make inspect/jcop3-algorithms Prueba configuración temporal MSE de RSA/SHA-256, sin PIN.' \
 		'make sign/jcop3            Firma un texto de prueba con PIN y verifica con OpenSSL.' \
 		'make sign/jcop3-sha256     Prueba SHA256-RSA-PKCS con el mismo texto y verificación.' \
-		'make firmador/jcop3        Abre firmador con el módulo y perfil locales, sin depuración APDU.'
+		'make firmador/jcop3        Abre firmador con el módulo y perfil locales, sin depuración APDU.' \
+		'make firmador/jcop3-diagnose Registra únicamente metadatos de sesiones y firma, sin PIN ni APDU.'
 
 probe/jcop3:
 	@bash scripts/probe-jcop3.sh "$$READER"
@@ -72,3 +73,6 @@ sign/jcop3-sha256:
 
 firmador/jcop3:
 	@bash scripts/firmador-jcop3.sh
+
+firmador/jcop3-diagnose:
+	@bash scripts/firmador-jcop3.sh --trace-api

@@ -15,7 +15,7 @@ task_build=$(cd -- "$task_build" && pwd)
 
 read -r -a task_crypto_cflags <<< "$(pkg-config --cflags libcrypto)"
 read -r -a task_crypto_libs <<< "$(pkg-config --libs libcrypto)"
-for task_test in iasecc-fci iasecc-pin-path iasecc-key-path iasecc-sdo iasecc-pin-policy iasecc-sign-setup iasecc-rsa-pkcs; do
+for task_test in iasecc-fci iasecc-pin-path iasecc-key-path iasecc-sdo iasecc-pin-policy iasecc-sign-setup iasecc-rsa-pkcs pkcs11-api-trace; do
     "${CC:-cc}" -std=c99 -D_GNU_SOURCE -DHAVE_CONFIG_H \
         -ffunction-sections -fdata-sections -Wall -Wextra -Werror \
         -Wno-unused-function -Wno-unused-parameter -Wno-deprecated-declarations \

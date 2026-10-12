@@ -25,7 +25,7 @@ medidas de la llave de firma. El mecanismo combinado `SHA256-RSA-PKCS`
 falló en `C_SignFinal`: el camino QSign no soporta OpenSSL 3. El helper
 prepara el DigestInfo SHA-256 en el equipo y pide `RSA-PKCS` a la tarjeta.
 El 11 de octubre de 2026 a las 20:18 de Costa Rica, esta ruta produjo una
-firma de 256 bytes y OpenSSL confirmó `Verified OK`. Pasan 104 comprobaciones
+firma de 256 bytes y OpenSSL confirmó `Verified OK`. Pasan 108 comprobaciones
 locales. Para reproducir la prueba técnica:
 
 ```bash
@@ -58,9 +58,21 @@ para revisar el error. La firma técnica verificada no demuestra todavía
 compatibilidad con firmador. El primer intento falló con
 `CKR_FUNCTION_NOT_SUPPORTED` y `signatureValue cannot be null!`.
 La negociación del hashing SHA-256 ya se corrigió y validó en la tarjeta
-mediante `make sign/jcop3-sha256`. El siguiente paso es volver a probar
-`make firmador/jcop3` después de cerrar cualquier instancia anterior, sin
-recompilar ni repetir la firma técnica.
+mediante `make sign/jcop3-sha256`. El intento posterior del firmador pidió
+el PIN y falló con `CKR_USER_NOT_LOGGED_IN`; no se confirmó el certificado
+seleccionado. Para investigar las sesiones sin capturar PIN ni APDU:
+
+```bash
+make test/iasecc JOBS="$(nproc)"
+make firmador/jcop3-diagnose
+```
+
+Cerrar previamente las instancias del firmador. Realizar una sola firma de
+un PDF de prueba y cerrar el programa. El diagnóstico guarda exclusivamente
+funciones, códigos de retorno, sesiones y metadatos numéricos de llave en
+`local/jcop3-firmador-api-*/api.log`. Mantiene depuración 0 y caché de PIN
+desactivada. El objetivo normal deja este registro desactivado. Revisar
+el informe antes de otro intento; todavía no se ha corregido este fallo.
 
 ## Organización
 
