@@ -17,16 +17,21 @@ Consultar [AGENTS.md](AGENTS.md) y las últimas secciones de
 [docs/jcop3.md](docs/jcop3.md). Ya se leen certificados RSA y la política
 del PIN (7 intentos restantes en la última consulta). Todavía no hay una
 firma exitosa. Se corrigió la lectura de todos los grupos de ACL de los
-objetos RSA, con 49 comprobaciones locales. Falta validar el entorno de
-seguridad 3, la ruta de la llave y las referencias de algoritmo:
+objetos RSA. SE 3 ya apunta al PIN global 1. Se preparó una corrección de
+la ruta de firma: la llave es un objeto nativo en ChipDoc y `0003` no es
+seleccionable como archivo. Pasan 63 comprobaciones locales. Falta validar
+esa corrección y comprobar las referencias de algoritmo:
 
 ```bash
 nix develop
 make test/iasecc JOBS="$(nproc)"
-make inspect/jcop3-security-env
+make inspect/jcop3-pkcs11
+make inspect/jcop3-algorithms
 ```
 
-La consulta guarda un informe local, no solicita PIN y no ejecuta firmas.
+Las consultas guardan informes locales, no solicitan PIN y no ejecutan firmas.
+El diagnóstico de algoritmos configura temporalmente el entorno mediante MSE
+y compara los contadores del PIN antes y después; no modifica objetos almacenados.
 Las secciones siguientes conservan los pasos anteriores de preparación e
 investigación; no es necesario repetirlos al retomar este directorio.
 

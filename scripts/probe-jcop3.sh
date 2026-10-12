@@ -3,8 +3,8 @@ set -euo pipefail
 umask 077
 
 task_mode=${2:---probe}
-if (( $# > 2 )) || [[ ! ${1:-0} =~ ^[0-9]+$ ]] || [[ $task_mode != --probe && $task_mode != --inspect && $task_mode != --read-dir && $task_mode != --pkcs11 && $task_mode != --pin-context && $task_mode != --pin-policy && $task_mode != --key-policy && $task_mode != --security-env ]]; then
-    printf 'Uso: bash scripts/probe-jcop3.sh [índice de lector] [--probe|--inspect|--read-dir|--pkcs11|--pin-context|--pin-policy|--key-policy|--security-env]\n' >&2
+if (( $# > 2 )) || [[ ! ${1:-0} =~ ^[0-9]+$ ]] || [[ $task_mode != --probe && $task_mode != --inspect && $task_mode != --read-dir && $task_mode != --pkcs11 && $task_mode != --pin-context && $task_mode != --pin-policy && $task_mode != --key-policy && $task_mode != --security-env && $task_mode != --algorithms ]]; then
+    printf 'Uso: bash scripts/probe-jcop3.sh [índice de lector] [--probe|--inspect|--read-dir|--pkcs11|--pin-context|--pin-policy|--key-policy|--security-env|--algorithms]\n' >&2
     exit 2
 fi
 
@@ -47,6 +47,8 @@ elif [[ $task_mode == --key-policy ]]; then
     task_report=$(mktemp "$task_root/local/jcop3-key-policy-XXXXXXXX.txt")
 elif [[ $task_mode == --security-env ]]; then
     task_report=$(mktemp "$task_root/local/jcop3-security-env-XXXXXXXX.txt")
+elif [[ $task_mode == --algorithms ]]; then
+    task_report=$(mktemp "$task_root/local/jcop3-algorithms-XXXXXXXX.txt")
 else
     task_report=$(mktemp "$task_root/local/jcop3-inventory-XXXXXXXX.txt")
 fi
@@ -206,7 +208,31 @@ if [[ $task_mode == --security-env ]] && (( task_failed == 0 )); then
         --send-apdu 00A4090402000300 || task_failed=1
 fi
 
-if [[ $task_mode == --read-dir || $task_mode == --pin-context || $task_mode == --pin-policy || $task_mode == --key-policy || $task_mode == --security-env ]]; then
+if [[ $task_mode == --algorithms ]] && (( task_failed == 0 )); then
+    # TokenInfo omits algorithm references. Probe only the constants and MSE
+    # templates already defined by IAS/ECC in OpenSC: SHA2=40, RSA_PKCS=02.
+    # MSE changes volatile operation context; it does not authenticate, sign,
+    # generate keys or modify stored objects. Never send VERIFY or private TLVs.
+    printf '\nquery=CHV_1_DOCP_before_MSE\n' >> "$task_report"
+    task_record env OPENSC_DEBUG=9 opensc-tool --reader "$task_reader" --card-driver default \
+        --send-apdu 00A404040BF0496173456363526F6F7400 \
+        --send-apdu 00CB3FFF0A4D087006BF810102A08000 || task_failed=1
+    printf '\nquery=MSE_SHA256_HT_40_and_DST_RSA_42_key_83\n' >> "$task_report"
+    task_record env OPENSC_DEBUG=9 opensc-tool --reader "$task_reader" --card-driver default \
+        --send-apdu 00A404040EE828BD080FD25047656E6572696300 \
+        --send-apdu 002241AA03800140 \
+        --send-apdu 002241B606840183800142 || task_failed=1
+    printf '\nquery=MSE_AT_RSA_PKCS_02_key_83\n' >> "$task_report"
+    task_record env OPENSC_DEBUG=9 opensc-tool --reader "$task_reader" --card-driver default \
+        --send-apdu 00A404040EE828BD080FD25047656E6572696300 \
+        --send-apdu 002241A406840183800102 || task_failed=1
+    printf '\nquery=CHV_1_DOCP_after_MSE\n' >> "$task_report"
+    task_record env OPENSC_DEBUG=9 opensc-tool --reader "$task_reader" --card-driver default \
+        --send-apdu 00A404040BF0496173456363526F6F7400 \
+        --send-apdu 00CB3FFF0A4D087006BF810102A08000 || task_failed=1
+fi
+
+if [[ $task_mode == --read-dir || $task_mode == --pin-context || $task_mode == --pin-policy || $task_mode == --key-policy || $task_mode == --security-env || $task_mode == --algorithms ]]; then
     # opensc-tool puede devolver 0 aunque una APDU devuelva un SW de error.
     # En el diagnóstico de contexto, los SW negativos también son evidencia.
     task_expected_responses=4
@@ -216,6 +242,8 @@ if [[ $task_mode == --read-dir || $task_mode == --pin-context || $task_mode == -
         task_expected_responses=22
     elif [[ $task_mode == --security-env ]]; then
         task_expected_responses=6
+    elif [[ $task_mode == --algorithms ]]; then
+        task_expected_responses=9
     fi
     task_responses=0
     while IFS= read -r task_line; do

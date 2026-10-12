@@ -156,6 +156,38 @@ static void check_rsa_policy(void)
 	check("a truncated later SDO group is rejected", result == SC_ERROR_INVALID_DATA);
 }
 
+static void check_security_env(void)
+{
+	struct sc_context ctx = {0};
+	struct sc_card card = {0};
+	struct iasecc_se_info se = {0};
+	struct sc_crt crt = {0};
+	/* Identical public response from root and ChipDoc, with no PIN value. */
+	unsigned char captured[] = {
+		0x70,0x27,0xBF,0xFB,0x03,0x23,0x7B,0x21,
+		0xB4,0x09,0x80,0x01,0x00,0x95,0x01,0x30,0x83,0x01,0x00,
+		0xB8,0x09,0x80,0x01,0x00,0x95,0x01,0x30,0x83,0x01,0x00,
+		0xA4,0x09,0x80,0x01,0x00,0x95,0x01,0x08,0x83,0x01,0x01
+	};
+	int result;
+
+	ctx.app_name = "iasecc-security-env-regression";
+	card.ctx = &ctx;
+	se.reference = 3;
+	result = iasecc_se_parse(&card, captured, sizeof(captured), &se);
+	check("captured SE 3 retains its three public CRTs", result == SC_SUCCESS &&
+			se.crts[0].tag == IASECC_CRT_TAG_CCT && se.crts[1].tag == IASECC_CRT_TAG_CT &&
+			se.crts[2].tag == IASECC_CRT_TAG_AT && !se.crts[3].tag);
+	crt.tag = IASECC_CRT_TAG_AT;
+	crt.usage = IASECC_UQB_AT_USER_PASSWORD;
+	result = iasecc_se_get_crt(&card, &se, &crt);
+	check("captured SE 3 authenticates using CHV 1", result == SC_SUCCESS &&
+			crt.refs[0] == 1 && crt.algo == 0 && crt.usage == 0x08);
+	memset(&se, 0, sizeof(se));
+	result = iasecc_se_parse(&card, captured, sizeof(captured)-1, &se);
+	check("a truncated captured SE response is rejected", result == SC_ERROR_INVALID_DATA);
+}
+
 int main(void)
 {
 	struct sc_context ctx = {0};
@@ -210,5 +242,6 @@ int main(void)
 	iasecc_sdo_free_fields(&card, &sdo);
 	check_chipdoc();
 	check_rsa_policy();
+	check_security_env();
 	return failures ? 1 : 0;
 }

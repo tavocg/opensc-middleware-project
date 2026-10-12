@@ -593,3 +593,91 @@ de la ruta `0003`. Esto no aporta evidencia sobre su compatibilidad. Falta
 restaurar la disponibilidad del lector y repetir
 `make inspect/jcop3-security-env`, sin recompilar ni solicitar PIN. Si la
 reconexión no lo resuelve, revisar servicio PC/SC y detección USB.
+
+## SE 3 confirmado y ruta del objeto de firma: 2026-10-11, 18:49 de Costa Rica
+
+Después de una ejecución adicional sin lector (`jcop3-security-env-3Ox7z8hz.txt`),
+los informes `local/jcop3-security-env-yw7ohMX7.txt` y
+`local/jcop3-security-env-OQCXHYVH.txt`, de las 00:49:16 y 00:49:19 UTC del
+12 de octubre, contienen las seis respuestas previstas. Ambos usan OpenSC
+`0c3e1c4f5` y tienen los mismos resultados.
+
+GET DATA de SE 3 devuelve `9000` tanto en ChipDoc como en la raíz. La
+respuesta pública, sin SW, es:
+
+```text
+70 27 BF FB 03 23 7B 21
+B4 09 80 01 00 95 01 30 83 01 00
+B8 09 80 01 00 95 01 30 83 01 00
+A4 09 80 01 00 95 01 08 83 01 01
+```
+
+El parser existente conserva tres CRT. La plantilla AT (`A4`) tiene usage
+`08`, USER PASSWORD, y referencia `01`: el entorno de seguridad exigido por
+las ACL RSA apunta al **CHV 1**, cuya existencia global ya se comprobó.
+El algoritmo `00` de esa plantilla describe la autenticación de usuario;
+no proporciona las referencias ausentes de RSA/SHA-256.
+
+La selección de ChipDoc funciona, pero SELECT por ruta `0003` devuelve
+`6A82` en ambos informes. El DOCP RSA_PRIVATE 3 ya se leyó en esa aplicación:
+la llave existe como objeto nativo, pero el camino PKCS#15 intentaba abrir
+un archivo `0003` antes de configurar MSE.
+
+Se añadió `_iasecc_fixup_signing_key_paths()` a la emulación IAS/ECC. Solo
+actúa sobre Amos + AID Generic PKI, llave RSA nativa de 2048 bits, referencia
+3 y ruta `0003` con ese mismo AID. Conserva el AID y la referencia de llave,
+eliminando la porción de archivo. `select_key_file()` puede así seleccionar
+solo la aplicación; MSE seguirá identificando el objeto RSA por su referencia.
+Se aplica al cargar PrKDF y a los objetos ya cargados durante la inicialización.
+La ruta de la llave de autenticación 2 se mantiene porque no se probó su
+selección. Los permisos y la asociación con el PIN no cambian.
+
+`tests/iasecc-key-path.c` comprueba la corrección, su idempotencia, exclusión
+de otros perfiles y el selector PKCS#15 real con selección simulada.
+`tests/iasecc-sdo.c` reproduce SE 3 y su referencia CHV 1, y rechaza la
+respuesta truncada. Pasan **63 comprobaciones**. La compilación completa
+sin PC/SC terminó; registro `build/opensc-offline/signing-path-build.log`.
+Falta validar la nueva ruta en la enumeración de la tarjeta.
+
+## Comprobar referencias de algoritmo, sin PIN
+
+La tabla `supportedAlgorithms` de TokenInfo sigue ausente. Se añadió
+`make inspect/jcop3-algorithms` para probar las plantillas MSE ya presentes
+en `iasecc_set_security_env()` con las constantes de `iasecc-sdo.h`:
+
+| Plantilla | APDU | Referencia candidata definida por OpenSC |
+| --- | --- | --- |
+| HT, SHA-256 | `00 22 41 AA 03 80 01 40` | `IASECC_ALGORITHM_SHA2 = 40` |
+| DST, RSA/SHA-256 | `00 22 41 B6 06 84 01 83 80 01 42` | RSA_PKCS `02` combinado con SHA2 `40` |
+| AT, RSA PKCS#1 | `00 22 41 A4 06 84 01 83 80 01 02` | `IASECC_ALGORITHM_RSA_PKCS = 02` |
+
+`84 01 83` identifica la referencia de llave local 3 en las plantillas de
+OpenSC. Estas referencias de algoritmo **todavía no están confirmadas para
+la tarjeta**; no se ha añadido un fallback que las asuma. Un `9000` de MSE
+solo demostraría aceptación de la configuración, no una firma correcta.
+
+El diagnóstico selecciona ChipDoc para cada caso, configura HT/DST en una
+misma conexión y compara AT en otra. Antes y después selecciona la raíz y
+lee DOCP del CHV 1 para comparar contadores. Son **nueve respuestas**:
+cuatro SELECT, dos GET DATA y tres MSE. Guarda el informe en
+`local/jcop3-algorithms-*`.
+
+MSE cambia el estado temporal de la operación; no es una consulta puramente
+de lectura. El diagnóstico no transmite VERIFY, PIN, PSO, INTERNAL AUTHENTICATE,
+administración de objetos ni consultas de componentes privados. No genera
+llaves ni modifica archivos. Su secuencia, longitudes y recuento se comprobaron
+con transporte simulado; falta ejecutarlo con la tarjeta.
+
+```bash
+make test/iasecc JOBS="$(nproc)"
+make inspect/jcop3-pkcs11
+make inspect/jcop3-algorithms
+```
+
+Revisar primero la ruta de firma corregida y los SW de MSE. Sigue pendiente
+resolver las referencias ausentes en el driver. Antes del próximo intento
+autenticado, revisar además `iasecc_set_security_env()`: actualmente solicita
+la plantilla privada `7F48` mediante `iasecc_sdo_get_data()`, aunque para
+configurar la operación usa tamaño y ACL del DOCP. Evaluar una lectura limitada
+a DOCP para el perfil observado. No se ha ejecutado esa consulta privada en
+estos diagnósticos ni producido una firma.
