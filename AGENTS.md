@@ -2,8 +2,9 @@
 
 Estado documentado el **11 de octubre de 2026**, después de revisar los informes
 de las 21:34 UTC, SE 3, MSE y el fallo de firma posterior al login de las
-19:41 de Costa Rica y el rechazo de longitud del PIN de las 19:59
-(01:41 y 01:59 UTC del 12 de octubre). Leer este archivo
+19:41 de Costa Rica, el rechazo de longitud del PIN de las 19:59 y la
+consulta pública de las 20:12 que confirma 7/7 intentos
+(01:41, 01:59 y 02:12 UTC del 12 de octubre). Leer este archivo
 al retomar el proyecto y contrastarlo con Git y las capturas más recientes.
 Es un punto de partida, no una afirmación
 de soporte completo de la tarjeta.
@@ -98,7 +99,7 @@ pero no valida comunicación con la tarjeta.
 
 Los últimos commits guardados del driver y su diagnóstico son:
 
-- Repositorio principal: **`26f8926`**, `Record PIN length rejection`.
+- Repositorio principal: **`115d0d5`**, `Document pending PIN metadata check`.
 - Submódulo OpenSC: **`70d7afc20`**, `iasecc: add ChipDoc signing algorithms`.
 - Base upstream original: `c7a377af971df03f879c1697e91ebac1f7e28c56`.
 
@@ -227,6 +228,7 @@ Esto no sustituye pruebas de firma en hardware.
 | **`jcop3-pkcs11-XtNrgvHO.txt`** | 12 de octubre, 01:39:13 UTC, OpenSC `70d7afc20`: lector y ATR visibles, slot 0 presente, dos certificados y dos llaves públicas RSA; correcciones de rutas aplicadas, intentos PIN 7/7 |
 | **`jcop3-signature-CXq9hBMQ/report.txt`** | 12 de octubre, 01:41:29 UTC: certificado leído y login aceptado; `C_SignFinal` devuelve `CKR_FUNCTION_NOT_SUPPORTED`; no hay firma ni verificación OpenSSL |
 | **`jcop3-signature-Pwfndadv/report.txt`** | 12 de octubre, 01:59:58 UTC: helper `RSA-PKCS`, certificado y DigestInfo preparados; `C_Login` devuelve `CKR_PIN_LEN_RANGE`; no se llegó a la firma |
+| **`jcop3-pkcs11-EqveuSwF.txt`** | 12 de octubre, 02:12:28 UTC: mismo módulo y ATR, slot 0 y objetos RSA visibles; AODF 4–20, CHV 4–14, intentos 7/7; no hubo login |
 
 Los informes PKCS#11 y DOCP RSA de las 21:34 UTC ya se revisaron: **no pedir ejecutarlos de nuevo como
 primer paso**. Los DOCP RSA se reprodujeron en las regresiones del parser
@@ -267,10 +269,14 @@ No alterar ninguno de esos límites para eludir el error.
 El usuario no puede confirmar si introdujo el mismo PIN que en el login
 exitoso anterior; cree que sí. La lectura de `util_getpass()` y el paso de
 su resultado a `C_Login` no muestran un cambio entre ambos intentos.
-No se ha consultado el contador después de este intento, ni hay captura
-autenticada. Solicitar `make inspect/jcop3-pkcs11` para contrastar metadatos
-PKCS#15, política pública CHV y contador antes de otro login. Esta consulta
-no pide el PIN; no asumir un error de entrada ni reducir las validaciones.
+La consulta posterior `jcop3-pkcs11-EqveuSwF.txt` confirma que los límites
+permanecen iguales y los intentos siguen en 7/7. Lector, ATR, slot 0 y objetos
+RSA son visibles; persiste PuKDF `-1402`, sin bloquear la enumeración.
+No hubo login en esa consulta ni hay captura autenticada. No se confirmó
+la causa de la entrada rechazada y no se cambiaron límites ni código.
+Se puede solicitar un único intento de `make sign/jcop3`, escribiendo el
+PIN habitual después del prompt, directamente en la terminal. Si vuelve
+a fallar, revisar el informe antes de cualquier otra autenticación.
 
 Las consultas vacías de VERIFY devuelven `63 C7`: PIN no verificado, 7 intentos
 restantes. No llevan el valor del PIN. El primer intento de firma no tuvo
@@ -283,13 +289,13 @@ internos de parsing: revisar las respuestas y el contexto.
 
 1. Los informes de las 19:41 y 19:59 ya se revisaron. Las pruebas pasan y
    el helper actualizado está comprometido; el submódulo sigue en `70d7afc20`.
-   El usuario no recuerda con certeza la entrada del último PIN. Revisar
-   una nueva consulta `make inspect/jcop3-pkcs11`, sin PIN, para comprobar
-   los límites declarados y los intentos restantes después del error.
-   Investigar cualquier diferencia antes de volver a autenticar.
+   La consulta pública de las 20:12 ya se revisó: límites sin cambios,
+   intentos 7/7 y enumeración correcta. El usuario no recuerda con certeza
+   la entrada del último PIN; no se confirmó un error de entrada.
+   No repetir esa consulta como primer paso ni recompilar sin cambios.
    No habilitar APDU durante autenticación. La causa de los `No slots.`
    anteriores sigue sin confirmarse.
-2. Cuando se resuelva ese rechazo, indicar **una ejecución**
+2. Con los metadatos y el contador ya comprobados, indicar **una ejecución**
    de `make sign/jcop3` con el helper actualizado, directamente en su terminal.
    Usa `RSA-PKCS` y `digest-info.der`, manteniendo la verificación SHA-256
    del `message.txt` original. No cambiarlo a `SHA256-RSA-PKCS` todavía.

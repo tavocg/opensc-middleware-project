@@ -885,3 +885,27 @@ entre el login aceptado y el rechazo de longitud. Se solicita una consulta
 `make inspect/jcop3-pkcs11` sin PIN para contrastar los atributos AODF,
 la política pública CHV y los intentos restantes después del fallo.
 No recompilar ni repetir la firma antes de revisar ese nuevo informe.
+
+## Metadatos posteriores al rechazo: 2026-10-11, 20:12 de Costa Rica
+
+`local/jcop3-pkcs11-EqveuSwF.txt`, de las 02:12:28 UTC del 12 de octubre,
+usa OpenSC `70d7afc20`, con el submódulo limpio y el mismo proveedor PC/SC.
+Detecta el lector, el ATR esperado y el slot 0; enumera los dos certificados
+y las dos llaves públicas RSA. Las correcciones de ruta del CHV global
+y de la llave de firma siguen aplicadas. Los comandos terminan con estado 0,
+aunque persiste el error conocido de PuKDF `-1402`.
+
+Los atributos AODF conservan mínimo 4, máximo 20 y longitud almacenada 11.
+El slot anuncia esos límites 4/20. La consulta de política CHV indica
+máximo/mínimo 14/4 y máximo/restantes 7/7. El VERIFY vacío de estado devuelve
+`63 C7`, sin enviar el valor del PIN. Estos resultados coinciden con la
+consulta anterior al login aceptado de las 19:41: no se observa un cambio
+de límites ni una reducción del contador tras el rechazo de longitud.
+La entrada que originó ese rechazo sigue sin conocerse.
+
+No se necesita cambiar el driver ni recompilar por esta evidencia. El
+siguiente paso es un único `make sign/jcop3`, directamente en la terminal,
+escribiendo el PIN habitual solo después del prompt. Mantener depuración 0
+y no redirigir stdout. Revisar el nuevo informe si falla, antes de otro
+login. La ruta RSA-PKCS con DigestInfo aún no se ha probado después de un
+login exitoso; no existe todavía una firma verificada.
