@@ -1,8 +1,8 @@
 # libjcop3p11: contexto para continuar
 
 Estado documentado el **11 de octubre de 2026**, después de revisar los informes
-de las 21:34 UTC, SE 3 y las consultas MSE de las 19:16 de Costa Rica
-(01:16 UTC del 12 de octubre). Leer este archivo
+de las 21:34 UTC, SE 3, las consultas MSE y los tres fallos de firma de las
+19:28 de Costa Rica (01:28 UTC del 12 de octubre). Leer este archivo
 al retomar el proyecto y contrastarlo con Git y las capturas más recientes.
 Es un punto de partida, no una afirmación
 de soporte completo de la tarjeta.
@@ -96,16 +96,14 @@ pero no valida comunicación con la tarjeta.
 
 Los últimos commits guardados del driver y su diagnóstico son:
 
-- Repositorio principal: **`f40cc4d`**, `Test signing path and algorithm setup`.
-- Submódulo OpenSC: **`fb767b3dd`**, `iasecc: fix ChipDoc signing key path`.
+- Repositorio principal: **`f796cb7`**, `Test signing setup and disable PIN cache`.
+- Submódulo OpenSC: **`70d7afc20`**, `iasecc: add ChipDoc signing algorithms`.
 - Base upstream original: `c7a377af971df03f879c1697e91ebac1f7e28c56`.
 
-Las correcciones de ACL, ruta de firma y su diagnóstico ya están comprometidas.
-Está preparado, sin commit al momento de esta edición, el fallback de
-referencias de algoritmo y lectura RSA limitada a DOCP en `card-iasecc.c`,
-con `tests/iasecc-sign-setup.c`. El helper de firma desactiva la caché de PIN;
-también están actualizados el runner de pruebas y la documentación.
-Confirmar siempre este estado mediante Git.
+Las correcciones de ACL, ruta de firma, fallback de referencias de algoritmo
+y lectura RSA limitada a DOCP ya están comprometidas, junto con sus pruebas.
+El helper de firma desactiva la caché de PIN. Ambos árboles estaban limpios
+antes de documentar los tres fallos nuevos. Confirmar siempre mediante Git.
 
 La URL del submódulo aún es `https://github.com/OpenSC/OpenSC.git`. Los commits
 locales del driver necesitarán publicarse en un fork y actualizar esa URL
@@ -174,7 +172,7 @@ Anunciar un mecanismo no demuestra que funcione en esta tarjeta.
    `6A82`. Se limita a Amos + Generic PKI + RSA nativa de 2048 bits y ese AID
    en la ruta. La llave 2 y otros perfiles quedan intactos. La corrección se
    aplica al cargar PrKDF y a los objetos ya cargados en la inicialización.
-7. **Referencias medidas y DOCP público** (pendiente de commit):
+7. **Referencias medidas y DOCP público** (`70d7afc20`):
    `card-iasecc.c` resuelve HT SHA-256 `40`, DST RSA/SHA-256 `42` y AT RSA_PKCS
    `02` cuando no hay tabla declarada. Se limita a Amos, DF seleccionado con
    el AID Generic PKI, RSA 2048 y referencia de llave 3. Tablas declaradas y
@@ -206,7 +204,7 @@ Esto no sustituye pruebas de firma en hardware.
 | Captura local | Resultado relevante |
 | --- | --- |
 | `jcop3-inspection-WAZLkGL7.txt` | Certificados legibles tras corregir FCP |
-| `jcop3-signature-S8Pd9rPG/report.txt` | Único intento de firma: `C_Login` falla con `CKR_GENERAL_ERROR`; no hay firma |
+| `jcop3-signature-S8Pd9rPG/report.txt` | Intento anterior que llegó a `C_Login`: falla con `CKR_GENERAL_ERROR`; no hay firma |
 | `jcop3-pin-context-6Hd0jGpP.txt` | CHV 1 accesible en raíz; `0001` no seleccionable |
 | `jcop3-pkcs11-gYBEWLz8.txt` | SDO ya conserva CHV 1, pero parser antiguo rechaza `C9` |
 | `jcop3-pin-policy-9U5otg3U.txt` | Selecciones anidadas devuelven DOCP entero; controles idénticos, 7/7 intentos |
@@ -216,6 +214,7 @@ Esto no sustituye pruebas de firma en hardware.
 | **`jcop3-security-env-yw7ohMX7.txt`**, **`jcop3-security-env-OQCXHYVH.txt`** | 12 de octubre, 00:49:16 y 00:49:19 UTC: seis respuestas idénticas; SE 3 legible en ambos AID, AT USER PASSWORD referencia 1; SELECT `0003` devuelve `6A82` |
 | **`jcop3-pkcs11-OwOOGiF2.txt`** | 12 de octubre, 01:16:15 UTC: corrección de ruta de firma aplicada por PKCS#15 y PKCS#11; límites PIN 14/4, intentos 7/7 |
 | **`jcop3-algorithms-FinI8oaD.txt`** | 12 de octubre, 01:16:28 UTC: nueve respuestas `9000`; HT `40`, DST `42` y AT `02` aceptados; DOCP CHV 1 antes/después idénticos, 7/7 intentos |
+| **`jcop3-signature-FktWTv57/report.txt`**, **`jcop3-signature-jQYkimJu/report.txt`**, **`jcop3-signature-54OpXE2f/report.txt`** | 12 de octubre, 01:28:26, 01:28:46 y 01:28:53 UTC, OpenSC `70d7afc20`: `No slots.` en lectura del certificado; no se ejecutó el comando autenticado |
 
 Los informes PKCS#11 y DOCP RSA de las 21:34 UTC ya se revisaron: **no pedir ejecutarlos de nuevo como
 primer paso**. Los DOCP RSA se reprodujeron en las regresiones del parser
@@ -227,8 +226,13 @@ DOCP `A0`, nunca la plantilla `7F48` ni componentes privados.
 TokenInfo no incluye `supportedAlgorithms`, y las llaves muestran
 `Algo_refs: 0`. Se preparó el fallback limitado a las tres referencias MSE
 aceptadas. La corrección de ruta ya aparece en la enumeración de la tarjeta.
-El siguiente hito es un intento de login/firma, que todavía no se ha ejecutado
-con el conjunto actual. Aceptar MSE no demuestra una operación RSA correcta.
+Con el conjunto actual hubo tres ejecuciones del helper, pero todas se
+detuvieron en la enumeración de slots previa a leer el certificado. Ninguna
+ejecutó `--login --sign` ni verificó un PIN. Los informes no distinguen entre
+lector no visible, servicio PC/SC inaccesible o configuración de slots.
+La compilación tiene PC/SC habilitado y existe la biblioteca del proveedor
+configurado; falta diagnosticar su disponibilidad en la terminal del usuario.
+Aceptar MSE no demuestra una operación RSA correcta.
 
 Las consultas vacías de VERIFY devuelven `63 C7`: PIN no verificado, 7 intentos
 restantes. No llevan el valor del PIN. El primer intento de firma no tuvo
@@ -239,11 +243,13 @@ internos de parsing: revisar las respuestas y el contexto.
 
 ## Próximo trabajo, en orden
 
-1. Los últimos diagnósticos ya se revisaron; no repetir SE 3, ruta ni MSE
-   sin un motivo nuevo. Dar comandos de commit para `card-iasecc.c`, las
-   regresiones y el helper de firma actualizado, primero en el submódulo.
-2. Dentro de `nix develop`, indicar al usuario `make test/iasecc JOBS="$(nproc)"`
-   y **una ejecución** de `make sign/jcop3`, directamente en su terminal.
+1. Los tres fallos de las 19:28 ya se revisaron: el bloqueo actual es
+   `No slots.`. Pedir `make inspect/jcop3-pkcs11` dentro de `nix develop`,
+   con el lector conectado y la tarjeta insertada. Este diagnóstico usa
+   la compilación actual y no pide PIN. No repetir firma, SE 3 ni MSE
+   hasta distinguir disponibilidad PC/SC de enumeración PKCS#11.
+2. Después de resolver ese bloqueo, indicar al usuario **una ejecución**
+   de `make sign/jcop3`, directamente en su terminal.
    El helper configura `use_pin_caching = no`, `OPENSC_DEBUG=0` y `debug = 0`.
    No redirigir stdout ni pedir capturas APDU autenticadas. Revisar el nuevo
    `local/jcop3-signature-*/report.txt`, separando C_Login, C_Sign y OpenSSL.

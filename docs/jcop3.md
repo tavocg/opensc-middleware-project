@@ -738,3 +738,34 @@ no un PDF. Todavía no se ha validado login con este conjunto de correcciones,
 ni una operación RSA efectiva. Revisar el informe de
 `local/jcop3-signature-*` para distinguir login, firma y verificación OpenSSL.
 Si falla, detenerse e investigar el resultado antes de otra autenticación.
+
+## Fallo antes del PIN: 2026-10-11, 19:28 de Costa Rica
+
+Las ejecuciones guardadas en `jcop3-signature-FktWTv57`,
+`jcop3-signature-jQYkimJu` y `jcop3-signature-54OpXE2f`, a las
+01:28:26, 01:28:46 y 01:28:53 UTC del 12 de octubre, usan OpenSC
+`70d7afc20`. Los tres informes muestran el mismo fallo: `No slots.` y
+estado de salida 1 al ejecutar `--read-object --type cert`.
+
+El helper no llegó a ejecutar `--login --sign`. En `pkcs11-tool.c`,
+`No slots.` se emite después de inicializar el módulo y enumerar slots,
+antes de abrir sesión, leer el certificado o autenticar. Por ello, estas
+tres ejecuciones no verificaron un PIN ni probaron la nueva preparación RSA.
+No hay evidencia de un PIN incorrecto en ellas.
+
+El mensaje establece que la enumeración PKCS#11 está vacía, pero no explica
+su causa. Podría faltar visibilidad del lector o acceso al servicio PC/SC;
+también hay que revisar la configuración de slots. `build/opensc/config.h`
+confirma `ENABLE_PCSC=1` y la biblioteca configurada de pcsclite existe.
+Esto descarta que esta compilación sea la variante offline, pero no prueba
+que pueda acceder al servicio o al lector durante la ejecución del usuario.
+
+El siguiente diagnóstico usa la compilación existente, sin PIN ni firma:
+
+```bash
+make inspect/jcop3-pkcs11
+```
+
+Ejecutarlo dentro de `nix develop`, con el lector conectado y la tarjeta
+insertada. Revisar primero lector y ATR, después slots y objetos. No repetir
+firma ni los diagnósticos MSE mientras esté pendiente ese resultado.
