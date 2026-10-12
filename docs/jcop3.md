@@ -579,3 +579,17 @@ y una selección de ruta. El informe se guarda en
 ni comandos administrativos. Una prueba con transporte simulado verificó
 longitudes, referencias, contextos y número de respuestas. Su compatibilidad
 real y el contenido de SE 3 siguen pendientes de la tarjeta.
+
+## Consulta de SE sin lector: 2026-10-11, 18:31 de Costa Rica
+
+Los cambios ya están guardados: repositorio principal `2ef3ccd` y OpenSC
+`0c3e1c4f5`. El informe `local/jcop3-security-env-MMjEmIcC.txt`, de
+`2026-10-12T00:31:57Z`, identifica la compilación con PC/SC, pero la lista
+de lectores devuelve `No smart card readers found`. La consulta del ATR
+falla con `Failed to connect to reader: No readers found` y estado 1.
+
+El script se detiene antes de las consultas: no hay respuestas de SE 3 ni
+de la ruta `0003`. Esto no aporta evidencia sobre su compatibilidad. Falta
+restaurar la disponibilidad del lector y repetir
+`make inspect/jcop3-security-env`, sin recompilar ni solicitar PIN. Si la
+reconexión no lo resuelve, revisar servicio PC/SC y detección USB.

@@ -1,7 +1,8 @@
 # libjcop3p11: contexto para continuar
 
 Estado documentado el **11 de octubre de 2026**, después de revisar los informes
-de las 21:34 UTC y corregir la lectura de ACL de los SDO RSA. Leer este archivo
+de las 21:34 UTC, corregir la lectura de ACL de los SDO RSA y revisar la
+consulta de las 18:31 de Costa Rica (00:31 UTC del 12 de octubre). Leer este archivo
 al retomar el proyecto y contrastarlo con Git y las capturas más recientes.
 Es un punto de partida, no una afirmación
 de soporte completo de la tarjeta.
@@ -93,17 +94,16 @@ pero no valida comunicación con la tarjeta.
 
 ## Git al momento de esta documentación
 
-Los commits guardados antes de la última corrección son:
+Los últimos commits guardados del driver y su diagnóstico son:
 
-- Repositorio principal: **`6a3d4a6`**, `Consolidate agent instructions`.
-- Submódulo OpenSC: **`840a7b204`**, `iasecc: support observed ChipDoc PIN policy`.
+- Repositorio principal: **`2ef3ccd`**, `Test RSA policies and probe signing context`.
+- Submódulo OpenSC: **`0c3e1c4f5`**, `iasecc: parse all SDO ACL groups`.
 - Base upstream original: `c7a377af971df03f879c1697e91ebac1f7e28c56`.
 
-Está preparada, todavía sin commit, la corrección de ACL de SDO en
-`vendor/opensc/src/libopensc/iasecc-sdo.c`, con regresiones en
-`tests/iasecc-sdo.c`, un nuevo diagnóstico `inspect/jcop3-security-env` y
-actualizaciones de documentación. Confirmar este estado mediante Git;
-el usuario puede haber hecho los commits desde su terminal.
+La corrección de ACL de SDO, sus regresiones y el diagnóstico
+`inspect/jcop3-security-env` ya están comprometidos. La actualización de
+documentación por la consulta sin lector queda pendiente de commit al
+momento de esta edición. Confirmar siempre este estado mediante Git.
 
 La URL del submódulo aún es `https://github.com/OpenSC/OpenSC.git`. Los commits
 locales del driver necesitarán publicarse en un fork y actualizar esa URL
@@ -160,7 +160,7 @@ Anunciar un mecanismo no demuestra que funcione en esta tarjeta.
    de esa ACL se rechazan. No implementa la política contactless.
    `card-iasecc.c` marca `read_verify_only` y bloquea cambio/desbloqueo antes
    de cualquier autenticación.
-5. **Todos los grupos de ACL de SDO** (pendiente de commit):
+5. **Todos los grupos de ACL de SDO** (`0c3e1c4f5`):
    `iasecc_parse_acls()` también perdía los grupos posteriores al primero.
    Ahora conserva todas las condiciones de los DOCP RSA capturados, acepta
    repeticiones idénticas y rechaza alternativas distintas y truncamientos.
@@ -196,8 +196,9 @@ Esto no sustituye pruebas de firma en hardware.
 | `jcop3-pin-policy-9U5otg3U.txt` | Selecciones anidadas devuelven DOCP entero; controles idénticos, 7/7 intentos |
 | **`jcop3-pkcs11-cRVr2acc.txt`** | Última consulta, 21:34:21 UTC, OpenSC `840a7b204`: política del PIN leída, límites 14/4 e intentos 7/7 |
 | **`jcop3-key-policy-egE7wr1j.txt`** | Última consulta, 21:34:35 UTC: SELECT ChipDoc y GET DOCP de RSA_PRIVATE 2 y 3 devuelven `9000` |
+| **`jcop3-security-env-MMjEmIcC.txt`** | 12 de octubre, 00:31:57 UTC (11 de octubre, 18:31 en Costa Rica): PC/SC no encuentra lectores; ninguna consulta SE/ruta se ejecutó |
 
-Los dos últimos informes ya se revisaron: **no pedir ejecutarlos de nuevo como
+Los informes PKCS#11 y DOCP RSA de las 21:34 UTC ya se revisaron: **no pedir ejecutarlos de nuevo como
 primer paso**. Los DOCP RSA se reprodujeron en las regresiones del parser
 corregido; ambos declaran tamaño 256 bytes y ACL idénticas. La condición de
 firma `13` significa autenticación de usuario mediante SE 3 según OpenSC;
@@ -220,10 +221,14 @@ internos de parsing: revisar las respuestas y el contexto.
 
 ## Próximo trabajo, en orden
 
-1. Dar al usuario los comandos de commit para la corrección de ACL de SDO
-   y el diagnóstico, y ejecutar desde su terminal:
-   `make test/iasecc JOBS="$(nproc)"` y `make inspect/jcop3-security-env`.
-   El último objetivo no recompila ni solicita PIN. Envía seis APDU:
+1. El último diagnóstico se detuvo en el inventario: `No smart card readers
+   found`, seguido de `Failed to connect to reader: No readers found`.
+   No permite distinguir desconexión del lector de un problema del servicio.
+   Pedir al usuario reconectar el lector, insertar la tarjeta y repetir
+   `make inspect/jcop3-security-env` desde `nix develop`. Si persiste,
+   revisar el servicio PC/SC y detección USB antes de investigar APDU.
+   No repetir commits ni compilación sin cambios. El objetivo no solicita PIN;
+   cuando encuentra lector, envía seis APDU:
    SELECT/GET DATA de SE 3 en ChipDoc y raíz, y SELECT ChipDoc/ruta `0003`.
    Se verificó con transporte simulado, todavía no con la tarjeta.
 2. Revisar `local/jcop3-security-env-*` cuando exista una captura real:
