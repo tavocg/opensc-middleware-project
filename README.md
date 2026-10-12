@@ -82,8 +82,10 @@ Mantiene depuración 0 y caché de PIN desactivada; no registra PIN, su longitud
 rutas, documentos, certificados ni buffers APDU. Las banderas de intentos
 del token utilizan metadatos públicos anteriores y pueden estar desactualizadas.
 Login sigue verificando el PIN. El experimento está desactivado por defecto,
-no modifica los modos normal/diagnóstico y aún no se ha probado en hardware.
-Revisar el informe antes de otro intento; todavía no hay una corrección validada.
+no modifica los modos normal/diagnóstico y produjo una firma en hardware.
+La captura de las 23:34 confirmó login, RSA AT y `C_SignFinal` exitosos,
+con una firma de 256 bytes y llave 3. No repetirla como primer paso.
+Falta validar el PDF guardado y diseñar la corrección definitiva.
 
 ## Organización
 

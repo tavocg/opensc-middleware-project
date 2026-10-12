@@ -1412,3 +1412,51 @@ simulada en los tres modos: variables heredadas eliminadas, mismo módulo y
 configuración, caché PIN desactivada, permisos privados, marca específica
 solo en experimento y propagación del código de salida. No se abrió Java,
 no se usó lector y no se pidió PIN en esas verificaciones.
+
+## Primera operación exitosa del firmador: 2026-10-11, 23:34
+
+`local/jcop3-firmador-api-WV8KnIjI/report.txt` registra 05:34:00 UTC del
+12 de octubre, OpenSC `da1edb457`, sin cambios locales, y las marcas
+`session_state_experiment=yes` y
+`pin_query_experiment=session_and_token_info`. El repositorio principal está
+en `9c4281a`; ambos árboles estaban limpios al revisar. El usuario informa
+que parece funcionar. El registro de 173 líneas confirma:
+
+- Un `C_Login CKR_OK`, seguido de `TOKEN_PIN_CACHED` y tres
+  `SESSION_LOGIN_STATE`; se activó la omisión ampliada de consultas.
+- Después del login no hay SELECT raíz, consultas físicas de PIN ni
+  eventos de reset. La firma realiza un único SELECT ChipDoc, con `9000`.
+- `CKM_SHA256_RSA_PKCS (0x40)` y **llave 3, RSA 2048**, `LlaveDeFirma`.
+- `KEY_SELECT`, `CARD_KEY_DOCP`, `CARD_MSE (9000)` y `KEY_MSE` pasan.
+- **`CARD_SIGN_AT rv=0, SW=9000`** y **`KEY_COMPUTE rv=0x100`**:
+  la operación RSA devuelve 256 bytes.
+- **`C_SignFinal CKR_OK`** con buffer de salida. No hay revalidación PIN,
+  segunda operación RSA, logout ni cierre de sesión intermedios.
+
+Es la primera operación de firma exitosa observada en el firmador con este
+módulo. El logout `0x101` anterior al login no es un fallo de la firma.
+El resultado valida la ruta PKCS#11 bajo el experimento y concuerda con
+el mensaje del usuario; **aún no verifica el PDF guardado**, su integridad,
+la cobertura de sus rangos, la confianza del certificado ni sello/revocación.
+No hay PDF en `local/` al revisar. Se pidió su ruta para validación local;
+no repetir login/firma o compilación como primer paso.
+
+Comparación con las 21:54: aquel registro tenía una consulta token y cuatro
+consultas sesión tras login, 15 SELECT raíz y rechazo RSA `6982`; este omite
+las dos clases de consulta y obtiene `9000`. El experimento anterior que
+solo omitía consultas de sesión había fallado. Esto sustenta investigar
+el efecto de consultas/selecciones posteriores al login, pero no aísla
+SELECT frente a VERIFY vacío o GET DATA, ni define `C9`. Tampoco valida
+concurrencia, recuperación ante reset o todos los algoritmos de la tarjeta.
+No promover aún el experimento a comportamiento normal: sus banderas de
+intentos utilizan metadatos anteriores y su estado físico queda UNKNOWN.
+
+El siguiente paso es verificar el PDF localmente. El `pdfsig` del sistema
+(26.09.0) admite `-nocert` para omitir validación del certificado y
+`-no-ocsp` para omitir OCSP en línea. Esa comprobación debe revisar estado
+de firma y cobertura de rangos, conservando resultados identificables en
+`local/`; no acredita confianza/revocación al omitir esas verificaciones.
+Después se diseñará la corrección definitiva y sus regresiones para
+consultas de estado/política. No hubo cambios de código ni nuevas pruebas
+de tarjeta durante esta revisión; siguen pasando las 151 comprobaciones
+registradas antes de este intento.
