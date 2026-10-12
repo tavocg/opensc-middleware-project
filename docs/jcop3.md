@@ -1191,3 +1191,80 @@ Cerrar el programa y revisar el nuevo registro antes de otro intento.
 No repetir las firmas técnicas verificadas ni ejecutar el diagnóstico
 con la versión anterior esperando obtener estos eventos. El problema de
 autenticación sigue pendiente de localizar y corregir.
+
+## RSA rechazado y prueba aislada de estado de sesión: 2026-10-11, 21:24
+
+`local/jcop3-firmador-api-hBIzcp79/report.txt`, de las 03:24:32 UTC del 12
+de octubre, usa OpenSC `a19ee5927`, sin cambios locales. El repositorio
+principal está en `e12692b`; ambos árboles estaban limpios al revisar la
+captura. El registro contiene 95 líneas y un solo login/firma:
+
+- `C_Login CKR_OK`; cuatro consultas de sesión informan PIN autenticado
+  y `CKS_RW_USER_FUNCTIONS`, sin logout/cierre intermedio.
+- `CKM_SHA256_RSA_PKCS`, llave 3, RSA 2048.
+- `KEY_SELECT`, `CARD_KEY_DOCP`, `CARD_MSE (9000)` y `KEY_MSE` pasan.
+- **`CARD_SIGN_AT` devuelve `6982`**, traducido a
+  `SC_ERROR_SECURITY_STATUS_NOT_SATISFIED (-1211)`.
+- `KEY_COMPUTE` conserva ese error; la llamada existente de revalidación
+  queda rechazada, con caché PIN desactivada. No hay segunda operación RSA.
+- `C_SignFinal` lo traduce a `CKR_USER_NOT_LOGGED_IN`.
+
+Esto localiza el rechazo en la tarjeta al ejecutar RSA AT, después de una
+selección y configuración MSE exitosas. No es un fallo de enumeración,
+elección de llave ni negociación de SHA-256 en esta sesión. `6982` no
+determina por sí solo qué condición de autenticación quedó insatisfecha.
+No hay firma PDF verificable; los avisos de `signatureValue cannot be null!`
+son posteriores a ese rechazo y no demuestran un problema de Internet.
+
+Una diferencia observable con la firma técnica verificada es que Java
+llama repetidamente a `C_GetSessionInfo` después del login. Cada consulta
+ejecuta `sc_pkcs15_get_pin_info`, que selecciona la ruta MF corregida, y
+`iasecc_pin_get_info`, que consulta estado y después política. La lectura de
+política vuelve a seleccionar MF y restaura el DF guardado. Las consultas
+de estado informan PIN autenticado, pero no muestran si esas selecciones
+afectan condiciones adicionales necesarias para firmar. Esta relación
+es una **hipótesis**, no una causa demostrada.
+
+Se añadió `make firmador/jcop3-session-state`, una prueba aislada optativa
+que activa `OPENSC_JCOP3_SESSION_STATE=yes`, además del mismo registro de
+metadatos. El cambio en `framework-pkcs15.c` solo omite la consulta física
+de PIN de `C_GetSessionInfo` si ya hay login CKU_USER y coinciden Amos,
+AID Generic PKI, PIN de tipo CHV global referencia 1 y ruta MF `3F00`
+sin AID. PIN local, SO, PUK, otros perfiles y sesiones sin login siguen
+el comportamiento anterior. El login inicial mantiene su verificación
+normal; el experimento no acredita ni crea un login.
+
+Al omitir la consulta retorna `SC_PIN_STATE_UNKNOWN`, y el código existente
+de `C_GetSessionInfo` conserva el estado de sesión a partir de
+`slot->login_user`. No presenta ese valor como una lectura física del PIN.
+`SESSION_LOGIN_STATE session=0 rv=0 a=0 b=1` distingue el experimento de
+`PIN_STATUS`. La detección de presencia/cambio de tarjeta de
+`C_GetSessionInfo`, login/logout y errores de firma siguen ejecutándose.
+No se añaden comandos, autenticaciones, reintentos ni almacenamiento de PIN.
+
+Los objetivos normal y `firmador/jcop3-diagnose` eliminan la variable
+experimental heredada. Solo el objetivo nuevo la activa; `report.txt`
+incluye `session_state_experiment=yes` para identificar la comparación.
+Se conservan depuración 0, emulación primero, cachés de archivos/PIN
+desactivadas y permisos privados. El modo normal no cambia de comportamiento.
+
+Pasan **129 comprobaciones**, incluidas 17 nuevas en
+`tests/pkcs11-session-state.c`. Usan la función real del framework con
+consulta física simulada y comprueban: comportamiento predeterminado,
+ausencia de consultas repetidas tras login al activar el experimento,
+estado físico UNKNOWN, imposibilidad de crear login y exclusión de los
+otros perfiles/PIN/usuarios. No utilizan PIN ni lector. La compilación
+completa sin PC/SC pasó; los informes son
+`build/opensc-offline/chipdoc-session-state-tests.log` y
+`chipdoc-session-state-build.log`. El helper también pasó una prueba con
+aplicación simulada en sus tres modos: entorno aislado, misma configuración,
+permisos, marca del experimento y propagación del código de salida.
+
+Pendiente: guardar commits, compilar con
+`make test/iasecc JOBS="$(nproc)"`, cerrar instancias anteriores del firmador
+y hacer **un intento** con `make firmador/jcop3-session-state`. Cerrar y
+revisar el nuevo registro antes de repetir login. Si funciona, verificar
+el PDF y diseñar la corrección definitiva con esa evidencia; si falla,
+la hipótesis no se confirma y habrá que revisar las otras diferencias de
+contexto. No activar este experimento por defecto ni reclamar una solución
+validada antes de esa comparación. No repetir la firma técnica previa.

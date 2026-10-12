@@ -7,7 +7,7 @@ export JOBS
 SLOT_INDEX ?= 0
 export SLOT_INDEX
 
-.PHONY: help probe/jcop3 inspect/jcop3 read-dir/jcop3 build/opensc test/iasecc inspect/jcop3-built inspect/jcop3-pkcs11 inspect/jcop3-pin-context inspect/jcop3-pin-policy inspect/jcop3-key-policy inspect/jcop3-security-env inspect/jcop3-algorithms sign/jcop3 sign/jcop3-sha256 firmador/jcop3 firmador/jcop3-diagnose
+.PHONY: help probe/jcop3 inspect/jcop3 read-dir/jcop3 build/opensc test/iasecc inspect/jcop3-built inspect/jcop3-pkcs11 inspect/jcop3-pin-context inspect/jcop3-pin-policy inspect/jcop3-key-policy inspect/jcop3-security-env inspect/jcop3-algorithms sign/jcop3 sign/jcop3-sha256 firmador/jcop3 firmador/jcop3-diagnose firmador/jcop3-session-state
 
 help:
 	@printf '%s\n' \
@@ -27,7 +27,8 @@ help:
 		'make sign/jcop3            Firma un texto de prueba con PIN y verifica con OpenSSL.' \
 		'make sign/jcop3-sha256     Prueba SHA256-RSA-PKCS con el mismo texto y verificación.' \
 		'make firmador/jcop3        Abre firmador con el módulo y perfil locales, sin depuración APDU.' \
-		'make firmador/jcop3-diagnose Registra únicamente metadatos de sesiones y firma, sin PIN ni APDU.'
+		'make firmador/jcop3-diagnose Registra únicamente metadatos de sesiones y firma, sin PIN ni APDU.' \
+		'make firmador/jcop3-session-state Prueba aislada: omite consultas físicas de PIN de C_GetSessionInfo tras login.'
 
 probe/jcop3:
 	@bash scripts/probe-jcop3.sh "$$READER"
@@ -76,3 +77,6 @@ firmador/jcop3:
 
 firmador/jcop3-diagnose:
 	@bash scripts/firmador-jcop3.sh --trace-api
+
+firmador/jcop3-session-state:
+	@bash scripts/firmador-jcop3.sh --session-state

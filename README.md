@@ -25,7 +25,7 @@ medidas de la llave de firma. El mecanismo combinado `SHA256-RSA-PKCS`
 falló en `C_SignFinal`: el camino QSign no soporta OpenSSL 3. El helper
 prepara el DigestInfo SHA-256 en el equipo y pide `RSA-PKCS` a la tarjeta.
 El 11 de octubre de 2026 a las 20:18 de Costa Rica, esta ruta produjo una
-firma de 256 bytes y OpenSSL confirmó `Verified OK`. Pasan 112 comprobaciones
+firma de 256 bytes y OpenSSL confirmó `Verified OK`. Pasan 129 comprobaciones
 locales. Para reproducir la prueba técnica:
 
 ```bash
@@ -61,20 +61,25 @@ La negociación del hashing SHA-256 ya se corrigió y validó en la tarjeta
 mediante `make sign/jcop3-sha256`. El intento posterior del firmador pidió
 el PIN y falló con `CKR_USER_NOT_LOGGED_IN`. El diagnóstico de las 21:06
 confirmó login exitoso, llave de firma 3 y fallo en `C_SignFinal`, sin logout
-intermedio. Se amplió el registro para distinguir selección, MSE y operación
-RSA, sin capturar PIN ni contenido de APDU. Para usarlo:
+intermedio. La ampliación de las 21:24 confirma selección y MSE exitosos,
+pero rechazo `6982` al ejecutar RSA. Falta explicar la condición de seguridad.
+Para probar aisladamente si influyen las consultas de `C_GetSessionInfo`
+posteriores al login, se añadió un experimento desactivado por defecto:
 
 ```bash
 make test/iasecc JOBS="$(nproc)"
-make firmador/jcop3-diagnose
+make firmador/jcop3-session-state
 ```
 
 Cerrar previamente las instancias del firmador. Realizar una sola firma de
 un PDF de prueba y cerrar el programa. El diagnóstico guarda exclusivamente
 funciones, códigos de retorno, sesiones y metadatos numéricos de llave en
 `local/jcop3-firmador-api-*/api.log`. Mantiene depuración 0 y caché de PIN
-desactivada. El objetivo normal deja este registro desactivado. Revisar
-el informe antes de otro intento; todavía no se ha corregido este fallo.
+desactivada. En el perfil observado, después de login exitoso, omite la
+consulta física de PIN de `C_GetSessionInfo` y conserva el estado PKCS#11
+de sesión. No evita la autenticación ni cambia el PIN. El objetivo normal
+y `firmador/jcop3-diagnose` mantienen esas consultas. Revisar el informe
+antes de otro intento; todavía no se ha validado una corrección de este fallo.
 
 ## Organización
 

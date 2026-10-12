@@ -5,11 +5,15 @@ umask 077
 task_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 task_module="$task_root/build/opensc/src/pkcs11/.libs/opensc-pkcs11.so"
 task_trace_api=no
+task_session_state=no
 
 if (( $# == 1 )) && [[ $1 == --trace-api ]]; then
     task_trace_api=yes
+elif (( $# == 1 )) && [[ $1 == --session-state ]]; then
+    task_trace_api=yes
+    task_session_state=yes
 elif (( $# != 0 )); then
-    printf 'Uso: make firmador/jcop3 o make firmador/jcop3-diagnose\n' >&2
+    printf 'Uso: make firmador/jcop3, make firmador/jcop3-diagnose o make firmador/jcop3-session-state\n' >&2
     exit 2
 fi
 if [[ ! -r "$task_module" ]]; then
@@ -22,7 +26,7 @@ if ! command -v firmador >/dev/null 2>&1; then
 fi
 
 mkdir -p -- "$task_root/local"
-task_env=(env -u OPENSC_API_TRACE_FILE OPENSC_DEBUG=0 LIBASEP11="$task_module")
+task_env=(env -u OPENSC_API_TRACE_FILE -u OPENSC_JCOP3_SESSION_STATE OPENSC_DEBUG=0 LIBASEP11="$task_module")
 if [[ $task_trace_api == yes ]]; then
     task_output=$(mktemp -d "$task_root/local/jcop3-firmador-api-XXXXXXXX")
     task_config="$task_output/opensc.conf"
@@ -30,6 +34,7 @@ if [[ $task_trace_api == yes ]]; then
     : > "$task_trace"
     {
         printf 'date_utc=%s\nmodule=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$task_module"
+        printf 'session_state_experiment=%s\n' "$task_session_state"
         git -C "$task_root/vendor/opensc" rev-parse HEAD
         git -C "$task_root/vendor/opensc" status --short
     } > "$task_output/report.txt"
@@ -37,6 +42,10 @@ if [[ $task_trace_api == yes ]]; then
     printf 'Informe API (solo metadatos): %s\n' "$task_trace"
 else
     task_config=$(mktemp "$task_root/local/jcop3-firmador-XXXXXXXX.conf")
+fi
+if [[ $task_session_state == yes ]]; then
+    task_env+=(OPENSC_JCOP3_SESSION_STATE=yes)
+    printf 'Experimento: C_GetSessionInfo utiliza el estado del login, sin consultar el PIN después de autenticar.\n'
 fi
 cat > "$task_config" <<'CONFIG'
 app default {

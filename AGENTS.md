@@ -8,8 +8,11 @@ consulta pública de las 20:12 y la primera firma verificada de las 20:18
 del firmador con `CKR_FUNCTION_NOT_SUPPORTED` y la firma combinada verificada
 de las 20:37 de Costa Rica (02:37 UTC del 12 de octubre), y el nuevo fallo
 del firmador con `CKR_USER_NOT_LOGGED_IN` y su diagnóstico de las 21:06
-de Costa Rica (03:06 UTC del 12 de octubre). Ese registro confirma login
-exitoso, selección de la llave de firma 3 y fallo en `C_SignFinal`.
+de Costa Rica (03:06 UTC del 12 de octubre), y el diagnóstico ampliado
+de las 21:24 (03:24 UTC): selección y MSE pasan, pero RSA AT devuelve
+`6982`. El login pasó y se usó la llave de firma 3. La causa de la condición
+de seguridad insatisfecha sigue pendiente; se preparó una prueba optativa
+que omite consultas físicas posteriores de `C_GetSessionInfo`.
 Leer este archivo
 al retomar el proyecto y contrastarlo con Git y las capturas más recientes.
 Es un punto de partida, no una afirmación
@@ -99,7 +102,7 @@ make test/iasecc JOBS="$(nproc)"
 selecciona slot PKCS#11; no son necesariamente el mismo índice.
 `inspect/jcop3-pkcs11`, los diagnósticos de política, `sign/jcop3`,
 `sign/jcop3-sha256`,
-`firmador/jcop3` y `firmador/jcop3-diagnose` utilizan
+`firmador/jcop3`, `firmador/jcop3-diagnose` y `firmador/jcop3-session-state` utilizan
 la compilación existente: **no recompilan**.
 
 Las restricciones del entorno del agente pueden impedir usar el daemon de
@@ -110,8 +113,8 @@ pero no valida comunicación con la tarjeta.
 
 Los últimos commits guardados del driver y su diagnóstico son:
 
-- Repositorio principal: **`7eb8fb0`**, `Add firmador session diagnostics`.
-- Submódulo OpenSC: **`f7752be36`**, `pkcs11: add metadata-only session trace`.
+- Repositorio principal: **`e12692b`**, `Investigate firmador authentication failure`.
+- Submódulo OpenSC: **`a19ee5927`**, `Trace PKCS15 signing stages`.
 - Base upstream original: `c7a377af971df03f879c1697e91ebac1f7e28c56`.
 
 Las correcciones de ACL, ruta de firma, fallback de referencias de algoritmo
@@ -127,9 +130,13 @@ Al comenzar a investigar `CKR_USER_NOT_LOGGED_IN`, ambos árboles estaban
 limpios. El diagnóstico PKCS#11, sus pruebas y `firmador/jcop3-diagnose` ya
 están comprometidos; el usuario ejecutó el diagnóstico con ese módulo.
 Ambos árboles estaban limpios al revisar su registro de las 21:06. Ahora
-hay cambios locales que amplían el registro a las etapas PKCS#15 y al
-resultado de RSA AT, con sus regresiones y documentación. No hay cambios
-en la autenticación ni se ha corregido todavía el fallo del firmador.
+la ampliación del registro ya está comprometida y se probó en hardware.
+Ambos árboles estaban limpios al revisar su captura de las 21:24. Ahora
+hay cambios locales de un experimento optativo de estado de sesión, su
+helper Make, regresiones y documentación. No modifica el login ni PIN,
+pero al activarlo omite la consulta física de PIN de `C_GetSessionInfo`
+tras login CKU_USER en el perfil observado. Está desactivado por defecto.
+Todavía no se ha probado en hardware ni corregido el fallo del firmador.
 Confirmar mediante Git antes de cambiar el puntero.
 
 La URL del submódulo aún es `https://github.com/OpenSC/OpenSC.git`. Los commits
@@ -235,20 +242,23 @@ El nuevo objetivo `make firmador/jcop3` proporciona esa configuración local.
 
 ## Verificación y últimas capturas
 
-Hay **112 comprobaciones de regresión** en ocho archivos C: `iasecc-fci.c`,
+Hay **129 comprobaciones de regresión** en nueve archivos C: `iasecc-fci.c`,
 `iasecc-pin-path.c`, `iasecc-key-path.c`, `iasecc-sdo.c`, `iasecc-pin-policy.c`
-y `iasecc-sign-setup.c`, más `iasecc-rsa-pkcs.c`, `pkcs11-api-trace.c`, y el script
+y `iasecc-sign-setup.c`, más `iasecc-rsa-pkcs.c`, `pkcs11-api-trace.c`,
+`pkcs11-session-state.c`, y el script
 `sha256-digestinfo.sh`. Incluyen respuestas
 capturadas, conservación/copia de metadatos, rechazo de perfiles distintos y
 transporte simulado que verifica que cambio/desbloqueo no autentican.
 Pasaron en la comprobación local; también terminó la compilación completa
-sin PC/SC, registrada en `build/opensc-offline/chipdoc-sign-stages-build.log`.
-Las últimas regresiones están en `build/opensc-offline/chipdoc-sign-stages-tests.log`.
+sin PC/SC, registrada en `build/opensc-offline/chipdoc-session-state-build.log`.
+Las últimas regresiones están en `build/opensc-offline/chipdoc-session-state-tests.log`.
 Esto no sustituye pruebas de firma en hardware.
-El lanzador de firmador, en modo normal y de diagnóstico, pasó sintaxis y una ejecución con
+El lanzador de firmador, en modos normal, diagnóstico y experimento de sesión,
+pasó sintaxis y una ejecución con
 `firmador` simulado: selección del módulo, sustitución de configuración/debug
 heredados, perfil idéntico al de la firma, permisos 0600 y propagación del
-código de salida. El modo normal elimina `OPENSC_API_TRACE_FILE` heredado;
+código de salida. Los modos normal y diagnóstico eliminan
+`OPENSC_JCOP3_SESSION_STATE` heredado; el normal también elimina `OPENSC_API_TRACE_FILE`;
 el diagnóstico crea directorio 0700 y archivos 0600. Esa comprobación no
 abrió Java ni accedió al lector.
 
@@ -273,6 +283,7 @@ abrió Java ni accedió al lector.
 | **`jcop3-signature-crUXrnAi/report.txt`** | 12 de octubre, 02:18:39 UTC: login y RSA-PKCS exitosos, firma de 256 bytes, OpenSSL `Verified OK`, estado 0; primera firma verificada |
 | **`jcop3-signature-kiHbc1Qh/report.txt`** | 12 de octubre, 02:37:33 UTC, OpenSC `34a040c32`: login y SHA256-RSA-PKCS exitosos, texto original como entrada, firma de 256 bytes, OpenSSL `Verified OK`, estado 0 |
 | **`jcop3-firmador-api-1LBmDPbP/api.log`** | 12 de octubre, 03:06:20 UTC, OpenSC `f7752be36`: un login exitoso, PIN_STATUS logged in, sesiones RW USER, SHA256-RSA-PKCS y llave 3; `C_SignFinal` devuelve `CKR_USER_NOT_LOGGED_IN`; no hay logout/cierre intermedio |
+| **`jcop3-firmador-api-hBIzcp79/api.log`** | 12 de octubre, 03:24:32 UTC, OpenSC `a19ee5927`: un login exitoso; llave 3; selección, DOCP y MSE pasan; RSA AT devuelve `6982`, traducido a `SC_ERROR_SECURITY_STATUS_NOT_SATISFIED (-1211)` y `CKR_USER_NOT_LOGGED_IN`; no reintento RSA |
 
 Los informes PKCS#11 y DOCP RSA de las 21:34 UTC ya se revisaron: **no pedir ejecutarlos de nuevo como
 primer paso**. Los DOCP RSA se reprodujeron en las regresiones del parser
@@ -348,9 +359,15 @@ cuatro consultas de estado posteriores al login informan autenticación
 Los tres mensajes del usuario no corresponden a tres firmas en este
 registro: solo hay un login y un `C_SignFinal`. Un logout previo al login
 devuelve `0x101`; no confundirlo con el error posterior de firma.
-Falta distinguir selección de aplicación, MSE y RSA en PKCS#15. No afirmar
-todavía que perdió el PIN ni qué comando fue rechazado. No hay evidencia
-de PIN incorrecto, selección de llave equivocada o problema de Internet.
+El registro ampliado de las 21:24 confirma que selección, DOCP y MSE
+pasan. RSA AT devuelve `6982`, y la revalidación de PIN queda rechazada
+por caché desactivada. No hay otra operación RSA en ese registro.
+Falta explicar qué condición de seguridad perdió o no satisfizo la tarjeta.
+Las consultas posteriores de `C_GetSessionInfo` seleccionan MF y leen
+política; eso es una diferencia concreta con la prueba CLI verificada.
+Se preparó un experimento que omite solo esas consultas tras login,
+limitado al perfil y activado explícitamente. No es una corrección validada.
+No hay evidencia de PIN incorrecto, llave equivocada o problema de Internet.
 
 Las consultas vacías de VERIFY devuelven `63 C7`: PIN no verificado, 7 intentos
 restantes. No llevan el valor del PIN. El primer intento de firma no tuvo
@@ -372,9 +389,9 @@ internos de parsing: revisar las respuestas y el contexto.
    sin cambios. Hay nuevos cambios de diagnóstico: compilarlos y comprobarlos con
    `make test/iasecc JOBS="$(nproc)"`. Mantener depuración 0 y caché PIN desactivada.
 3. Cerrar cualquier instancia de firmador y ejecutar
-   `make firmador/jcop3-diagnose`. Realizar una sola firma de un PDF de prueba
+   **`make firmador/jcop3-session-state`**. Realizar una sola firma de un PDF de prueba
    y cerrar el programa. Revisar `local/jcop3-firmador-api-*/api.log` antes de
-   otro intento. El registro anterior de las 21:06 ya se revisó: no pedir
+   otro intento. Los registros anteriores de las 21:06 y 21:24 ya se revisaron: no pedir
    repetirlo con el módulo sin actualizar. El helper mantiene el perfil de la firma verificada,
    emulación PKCS#15 primero, cachés desactivadas y depuración 0; no redirige
    ni captura la salida de la aplicación. El registro optativo solo recibe
@@ -388,9 +405,16 @@ internos de parsing: revisar las respuestas y el contexto.
    `CARD_KEY_DOCP` y `CARD_MSE` distinguen la lectura de metadatos públicos
    y el resultado de MSE. Todos estos retornos son internos de OpenSC,
    convertidos a enteros sin signo; no confundirlos con `CK_RV`.
-   No añade consultas, login o reintentos. Consultar `docs/jcop3.md` para
-   interpretar los campos. No hay corrección
-   de autenticación hasta contar con esta evidencia. No activar caché de PIN,
+   El experimento activa `OPENSC_JCOP3_SESSION_STATE=yes`, únicamente para
+   Amos + Generic PKI + CHV 1 global con ruta MF y login software CKU_USER.
+   `C_GetSessionInfo` devuelve estado físico UNKNOWN sin consultar PIN;
+   conserva el estado de sesión del login que pasó. `SESSION_LOGIN_STATE`
+   lo distingue de `PIN_STATUS`. No crea login, conserva PIN ni reintenta.
+   La detección de presencia/cambio de tarjeta de `C_GetSessionInfo` sigue
+   ejecutándose. El modo normal y el diagnóstico eliminan esa variable;
+   no activarlo por defecto sin interpretar el resultado.
+   Consultar `docs/jcop3.md` para interpretar los campos. No hay corrección
+   validada de autenticación hasta contar con esta evidencia. No activar caché de PIN,
    `atomic` ni `lock_login` como solución especulativa.
 4. Verificar el PDF producido y confirmar la carga del módulo local antes
    de declarar compatible el firmador. No habilitar depuración APDU durante
