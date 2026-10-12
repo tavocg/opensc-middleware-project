@@ -877,3 +877,11 @@ mismo driver. Antes de solicitar otro intento, aclarar si el usuario
 introdujo el mismo PIN o cometió un error de entrada, sin pedir su valor.
 Si confirma la misma entrada, investigar los metadatos públicos y la lectura
 desde la terminal. Conservar depuración 0 durante cualquier autenticación.
+
+El usuario respondió que no puede asegurar si introdujo el mismo PIN, aunque
+cree que sí. No se considera confirmado un error de entrada. La revisión de
+`util_getpass()` y su llamada desde `pkcs11-tool` no identifica un cambio
+entre el login aceptado y el rechazo de longitud. Se solicita una consulta
+`make inspect/jcop3-pkcs11` sin PIN para contrastar los atributos AODF,
+la política pública CHV y los intentos restantes después del fallo.
+No recompilar ni repetir la firma antes de revisar ese nuevo informe.

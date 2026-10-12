@@ -98,7 +98,7 @@ pero no valida comunicación con la tarjeta.
 
 Los últimos commits guardados del driver y su diagnóstico son:
 
-- Repositorio principal: **`62e6d5a`**, `Use RSA-PKCS for SHA256 signing probe`.
+- Repositorio principal: **`26f8926`**, `Record PIN length rejection`.
 - Submódulo OpenSC: **`70d7afc20`**, `iasecc: add ChipDoc signing algorithms`.
 - Base upstream original: `c7a377af971df03f879c1697e91ebac1f7e28c56`.
 
@@ -263,10 +263,14 @@ No demuestra un fallo de la ruta RSA-PKCS ni un PIN incorrecto. En el camino
 de código revisado, este error de longitud se produce antes del VERIFY con
 el PIN. `_validate_pin()` valida primero el rango PKCS#15 declarado en AODF
 (4–20), distinto del límite público CHV (4–14) que aplica después el driver.
-No alterar ninguno de esos límites para eludir el error. Está pendiente
-aclarar con el usuario si introdujo el mismo PIN que en el login exitoso
-anterior, sin solicitar su valor. No se ha consultado el contador después
-de este intento, ni hay captura autenticada.
+No alterar ninguno de esos límites para eludir el error.
+El usuario no puede confirmar si introdujo el mismo PIN que en el login
+exitoso anterior; cree que sí. La lectura de `util_getpass()` y el paso de
+su resultado a `C_Login` no muestran un cambio entre ambos intentos.
+No se ha consultado el contador después de este intento, ni hay captura
+autenticada. Solicitar `make inspect/jcop3-pkcs11` para contrastar metadatos
+PKCS#15, política pública CHV y contador antes de otro login. Esta consulta
+no pide el PIN; no asumir un error de entrada ni reducir las validaciones.
 
 Las consultas vacías de VERIFY devuelven `63 C7`: PIN no verificado, 7 intentos
 restantes. No llevan el valor del PIN. El primer intento de firma no tuvo
@@ -279,9 +283,10 @@ internos de parsing: revisar las respuestas y el contexto.
 
 1. Los informes de las 19:41 y 19:59 ya se revisaron. Las pruebas pasan y
    el helper actualizado está comprometido; el submódulo sigue en `70d7afc20`.
-   Aclarar primero el rechazo local de longitud de la entrada del PIN.
-   Si el usuario confirma que introdujo el mismo PIN del login exitoso,
-   investigar entrada y metadatos públicos antes de volver a autenticar.
+   El usuario no recuerda con certeza la entrada del último PIN. Revisar
+   una nueva consulta `make inspect/jcop3-pkcs11`, sin PIN, para comprobar
+   los límites declarados y los intentos restantes después del error.
+   Investigar cualquier diferencia antes de volver a autenticar.
    No habilitar APDU durante autenticación. La causa de los `No slots.`
    anteriores sigue sin confirmarse.
 2. Cuando se resuelva ese rechazo, indicar **una ejecución**
