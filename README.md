@@ -123,13 +123,17 @@ omitir VERIFY real después de reseleccionar raíz. La candidata actualizada
 desactiva ese atajo en el perfil observado: cada nuevo login verifica la
 entrada en la tarjeta, sin conservar su hash ni reintentar errores. Mantiene
 consultas físicas sin selección y caché PKCS#15 desactivada.
-Está desactivada por defecto y esta ampliación aún no se probó en hardware.
-Recompilar con `make test/iasecc JOBS="$(nproc)"` y guardar los commits antes
-de probar dos documentos en una misma instancia del mismo objetivo. Guardar
-los resultados con nombres distintos dentro de `local/`. Detenerse ante un
-error sin repetir la operación fallida. El registro numérico privado añade
-CARD_PIN_VERIFY/CARD_PIN_VERIFY_CACHED, sin valor, longitud ni hash del PIN.
-Recuperación y concurrencia siguen pendientes.
+Con OpenSC `381c469b2`, el 12 de octubre a las 01:07 de Costa Rica, **ambas
+firmas consecutivas pasaron**. El registro confirma dos VERIFY reales y
+dos operaciones RSA de 256 bytes; OpenSSL verificó la firma y el sello de
+ambos PDF. Firmador hace logout entre documentos y un nuevo login, por eso
+pidió PIN dos veces en esta prueba. No se validaron confianza ni revocación.
+La candidata sigue desactivada por defecto. El siguiente caso es retirar y
+reinsertar la misma tarjeta después de una firma, manteniendo firmador abierto
+y el lector conectado. Usar el mismo objetivo y biblioteca ya compilada,
+guardando ambos resultados en `local/`; detenerse ante un error sin repetirlo.
+El registro numérico incluye CARD_PIN_VERIFY/CARD_PIN_VERIFY_CACHED, sin
+valor, longitud ni hash del PIN. Recuperación y concurrencia siguen pendientes.
 
 ## Organización
 

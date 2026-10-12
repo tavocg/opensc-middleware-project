@@ -1,28 +1,26 @@
 # libjcop3p11: contexto para continuar
 
-Estado actualizado el **12 de octubre de 2026**, después de revisar las
-capturas de las **00:47 y 00:48 de Costa Rica**. La candidata sin reselección
-permite la primera firma del firmador; su PDF y sello se verificaron con
-OpenSSL. **La segunda firma en la misma instancia falla con RSA `6982`,
-tras logout y un nuevo login que devuelve éxito.** Las consultas físicas
-siguen indicando CHV autenticado. La captura consecutiva es
-`local/jcop3-firmador-api-LB7oJvqS/`, OpenSC `23b3d25fa`.
-El driver conserva un atajo por hash del PIN previo, independiente de la
-caché PKCS#15 desactivada. Puede omitir VERIFY real en el segundo login,
-aunque este haya reseleccionado raíz y perdido permiso RSA. El diagnóstico
-anterior no registra VERIFY directamente; el código y una regresión
-reproducen esta explicación. No afirmar que el segundo PIN se comprobó
-en la tarjeta solo porque C_Login devolvió éxito.
-Se preparó una ampliación optativa que ejecuta VERIFY real por nuevo login
-en el perfil observado y no conserva el hash. **Aún no probada en hardware.**
-Pasan 228 regresiones y la compilación completa sin PC/SC.
-El primer PDF consecutivo, `local/jcop3-consecutive-1.pdf`, tiene firma y
-sello verificados: `local/jcop3-pdf-verification-h_m47tdj/report.json`.
-No hay segundo PDF consecutivo guardado. No repetir la prueba con el mismo
-código: la nueva intervención requiere compilar y guardar los cambios.
-La candidata sigue optativa; recuperación y concurrencia están pendientes.
+Estado actualizado el **12 de octubre de 2026**, después de revisar la
+prueba de las **01:07 de Costa Rica** (07:07 UTC). **Pasaron dos firmas del
+original en la misma instancia de firmador, con dos VERIFY reales y ambos
+PDF y sellos de tiempo verificados con OpenSSL.** Captura:
+`local/jcop3-firmador-api-fgRfkdCF/`, OpenSC `381c469b2`.
+Firmador hace logout entre documentos y un nuevo login; pedir PIN dos veces
+es esperado en esta secuencia. La candidata no almacena el hash del PIN y
+mantiene consultas físicas sin reseleccionar raíz después de autenticar.
+Cada operación RSA usa llave 3, SHA256-RSA-PKCS y produce 256 bytes.
+Informes privados de PDF: `jcop3-pdf-verification-w2t9vw2q` y
+`jcop3-pdf-verification-_5f871pd`. Certificado de LlaveDeFirma, CMS CAdES,
+CMS RFC 3161 e imprint SHA-512 verificados; página original conservada.
+No se validaron confianza ni revocación. La candidata sigue optativa.
+Pasan las 228 regresiones y la compilación anteriores; no hubo cambios de
+código durante esta revisión. **No recompilar ni repetir firmas consecutivas
+como primer paso.** Siguiente intervención: retirada/reinserción tras una
+firma en la misma instancia, manteniendo el lector conectado. Después faltan
+concurrencia y contexto cambiado por otro cliente antes de decidir activar
+el comportamiento por defecto.
 Leer este archivo al retomar y contrastar Git y las capturas más recientes;
-no afirma soporte completo ni validación de confianza/revocación.
+no afirma soporte completo de la tarjeta.
 
 ## Objetivo y alcance
 
@@ -122,15 +120,16 @@ pero no valida comunicación con la tarjeta.
 
 Los últimos commits guardados son:
 
-- Repositorio principal: **`c3ea52a`**, `Document verified PIN status signing`.
-- Submódulo OpenSC: **`23b3d25fa`**, `Query ChipDoc PIN without selection`.
+- Repositorio principal: **`2ab0042`**, `Test consecutive ChipDoc logins`.
+- Submódulo OpenSC: **`381c469b2`**, `Verify ChipDoc PIN on each login`.
 - Base upstream original: `c7a377af971df03f879c1697e91ebac1f7e28c56`.
 
-Ambos árboles estaban limpios al comenzar a revisar las capturas consecutivas.
-Sobre esos commits hay cambios locales que amplían la candidata para VERIFY
-real por login y desactivan su atajo SHA-1, más eventos numéricos, regresiones,
-lanzador y documentación. Pasaron las comprobaciones sin tarjeta; aún falta
-compilar con PC/SC y probarlos desde la terminal del usuario. No hay commits
+Ambos árboles estaban limpios al comenzar a revisar la captura de las 01:07.
+La ampliación de la candidata (VERIFY real por login y sin atajo SHA-1),
+eventos numéricos, regresiones y lanzador ya están comprometidos y compilados
+por el usuario. La prueba de dos firmas consecutivas pasó en hardware y
+ambos PDF se verificaron localmente. Los cambios nuevos solo documentan
+este resultado y el próximo caso; no requieren recompilar. No hay commits
 nuevos del agente.
 
 La URL del submódulo aún es `https://github.com/OpenSC/OpenSC.git`. Los commits
@@ -290,6 +289,7 @@ abrió Java ni accedió al lector.
 | **`jcop3-firmador-api-MWUUuIrV/api.log`** | 12 de octubre, 06:37:01 UTC, OpenSC `23b3d25fa`: candidata sin selección, login OK, cuatro consultas físicas autenticadas, cero SELECT raíz después del login, RSA AT `9000`, 256 bytes y C_SignFinal OK; nuevo PDF y sello verificados |
 | **`jcop3-firmador-api-UpCXoCn0/api.log`** | 12 de octubre, 06:47:51 UTC, OpenSC `23b3d25fa`: un login y una firma RSA exitosa, cuatro consultas físicas autenticadas |
 | **`jcop3-firmador-api-LB7oJvqS/api.log`** | 12 de octubre, 06:48:43 UTC: primera firma exitosa, logout software, CHV sigue autenticado, un SELECT raíz antes de segundo login exitoso; segunda RSA `6982`; primer PDF consecutivo y sello verificados |
+| **`jcop3-firmador-api-fgRfkdCF/api.log`** | 12 de octubre, 07:07:46 UTC, OpenSC `381c469b2`: dos logins con VERIFY real, logout intermedio, consultas físicas autenticadas sin reselección, ambas RSA `9000` de 256 bytes; los dos PDF y sellos se verificaron |
 
 Los informes PKCS#11 y DOCP RSA de las 21:34 UTC ya se revisaron: **no pedir ejecutarlos de nuevo como
 primer paso**. Los DOCP RSA se reprodujeron en las regresiones del parser
@@ -405,75 +405,75 @@ internos de parsing: revisar las respuestas y el contexto.
 
 ## Próximo trabajo, en orden
 
-1. **Los registros consecutivos ya se revisaron. No repetir el mismo código.**
-   `UpCXoCn0` tiene una firma exitosa. `LB7oJvqS` contiene dos logins y dos
-   operaciones RSA: primera `9000`, segunda `6982`. Hay logout software
-   intermedio y CHV sigue autenticado; un SELECT raíz precede al segundo
-   login. No hay reset detectado ni reintento RSA después del error.
-   Los resúmenes están en `analysis.json` de cada carpeta.
-2. El primer PDF consecutivo está en `local/jcop3-consecutive-1.pdf` y se
-   verificó sin tarjeta/PIN/red. Informe privado
-   `local/jcop3-pdf-verification-h_m47tdj/report.json`, con copia `signed.pdf`.
-   CAdES cubre la revisión de 38403 bytes; el sello se vincula al PDF final
-   de 80465 bytes. Certificado idéntico a LlaveDeFirma, CMS y huella SHA-512
-   válidos; se conservan original y página sin anotaciones. No hay segundo
-   PDF consecutivo guardado. Los archivos de la raíz pueden haber sido
-   reemplazados: para resultados previos usar las copias privadas y hashes
-   de cada informe, no suponer que doc-firmado.pdf sigue siendo el mismo.
-   No se validaron confianza ni revocación. No publicar esos archivos.
-3. **Nueva intervención pendiente: compilar y probar la ampliación.**
-   `make test/iasecc JOBS="$(nproc)"`. Guardar primero el commit del submódulo
-   (`src/libopensc/card-iasecc.c` y `src/libopensc/api-trace.h`) y después el
-   principal (lanzador, fixture, documentación y puntero vendor/opensc).
-   Cerrar instancias anteriores y abrir
-   `make firmador/jcop3-pin-status-in-place`. Firmar el original `doc.pdf`
-   con LlaveDeFirma y guardar `local/jcop3-fresh-verify-1.pdf`. Abrir de nuevo
-   el original en la misma instancia y guardar otra firma en
-   `local/jcop3-fresh-verify-2.pdf`. Observar si pide PIN otra vez y cerrar
-   después. Detenerse ante el primer error, sin repetir la operación fallida.
-   Revisar los nuevos CARD_PIN_VERIFY y ambas firmas antes de otra prueba;
-   verificar los nuevos PDF localmente, sin tarjeta/PIN.
+1. **Las dos firmas consecutivas ya pasaron y se verificaron.** No pedir
+   recompilar ni repetirlas sin un motivo nuevo. Captura
+   `local/jcop3-firmador-api-fgRfkdCF/`, resumen `analysis.json`:
+   dos CARD_PIN_VERIFY exitosos, dos C_Login CKR_OK, logout software
+   intermedio y dos RSA `9000` con 256 bytes. Cada login tiene cuatro consultas
+   físicas antes de firmar, sin SELECT raíz en ese intervalo. Hay además dos
+   consultas entre primera firma y nuevo login, incluso tras logout software.
+   El estado CHV físico sigue autenticado; el segundo login ejecuta VERIFY real
+   después de seleccionar raíz y leer política. No hay atajo por hash,
+   omisión de consultas ni reset detectado.
+2. Los PDF `local/jcop3-fresh-verify-1.pdf` y `local/jcop3-fresh-verify-2.pdf`
+   se verificaron sin lector, PIN ni red. Informes privados:
+   `local/jcop3-pdf-verification-w2t9vw2q/report.json` y
+   `local/jcop3-pdf-verification-_5f871pd/report.json`, con copias signed.pdf.
+   Ambos tienen 80485 bytes; CAdES cubre revisión de 38403 bytes y sello
+   RFC 3161 se vincula al archivo final salvo su propio Contents.
+   Certificado idéntico a LlaveDeFirma, CMS e imprint SHA-512 válidos;
+   original, texto y página sin anotaciones conservados. No se validaron
+   confianza ni revocación. Para versiones previas usar las copias y hashes
+   de cada informe, no nombres o tamaños. No publicar esos archivos.
+3. **Siguiente intervención: retirada/reinserción en la misma instancia.**
+   Guardar la documentación mediante comandos de commit para el usuario,
+   sin tocar el submódulo ni recompilar este mismo código. Cerrar instancias
+   previas y abrir `make firmador/jcop3-pin-status-in-place`. Firmar el original
+   `doc.pdf` con LlaveDeFirma, guardando `local/jcop3-reinsert-before.pdf`.
+   Después de completar y guardar, retirar solo la tarjeta, dejar el lector
+   conectado y firmador abierto, reinsertar la misma tarjeta y volver a abrir
+   el original para guardar `local/jcop3-reinsert-after.pdf`. Observar detección
+   de tarjeta y petición de PIN. Detenerse ante el primer error, sin repetir
+   la operación fallida; cerrar al terminar. Esta prueba tiene un motivo
+   nuevo: recuperación tras cambio real de estado, no otra repetición de las
+   firmas consecutivas. Revisar reset/reattachment, estado, VERIFY, sesiones y
+   firma; verificar ambos PDF localmente después. El agente no tiene lector.
 4. La candidata sigue **optativa** mediante
-   `OPENSC_JCOP3_PIN_STATUS_IN_PLACE=yes`. PKCS#15 usa estado físico sin
-   SELECT, limitado a Amos + Generic PKI + CHV global 1 + MF FILE_ID,
-   excluyendo SO/PUK. El driver requiere política pública conocida para
-   STATUS_ONLY; solo conserva el máximo público de intentos, nunca estado
-   físico ni contador restante. Si aún no se conoce, NOT_SUPPORTED permite
-   inicialización completa. Fallos invalidan las observaciones físicas;
-   no afirmar que resuelven por sí solos sesiones software o cambios externos.
-   La ampliación desactiva consulta y almacenamiento del atajo SHA-1 del
-   driver para VERIFY explícito Amos + Generic PKI completo + CHV global 1.
-   Conserva estado previo, política/ACL/límites y un VERIFY real con la
-   entrada del usuario, sin reintentos. No modifica logout físico. El modo
-   predeterminado y perfiles fuera del opt-in conservan el comportamiento
-   anterior. Pasan 228 regresiones, incluidas 18 nuevas del atajo y su
-   corrección. No activar la caché PKCS#15 como arreglo.
-5. Los nuevos eventos CARD_PIN_VERIFY y CARD_PIN_VERIFY_CACHED indican el
-   resultado de VERIFY por el driver ISO o el retorno anticipado por hash.
-   Solo llevan retorno y referencia pública, sin valor, longitud ni hash
-   del PIN. El informe nuevo añade `pin_verify_experiment=fresh_verify`;
-   no basta esa marca para comprobar la biblioteca compilada. Esperar un
-   VERIFY real por login y ninguna marca CACHED en la candidata, además de
-   PIN_STATUS_IN_PLACE sin TOKEN_PIN_CACHED/SESSION_LOGIN_STATE.
-   El experimento anterior de omisión sigue disponible pero no convertirlo
-   en predeterminado. SELECT raíz aislado ya reprodujo `6982`; el estado
-   CHV autenticado no garantiza permiso RSA. C9 sigue sin significado
-   confirmado. No activar atomic/lock_login, modificar PIN/llaves/ACL,
-   forzar reset/logout físico ni capturar APDU autenticadas como arreglo.
-6. Después de resolver firmas consecutivas, validar retirada/reinserción,
-   pérdida de autenticación, sesiones, concurrencia y contexto cambiado
-   por otro cliente. Preparar intervenciones concretas; no automatizar
-   reintentos de PIN. Decidir activación por defecto con evidencia suficiente.
-   Antes de upstream, preservar la rama local y reproducir contra master
-   actual según vendor/opensc/AGENTS.md. Dar comandos de commit al usuario:
-   submódulo primero, principal después con su puntero. Ampliar mecanismos
-   y plataformas antes de afirmar soporte completo. No generar nuevas llaves.
+   `OPENSC_JCOP3_PIN_STATUS_IN_PLACE=yes`. PKCS#15 usa estado físico sin SELECT,
+   limitado a Amos + Generic PKI + CHV global 1 + MF FILE_ID, excluyendo SO/PUK.
+   Driver STATUS_ONLY requiere política pública conocida y solo conserva su
+   máximo público de intentos, nunca estado ni contador restante. Si aún no
+   se conoce, NOT_SUPPORTED permite inicialización completa. Fallos invalidan
+   observaciones físicas; no afirmar que resuelven sesiones software o cambios
+   externos. La ampliación desactiva consulta y almacenamiento del atajo SHA-1
+   para VERIFY explícito Amos + Generic PKI completo + CHV global 1. Conserva
+   estado previo, política/ACL/límites y un VERIFY real con la entrada del
+   usuario, sin reintentos. No modifica logout físico. Fuera del opt-in se
+   conserva el camino anterior. Pasan 228 regresiones. No activar caché PIN.
+5. CARD_PIN_VERIFY y CARD_PIN_VERIFY_CACHED indican resultado del VERIFY
+   mediante el driver ISO o retorno anticipado por hash. Llevan retorno y
+   referencia pública, sin valor, longitud ni hash del PIN. El informe
+   `pin_verify_experiment=fresh_verify` no basta sin eventos del módulo.
+   La captura nueva confirma un VERIFY por login y ninguna marca CACHED.
+   Firmador pidió PIN dos veces porque hace logout y login entre documentos,
+   no porque la candidata genere un diálogo adicional o reintente un error.
+   No inferir una política de una firma por PIN de la tarjeta. El experimento
+   de omisión sigue disponible pero no convertirlo en predeterminado. SELECT
+   raíz aislado ya reprodujo `6982`; C9 sigue sin significado confirmado.
+   No activar atomic/lock_login, modificar PIN/llaves/ACL, forzar reset/logout
+   físico ni capturar APDU autenticadas como arreglo especulativo.
+6. Tras reinserción, validar sesiones, pérdida de autenticación, concurrencia
+   y contexto cambiado por otro cliente. Preparar intervenciones concretas y
+   no automatizar reintentos de PIN. Decidir activación por defecto con evidencia
+   suficiente. Antes de upstream, preservar la rama y reproducir contra master
+   actual según vendor/opensc/AGENTS.md. Si cambia código, dar comandos de commit
+   al usuario: submódulo primero, principal después con su puntero. Ampliar
+   mecanismos y plataformas antes de afirmar soporte completo. No generar llaves.
 
-**La primera firma del firmador con consultas físicas funciona y tiene PDF
-verificado. La segunda en la misma instancia falla tras nuevo login; hay
-una ampliación preparada y comprobada sin tarjeta para ejecutar VERIFY real.
-Su validación en hardware, recuperación/concurrencia y confianza/revocación
-siguen pendientes.**
+**Dos firmas consecutivas del firmador y ambos PDF/sellos están verificados
+con la candidata que consulta estado físico sin reselección y ejecuta VERIFY
+real por login. Recuperación/reinserción, concurrencia, activación por defecto
+y confianza/revocación siguen pendientes.**
 
 ## PIN, privacidad e Idopte
 

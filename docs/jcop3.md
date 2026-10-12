@@ -1880,7 +1880,8 @@ sin PC/SC pasó, al igual que la sintaxis del lanzador. Informes:
 `build/opensc-offline/chipdoc-fresh-verify-build.log` y
 `build/opensc-offline/chipdoc-fresh-verify-tests.log`.
 
-**Esta ampliación aún no se probó en hardware.** Recompilar con
+En esta etapa la ampliación aún no se había probado en hardware; el resultado
+está en la sección siguiente. La intervención preparada consistía en compilar con
 `make test/iasecc JOBS="$(nproc)"`, guardar los commits del submódulo y después
 del principal, y repetir únicamente la prueba de dos documentos en una
 misma instancia de `make firmador/jcop3-pin-status-in-place`, guardando nuevos
@@ -1888,3 +1889,75 @@ nombres privados. Detenerse ante el primer error, sin repetir la operación
 fallida. Leer los eventos de VERIFY y ambas firmas antes de otra intervención.
 La candidata sigue desactivada por defecto; recuperación y concurrencia
 siguen pendientes.
+
+## Dos firmas consecutivas verificadas: 2026-10-12, 01:07
+
+`local/jcop3-firmador-api-fgRfkdCF/report.txt` registra 07:07:46 UTC,
+OpenSC `381c469b2` limpio, `pin_status_in_place_experiment=yes`,
+`session_state_experiment=no`, `pin_query_experiment=status_without_selection`
+y `pin_verify_experiment=fresh_verify`. El repositorio principal está en
+`2ab0042`, también limpio al iniciar esta revisión. El usuario compiló y
+ejecutó dos firmas del original en la misma instancia; confirmó que pidió
+PIN dos veces y ambas parecían funcionar. El registro y la verificación
+independiente confirman ese resultado.
+
+La captura contiene 299 eventos:
+
+- Dos `CARD_PIN_VERIFY rv=0`, referencia 1, inmediatamente antes de los
+  dos `C_Login CKR_OK`. No hay `CARD_PIN_VERIFY_CACHED`.
+- Cada login tiene después una consulta token y tres de sesión, todas con
+  estado físico LOGGED_IN. No hay SELECT raíz entre cada login y su firma.
+- La primera firma termina en C_SignFinal exitoso; después hay una consulta
+  token, `C_Logout CKR_OK` y otra consulta token. El CHV físico sigue
+  autenticado tras el logout software, como en la captura fallida anterior.
+- El segundo login vuelve a seleccionar raíz y leer política antes del
+  **VERIFY real**. Esta vez se observan tres SELECT raíz previos, no solo
+  el SELECT anterior al atajo del módulo viejo.
+- Ambas firmas usan llave 3, RSA 2048 y SHA256-RSA-PKCS. SELECT ChipDoc,
+  DOCP, MSE y RSA AT pasan; cada KEY_COMPUTE devuelve 256 bytes y cada
+  C_SignFinal entrega la firma con CKR_OK. No hay revalidación ni reintento.
+- No hay omisión de consultas ni reset detectado. El registro termina en
+  la segunda firma, sin otra consulta posterior a ella.
+
+Resumen privado: `local/jcop3-firmador-api-fgRfkdCF/analysis.json`.
+**Pedir el PIN dos veces es esperado en esta secuencia del firmador**:
+ejecuta logout entre documentos y un nuevo login para el segundo. La
+candidata usa la entrada actual del usuario para VERIFY; no introduce un
+segundo diálogo ni repite una autenticación fallida. No atribuir esa secuencia
+a todos los firmadores ni a una regla de una sola firma por PIN de la tarjeta.
+
+Se verificaron ambos PDF sin tarjeta, PIN ni red, guardando copias privadas:
+
+| Archivo | Informe privado | Resultado |
+| --- | --- | --- |
+| `local/jcop3-fresh-verify-1.pdf` | `local/jcop3-pdf-verification-w2t9vw2q/report.json` | CAdES y sello RFC 3161 verificados |
+| `local/jcop3-fresh-verify-2.pdf` | `local/jcop3-pdf-verification-_5f871pd/report.json` | CAdES y sello RFC 3161 verificados |
+
+Ambos tienen 80485 bytes; cada uno contiene una firma CAdES de la tarjeta
+y un sello de documento. La revisión CAdES termina en 38403 bytes, con
+ByteRange `[0, 7346, 33972, 4431]`. El sello tiene rangos
+`[0, 60499, 79445, 1040]` y se vincula al PDF final salvo su propio Contents.
+En ambos, OpenSSL verificó los CMS, el certificado firmante coincide con
+LlaveDeFirma y el imprint SHA-512 coincide con los rangos finales. Cada PDF
+conserva todos los bytes originales como prefijo, el texto y el renderizado
+de la página sin anotaciones. No se validaron confianza, revocación ni
+vigencia; el resultado no afirma validación completa de larga duración.
+
+**La candidata mantiene consultas físicas y ya pasó dos firmas consecutivas
+tras dos logins reales, con ambos PDF y sellos verificados.** Esto respalda
+desactivar el atajo del driver en este perfil, junto con las consultas sin
+reselección. Sigue optativa; no afirmar soporte completo de JCOP3.
+No hubo cambios de código ni nuevas firmas por parte del agente; las 228
+regresiones y la compilación previas siguen siendo las comprobaciones vigentes.
+No pedir recompilar ni repetir esta misma prueba como primer paso.
+
+La siguiente intervención cubrirá retirada/reinserción en la misma instancia
+ya usada: abrir el objetivo existente, firmar el original como control y
+guardar `local/jcop3-reinsert-before.pdf`; retirar solo la tarjeta, mantener
+el lector conectado y firmador abierto, reinsertar la misma tarjeta y volver
+a abrir el original para guardar `local/jcop3-reinsert-after.pdf`. Observar
+si la aplicación detecta la tarjeta y pide PIN. Detenerse ante un error sin
+repetir la operación fallida. El registro permitirá comprobar recuperación,
+nuevo VERIFY y firma tras el cambio de estado; después seguirán concurrencia
+y contexto cambiado por otro cliente. No activar la candidata por defecto
+antes de validar estos límites.
