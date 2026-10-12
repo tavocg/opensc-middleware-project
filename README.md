@@ -25,7 +25,7 @@ medidas de la llave de firma. El mecanismo combinado `SHA256-RSA-PKCS`
 falló en `C_SignFinal`: el camino QSign no soporta OpenSSL 3. El helper
 prepara el DigestInfo SHA-256 en el equipo y pide `RSA-PKCS` a la tarjeta.
 El 11 de octubre de 2026 a las 20:18 de Costa Rica, esta ruta produjo una
-firma de 256 bytes y OpenSSL confirmó `Verified OK`. Pasan 210 comprobaciones
+firma de 256 bytes y OpenSSL confirmó `Verified OK`. Pasan 228 comprobaciones
 locales. Para reproducir la prueba técnica:
 
 ```bash
@@ -116,12 +116,20 @@ No omite las consultas como el experimento anterior ni guarda el PIN.
 OpenSSL verificó la firma CAdES del nuevo PDF, con el certificado de
 `LlaveDeFirma`, y el CMS y la huella SHA-512 del sello de tiempo. La página
 original se conserva. No se validaron confianza ni revocación.
-Está desactivada por defecto. La siguiente prueba es firmar dos documentos
-en una misma instancia, para observar consultas y autenticación después de
-usar la llave. Usar el mismo objetivo, sin recompilar si no cambió el código,
-y guardar los dos resultados con nombres distintos. Detenerse ante un error,
-sin repetir la operación fallida. El registro numérico privado sigue en
-`local/jcop3-firmador-api-*/`. Recuperación y concurrencia siguen pendientes.
+Las firmas consecutivas encontraron otro bloqueo: la primera pasó y su PDF
+se verificó, pero tras logout y nuevo login la segunda recibió `6982`.
+El driver tiene un atajo por hash de PIN previo y estado CHV que puede
+omitir VERIFY real después de reseleccionar raíz. La candidata actualizada
+desactiva ese atajo en el perfil observado: cada nuevo login verifica la
+entrada en la tarjeta, sin conservar su hash ni reintentar errores. Mantiene
+consultas físicas sin selección y caché PKCS#15 desactivada.
+Está desactivada por defecto y esta ampliación aún no se probó en hardware.
+Recompilar con `make test/iasecc JOBS="$(nproc)"` y guardar los commits antes
+de probar dos documentos en una misma instancia del mismo objetivo. Guardar
+los resultados con nombres distintos dentro de `local/`. Detenerse ante un
+error sin repetir la operación fallida. El registro numérico privado añade
+CARD_PIN_VERIFY/CARD_PIN_VERIFY_CACHED, sin valor, longitud ni hash del PIN.
+Recuperación y concurrencia siguen pendientes.
 
 ## Organización
 

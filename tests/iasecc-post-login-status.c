@@ -1,5 +1,6 @@
-/* One isolated empty status query after a real successful VERIFY. No hardware
- * or actual PIN: the only credential here is a fixed synthetic fixture.
+/* Isolated post-VERIFY probes and repeated login with an authenticated CHV
+ * whose RSA permission was lost after root SELECT. No hardware or actual
+ * PIN: the only credential here is a fixed synthetic fixture.
  */
 #include <stdio.h>
 #include <string.h>
@@ -9,6 +10,7 @@
 
 static int failures, status_queries, verifies, metadata_queries, forbidden;
 static int authenticated, verify_error, status_error, selects, select_error, select_rejected;
+static int allow_authenticated_metadata, rsa_authorized, metadata_error;
 
 static void check(const char *name, int valid)
 {
@@ -23,6 +25,7 @@ static int mock_pin(struct sc_card *card, struct sc_pin_cmd_data *data)
 		verifies++;
 		if (verify_error) return verify_error;
 		authenticated = 1;
+		rsa_authorized = 1;
 		return SC_SUCCESS;
 	}
 	if (data->cmd != SC_PIN_CMD_GET_INFO || data->pin_reference != 1 ||
@@ -56,13 +59,15 @@ int sc_transmit_apdu(struct sc_card *card, struct sc_apdu *apdu)
 	if (authenticated && apdu->ins == 0xA4 && apdu->p1 == 0x04 &&
 			apdu->datalen == 11 && !memcmp(apdu->data, "\xF0IasEccRoot", 11)) {
 		selects++;
+		rsa_authorized = 0;
 		if (select_error) return select_error;
 		apdu->resplen = 0;
 		apdu->sw1 = select_rejected ? 0x69 : 0x90;
 		apdu->sw2 = select_rejected ? 0x82 : 0;
 		return SC_SUCCESS;
 	}
-	if (authenticated || apdu->ins != 0xCB || apdu->p1 != 0x3F || apdu->p2 != 0xFF ||
+	if ((authenticated && !allow_authenticated_metadata) ||
+			apdu->ins != 0xCB || apdu->p1 != 0x3F || apdu->p2 != 0xFF ||
 			apdu->datalen < 10 || apdu->data[5] != 0x81 || apdu->data[6] != 1) {
 		forbidden++;
 		return SC_ERROR_NOT_SUPPORTED;
@@ -79,6 +84,7 @@ int sc_transmit_apdu(struct sc_card *card, struct sc_apdu *apdu)
 	}
 	if (apdu->resplen < length) return SC_ERROR_BUFFER_TOO_SMALL;
 	metadata_queries++;
+	if (metadata_error) return metadata_error;
 	memcpy(apdu->resp, response, length);
 	apdu->resplen = length;
 	apdu->sw1 = 0x90;
@@ -93,6 +99,7 @@ static void clear_run(struct sc_card *card, struct sc_pin_cmd_data *pin)
 	status_queries = verifies = metadata_queries = forbidden = 0;
 	authenticated = verify_error = status_error = 0;
 	selects = select_error = select_rejected = 0;
+	allow_authenticated_metadata = rsa_authorized = metadata_error = 0;
 }
 
 int main(void)
@@ -117,6 +124,7 @@ int main(void)
 	unsetenv("OPENSC_API_TRACE_FILE");
 	unsetenv("OPENSC_JCOP3_POST_LOGIN_STATUS");
 	unsetenv("OPENSC_JCOP3_POST_LOGIN_SELECT");
+	unsetenv("OPENSC_JCOP3_PIN_STATUS_IN_PLACE");
 	card.ctx = &ctx;
 	card.type = SC_CARD_TYPE_IASECC_AMOS;
 	card.drv_data = &private_data;
@@ -149,7 +157,8 @@ int main(void)
 	if (file) fclose(file);
 	output[length] = 0;
 	check("isolated query trace contains only numeric results and no credential",
-			!strcmp(output, "POST_LOGIN_STATUS_BEGIN session=0x0 rv=0x0 a=0x1 b=0x0\n"
+			!strcmp(output, "CARD_PIN_VERIFY session=0x0 rv=0x0 a=0x1 b=0x0\n"
+			"POST_LOGIN_STATUS_BEGIN session=0x0 rv=0x0 a=0x1 b=0x0\n"
 			"POST_LOGIN_STATUS session=0x0 rv=0x0 a=0x2 b=0x0\n"));
 	rv = iasecc_pin_verify(&card, &pin);
 	check("existing verified-PIN shortcut does not repeat the post-VERIFY experiment",
@@ -223,7 +232,8 @@ int main(void)
 	if (file) fclose(file);
 	output[length] = 0;
 	check("root selection trace encloses exactly the actual public root command",
-			!strcmp(output, "POST_LOGIN_SELECT_BEGIN session=0x0 rv=0x0 a=0x2 b=0x0\n"
+			!strcmp(output, "CARD_PIN_VERIFY session=0x0 rv=0x0 a=0x1 b=0x0\n"
+			"POST_LOGIN_SELECT_BEGIN session=0x0 rv=0x0 a=0x2 b=0x0\n"
 			"CARD_SELECT session=0x0 rv=0x0 a=0x2 b=0x9000\n"
 			"POST_LOGIN_SELECT session=0x0 rv=0x0 a=0x2 b=0x0\n"));
 	unsetenv("OPENSC_API_TRACE_FILE");
@@ -263,6 +273,87 @@ int main(void)
 	rv = iasecc_chipdoc_post_login_probe(&card, &pin, &policy);
 	check("root selection requires the observed PIN policy", rv == 0 && !selects);
 	unsetenv("OPENSC_JCOP3_POST_LOGIN_SELECT");
+	policy.read_verify_only = 1;
+	clear_run(&card, &pin);
+	rv = iasecc_pin_verify(&card, &pin);
+	{
+		struct sc_path root;
+		sc_format_path("F0496173456363526F6F74", &root);
+		root.type = SC_PATH_TYPE_DF_NAME;
+		if (rv == 0) rv = iasecc_select_file(&card, &root, NULL);
+		if (rv == 0) rv = iasecc_pin_verify(&card, &pin);
+		check("legacy shortcut accepts logged-in CHV despite lost RSA permission after root SELECT",
+				rv == 0 && verifies == 1 && selects == 1 && authenticated &&
+				!rsa_authorized && metadata_queries == 2 && !forbidden);
+		clear_run(&card, &pin);
+		setenv("OPENSC_JCOP3_PIN_STATUS_IN_PLACE", "yes", 1);
+		allow_authenticated_metadata = 1;
+		rv = iasecc_pin_verify(&card, &pin);
+		check("candidate initial VERIFY reaches card without storing a verified-PIN hash",
+				rv == 0 && verifies == 1 && rsa_authorized && !checked_pins &&
+				metadata_queries == 2 && !forbidden);
+		/* Seed only a synthetic legacy hash, to test candidate adoption. */
+		iasecc_chv_cache_verified(&card, &pin);
+		rv = iasecc_select_file(&card, &root, NULL);
+		if (rv == 0) rv = iasecc_pin_verify(&card, &pin);
+		check("candidate repeats actual VERIFY after root SELECT despite old matching hash and authenticated CHV",
+				rv == 0 && verifies == 2 && rsa_authorized && !checked_pins &&
+				metadata_queries == 4 && !forbidden);
+		verify_error = SC_ERROR_PIN_CODE_INCORRECT;
+		iasecc_chv_cache_verified(&card, &pin);
+		rv = iasecc_pin_verify(&card, &pin);
+		check("candidate propagates actual VERIFY rejection without hash shortcut or retry",
+				rv == verify_error && verifies == 3 && !checked_pins &&
+				metadata_queries == 6 && !forbidden);
+		verify_error = 0;
+		status_error = SC_ERROR_TRANSMIT_FAILED;
+		rv = iasecc_pin_verify(&card, &pin);
+		check("candidate stops on status transport failure before actual VERIFY or policy reads",
+				rv == status_error && verifies == 3 && metadata_queries == 6 && !forbidden);
+		status_error = 0;
+		metadata_error = SC_ERROR_TRANSMIT_FAILED;
+		rv = iasecc_pin_verify(&card, &pin);
+		check("candidate still requires policy retrieval before actual VERIFY and never retries on failure",
+				rv == metadata_error && verifies == 3 && metadata_queries == 7 && !forbidden);
+		metadata_error = 0;
+		pin.pin1.len = 0;
+		rv = iasecc_pin_verify(&card, &pin);
+		check("candidate preserves empty VERIFY status query without credential submission",
+				rv == 0 && verifies == 3 && metadata_queries == 7 && !forbidden);
+		pin.pin1.len = sizeof(synthetic_pin) - 1;
+	}
+	clear_run(&card, &pin);
+	setenv("OPENSC_JCOP3_PIN_STATUS_IN_PLACE", "no", 1);
+	check("fresh VERIFY requires exact candidate opt-in", !iasecc_chipdoc_fresh_verify(&card, &pin));
+	setenv("OPENSC_JCOP3_PIN_STATUS_IN_PLACE", "yes", 1);
+	check("fresh VERIFY recognizes the observed contact profile", iasecc_chipdoc_fresh_verify(&card, &pin));
+	card.type = SC_CARD_TYPE_IASECC_SAGEM;
+	check("fresh VERIFY excludes other card types", !iasecc_chipdoc_fresh_verify(&card, &pin));
+	card.type = SC_CARD_TYPE_IASECC_AMOS;
+	pin.pin_reference = 1 | IASECC_OBJECT_REF_LOCAL;
+	check("fresh VERIFY excludes local PINs", !iasecc_chipdoc_fresh_verify(&card, &pin));
+	pin.pin_reference = 2;
+	check("fresh VERIFY excludes other PIN references", !iasecc_chipdoc_fresh_verify(&card, &pin));
+	pin.pin_reference = 1;
+	pin.pin_type = SC_AC_AUT;
+	check("fresh VERIFY excludes other authentication types", !iasecc_chipdoc_fresh_verify(&card, &pin));
+	pin.pin_type = SC_AC_CHV;
+	pin.cmd = SC_PIN_CMD_CHANGE;
+	check("fresh VERIFY excludes administrative operations", !iasecc_chipdoc_fresh_verify(&card, &pin));
+	pin.cmd = SC_PIN_CMD_VERIFY;
+	app.aid.value[0] ^= 1;
+	check("fresh VERIFY excludes other application AIDs", !iasecc_chipdoc_fresh_verify(&card, &pin));
+	app.aid.value[0] ^= 1;
+	app.aid.len--;
+	check("fresh VERIFY excludes partial AID matches", !iasecc_chipdoc_fresh_verify(&card, &pin));
+	app.aid.len++;
+	card.app[0] = NULL;
+	check("fresh VERIFY tolerates missing application metadata", !iasecc_chipdoc_fresh_verify(&card, &pin));
+	card.app[0] = &app;
+	card.app_count = 0;
+	check("fresh VERIFY requires an enumerated application", !iasecc_chipdoc_fresh_verify(&card, &pin));
+	card.app_count = 1;
+	unsetenv("OPENSC_JCOP3_PIN_STATUS_IN_PLACE");
 	unlink(path);
 	return failures ? 1 : 0;
 }

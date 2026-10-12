@@ -47,6 +47,7 @@ if [[ $task_trace_api == yes ]]; then
             printf 'pin_query_experiment=session_and_token_info\n'
         elif [[ $task_pin_status_in_place == yes ]]; then
             printf 'pin_query_experiment=status_without_selection\n'
+            printf 'pin_verify_experiment=fresh_verify\n'
         fi
         git -C "$task_root/vendor/opensc" rev-parse HEAD
         git -C "$task_root/vendor/opensc" status --short
@@ -60,6 +61,7 @@ if [[ $task_pin_status_in_place == yes ]]; then
     task_env+=(OPENSC_JCOP3_PIN_STATUS_IN_PLACE=yes)
     printf 'Prueba: consulta física del PIN sin reseleccionar ni releer su política conocida.\n'
     printf 'Los intentos restantes proceden de la respuesta actual; pueden no estar disponibles tras login.\n'
+    printf 'Candidata actualizada: cada nuevo login verifica el PIN en la tarjeta, sin el atajo de hash previo.\n'
 fi
 if [[ $task_session_state == yes ]]; then
     task_env+=(OPENSC_JCOP3_SESSION_STATE=yes)
