@@ -9,21 +9,24 @@ El driver de tarjeta es `iasecc` y el módulo PKCS#11 compilado se llama
 
 Primer objetivo: reconocer una tarjeta JCOP3 emitida en Costa Rica, leer su
 certificado y producir una firma verificable mediante PKCS#11 de OpenSC.
-La enumeración pública funciona; la primera firma todavía está pendiente.
+La enumeración pública funciona y se obtuvo una firma RSA SHA-256 verificada
+con OpenSSL en la tarjeta observada.
 
 ## Punto actual para continuar
 
 Consultar [AGENTS.md](AGENTS.md) y las últimas secciones de
 [docs/jcop3.md](docs/jcop3.md). Ya se leen certificados RSA y la política
-del PIN (7 intentos restantes en la última consulta). Todavía no hay una
-firma exitosa. Se corrigieron las ACL RSA y la ruta de firma: la llave es
+del PIN (7 intentos restantes en la última consulta pública). Se corrigieron
+las ACL RSA y la ruta de firma: la llave es
 un objeto nativo en ChipDoc y `0003` no es seleccionable como archivo.
 SE 3 apunta al PIN global 1. La tarjeta acepta las configuraciones MSE de
 RSA PKCS#1 y RSA/SHA-256; se agregó una adaptación limitada a las referencias
-medidas de la llave de firma. El último login pasó, pero `SHA256-RSA-PKCS`
-falló en `C_SignFinal`: el camino QSign no soporta OpenSSL 3. El helper ahora
+medidas de la llave de firma. El mecanismo combinado `SHA256-RSA-PKCS`
+falló en `C_SignFinal`: el camino QSign no soporta OpenSSL 3. El helper
 prepara el DigestInfo SHA-256 en el equipo y pide `RSA-PKCS` a la tarjeta.
-Pasan 86 comprobaciones locales; falta validar esta ruta en hardware:
+El 11 de octubre de 2026 a las 20:18 de Costa Rica, esta ruta produjo una
+firma de 256 bytes y OpenSSL confirmó `Verified OK`. Pasan 86 comprobaciones
+locales. Para reproducir la prueba técnica:
 
 ```bash
 nix develop
@@ -37,6 +40,19 @@ El mecanismo combinado `SHA256-RSA-PKCS` sigue pendiente. Ejecutarlo directament
 terminal, sin redirigir stdout ni usar `tee`; no reintentar tras un fallo.
 Las secciones siguientes conservan los pasos anteriores de preparación e
 investigación; no es necesario repetirlos al retomar este directorio.
+
+El siguiente paso es probar el firmador instalado con el módulo local:
+
+```bash
+make firmador/jcop3
+```
+
+No recompila ni instala nada. El lanzador fija `LIBASEP11` al módulo compilado
+y `OPENSC_CONF` a una configuración privada en `local/`, con emulación
+PKCS#15 prioritaria, cachés de archivos/PIN desactivadas y depuración 0.
+Utilizar un PDF de prueba y realizar una sola firma; si falla, detenerse
+para revisar el error. La firma técnica verificada no demuestra todavía
+compatibilidad con firmador, que podría elegir otro mecanismo PKCS#11.
 
 ## Organización
 
@@ -187,7 +203,8 @@ make sign/jcop3
 Solicita el PIN en la terminal, firma un texto técnico y verifica el resultado
 con OpenSSL usando la llave pública del certificado. Guarda los archivos en
 `local/jcop3-signature-*`, con depuración APDU desactivada y sin reintentar el
-PIN. Todavía no se ha producido una firma ni validado el firmador con OpenSC.
+PIN. Esta prueba ya produjo una firma verificada; falta validar el firmador
+con OpenSC mediante `make firmador/jcop3`.
 
 El primer intento de firma falló en `C_Login`. La enumeración previa también
 mostró que la selección del contexto `0001` del PIN devuelve `6A82`. Antes de

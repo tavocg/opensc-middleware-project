@@ -909,3 +909,45 @@ escribiendo el PIN habitual solo después del prompt. Mantener depuración 0
 y no redirigir stdout. Revisar el nuevo informe si falla, antes de otro
 login. La ruta RSA-PKCS con DigestInfo aún no se ha probado después de un
 login exitoso; no existe todavía una firma verificada.
+
+## Primera firma verificada: 2026-10-11, 20:18 de Costa Rica
+
+`local/jcop3-signature-crUXrnAi/report.txt`, de las 02:18:39 UTC del 12 de
+octubre, usa OpenSC `70d7afc20`, sin cambios locales. El helper leyó el
+certificado de `LlaveDeFirma`, extrajo su llave pública y preparó DigestInfo
+SHA-256 de 51 bytes a partir del texto técnico de 82 bytes. El login pasó
+y `RSA-PKCS` produjo `signature.bin` de 256 bytes. OpenSSL verificó la firma
+contra el texto original con `Verified OK`; la ejecución terminó con estado 0.
+
+La comprobación independiente extrajo nuevamente la llave pública del
+certificado DER, la comparó con `public-key.pem`, recalculó y comparó el
+DigestInfo y verificó la firma con OpenSSL. También devolvió `Verified OK`.
+Estas comprobaciones no comunicaron con la tarjeta ni necesitaron el PIN.
+Los archivos permanecen en `local/`, con permisos 0600, fuera de Git.
+
+Se completó el primer hito: firma RSA SHA-256 real mediante PKCS#11 y
+verificación con la llave pública del certificado. No se cambió el PIN
+ni su tratamiento para este intento; la causa del rechazo de longitud
+anterior sigue sin confirmarse. No hubo depuración APDU autenticada, por
+lo que la secuencia física exacta no se capturó. La ruta del código y sus
+regresiones usan MSE AT `02` e INTERNAL AUTHENTICATE para RSA-PKCS.
+
+El siguiente paso es `make firmador/jcop3`. El nuevo helper fija `LIBASEP11`
+al módulo compilado y `OPENSC_CONF` a un archivo privado recién creado en
+`local/`, con el mismo contenido que el perfil de la firma verificada:
+depuración 0, emulación PKCS#15 primero y cachés de archivos/PIN desactivadas.
+Conserva la salida en la terminal y ejecuta el firmador instalado sin
+recompilar ni instalar. Su lanzador respeta `LIBASEP11` y conserva el entorno
+al ejecutar Java. Comprobar el certificado y una firma de un PDF de prueba;
+ante fallo, investigar antes de otro intento.
+
+El lanzador pasó la comprobación de sintaxis y se ejecutó con un `firmador`
+simulado que comprobó la ruta del módulo, `OPENSC_DEBUG=0`, el perfil idéntico
+al de la firma y la sustitución de variables heredadas. Los archivos de
+configuración quedaron con permisos 0600; se comprobó propagación de estado
+0 y 17 y rechazo de argumentos. No se abrió Java ni se accedió al lector.
+
+La verificación técnica no demuestra compatibilidad con el firmador:
+podría seleccionar otro mecanismo. `SHA256-RSA-PKCS` y QSign siguen pendientes,
+al igual que PuKDF `-1402`, concurrencia, otras llaves/mecanismos y validación
+de versiones/plataformas. No se reclama soporte completo de IAS/ECC o JCOP3.

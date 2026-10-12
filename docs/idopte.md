@@ -43,6 +43,10 @@ nix develop
 pkcs11-tool --module /run/current-system/sw/lib/SCMiddleware/libidop11.so --show-info --list-slots
 ```
 
-No se ha capturado una firma ni una sesión autenticada de Idopte. Primero se
-validará la corrección de enumeración en OpenSC. El código y los binarios del
-instalador permanecen fuera del historial del proyecto.
+No se ha capturado una firma ni una sesión autenticada de Idopte. OpenSC ya
+enumera los objetos y produjo una firma RSA SHA-256 verificada con OpenSSL.
+La integración pendiente se prueba con `make firmador/jcop3`: fija
+`LIBASEP11` al módulo compilado y proporciona `OPENSC_CONF` con el perfil
+usado en la firma verificada. El lanzador instalado conserva ambas variables
+al ejecutar Java. El código y los binarios del instalador permanecen fuera
+del historial del proyecto.

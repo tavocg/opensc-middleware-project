@@ -2,9 +2,9 @@
 
 Estado documentado el **11 de octubre de 2026**, después de revisar los informes
 de las 21:34 UTC, SE 3, MSE y el fallo de firma posterior al login de las
-19:41 de Costa Rica, el rechazo de longitud del PIN de las 19:59 y la
-consulta pública de las 20:12 que confirma 7/7 intentos
-(01:41, 01:59 y 02:12 UTC del 12 de octubre). Leer este archivo
+19:41 de Costa Rica, el rechazo de longitud del PIN de las 19:59, la
+consulta pública de las 20:12 y la primera firma verificada de las 20:18
+(01:41, 01:59, 02:12 y 02:18 UTC del 12 de octubre). Leer este archivo
 al retomar el proyecto y contrastarlo con Git y las capturas más recientes.
 Es un punto de partida, no una afirmación
 de soporte completo de la tarjeta.
@@ -14,8 +14,10 @@ de soporte completo de la tarjeta.
 Desarrollar soporte libre, sobre OpenSC, para una tarjeta **JCOP3 de firma
 digital de Costa Rica**, mediante su interfaz de contacto. El usuario tiene
 la tarjeta y un lector USB. El primer hito es obtener una firma RSA SHA-256
-con `LlaveDeFirma` y verificarla con OpenSSL. Después se probará `firmador`
-cargando el módulo PKCS#11 compilado, y se prepararán cambios para OpenSC.
+con `LlaveDeFirma` y verificarla con OpenSSL. **Ese primer hito se completó**
+con RSA-PKCS y DigestInfo SHA-256 el 11 de octubre a las 20:18 de Costa Rica.
+Ahora se probará `firmador` cargando el módulo PKCS#11 compilado, y después
+se prepararán cambios para OpenSC.
 
 La cadena de comunicación es:
 
@@ -66,6 +68,7 @@ Directorio de trabajo: `/home/tavo/Projects/middleware-project`.
 | `scripts/probe-jcop3.sh` | Consultas e informes sin introducir PIN |
 | `scripts/sign-jcop3.sh` | Firma interactiva de texto y verificación OpenSSL |
 | `scripts/sha256-digestinfo.sh` | Prepara DigestInfo SHA-256 DER para `RSA-PKCS`, sin PIN |
+| `scripts/firmador-jcop3.sh` | Abre firmador con módulo local y configuración PKCS#15, sin depuración APDU |
 | `scripts/test-iasecc.sh`, `tests/` | Regresiones sin tarjeta |
 | `docs/jcop3.md` | Evidencia técnica y evolución de la investigación |
 | `docs/idopte.md` | Localización del módulo privativo instalado |
@@ -88,7 +91,8 @@ make test/iasecc JOBS="$(nproc)"
 
 `JOBS` vale 2 por defecto. `READER=0` selecciona lector PC/SC y `SLOT_INDEX=0`
 selecciona slot PKCS#11; no son necesariamente el mismo índice.
-`inspect/jcop3-pkcs11`, los diagnósticos de política y `sign/jcop3` utilizan
+`inspect/jcop3-pkcs11`, los diagnósticos de política, `sign/jcop3` y
+`firmador/jcop3` utilizan
 la compilación existente: **no recompilan**.
 
 Las restricciones del entorno del agente pueden impedir usar el daemon de
@@ -99,16 +103,18 @@ pero no valida comunicación con la tarjeta.
 
 Los últimos commits guardados del driver y su diagnóstico son:
 
-- Repositorio principal: **`115d0d5`**, `Document pending PIN metadata check`.
+- Repositorio principal: **`96d1196`**, `Record unchanged PIN limits and retries`.
 - Submódulo OpenSC: **`70d7afc20`**, `iasecc: add ChipDoc signing algorithms`.
 - Base upstream original: `c7a377af971df03f879c1697e91ebac1f7e28c56`.
 
 Las correcciones de ACL, ruta de firma, fallback de referencias de algoritmo
 y lectura RSA limitada a DOCP ya están comprometidas, junto con sus pruebas.
 El helper de firma desactiva la caché de PIN. Ambos árboles estaban limpios
-al comenzar a revisar el informe de las 19:59. El helper para usar DigestInfo
+al comenzar a revisar el informe de las 20:18. El helper para usar DigestInfo
 SHA-256 y `RSA-PKCS`, las nuevas regresiones y su documentación están
-comprometidos. El submódulo no tiene cambios nuevos. Confirmar mediante Git.
+comprometidos. Quedan por guardar el nuevo lanzador de firmador, el objetivo
+Make y la documentación de la firma verificada. El submódulo no tiene cambios
+nuevos. Confirmar mediante Git.
 
 La URL del submódulo aún es `https://github.com/OpenSC/OpenSC.git`. Los commits
 locales del driver necesitarán publicarse en un fork y actualizar esa URL
@@ -145,7 +151,7 @@ relleno no se ha resuelto. No afirmar que esta parte funciona completamente.
 El módulo anuncia Cryptoki 3.0 y mecanismos RSA, incluido `SHA256-RSA-PKCS`.
 Anunciar un mecanismo no demuestra que funcione en esta tarjeta.
 La prueba de las 19:41 falla con `SHA256-RSA-PKCS` después de pasar el login.
-El helper ahora usa `RSA-PKCS` con DigestInfo SHA-256; también falta validarlo
+El helper ahora usa `RSA-PKCS` con DigestInfo SHA-256 y esa ruta se verificó
 en hardware. No considerar resuelto el mecanismo combinado ni QSign.
 
 ## Cambios realizados y límites
@@ -197,6 +203,7 @@ configuración local con **`try_emulation_first = yes`** y
 **`use_file_caching = no`**. El binding nativo por defecto puede omitir esa
 corrección: al integrar con firmador habrá que conservar esta configuración
 o resolver la selección del perfil. No basta con cambiar la ruta de la .so.
+El nuevo objetivo `make firmador/jcop3` proporciona esa configuración local.
 
 ## Verificación y últimas capturas
 
@@ -210,6 +217,10 @@ Pasaron en la comprobación local; también terminó la compilación completa
 sin PC/SC, registrada en `build/opensc-offline/rsa-pkcs-build.log`.
 Las últimas regresiones están en `build/opensc-offline/rsa-pkcs-tests.log`.
 Esto no sustituye pruebas de firma en hardware.
+El lanzador de firmador pasó comprobación de sintaxis y una ejecución con
+`firmador` simulado: selección del módulo, sustitución de configuración/debug
+heredados, perfil idéntico al de la firma, permisos 0600 y propagación del
+código de salida. Esa comprobación no abrió Java ni accedió al lector.
 
 | Captura local | Resultado relevante |
 | --- | --- |
@@ -229,6 +240,7 @@ Esto no sustituye pruebas de firma en hardware.
 | **`jcop3-signature-CXq9hBMQ/report.txt`** | 12 de octubre, 01:41:29 UTC: certificado leído y login aceptado; `C_SignFinal` devuelve `CKR_FUNCTION_NOT_SUPPORTED`; no hay firma ni verificación OpenSSL |
 | **`jcop3-signature-Pwfndadv/report.txt`** | 12 de octubre, 01:59:58 UTC: helper `RSA-PKCS`, certificado y DigestInfo preparados; `C_Login` devuelve `CKR_PIN_LEN_RANGE`; no se llegó a la firma |
 | **`jcop3-pkcs11-EqveuSwF.txt`** | 12 de octubre, 02:12:28 UTC: mismo módulo y ATR, slot 0 y objetos RSA visibles; AODF 4–20, CHV 4–14, intentos 7/7; no hubo login |
+| **`jcop3-signature-crUXrnAi/report.txt`** | 12 de octubre, 02:18:39 UTC: login y RSA-PKCS exitosos, firma de 256 bytes, OpenSSL `Verified OK`, estado 0; primera firma verificada |
 
 Los informes PKCS#11 y DOCP RSA de las 21:34 UTC ya se revisaron: **no pedir ejecutarlos de nuevo como
 primer paso**. Los DOCP RSA se reprodujeron en las regresiones del parser
@@ -274,56 +286,54 @@ permanecen iguales y los intentos siguen en 7/7. Lector, ATR, slot 0 y objetos
 RSA son visibles; persiste PuKDF `-1402`, sin bloquear la enumeración.
 No hubo login en esa consulta ni hay captura autenticada. No se confirmó
 la causa de la entrada rechazada y no se cambiaron límites ni código.
-Se puede solicitar un único intento de `make sign/jcop3`, escribiendo el
-PIN habitual después del prompt, directamente en la terminal. Si vuelve
-a fallar, revisar el informe antes de cualquier otra autenticación.
+El intento posterior de las 20:18 pasó el login y produjo la primera firma
+RSA SHA-256 verificada. Se compararon la llave pública extraída del certificado
+y el DigestInfo recalculado con los archivos guardados; una comprobación
+OpenSSL independiente también devolvió `Verified OK`. No repetir esa firma
+como primer paso. La causa de la entrada rechazada anterior sigue sin
+confirmarse; no se modificó el tratamiento del PIN para obtener este éxito.
 
 Las consultas vacías de VERIFY devuelven `63 C7`: PIN no verificado, 7 intentos
 restantes. No llevan el valor del PIN. El primer intento de firma no tuvo
 depuración APDU; no se puede asegurar a partir del registro si el PIN llegó
-a transmitirse. No hay evidencia de PIN incorrecto ni de firma exitosa.
+a transmitirse. No hay evidencia de PIN incorrecto. La firma exitosa posterior
+consta en `jcop3-signature-crUXrnAi/report.txt`.
 Un `exit_status=0` en una herramienta no garantiza que no haya errores
 internos de parsing: revisar las respuestas y el contexto.
 
 ## Próximo trabajo, en orden
 
-1. Los informes de las 19:41 y 19:59 ya se revisaron. Las pruebas pasan y
-   el helper actualizado está comprometido; el submódulo sigue en `70d7afc20`.
-   La consulta pública de las 20:12 ya se revisó: límites sin cambios,
-   intentos 7/7 y enumeración correcta. El usuario no recuerda con certeza
-   la entrada del último PIN; no se confirmó un error de entrada.
-   No repetir esa consulta como primer paso ni recompilar sin cambios.
-   No habilitar APDU durante autenticación. La causa de los `No slots.`
-   anteriores sigue sin confirmarse.
-2. Con los metadatos y el contador ya comprobados, indicar **una ejecución**
-   de `make sign/jcop3` con el helper actualizado, directamente en su terminal.
-   Usa `RSA-PKCS` y `digest-info.der`, manteniendo la verificación SHA-256
-   del `message.txt` original. No cambiarlo a `SHA256-RSA-PKCS` todavía.
-   El helper configura `use_pin_caching = no`, `OPENSC_DEBUG=0` y `debug = 0`.
-   No redirigir stdout ni pedir capturas APDU autenticadas. Revisar el nuevo
-   `local/jcop3-signature-*/report.txt`, separando C_Login, C_Sign y OpenSSL.
-   Si falla, no repetir autenticación: investigar primero el resultado.
-3. Si aparece otro fallo reproducible, preparar una corrección con evidencia
+1. El primer hito está completo: firma RSA SHA-256 de las 20:18 verificada.
+   Guardar el lanzador y la documentación en el repositorio principal; el
+   submódulo sigue en `70d7afc20`. No repetir la firma ni recompilar sin cambios.
+2. Ejecutar `make firmador/jcop3` desde `nix develop`. El helper abre el
+   firmador instalado con el módulo compilado y un archivo privado en
+   `local/jcop3-firmador-*.conf`: emulación PKCS#15 primero, cachés de archivos
+   y PIN desactivadas, `OPENSC_DEBUG=0` y `debug = 0`. No solicita PIN por sí
+   mismo, no redirige ni captura la salida y no recompila ni instala.
+   Comprobar que aparece el certificado y realizar una firma de un PDF de
+   prueba. Ante fallo, revisar el mensaje antes de otro intento. Firmador
+   podría elegir un mecanismo combinado todavía no soportado.
+3. Verificar el PDF producido y confirmar la carga del módulo local antes
+   de declarar compatible el firmador. No habilitar depuración APDU durante
+   autenticación ni cambiar PIN, llaves o parámetros persistentes de tarjeta.
+4. Si aparece otro fallo reproducible, preparar una corrección con evidencia
    y regresión pertinente. Dar comandos para commit primero en el submódulo
    y luego en el repositorio principal, registrando su nuevo puntero.
-4. Confirmar una firma únicamente si OpenSSL verifica `signature.bin` contra
-   la llave pública del certificado y el texto técnico guardado. Una respuesta
-   MSE, login exitoso o archivo de salida por sí solos no completan ese hito.
-5. Después de una firma verificada, probar firmador con la biblioteca local
-   y la configuración PKCS#15 pertinente. La variable que usa su lanzador es:
+5. La variable que usa el lanzador instalado para seleccionar el módulo es:
 
    ```bash
    LIBASEP11="$(pwd)/build/opensc/src/pkcs11/.libs/opensc-pkcs11.so" firmador
    ```
 
-   Ese comando muestra la selección del módulo; falta definir/proporcionar
-   `OPENSC_CONF` para el perfil antes de considerarlo una prueba completa.
+   El objetivo Make proporciona también `OPENSC_CONF` para el perfil;
+   usarlo para la prueba en lugar del comando incompleto anterior.
 6. Ampliar compatibilidad y validación (concurrencia, caché, mecanismos reales,
    versiones/plataformas) antes de reclamar soporte completo o enviar cambios
    upstream. No generar nuevas llaves en una tarjeta emitida para probarlo.
 
-**Todavía no existe una firma producida por este driver, ni una prueba exitosa
-del firmador usando OpenSC.**
+**Existe una firma RSA SHA-256 producida por este driver y verificada con
+OpenSSL. Todavía no existe una prueba exitosa del firmador usando OpenSC.**
 
 ## PIN, privacidad e Idopte
 
