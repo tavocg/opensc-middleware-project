@@ -35,6 +35,9 @@ if [[ $task_trace_api == yes ]]; then
     {
         printf 'date_utc=%s\nmodule=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$task_module"
         printf 'session_state_experiment=%s\n' "$task_session_state"
+        if [[ $task_session_state == yes ]]; then
+            printf 'pin_query_experiment=session_and_token_info\n'
+        fi
         git -C "$task_root/vendor/opensc" rev-parse HEAD
         git -C "$task_root/vendor/opensc" status --short
     } > "$task_output/report.txt"
@@ -45,7 +48,8 @@ else
 fi
 if [[ $task_session_state == yes ]]; then
     task_env+=(OPENSC_JCOP3_SESSION_STATE=yes)
-    printf 'Experimento: C_GetSessionInfo utiliza el estado del login, sin consultar el PIN después de autenticar.\n'
+    printf 'Experimento: se omiten consultas físicas de PIN de C_GetSessionInfo y C_GetTokenInfo tras login.\n'
+    printf 'Las banderas de intentos del token usan los últimos metadatos públicos disponibles.\n'
 fi
 cat > "$task_config" <<'CONFIG'
 app default {

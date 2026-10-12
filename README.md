@@ -25,7 +25,7 @@ medidas de la llave de firma. El mecanismo combinado `SHA256-RSA-PKCS`
 falló en `C_SignFinal`: el camino QSign no soporta OpenSSL 3. El helper
 prepara el DigestInfo SHA-256 en el equipo y pide `RSA-PKCS` a la tarjeta.
 El 11 de octubre de 2026 a las 20:18 de Costa Rica, esta ruta produjo una
-firma de 256 bytes y OpenSSL confirmó `Verified OK`. Pasan 136 comprobaciones
+firma de 256 bytes y OpenSSL confirmó `Verified OK`. Pasan 151 comprobaciones
 locales. Para reproducir la prueba técnica:
 
 ```bash
@@ -65,22 +65,25 @@ intermedio. La ampliación de las 21:24 confirma selección y MSE exitosos,
 pero rechazo `6982` al ejecutar RSA. Falta explicar la condición de seguridad.
 El experimento de las 21:39 omitió las consultas de `C_GetSessionInfo`
 posteriores al login y el rechazo persistió. No se confirmó esa hipótesis.
-Se amplió el diagnóstico para observar también `C_GetTokenInfo`, selecciones
-de aplicación y reinicios detectados por OpenSC:
+El diagnóstico de las 21:54 muestra una consulta de `C_GetTokenInfo`
+inmediatamente después del login, que vuelve a seleccionar la raíz IAS.
+No estaba cubierta por el experimento previo. Ahora la comparación omite
+ambas clases de consulta física después de login, solo en el perfil observado:
 
 ```bash
 make test/iasecc JOBS="$(nproc)"
-make firmador/jcop3-diagnose
+make firmador/jcop3-session-state
 ```
 
 Cerrar previamente las instancias del firmador. Realizar una sola firma de
 un PDF de prueba y cerrar el programa. El diagnóstico guarda exclusivamente
 nombres fijos y metadatos numéricos en `local/jcop3-firmador-api-*/api.log`.
 Mantiene depuración 0 y caché de PIN desactivada; no registra PIN, su longitud,
-rutas, documentos, certificados ni buffers APDU. Revisar el informe antes de
-otro intento. Todavía no se ha validado una corrección de este fallo.
-El experimento `firmador/jcop3-session-state` sigue disponible, desactivado
-por defecto, como referencia de la comparación que falló.
+rutas, documentos, certificados ni buffers APDU. Las banderas de intentos
+del token utilizan metadatos públicos anteriores y pueden estar desactualizadas.
+Login sigue verificando el PIN. El experimento está desactivado por defecto,
+no modifica los modos normal/diagnóstico y aún no se ha probado en hardware.
+Revisar el informe antes de otro intento; todavía no hay una corrección validada.
 
 ## Organización
 

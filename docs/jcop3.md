@@ -1343,3 +1343,72 @@ observaciones de hardware. La compilación completa sin PC/SC pasó.
 Informes: `build/opensc-offline/chipdoc-context-trace-tests.log` y
 `chipdoc-context-trace-build.log`. Falta ejecutar este registro ampliado
 en el lector del usuario; no se ha corregido aún el rechazo RSA del firmador.
+
+## Consulta del token después del login: 2026-10-11, 21:54
+
+`local/jcop3-firmador-api-D83Fsxrk/report.txt` registra 03:54:31 UTC del
+12 de octubre, OpenSC `a3b001ea2`, sin cambios locales y experimento apagado.
+El repositorio principal está en `e99218b`; ambos árboles estaban limpios
+al revisar la captura. El registro ampliado contiene 211 líneas:
+
+- Un `C_Login CKR_OK` y una firma fallida con llave 3, RSA 2048,
+  mecanismo SHA256-RSA-PKCS. No hay logout ni cierre de sesión intermedio.
+- **Una consulta `C_GetTokenInfo` inmediatamente después del login**,
+  que ejecuta SELECT raíz IAS, consulta estado y política del PIN, y
+  vuelve a seleccionar la raíz. `TOKEN_PIN_STATUS` informa PIN verificado.
+- Cuatro `C_GetSessionInfo` posteriores, con secuencia equivalente,
+  PIN verificado y sesión RW USER. En total son **15 SELECT raíz IAS**
+  después del login y antes del SELECT ChipDoc de la firma.
+- No se observan selecciones de archivo provocadas por enumeración o lectura
+  de atributos tras login. Esto concuerda con los certificados
+  ya cargados en los objetos del framework; no confundirlo con caché PIN.
+- Se observan seis bloqueos del lector después del login, todos sin resultado
+  reset/reattachment; no hay evento `CARD_RESET`. Esto no excluye cambios de
+  contexto externos que OpenSC no detecte.
+- Selección ChipDoc, DOCP y MSE pasan; RSA AT devuelve `6982`. La caché PIN
+  desactivada bloquea revalidación y no se repite RSA.
+
+El registro confirma el punto ciego del experimento anterior: omitía las
+consultas de sesión, **pero conservaba la consulta física del token**. No
+prueba que esa consulta cause el rechazo RSA, ni explica por qué el PIN
+aparece verificado en la raíz. La hipótesis de efectos de consultas/selecciones
+posteriores al login sigue requiriendo una comparación controlada.
+
+Se amplió el mismo experimento optativo, `OPENSC_JCOP3_SESSION_STATE=yes`,
+para omitir también la consulta de `C_GetTokenInfo` después de login CKU_USER,
+con exactamente las mismas restricciones de perfil, CHV global 1 y ruta MF.
+Antes del login y en otros perfiles conserva la consulta real. El método
+sigue comprobando presencia/token y calculando banderas de intentos usando
+los metadatos públicos disponibles; **esas banderas pueden estar
+desactualizadas** en este experimento. No modifica el estado físico de la
+tarjeta ni presenta los datos anteriores como una nueva observación.
+
+El evento **`TOKEN_PIN_CACHED session=0 rv=0 a=0 b=1`** marca la omisión;
+`a=SC_PIN_STATE_UNKNOWN` evita afirmar que se leyó el estado físico, y
+`b=CKU_USER` identifica el login software existente. La consulta omitida no
+produce `TOKEN_PIN_STATUS` ni SELECT/GET INFO adicionales. Las omisiones
+previas de sesión siguen marcadas con `SESSION_LOGIN_STATE`. La configuración
+mantiene caché de PIN desactivada: almacenar metadatos de intentos no
+almacena el valor del PIN. Login, logout, detección de presencia y rechazo
+RSA siguen sus caminos existentes; no hay nuevos VERIFY ni reintentos.
+
+El helper añade `pin_query_experiment=session_and_token_info` al informe
+para distinguir esta versión del experimento anterior; los modos normal y
+diagnóstico conservan consultas físicas y eliminan la variable experimental
+heredada. La versión ampliada sigue desactivada por defecto y no es todavía
+una corrección validada. La siguiente intervención es compilar cambios y
+hacer **un solo intento** con `make firmador/jcop3-session-state`, cerrar
+firmador y revisar el registro antes de repetir PIN. Las capturas anteriores
+y las firmas técnicas ya se revisaron; no pedir repetirlas primero.
+
+Pasan **151 comprobaciones** sin tarjeta. Las 15 nuevas comprueban omisión
+optativa de token-info sin inventar login físico, conservación de consulta
+antes de login, y consulta real en los 13 perfiles/condiciones excluidos.
+El comportamiento normal y los errores de consulta permanecen cubiertos.
+La compilación completa sin PC/SC pasó; informes
+`build/opensc-offline/chipdoc-token-state-tests.log` y
+`chipdoc-token-state-build.log`. El helper pasó sintaxis y una ejecución
+simulada en los tres modos: variables heredadas eliminadas, mismo módulo y
+configuración, caché PIN desactivada, permisos privados, marca específica
+solo en experimento y propagación del código de salida. No se abrió Java,
+no se usó lector y no se pidió PIN en esas verificaciones.

@@ -28,7 +28,7 @@ help:
 		'make sign/jcop3-sha256     Prueba SHA256-RSA-PKCS con el mismo texto y verificación.' \
 		'make firmador/jcop3        Abre firmador con el módulo y perfil locales, sin depuración APDU.' \
 		'make firmador/jcop3-diagnose Registra únicamente metadatos de sesiones y firma, sin PIN ni APDU.' \
-		'make firmador/jcop3-session-state Prueba aislada: omite consultas físicas de PIN de C_GetSessionInfo tras login.'
+		'make firmador/jcop3-session-state Prueba aislada: omite consultas físicas de PIN de sesión y token tras login.'
 
 probe/jcop3:
 	@bash scripts/probe-jcop3.sh "$$READER"

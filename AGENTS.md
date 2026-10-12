@@ -1,13 +1,17 @@
 # libjcop3p11: contexto para continuar
 
 Estado actualizado el **11 de octubre de 2026**, después de revisar el
-experimento del firmador de las **21:39 de Costa Rica** (03:39 UTC del 12).
+registro del firmador de las **21:54 de Costa Rica** (03:54 UTC del 12).
 RSA SHA-256 ya produjo dos firmas técnicas verificadas, pero firmador sigue
-fallando: login, selección y MSE pasan; RSA AT devuelve `6982`. Omitir las
-consultas físicas de `C_GetSessionInfo` no lo resolvió. Se amplió el registro
-numérico para observar `C_GetTokenInfo`, selecciones y reinicios detectados,
-sin modificar las operaciones de la tarjeta. Leer este archivo al retomar y
-contrastar Git y las capturas más recientes; no afirma soporte completo.
+fallando: login, selección y MSE pasan; RSA AT devuelve `6982`. El último
+registro muestra una consulta física de `C_GetTokenInfo` después del login,
+además de cuatro consultas de sesión, y 15 selecciones de la raíz IAS antes
+de seleccionar ChipDoc para firmar. No registra reinicios detectados.
+El experimento anterior solo omitía las consultas de sesión y falló; ahora
+se amplió para omitir también la consulta del token, limitado al perfil y
+activado explícitamente. Es una comparación pendiente, no una corrección.
+Leer este archivo al retomar y contrastar Git y las capturas más recientes;
+no afirma soporte completo.
 
 ## Objetivo y alcance
 
@@ -104,8 +108,8 @@ pero no valida comunicación con la tarjeta.
 
 Los últimos commits guardados del driver y su diagnóstico son:
 
-- Repositorio principal: **`78189a3`**, `Test firmador without post-login PIN queries`.
-- Submódulo OpenSC: **`ca8f65684`**, `Add ChipDoc session state experiment`.
+- Repositorio principal: **`e99218b`**, `Trace firmador card context`.
+- Submódulo OpenSC: **`a3b001ea2`**, `Trace ChipDoc card context`.
 - Base upstream original: `c7a377af971df03f879c1697e91ebac1f7e28c56`.
 
 Las correcciones de ACL, ruta de firma, fallback de referencias de algoritmo
@@ -122,12 +126,12 @@ limpios. El diagnóstico PKCS#11, sus pruebas y `firmador/jcop3-diagnose` ya
 están comprometidos; el usuario ejecutó el diagnóstico con ese módulo.
 Ambos árboles estaban limpios al revisar su registro de las 21:06. Ahora
 la ampliación del registro ya está comprometida y se probó en hardware.
-Ambos árboles estaban limpios al revisar la captura de las 21:39; el
-experimento ya está comprometido y falló en hardware. Hay cambios locales
-que amplían únicamente el registro de diagnóstico, con regresiones y
-actualización de documentación. El modo experimental continúa desactivado
-por defecto y no se recomienda como corrección. Confirmar mediante Git
-antes de cambiar el puntero.
+Ambos árboles estaban limpios al revisar la captura de las 21:54; el
+registro ampliado está comprometido y se ejecutó en hardware. Hay cambios
+locales que amplían el experimento optativo a `C_GetTokenInfo`, con
+regresiones y documentación. El modo normal conserva las consultas físicas.
+El experimento continúa desactivado por defecto y no se recomienda como
+corrección. Confirmar mediante Git antes de cambiar el puntero.
 
 La URL del submódulo aún es `https://github.com/OpenSC/OpenSC.git`. Los commits
 locales del driver necesitarán publicarse en un fork y actualizar esa URL
@@ -232,7 +236,7 @@ El nuevo objetivo `make firmador/jcop3` proporciona esa configuración local.
 
 ## Verificación y últimas capturas
 
-Hay **136 comprobaciones de regresión** en diez archivos C: `iasecc-fci.c`,
+Hay **151 comprobaciones de regresión** en diez archivos C: `iasecc-fci.c`,
 `iasecc-pin-path.c`, `iasecc-key-path.c`, `iasecc-sdo.c`, `iasecc-pin-policy.c`
 y `iasecc-sign-setup.c`, más `iasecc-rsa-pkcs.c`, `pkcs11-api-trace.c`,
 `pkcs11-session-state.c`, `iasecc-context-trace.c`, y el script
@@ -240,8 +244,8 @@ y `iasecc-sign-setup.c`, más `iasecc-rsa-pkcs.c`, `pkcs11-api-trace.c`,
 capturadas, conservación/copia de metadatos, rechazo de perfiles distintos y
 transporte simulado que verifica que cambio/desbloqueo no autentican.
 Pasaron en la comprobación local; también terminó la compilación completa
-sin PC/SC, registrada en `build/opensc-offline/chipdoc-context-trace-build.log`.
-Las últimas regresiones están en `build/opensc-offline/chipdoc-context-trace-tests.log`.
+sin PC/SC, registrada en `build/opensc-offline/chipdoc-token-state-build.log`.
+Las últimas regresiones están en `build/opensc-offline/chipdoc-token-state-tests.log`.
 Esto no sustituye pruebas de firma en hardware.
 El lanzador de firmador, en modos normal, diagnóstico y experimento de sesión,
 pasó sintaxis y una ejecución con
@@ -275,6 +279,7 @@ abrió Java ni accedió al lector.
 | **`jcop3-firmador-api-1LBmDPbP/api.log`** | 12 de octubre, 03:06:20 UTC, OpenSC `f7752be36`: un login exitoso, PIN_STATUS logged in, sesiones RW USER, SHA256-RSA-PKCS y llave 3; `C_SignFinal` devuelve `CKR_USER_NOT_LOGGED_IN`; no hay logout/cierre intermedio |
 | **`jcop3-firmador-api-hBIzcp79/api.log`** | 12 de octubre, 03:24:32 UTC, OpenSC `a19ee5927`: un login exitoso; llave 3; selección, DOCP y MSE pasan; RSA AT devuelve `6982`, traducido a `SC_ERROR_SECURITY_STATUS_NOT_SATISFIED (-1211)` y `CKR_USER_NOT_LOGGED_IN`; no reintento RSA |
 | **`jcop3-firmador-api-HQ6utMiv/api.log`** | 12 de octubre, 03:39:50 UTC, OpenSC `ca8f65684`: experimento activo; `C_GetSessionInfo` omite consultas físicas; login, selección y MSE pasan; RSA AT sigue devolviendo `6982`; un login y una firma fallida |
+| **`jcop3-firmador-api-D83Fsxrk/api.log`** | 12 de octubre, 03:54:31 UTC, OpenSC `a3b001ea2`: un login exitoso; una consulta token y cuatro consultas sesión después del login; 15 SELECT raíz y un SELECT ChipDoc; sin reset detectado; RSA AT devuelve `6982` |
 
 Los informes PKCS#11 y DOCP RSA de las 21:34 UTC ya se revisaron: **no pedir ejecutarlos de nuevo como
 primer paso**. Los DOCP RSA se reprodujeron en las regresiones del parser
@@ -358,9 +363,16 @@ Las consultas posteriores de `C_GetSessionInfo` seleccionan MF y leen
 política; eso es una diferencia concreta con la prueba CLI verificada.
 El experimento de las 21:39 omitió esas consultas y el mismo rechazo RSA
 persistió: la hipótesis no se confirma. No descarta todas las consultas de
-PIN: `C_GetTokenInfo` también llama a `sc_pkcs15_get_pin_info` y el registro
-anterior no lo observaba. Sus llamadas, selecciones reales y reinicios
-observados por OpenSC se incorporaron al diagnóstico; no se añaden comandos.
+PIN: el registro de las 21:54 confirma que `C_GetTokenInfo` llama a
+`sc_pkcs15_get_pin_info` inmediatamente después del login y vuelve a
+seleccionar la raíz IAS. Después hay cuatro consultas de sesión similares.
+Las cinco informan PIN verificado. No se observaron selecciones de archivo
+por enumeración de objetos tras login ni reinicios detectados al bloquear.
+La firma selecciona ChipDoc, prepara MSE y recibe `6982`. El experimento
+se amplió para omitir ambas clases de consulta en el perfil autenticado.
+`TOKEN_PIN_CACHED` marca la omisión; las banderas de intentos del token usan
+metadatos públicos anteriores y pueden estar desactualizadas. No afirma una
+nueva lectura física del PIN, ni guarda su valor. Falta probarlo en hardware.
 No hay evidencia de PIN incorrecto, llave equivocada o problema de Internet.
 
 Las consultas vacías de VERIFY devuelven `63 C7`: PIN no verificado, 7 intentos
@@ -373,14 +385,14 @@ internos de parsing: revisar las respuestas y el contexto.
 
 ## Próximo trabajo, en orden
 
-1. Las firmas técnicas y las capturas de las 21:06, 21:24 y 21:39 ya se
+1. Las firmas técnicas y las capturas de las 21:06, 21:24, 21:39 y 21:54 ya se
    revisaron. No repetirlas con el módulo anterior. Guardar los cambios
    incrementales dando comandos al usuario: submódulo primero, repositorio
    principal después, incluyendo su puntero. No crear commits desde el agente.
-2. Compilar el diagnóstico ampliado y sus regresiones con
+2. Compilar el experimento ampliado y sus regresiones con
    `make test/iasecc JOBS="$(nproc)"`. La comprobación offline no valida PC/SC.
 3. Cerrar instancias anteriores del firmador y realizar **una sola firma**
-   de un PDF de prueba mediante **`make firmador/jcop3-diagnose`**. Cerrar el
+   de un PDF de prueba mediante **`make firmador/jcop3-session-state`**. Cerrar el
    programa y revisar el nuevo registro antes de otro intento. El helper
    conserva emulación primero, cachés desactivadas y depuración 0.
 4. Interpretar la secuencia tras login: `C_GetTokenInfo_BEGIN`,
@@ -395,10 +407,18 @@ internos de parsing: revisar las respuestas y el contexto.
    `CARD_RESET` informa una llamada existente de reset y si es cold reset.
    La ausencia de esos indicadores no demuestra ausencia de cambios
    externos de contexto. Ver `docs/jcop3.md` para los demás eventos.
-5. El experimento `firmador/jcop3-session-state` falló y queda como referencia
-   optativa, desactivada por defecto. No activar caché PIN, `atomic` ni
-   `lock_login` como solución especulativa. No modificar ACL, PIN, llaves
-   ni parámetros persistentes. No habilitar depuración APDU autenticada.
+5. El experimento anterior solo cubría consultas de sesión y falló. La
+   versión ampliada omite también la consulta PIN de `C_GetTokenInfo` tras
+   login CKU_USER únicamente en Amos + Generic PKI + CHV 1 global + ruta MF.
+   Antes del login, SO, PUK, PIN local u otros perfiles consultan la tarjeta.
+   `TOKEN_PIN_CACHED` (a=UNKNOWN, b=CKU_USER) marca metadatos previos;
+   `SESSION_LOGIN_STATE` marca estado de sesión conservado sin consulta.
+   `report.txt` añade `pin_query_experiment=session_and_token_info` para
+   distinguirlo de la prueba de las 21:39. Login, detección de presencia y
+   rechazo de RSA se conservan. Está desactivado por defecto; modos normal
+   y diagnóstico eliminan la variable experimental heredada. No activar
+   caché PIN, `atomic` ni `lock_login` como solución especulativa. No modificar
+   ACL, PIN, llaves ni parámetros persistentes, ni capturar APDU autenticadas.
 6. Cuando exista una corrección sustentada, verificar la firma PDF y confirmar
    carga del módulo local antes de declarar compatible el firmador. Su
    lanzador selecciona el módulo con `LIBASEP11`; el objetivo Make también
