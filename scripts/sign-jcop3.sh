@@ -28,7 +28,7 @@ task_report="$task_output/report.txt"
 task_config="$task_output/opensc.conf"
 task_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 printf 'Resultado y archivos: %s\n' "$task_output"
-printf 'date_utc=%s\nmodule=%s\nslot_index=%s\nkey_id=%s\nmechanism=SHA256-RSA-PKCS\n' \
+printf 'date_utc=%s\nmodule=%s\nslot_index=%s\nkey_id=%s\nmechanism=RSA-PKCS\ndigest_algorithm=SHA256\n' \
     "$task_date" "$task_module" "$task_slot_index" "$task_key_id" > "$task_report"
 git -C "$task_root/vendor/opensc" rev-parse HEAD >> "$task_report"
 git -C "$task_root/vendor/opensc" status --short >> "$task_report"
@@ -70,15 +70,20 @@ task_record openssl x509 -inform DER -in "$task_output/certificate.der" -pubkey 
 openssl x509 -inform DER -in "$task_output/certificate.der" -pubkey -noout \
     > "$task_output/public-key.pem" 2>> "$task_report"
 
+task_record bash "$task_root/scripts/sha256-digestinfo.sh" "$task_output/message.txt"
+bash "$task_root/scripts/sha256-digestinfo.sh" "$task_output/message.txt" \
+    > "$task_output/digest-info.der" 2>> "$task_report"
+
 printf '\nSe firmara este texto con LlaveDeFirma:\n'
 cat -- "$task_output/message.txt"
+printf '\nSHA-256 se calcula en el equipo; la tarjeta realiza RSA PKCS#1 v1.5.\n'
 printf '\nIntroduce tu PIN cuando lo solicite pkcs11-tool.\n'
-task_record "${task_common[@]}" --login --sign --mechanism SHA256-RSA-PKCS \
-    --input-file "$task_output/message.txt" --output-file "$task_output/signature.bin"
+task_record "${task_common[@]}" --login --sign --mechanism RSA-PKCS \
+    --input-file "$task_output/digest-info.der" --output-file "$task_output/signature.bin"
 # stdout debe seguir conectado a la terminal: util_getpass lo utiliza para
 # desactivar el eco. No registrar APDU ni pasar el PIN en argumentos.
-"${task_common[@]}" --login --sign --mechanism SHA256-RSA-PKCS \
-    --input-file "$task_output/message.txt" --output-file "$task_output/signature.bin" 2>> "$task_report"
+"${task_common[@]}" --login --sign --mechanism RSA-PKCS \
+    --input-file "$task_output/digest-info.der" --output-file "$task_output/signature.bin" 2>> "$task_report"
 
 task_record openssl dgst -sha256 -verify "$task_output/public-key.pem" \
     -signature "$task_output/signature.bin" "$task_output/message.txt"

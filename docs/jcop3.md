@@ -795,3 +795,57 @@ redirigir stdout. El helper primero intenta leer el certificado y solo
 después ejecuta el comando autenticado. Revisar el nuevo informe ante
 cualquier fallo antes de repetirlo. Sigue pendiente producir y verificar
 una firma real con el conjunto actual.
+
+## Login aceptado y fallo en QSign: 2026-10-11, 19:41 de Costa Rica
+
+`local/jcop3-signature-CXq9hBMQ/report.txt`, de las 01:41:29 UTC del 12 de
+octubre, usa OpenSC `70d7afc20`. El helper leyó el certificado y extrajo la
+llave pública. El comando autenticado pasó el login y eligió
+`SHA256-RSA-PKCS`, pero terminó en `C_SignFinal` con
+`CKR_FUNCTION_NOT_SUPPORTED (0x54)`. No produjo una firma ni ejecutó la
+verificación OpenSSL. El PIN no figura en el informe. Sin APDU autenticadas
+no se puede identificar el comando físico exacto que produjo el fallo.
+
+La revisión del código encuentra un bloqueo reproducible:
+`iasecc_qsign_data_sha256()` devuelve incondicionalmente
+`SC_ERROR_NOT_SUPPORTED` para OpenSSL 3. El transporte simulado reproduce
+ese error con la ruta PKCS#15 real después de aceptar DOCP y HT/DST, antes
+de transmitir PSO HASH o PSO SIGN. Además, al no declarar `algo_refs`,
+`pkcs15_prkey_can_do()` provoca hashing en software en la capa PKCS#11;
+las flags de SHA-256 aún llevan la operación al camino QSign del driver.
+Resolver el mecanismo combinado exige revisar ambas capas, no solo retirar
+el guard de versión de OpenSSL. Su soporte sigue pendiente.
+
+Para el primer hito se cambió el helper a `RSA-PKCS` con DigestInfo SHA-256
+calculado antes del login. `scripts/sha256-digestinfo.sh` genera 51 bytes:
+19 bytes de cabecera DER (OID SHA-256 y NULL) y el hash de 32 bytes del texto
+original. La tarjeta agrega el padding PKCS#1 v1.5 y realiza RSA. El driver
+existente usa MSE AT `02`, con referencia local de llave `83`, e INTERNAL
+AUTHENTICATE para esta modalidad; su ACL RSA también refiere al SE 3.
+La aceptación previa de MSE no acredita que la operación criptográfica vaya
+a funcionar. No se modificó el submódulo ni el tratamiento del PIN.
+
+`tests/iasecc-rsa-pkcs.c` usa el formato PKCS#15, padding y driver reales con
+transporte simulado. Comprueba selección del AID, GET DOCP público, AT `02`
+y transmisión del DigestInfo SHA-256 de `abc` sin volver a hashearlo.
+Verifica que fallos de MSE o de RSA detienen esa ruta PKCS#15 sin reintento
+ni revalidación de PIN. Su respuesta de 256 bytes es sintética, no una firma.
+También reproduce el fallo QSign actual con OpenSSL 3.
+`tests/sha256-digestinfo.sh` compara la salida DER completa con el vector
+conocido de `abc` y rechaza una entrada inexistente sin producir bytes.
+
+Pasan **86 comprobaciones** en la suite local, con registro
+`build/opensc-offline/rsa-pkcs-tests.log`; terminó la compilación completa
+sin PC/SC (`rsa-pkcs-build.log`). Estas pruebas no usan tarjeta ni generan
+llaves. Para validar en el entorno del usuario:
+
+```bash
+make test/iasecc JOBS="$(nproc)"
+make sign/jcop3
+```
+
+Solo ejecutar la firma si las pruebas pasan, una vez y directamente en la
+terminal. El helper conserva depuración 0 y caché de PIN desactivada.
+Ahora registra `mechanism=RSA-PKCS`, `digest_algorithm=SHA256` y firma
+`digest-info.der`, pero OpenSSL verifica siempre contra el `message.txt`
+original. El hito solo se cumple si esa verificación tiene éxito.

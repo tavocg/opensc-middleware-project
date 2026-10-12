@@ -20,8 +20,10 @@ firma exitosa. Se corrigieron las ACL RSA y la ruta de firma: la llave es
 un objeto nativo en ChipDoc y `0003` no es seleccionable como archivo.
 SE 3 apunta al PIN global 1. La tarjeta acepta las configuraciones MSE de
 RSA PKCS#1 y RSA/SHA-256; se agregó una adaptación limitada a las referencias
-medidas de la llave de firma. Pasan 80 comprobaciones locales. El siguiente
-paso es un único intento de firma:
+medidas de la llave de firma. El último login pasó, pero `SHA256-RSA-PKCS`
+falló en `C_SignFinal`: el camino QSign no soporta OpenSSL 3. El helper ahora
+prepara el DigestInfo SHA-256 en el equipo y pide `RSA-PKCS` a la tarjeta.
+Pasan 86 comprobaciones locales; falta validar esta ruta en hardware:
 
 ```bash
 nix develop
@@ -30,7 +32,8 @@ make sign/jcop3
 ```
 
 El helper solicita el PIN sin eco, con depuración y caché de PIN desactivadas,
-firma un texto técnico y verifica con OpenSSL. Ejecutarlo directamente en la
+firma un texto técnico mediante RSA PKCS#1 v1.5 y verifica con OpenSSL.
+El mecanismo combinado `SHA256-RSA-PKCS` sigue pendiente. Ejecutarlo directamente en la
 terminal, sin redirigir stdout ni usar `tee`; no reintentar tras un fallo.
 Las secciones siguientes conservan los pasos anteriores de preparación e
 investigación; no es necesario repetirlos al retomar este directorio.
@@ -173,8 +176,9 @@ make inspect/jcop3-pkcs11
 Utiliza la compilación existente y guarda el informe en `local/`. Consulta
 metadatos de llaves y PIN, slots, mecanismos y objetos. `READER=0` selecciona
 el lector PC/SC y `SLOT_INDEX=0` el slot PKCS#11; estos índices pueden diferir.
-La consulta PKCS#11 ya publica certificados y llaves públicas y anuncia
-`SHA256-RSA-PKCS`. Para probar una firma con `LlaveDeFirma`:
+La consulta PKCS#11 ya publica certificados y llaves públicas. Aunque anuncia
+`SHA256-RSA-PKCS`, ese mecanismo falla con la compilación actual. La prueba
+usa `RSA-PKCS` con un DigestInfo SHA-256 preparado antes de solicitar el PIN:
 
 ```bash
 make sign/jcop3
