@@ -2437,3 +2437,48 @@ durante login/firma. Detenerse al primer error sin repetir PIN y cerrar al
 terminar. Revisar ambas capturas y PDF. Esto prueba un segundo cliente entre
 firmas, no dos firmas simultáneas. Después se delimitará concurrencia real y
 se decidirá activación del perfil; no se ha preparado un reporte upstream.
+
+
+## Nuevo bloqueo de login: CKR_ARGUMENTS_BAD, 2026-10-12, 02:35–02:36
+
+Principal `f214746` y OpenSC `8842f394b`, limpios al comenzar la revisión.
+Las capturas GUI GbaOMELO (08:35:29 UTC, 241 eventos) y j0FPyGAS
+(08:36:49 UTC, 145 eventos) usan la candidata y debug 0. Se conservan copias
+privadas api-reviewed.log y analysis.json en cada captura. Hay respectivamente
+cuatro y dos C_Login con rv=0x7, todos precedidos por CARD_PIN_VERIFY -1300
+(SC_ERROR_INVALID_ARGUMENTS), referencia CHV 1. No hay C_SignInit, C_SignFinal
+ni CARD_SIGN_AT; los locks pasan. No se encontró informe peer-context:
+el fallo es anterior al paso del segundo cliente, que sigue pendiente.
+
+El usuario indicó que pegó el PIN en la GUI; no conocemos ni registramos
+su valor o longitud. No hay evidencia de PIN incorrecto ni de bloqueo de
+la tarjeta. El marcador CARD_PIN_VERIFY está después de iasecc_chv_verify,
+que llama al driver ISO; no distingue rechazo del encoder y transporte.
+En sec.c, sc_build_pin devuelve -1300 si supera max_length, y en GLP también
+por ciertas entradas inválidas. PKCS#15 construye ASCII para el tipo público
+observado y IAS combina max_length con el límite público 14 de la tarjeta.
+Esto ofrece una hipótesis comprobable, no demuestra la causa de estas capturas.
+Los SW ISO normales de PIN incorrecto/longitud/parámetros tienen otros errores;
+no equiparar -1300 a un PIN incorrecto ni afirmar que no fue enviado todavía.
+
+Se añaden dos eventos optativos al driver ISO, sin operaciones adicionales:
+PIN_APDU_BUILD justo después de construir VERIFY, antes del transporte,
+y PIN_TRANSMIT después de transmitir o invocar el lector PIN-pad. Solo
+resultado, referencia pública y SW si el transporte tuvo éxito; nunca PIN,
+longitud, hash o bytes APDU. La validación y propagación de errores siguen
+iguales. Build negativo demuestra rechazo previo al envío; build exitoso
+seguido de TRANSMIT separa fallo de comunicación de una respuesta de tarjeta.
+Si el llamador proporciona APDU, se conserva el camino existente sin build.
+
+Siete regresiones usan el encoder ISO real con credenciales sintéticas y
+transporte simulado: trazas desactivadas, éxito con dos etapas, límite excedido
+sin envío, -1300 de transporte distinguible sin reintento, respuesta 63C6 sin
+reintento, GET_INFO sin marcas VERIFY y archivo de diagnóstico inaccesible.
+No usan tarjeta o PIN real. La prueba del segundo cliente queda suspendida.
+Próxima intervención: cerrar instancias, compilar y ejecutar un solo intento
+GUI con el PIN escrito manualmente, guardar en una salida nueva; detenerse
+ante fallo para revisar las etapas. No ejecutar aún el helper peer-context.
+
+Pasan **269 comprobaciones, cero FAIL**, incluidas las siete nuevas, en
+`build/opensc-offline/pin-stage-tests.log`. Compilación completa sin PC/SC
+en `build/opensc-offline/pin-stage-build.log`; esto no valida hardware.

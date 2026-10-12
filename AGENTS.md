@@ -1,28 +1,26 @@
 # libjcop3p11: contexto para continuar
 
-Estado actualizado el **12 de octubre de 2026**, tras revisar los ciclos GUI
-iniciados a las **02:18 de Costa Rica** (08:18 UTC), captura
-`local/jcop3-firmador-api-tYcckn70/`, OpenSC `8842f394b` limpio.
-**Recuperación repetida pasó:** 1170 eventos, seis VERIFY/logins/firmas OK y
-cuatro cambios de tarjeta con limpieza del token antes de nuevas firmas.
-Los cinco PDF cycle-0 a cycle-4 y el extra cycle-.pdf están verificados con
-OpenSSL, incluidos sellos CMS/imprint SHA-512 y conservación del original.
-Hay seis PDF distintos; no se atribuye cada evento a un nombre por su sufijo.
-No hubo atajo por hash, SELECT raíz tras login ni errores de lock/sesión.
-Resumen privado analysis.json y copia estable api-reviewed.log en la captura.
-GUI, firmas consecutivas, reinserción única/repetida y CLI están verificados
-para la tarjeta/lector observados; no confianza/revocación/LTV o soporte completo.
-Git al iniciar: principal `e72fa35`, submódulo `8842f394b`, limpios.
-No se cambia el driver. Se añade un helper público de segundo cliente,
-`make inspect/jcop3-peer-context`, y seis pruebas simuladas: pasan 262
-regresiones. El helper solo SELECT raíz IAS observada con driver default,
-stdin vacío, depuración 0 y sin login/firma; valida transporte y SW 9000.
-No se ha ejecutado en hardware. Próxima intervención: GUI en reposo entre dos
-firmas, ejecutar el helper desde otra terminal manteniendo la tarjeta puesta.
-Esto comprueba contexto alterado por otro cliente; no firmas simultáneas.
-El agente no usa pass ni firma y no dispone del lector. La candidata sigue
-optativa. No repetir los ciclos ya comprobados como primer paso ni publicar
-upstream sin contrastar master. Leer este archivo y las capturas al retomar.
+Estado actualizado el **12 de octubre de 2026**, tras revisar las capturas
+GUI de **02:35 y 02:36 de Costa Rica** (08:35/08:36 UTC), GbaOMELO y j0FPyGAS,
+OpenSC `8842f394b` limpio. **Bloqueo nuevo antes de la primera firma:** seis
+C_Login fallidos con CKR_ARGUMENTS_BAD; CARD_PIN_VERIFY devuelve -1300
+(SC_ERROR_INVALID_ARGUMENTS). No se alcanzó ninguna operación de firma y los
+locks pasan. No hay informes del segundo cliente; su prueba queda pendiente.
+El usuario indicó que pegó el PIN en la GUI. No atribuir el error a esa acción
+sin evidencia, ni pedir el PIN o su longitud. El marcador existente está
+fuera de ISO: no demuestra por sí solo que se transmitiera un VERIFY con PIN.
+Se añaden marcas optativas PIN_APDU_BUILD y PIN_TRANSMIT en ISO para distinguir
+preparación local y transporte/respuesta. Solo referencia pública, resultado
+y SW cuando el transporte tiene éxito; sin PIN, longitud, hash o APDU.
+No cambia la validación ni el camino de firma; siete regresiones sintéticas
+nuevas comprueban límites, transporte, PIN incorrecto y ausencia de reintentos.
+Las firmas GUI consecutivas, reinserciones repetidas y CLI anteriores sí
+están verificadas; preservarlas. Git al iniciar esta revisión: principal
+`f214746`, submódulo `8842f394b`, limpios. El agente no dispone del lector,
+no usa pass ni firma. Próximo paso: compilar las marcas y un único intento
+GUI con el PIN escrito manualmente, sin ejecutar aún el helper del segundo
+cliente. Detenerse ante fallo; revisar la etapa antes de continuar.
+Leer este archivo y las capturas al retomar; no publicar upstream sin master.
 
 ## Objetivo y alcance
 
@@ -123,16 +121,18 @@ pero no valida comunicación con la tarjeta.
 
 Los últimos commits guardados son:
 
-- Repositorio principal: **`e72fa35`**, `Document CLI signing success`.
+- Repositorio principal al iniciar la revisión: **`f214746`**, `Add peer context probe`.
 - Submódulo OpenSC: **`8842f394b`**, `Handle card changes before event shortcut`.
 - Base upstream original: `c7a377af971df03f879c1697e91ebac1f7e28c56`.
 
 Ambos árboles estaban limpios al comenzar esta revisión. Correcciones y
 regresiones del driver ya están comprometidas y compiladas por el usuario.
-Los ciclos GUI pasaron y sus seis PDF/sellos se verificaron. Cambios nuevos
-solo en principal: helper público peer-context, Make, seis pruebas del helper,
-runner y documentación. El submódulo no cambia; no recompilar para este helper.
-Dar al usuario los comandos de commit en el principal. No hay commits del agente.
+Los ciclos GUI pasaron y sus seis PDF/sellos se verificaron. El helper público
+peer-context ya está comprometido en f214746. Cambios nuevos del submódulo:
+marcas ISO de preparación y transporte; principal: fixture de siete casos,
+runner y documentación. Dar comandos de commit primero para el submódulo y
+luego para el principal, actualizando su puntero. Es necesario recompilar
+antes de probar las marcas nuevas. No hay commits del agente.
 
 La URL del submódulo aún es `https://github.com/OpenSC/OpenSC.git`. Los commits
 locales del driver necesitarán publicarse en un fork y actualizar esa URL
@@ -238,19 +238,19 @@ El nuevo objetivo `make firmador/jcop3` proporciona esa configuración local.
 
 ## Verificación y últimas capturas
 
-Hay **262 comprobaciones de regresión** en trece fixtures C: `iasecc-fci.c`,
+Hay **269 comprobaciones de regresión** en catorce fixtures C: `iasecc-fci.c`,
 `iasecc-pin-path.c`, `iasecc-key-path.c`, `iasecc-sdo.c`, `iasecc-pin-policy.c`
 y `iasecc-sign-setup.c`, más `iasecc-rsa-pkcs.c`, `pkcs11-api-trace.c`,
 `pkcs11-session-state.c`, `iasecc-context-trace.c`,
 `iasecc-post-login-status.c`, `pkcs15-pin-status-in-place.c`,
-`pkcs11-card-change.c`, y los scripts
+`pkcs11-card-change.c`, `iso7816-pin-trace.c`, y los scripts
 `sha256-digestinfo.sh`, `firmador-launcher.sh`, `peer-context-launcher.sh` y `pkcs11-sign-fallback.sh`, este último con un módulo C
 PKCS#11 completamente simulado. Incluyen respuestas
 capturadas, conservación/copia de metadatos, rechazo de perfiles distintos y
 transporte simulado que verifica que cambio/desbloqueo no autentican.
 Pasaron en la comprobación local; también terminó la compilación completa
-sin PC/SC, registrada en `build/opensc-offline/card-change-build.log`.
-Las últimas regresiones están en `build/opensc-offline/peer-context-tests.log`.
+sin PC/SC, registrada en `build/opensc-offline/pin-stage-build.log`.
+Las últimas regresiones están en `build/opensc-offline/pin-stage-tests.log`.
 Esto no sustituye pruebas de firma en hardware.
 El lanzador de firmador, en modos normal, diagnóstico y experimento de sesión,
 pasó sintaxis y una ejecución con
@@ -299,6 +299,7 @@ abrió Java ni accedió al lector.
 | **`jcop3-firmador-api-und1k27k/api-reviewed.log`** | 12 de octubre, 08:02:29 UTC, 8842f394b limpio: 463 eventos revisados; dos CARD_CHANGED procesados y limpieza del token, dos VERIFY reales y dos RSA de 256 bytes; reinserción rápida y ambos PDF/sellos verificados |
 | **`jcop3-firmador-api-Z0aJ18Ge/api-reviewed.log`** | 12 de octubre, 08:11:29 UTC, 8842f394b limpio: primer CLI, 174 eventos; VERIFY/login/RSA OK, llave 3 de 2048 bits, firma de 256 bytes y PDF/sello verificados |
 | **`jcop3-firmador-api-tYcckn70/api-reviewed.log`** | 12 de octubre, 08:18:56 UTC, 8842f394b limpio: 1170 eventos, seis VERIFY y RSA exitosas, cuatro cambios con limpieza; cinco PDF previstos y un extra, todos con firma/sello verificados |
+| **`jcop3-firmador-api-GbaOMELO/api-reviewed.log`**, **`jcop3-firmador-api-j0FPyGAS/api-reviewed.log`** | 08:35/08:36 UTC, 8842f394b limpio: 241/145 eventos, cuatro/dos logins CKR_ARGUMENTS_BAD; VERIFY -1300, sin firma ni fallos de lock; causa pendiente de marcas ISO |
 
 Los informes PKCS#11 y DOCP RSA de las 21:34 UTC ya se revisaron: **no pedir ejecutarlos de nuevo como
 primer paso**. Los DOCP RSA se reprodujeron en las regresiones del parser
@@ -496,7 +497,18 @@ internos de parsing: revisar las respuestas y el contexto.
    a los 38403 de las pruebas GUI, y contenido/render coinciden. No se atribuye
    esa diferencia a una causa concreta. No inferir identidad byte a byte de archivos firmados por ambos
    modos. Nueve regresiones del lanzador y helper TTY siguen vigentes.
-7. **Ciclos repetidos ya pasaron; siguiente caso: otro cliente entre firmas.**
+7. **Resolver primero CKR_ARGUMENTS_BAD; segundo cliente pendiente.**
+   GbaOMELO (241 eventos, cuatro logins fallidos) y j0FPyGAS (145, dos)
+   muestran -1300 al verificar CHV 1 y C_Login 0x7, sin firma o fallo de lock.
+   El usuario pegó el PIN; no se conoce la causa ni se capturó el valor.
+   Añadir compilación de las marcas ISO y realizar solo un intento GUI con
+   entrada manual, sin helper entre clientes. PIN_APDU_BUILD < 0 indica
+   rechazo antes del envío; build=0 seguido de PIN_TRANSMIT identifica
+   transporte/SW. No normalizar, recortar ni relajar límites del PIN.
+   Si falla, detenerse y revisar antes de otro intento autenticado.
+   **Después de resolver este bloqueo**, retomar el caso que sigue.
+
+   **Ciclos repetidos ya pasaron; caso preparado: otro cliente entre firmas.**
    Captura tYcckn70, 1170 eventos. Seis VERIFY reales/logins/firmas, llave 3,
    RSA AT 9000 y 256 bytes. Primeras dos firmas sin retirada intermedia;
    después cuatro limpiezas de token activo y nueva autenticación/firma.
@@ -524,8 +536,9 @@ internos de parsing: revisar las respuestas y el contexto.
 
 
 **Firmas consecutivas, reinserciones únicas/repetidas y CLI pasaron con
-PDF/sellos verificados. El próximo caso altera contexto desde otro cliente
-entre firmas GUI. Concurrencia simultánea y activación siguen pendientes.**
+PDF/sellos verificados. Primero resolver el nuevo CKR_ARGUMENTS_BAD de login;
+la prueba que altera contexto desde otro cliente queda pendiente, al igual
+que concurrencia simultánea y activación.**
 
 ## PIN, privacidad e Idopte
 
