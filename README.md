@@ -105,15 +105,23 @@ Esto reduce el fallo a la reselección en el contexto observado. El CLI además
 intentó multipart tras fallar C_Sign; el helper ahora desactiva ese fallback
 con el módulo actualizado, sin cambiar el modo normal del CLI.
 
-La siguiente prueba es `make firmador/jcop3-pin-status-in-place`, después de
-compilar con `make test/iasecc JOBS="$(nproc)"`. La corrección candidata mantiene
+La candidata `make firmador/jcop3-pin-status-in-place` produjo una firma PDF
+el 12 de octubre a las 00:37 de Costa Rica, con OpenSC `23b3d25fa`.
+El registro confirma cuatro consultas físicas después del login, ninguna
+reselección raíz y una operación RSA exitosa de 256 bytes. La candidata mantiene
 consultas físicas de estado de PIN, sin reseleccionar ni releer política una
 vez conocida. Solo conserva el máximo público de intentos; estado e intentos
 restantes proceden de la respuesta actual, incluso si quedan desconocidos.
 No omite las consultas como el experimento anterior ni guarda el PIN.
-Está desactivada por defecto y **aún no se probó en hardware**. Cerrar las
-instancias anteriores, realizar una sola firma de un PDF de prueba y cerrar
-firmador. El registro numérico privado sigue en `local/jcop3-firmador-api-*/`.
+OpenSSL verificó la firma CAdES del nuevo PDF, con el certificado de
+`LlaveDeFirma`, y el CMS y la huella SHA-512 del sello de tiempo. La página
+original se conserva. No se validaron confianza ni revocación.
+Está desactivada por defecto. La siguiente prueba es firmar dos documentos
+en una misma instancia, para observar consultas y autenticación después de
+usar la llave. Usar el mismo objetivo, sin recompilar si no cambió el código,
+y guardar los dos resultados con nombres distintos. Detenerse ante un error,
+sin repetir la operación fallida. El registro numérico privado sigue en
+`local/jcop3-firmador-api-*/`. Recuperación y concurrencia siguen pendientes.
 
 ## Organización
 

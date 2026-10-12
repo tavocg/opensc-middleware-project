@@ -1670,7 +1670,8 @@ No usan PIN, lector, llaves ni firmas reales.
 
 El nuevo objetivo `make firmador/jcop3-pin-status-in-place` activa únicamente
 `OPENSC_JCOP3_PIN_STATUS_IN_PLACE=yes`, con diagnóstico numérico y sin el
-experimento de omisión de sesiones/token. **Aún no se probó en hardware.**
+experimento de omisión de sesiones/token. En esta etapa aún no se había
+probado en hardware; el resultado está en la sección siguiente.
 Mantiene login real, caché del valor del PIN desactivada y depuración 0.
 
 `sc_pkcs15_get_pin_info()` solo cambia para Amos + AID Generic PKI + CHV
@@ -1715,5 +1716,75 @@ configuración sin caché de PIN, permisos privados y salida propagada.
 La compilación completa sin PC/SC pasó; informes
 `build/opensc-offline/chipdoc-in-place-build.log` y
 `build/opensc-offline/chipdoc-in-place-tests.log`.
-Faltan consultas repetidas y firma en hardware, recuperación real,
-concurrencia y estado después de usar la llave; sigue siendo optativo.
+En esta etapa faltaban consultas repetidas y firma en hardware. Recuperación
+real, concurrencia y estado después de usar la llave siguen pendientes.
+
+## Candidata con consultas físicas: firma PDF verificada, 2026-10-12, 00:37
+
+`local/jcop3-firmador-api-MWUUuIrV/report.txt` registra 06:37:01 UTC,
+OpenSC `23b3d25fa` limpio, `pin_status_in_place_experiment=yes`,
+`session_state_experiment=no` y `pin_query_experiment=status_without_selection`.
+El repositorio principal está en `a275709`, también limpio al iniciar la
+revisión. El usuario ya compiló y ejecutó la candidata; no pedir repetir
+compilación o la primera firma sin un motivo nuevo.
+
+La captura contiene 192 eventos. Antes del login, la primera consulta sin
+política conocida recibe NOT_SUPPORTED y usa la inicialización completa;
+las siguientes consultas físicas devuelven NOT_LOGGED_IN sin reselección.
+Un `C_Logout 0x101` anterior al login no es un fallo de la firma. Después
+del único `C_Login CKR_OK`:
+
+- Una consulta de token y tres de sesión ejecutan `PIN_STATUS_IN_PLACE`,
+  todas con retorno 0, estado físico LOGGED_IN y referencia 1. Las sesiones
+  informan RW USER. Son lecturas reales, no estado físico supuesto.
+- No hay SELECT raíz ni eventos TOKEN_PIN_CACHED/SESSION_LOGIN_STATE.
+  No se detectó reset durante los bloqueos registrados; esto no excluye
+  cambios externos que el diagnóstico no detecte.
+- La firma usa SHA256-RSA-PKCS, llave nativa 3 y RSA 2048. El único SELECT
+  ChipDoc devuelve `9000`; DOCP, MSE y RSA AT también pasan.
+- `KEY_COMPUTE` devuelve 256 bytes y `C_SignFinal CKR_OK` entrega la salida.
+  Hay una sola operación RSA, sin revalidación ni reintento.
+
+El resumen numérico privado está en
+`local/jcop3-firmador-api-MWUUuIrV/analysis.json`. Frente al diagnóstico normal
+fallido, que reseleccionaba la raíz después del login, esta candidata mantiene
+consultas físicas repetidas y permite firmar sin esa reselección. Junto a
+los probes aislados, sustenta la corrección del camino de consulta para el
+perfil observado; no atribuye un significado a `C9` ni demuestra soporte
+general de JCOP3.
+
+El usuario actualizó `doc-firmado.pdf` en la raíz: ahora tiene **80486 bytes**
+y una huella distinta del archivo anterior de 80485 bytes. Se verificó este
+nuevo archivo, no el PDF del experimento de omisión. La evidencia, incluidas
+copias privadas de original y firmado, quedó en
+`local/jcop3-pdf-verification-a3zhmd8r/`, con resumen `report.json` fechado
+06:43:03 UTC. No se usó tarjeta, PIN ni red para esta verificación.
+
+| Objeto | Rangos `[offset, longitud, offset, longitud]` | Verificación |
+| --- | --- | --- |
+| `ETSI.CAdES.detached` | `[0, 7346, 33972, 4432]` | CMS válido; certificado idéntico al de `LlaveDeFirma` |
+| `ETSI.RFC3161` | `[0, 60500, 79446, 1040]` | CMS válido; messageImprint SHA-512 coincide con los rangos finales |
+
+Se comprobó que cada hueco corresponde al Contents del mismo objeto de firma,
+los rangos están dentro del archivo y el relleno después del DER es nulo.
+OpenSSL verificó ambos CMS con `-noverify`. La firma principal cubre su
+revisión de 38404 bytes; el sello vincula el PDF final de 80486 bytes salvo
+su propio Contents. `pdfsig` confirma la firma principal válida, pero no
+verifica el sello (retorno 1); la verificación CMS y del imprint con OpenSSL
+resuelve esa comprobación criptográfica. No se validaron confianza,
+revocación, vigencia ni una política de larga duración.
+
+El PDF conserva el original de 6967 bytes como prefijo, su texto y el
+renderizado de la página sin anotaciones, idéntico byte por byte. Las copias
+privadas permiten conservar este resultado aunque se reemplace el PDF de la
+raíz en una prueba posterior.
+
+**La candidata ya produjo un PDF con firma y sello verificados manteniendo
+consultas físicas después del login.** Sigue siendo optativa: el registro
+termina en C_SignFinal y no contiene consultas posteriores a usar la llave.
+La siguiente intervención debe cubrir dos firmas en la misma instancia,
+guardadas con nombres distintos, y observar si hay otro login. No repetir
+una operación fallida. Después faltan recuperación tras retirada/reinserción,
+estado de sesiones, concurrencia y contexto cambiado por otro cliente antes
+de decidir su activación por defecto. No hubo cambios de código ni nuevas
+pruebas de tarjeta por parte del agente; siguen las 210 regresiones previas.
