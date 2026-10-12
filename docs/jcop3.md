@@ -1521,3 +1521,47 @@ previas. El siguiente trabajo es diseñar la corrección definitiva del estado
 PIN/contexto sin banderas de intentos obsoletas, y comprobar recuperación
 ante cambios de tarjeta y concurrencia. El experimento no se activó por
 defecto durante esta revisión.
+
+## Prueba preparada: consulta vacía aislada después de VERIFY
+
+Se añadió `make sign/jcop3-pin-status` para distinguir una consulta vacía de
+estado de las selecciones y lecturas de política que ejecuta GET INFO completo.
+**Aún no se ejecutó en hardware.** Usa el texto técnico, DigestInfo SHA-256,
+RSA-PKCS y verificación OpenSSL del helper existente. Antes de ejecutar el
+nuevo objetivo hay que compilar los cambios; no repetir firmas anteriores.
+
+El opt-in `OPENSC_JCOP3_POST_LOGIN_STATUS=yes` añade una sola llamada a
+`iasecc_pin_get_status()` después del VERIFY exitoso y del registro existente
+de verificación. Se limita a Amos, AID Generic PKI enumerado, CHV global 1 y
+la política ChipDoc observada ya leída antes de autenticar. No asigna un
+significado a `C9`. La estructura del comando se construye desde cero, sin
+copiar credenciales ni flags de pinpad. No añade SELECT, GET DATA, lectura de
+política ni reintentos. Un rechazo de VERIFY o su atajo existente por PIN
+ya verificado no ejecutan el hook; un error de la consulta detiene el login.
+
+El informe contiene `post_login_status_experiment=yes`. El archivo privado
+`api.log` incluye `POST_LOGIN_STATUS_BEGIN` (`a=1`, referencia pública) y
+`POST_LOGIN_STATUS` (resultado en `rv`, estado físico en `a`), además del
+diagnóstico numérico existente. Nunca registra PIN, su longitud o APDU.
+El helper comprueba la marca de ejecución para detectar un módulo antiguo
+o un perfil excluido. Los modos normales de firma y los tres lanzadores de
+firmador eliminan la nueva variable heredada; el modo experimental de sesión
+no se activa en esta prueba.
+
+Si la firma falla después de esa consulta, se tendrá un caso reducido para
+investigar el estado de seguridad. Si pasa, únicamente demuestra que una
+consulta inmediata, en ese contexto y transacción, permite firmar; quedan
+pendientes SELECT, la rutina de política, repeticiones y cambios de transacción.
+No convierte el experimento de sesión/token en corrección definitiva.
+Cerrar firmador previamente, ejecutar un único intento y revisar el informe
+antes de repetir PIN.
+
+Pasan **168 comprobaciones** sin tarjeta: 17 nuevas cubren secuencia real del
+driver con transporte simulado, consulta sin credenciales, exclusiones de
+perfil, ausencia de comandos adicionales de política/selección después de
+VERIFY y parada sin reintentos ante errores. También pasaron ocho ejecuciones
+simuladas de los lanzadores, incluidos módulo sin marca y error de login,
+con stdout TTY y variables heredadas adversas; no se pidió PIN. La compilación
+completa sin PC/SC pasó. Informes locales:
+`build/opensc-offline/chipdoc-status-probe-build.log` y
+`build/opensc-offline/chipdoc-status-probe-tests.log`.

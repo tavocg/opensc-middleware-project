@@ -1,7 +1,8 @@
 # libjcop3p11: contexto para continuar
 
-Estado actualizado el **11 de octubre de 2026**, después de verificar los
-PDF aportados por el usuario a las **23:39 de Costa Rica** (05:39 UTC del 12).
+Estado actualizado el **12 de octubre de 2026**, al preparar la prueba de
+estado posterior al VERIFY. Los PDF aportados por el usuario se verificaron
+a las **23:39 de Costa Rica del día 11** (05:39 UTC del 12).
 **El firmador produjo un PDF cuya firma y sello de tiempo se verificaron
 criptográficamente**, usando OpenSC en el experimento de estado de sesión/token.
 La firma CAdES coincide con el certificado de `LlaveDeFirma`; OpenSSL la
@@ -10,8 +11,9 @@ RFC 3161 y su huella SHA-512 sobre los rangos del PDF final. Se conserva la
 página original. No se validaron confianza ni revocación de certificados.
 El modo normal conserva las consultas y su fallo previo; el experimento
 sigue desactivado por defecto. Falta diseñar una corrección definitiva de
-consultas/contexto y validar sus límites. No pedir otra firma como primer
-paso. Leer este archivo al retomar y contrastar Git y las capturas más
+consultas/contexto y validar sus límites. Se preparó una prueba optativa de
+una consulta vacía posterior al VERIFY; aún no se ejecutó en hardware.
+No repetir las firmas anteriores. Leer este archivo al retomar y contrastar Git y las capturas más
 recientes; no afirma soporte completo.
 
 ## Objetivo y alcance
@@ -98,7 +100,7 @@ make test/iasecc JOBS="$(nproc)"
 `JOBS` vale 2 por defecto. `READER=0` selecciona lector PC/SC y `SLOT_INDEX=0`
 selecciona slot PKCS#11; no son necesariamente el mismo índice.
 `inspect/jcop3-pkcs11`, los diagnósticos de política, `sign/jcop3`,
-`sign/jcop3-sha256`,
+`sign/jcop3-sha256`, `sign/jcop3-pin-status`,
 `firmador/jcop3`, `firmador/jcop3-diagnose` y `firmador/jcop3-session-state` utilizan
 la compilación existente: **no recompilan**.
 
@@ -110,9 +112,12 @@ pero no valida comunicación con la tarjeta.
 
 Los últimos commits guardados del driver y su diagnóstico son:
 
-- Repositorio principal: **`15c183a`**, `Document successful firmador signing`.
+- Repositorio principal: **`446329b`**, `Document verified firmador PDF`.
 - Submódulo OpenSC: **`da1edb457`**, `Test cached ChipDoc token info`.
 - Base upstream original: `c7a377af971df03f879c1697e91ebac1f7e28c56`.
+
+Sobre esos commits hay cambios locales de la prueba `sign/jcop3-pin-status`,
+sus regresiones y documentación. Aún no se guardaron ni probaron en tarjeta.
 
 Las correcciones de ACL, ruta de firma, fallback de referencias de algoritmo
 y lectura RSA limitada a DOCP ya están comprometidas, junto con sus pruebas.
@@ -240,16 +245,17 @@ El nuevo objetivo `make firmador/jcop3` proporciona esa configuración local.
 
 ## Verificación y últimas capturas
 
-Hay **151 comprobaciones de regresión** en diez archivos C: `iasecc-fci.c`,
+Hay **168 comprobaciones de regresión** en once archivos C: `iasecc-fci.c`,
 `iasecc-pin-path.c`, `iasecc-key-path.c`, `iasecc-sdo.c`, `iasecc-pin-policy.c`
 y `iasecc-sign-setup.c`, más `iasecc-rsa-pkcs.c`, `pkcs11-api-trace.c`,
-`pkcs11-session-state.c`, `iasecc-context-trace.c`, y el script
+`pkcs11-session-state.c`, `iasecc-context-trace.c`,
+`iasecc-post-login-status.c`, y el script
 `sha256-digestinfo.sh`. Incluyen respuestas
 capturadas, conservación/copia de metadatos, rechazo de perfiles distintos y
 transporte simulado que verifica que cambio/desbloqueo no autentican.
 Pasaron en la comprobación local; también terminó la compilación completa
-sin PC/SC, registrada en `build/opensc-offline/chipdoc-token-state-build.log`.
-Las últimas regresiones están en `build/opensc-offline/chipdoc-token-state-tests.log`.
+sin PC/SC, registrada en `build/opensc-offline/chipdoc-status-probe-build.log`.
+Las últimas regresiones están en `build/opensc-offline/chipdoc-status-probe-tests.log`.
 Esto no sustituye pruebas de firma en hardware.
 El lanzador de firmador, en modos normal, diagnóstico y experimento de sesión,
 pasó sintaxis y una ejecución con
@@ -423,6 +429,22 @@ internos de parsing: revisar las respuestas y el contexto.
    seguridad, ni el significado de `C9`. No convertir el experimento en
    comportamiento predeterminado sin resolver estado/flags de PIN y cambios
    de tarjeta. Mantener desactivada la caché del valor del PIN.
+   **Nueva intervención pendiente:** hay cambios locales preparados para
+   `make sign/jcop3-pin-status`. Compilar con `make test/iasecc JOBS="$(nproc)"`,
+   guardar commits (submódulo primero) y hacer un único intento. El hook
+   `OPENSC_JCOP3_POST_LOGIN_STATUS=yes` se limita a Amos + aplicación Generic
+   PKI enumerada + CHV global 1 + política ChipDoc observada. Después de un
+   VERIFY realmente exitoso añade solo un GET INFO ISO (VERIFY vacío), sin
+   SELECT ni lectura de política. Construye un comando sin credenciales y
+   no reintenta. No se ejecuta si VERIFY falla o toma el atajo existente de
+   PIN ya verificado. Los eventos `POST_LOGIN_STATUS_BEGIN` y
+   `POST_LOGIN_STATUS` están en `local/jcop3-signature-*/api.log`; el segundo
+   lleva resultado y estado físico numéricos. No equivale a consultas
+   completas PKCS#15, ni prueba efectos de repetición/transacciones. El helper
+   exige la marca para evitar una conclusión con un módulo sin recompilar.
+   Los otros modos de firma y todos los lanzadores de firmador eliminan la
+   variable heredada. Pasan 17 regresiones nuevas y ocho ejecuciones simuladas
+   de lanzadores sin tarjeta/PIN. Todavía falta el resultado del usuario.
 4. El modo experimental `firmador/jcop3-session-state` está disponible y
    probado en una firma, limitado a Amos + Generic PKI + CHV 1 global + MF
    tras login CKU_USER. Omite consultas físicas de `C_GetSessionInfo` y

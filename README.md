@@ -25,7 +25,7 @@ medidas de la llave de firma. El mecanismo combinado `SHA256-RSA-PKCS`
 falló en `C_SignFinal`: el camino QSign no soporta OpenSSL 3. El helper
 prepara el DigestInfo SHA-256 en el equipo y pide `RSA-PKCS` a la tarjeta.
 El 11 de octubre de 2026 a las 20:18 de Costa Rica, esta ruta produjo una
-firma de 256 bytes y OpenSSL confirmó `Verified OK`. Pasan 151 comprobaciones
+firma de 256 bytes y OpenSSL confirmó `Verified OK`. Pasan 168 comprobaciones
 locales. Para reproducir la prueba técnica:
 
 ```bash
@@ -91,6 +91,16 @@ abarca los rangos del archivo final. Se conserva el contenido de la página
 original. Esta comprobación local no valida confianza ni revocación de
 certificados. Falta diseñar la corrección definitiva; el experimento sigue
 desactivado por defecto.
+
+La siguiente prueba controlada es `make sign/jcop3-pin-status`, después de
+compilar con `make test/iasecc JOBS="$(nproc)"`. Firma el mismo texto técnico
+con RSA-PKCS, pero añade **una consulta vacía de estado del PIN justo después
+del VERIFY exitoso**, sin agregar SELECT ni lecturas de política. El nuevo
+experimento está desactivado por defecto y registra únicamente metadatos en
+`local/jcop3-signature-*/api.log`; el PIN sigue introduciéndose sin eco.
+Hacer un solo intento y revisar antes de repetir. Un resultado exitoso no
+descartaría efectos de selección, lectura de política, consultas repetidas
+o cambios de transacción; la prueba solo aísla esa consulta inmediata.
 
 ## Organización
 
