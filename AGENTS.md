@@ -2,7 +2,8 @@
 
 Estado documentado el **11 de octubre de 2026**, después de revisar los informes
 de las 21:34 UTC, SE 3, MSE y el fallo de firma posterior al login de las
-19:41 de Costa Rica (01:41 UTC del 12 de octubre). Leer este archivo
+19:41 de Costa Rica y el rechazo de longitud del PIN de las 19:59
+(01:41 y 01:59 UTC del 12 de octubre). Leer este archivo
 al retomar el proyecto y contrastarlo con Git y las capturas más recientes.
 Es un punto de partida, no una afirmación
 de soporte completo de la tarjeta.
@@ -97,16 +98,16 @@ pero no valida comunicación con la tarjeta.
 
 Los últimos commits guardados del driver y su diagnóstico son:
 
-- Repositorio principal: **`bb27ab4`**, `Record recovered card enumeration`.
+- Repositorio principal: **`62e6d5a`**, `Use RSA-PKCS for SHA256 signing probe`.
 - Submódulo OpenSC: **`70d7afc20`**, `iasecc: add ChipDoc signing algorithms`.
 - Base upstream original: `c7a377af971df03f879c1697e91ebac1f7e28c56`.
 
 Las correcciones de ACL, ruta de firma, fallback de referencias de algoritmo
 y lectura RSA limitada a DOCP ya están comprometidas, junto con sus pruebas.
 El helper de firma desactiva la caché de PIN. Ambos árboles estaban limpios
-antes de investigar el fallo de las 19:41. Quedan sin commit los cambios
-del helper para usar DigestInfo SHA-256 y `RSA-PKCS`, las nuevas regresiones
-y su documentación. El submódulo no tiene cambios nuevos. Confirmar mediante Git.
+al comenzar a revisar el informe de las 19:59. El helper para usar DigestInfo
+SHA-256 y `RSA-PKCS`, las nuevas regresiones y su documentación están
+comprometidos. El submódulo no tiene cambios nuevos. Confirmar mediante Git.
 
 La URL del submódulo aún es `https://github.com/OpenSC/OpenSC.git`. Los commits
 locales del driver necesitarán publicarse en un fork y actualizar esa URL
@@ -225,6 +226,7 @@ Esto no sustituye pruebas de firma en hardware.
 | **`jcop3-signature-FktWTv57/report.txt`**, **`jcop3-signature-jQYkimJu/report.txt`**, **`jcop3-signature-54OpXE2f/report.txt`** | 12 de octubre, 01:28:26, 01:28:46 y 01:28:53 UTC, OpenSC `70d7afc20`: `No slots.` en lectura del certificado; no se ejecutó el comando autenticado |
 | **`jcop3-pkcs11-XtNrgvHO.txt`** | 12 de octubre, 01:39:13 UTC, OpenSC `70d7afc20`: lector y ATR visibles, slot 0 presente, dos certificados y dos llaves públicas RSA; correcciones de rutas aplicadas, intentos PIN 7/7 |
 | **`jcop3-signature-CXq9hBMQ/report.txt`** | 12 de octubre, 01:41:29 UTC: certificado leído y login aceptado; `C_SignFinal` devuelve `CKR_FUNCTION_NOT_SUPPORTED`; no hay firma ni verificación OpenSSL |
+| **`jcop3-signature-Pwfndadv/report.txt`** | 12 de octubre, 01:59:58 UTC: helper `RSA-PKCS`, certificado y DigestInfo preparados; `C_Login` devuelve `CKR_PIN_LEN_RANGE`; no se llegó a la firma |
 
 Los informes PKCS#11 y DOCP RSA de las 21:34 UTC ya se revisaron: **no pedir ejecutarlos de nuevo como
 primer paso**. Los DOCP RSA se reprodujeron en las regresiones del parser
@@ -255,6 +257,17 @@ de QSign al submódulo. La cadena combinada requiere revisar también cómo
 PKCS#11 calcula el hash al faltar referencias declaradas de algoritmos.
 Aceptar MSE no demuestra una operación RSA correcta.
 
+El usuario confirmó que pasan las pruebas con el helper actualizado. El nuevo
+intento de las 19:59 se detuvo en `C_Login` con `CKR_PIN_LEN_RANGE (0xa2)`.
+No demuestra un fallo de la ruta RSA-PKCS ni un PIN incorrecto. En el camino
+de código revisado, este error de longitud se produce antes del VERIFY con
+el PIN. `_validate_pin()` valida primero el rango PKCS#15 declarado en AODF
+(4–20), distinto del límite público CHV (4–14) que aplica después el driver.
+No alterar ninguno de esos límites para eludir el error. Está pendiente
+aclarar con el usuario si introdujo el mismo PIN que en el login exitoso
+anterior, sin solicitar su valor. No se ha consultado el contador después
+de este intento, ni hay captura autenticada.
+
 Las consultas vacías de VERIFY devuelven `63 C7`: PIN no verificado, 7 intentos
 restantes. No llevan el valor del PIN. El primer intento de firma no tuvo
 depuración APDU; no se puede asegurar a partir del registro si el PIN llegó
@@ -264,12 +277,14 @@ internos de parsing: revisar las respuestas y el contexto.
 
 ## Próximo trabajo, en orden
 
-1. El informe de las 19:41 ya se revisó: login aceptado, firma fallida.
-   Guardar los cambios del helper y pruebas en un commit del repositorio
-   principal; el submódulo sigue en `70d7afc20`. No repetir los diagnósticos
-   anteriores ni habilitar APDU durante autenticación. La causa de los
-   `No slots.` anteriores sigue sin confirmarse.
-2. Indicar `make test/iasecc JOBS="$(nproc)"`; si pasa, **una ejecución**
+1. Los informes de las 19:41 y 19:59 ya se revisaron. Las pruebas pasan y
+   el helper actualizado está comprometido; el submódulo sigue en `70d7afc20`.
+   Aclarar primero el rechazo local de longitud de la entrada del PIN.
+   Si el usuario confirma que introdujo el mismo PIN del login exitoso,
+   investigar entrada y metadatos públicos antes de volver a autenticar.
+   No habilitar APDU durante autenticación. La causa de los `No slots.`
+   anteriores sigue sin confirmarse.
+2. Cuando se resuelva ese rechazo, indicar **una ejecución**
    de `make sign/jcop3` con el helper actualizado, directamente en su terminal.
    Usa `RSA-PKCS` y `digest-info.der`, manteniendo la verificación SHA-256
    del `message.txt` original. No cambiarlo a `SHA256-RSA-PKCS` todavía.

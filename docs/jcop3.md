@@ -849,3 +849,31 @@ terminal. El helper conserva depuración 0 y caché de PIN desactivada.
 Ahora registra `mechanism=RSA-PKCS`, `digest_algorithm=SHA256` y firma
 `digest-info.der`, pero OpenSSL verifica siempre contra el `message.txt`
 original. El hito solo se cumple si esa verificación tiene éxito.
+
+## Rechazo de longitud en login: 2026-10-11, 19:59 de Costa Rica
+
+El usuario confirmó que las pruebas pasan. El informe
+`local/jcop3-signature-Pwfndadv/report.txt`, de las 01:59:58 UTC del 12 de
+octubre, usa el mismo OpenSC `70d7afc20` y el helper actualizado comprometido
+en `62e6d5a`. La lectura del certificado, extracción de llave pública y
+preparación de DigestInfo terminaron correctamente. El comando `RSA-PKCS`
+se detuvo en `C_Login` con `CKR_PIN_LEN_RANGE (0xa2)`. No ejecutó la firma
+RSA ni la verificación OpenSSL; este informe no permite evaluar aún la
+operación INTERNAL AUTHENTICATE.
+
+La revisión de `pkcs15_login()`, `sc_pkcs15_verify_pin()` y `_validate_pin()`
+identifica un rechazo de longitud antes del VERIFY con el PIN. La validación
+PKCS#15 inicial usa los atributos AODF (mínimo 4, máximo 20); la política
+pública CHV (mínimo 4, máximo 14) se combina posteriormente en el driver.
+No confundir esos dos rangos ni ajustar sus límites para forzar el login.
+`SC_ERROR_INVALID_PIN_LENGTH` se convierte en `CKR_PIN_LEN_RANGE`, distinto
+del error de PIN incorrecto. El control posterior de máximo en
+`sc_build_pin()` devuelve `SC_ERROR_INVALID_ARGUMENTS`, por lo que no explica
+por sí solo el código observado.
+
+La captura no contiene la entrada ni su longitud, y no hubo una consulta
+posterior del contador. El login anterior sí había sido aceptado con el
+mismo driver. Antes de solicitar otro intento, aclarar si el usuario
+introdujo el mismo PIN o cometió un error de entrada, sin pedir su valor.
+Si confirma la misma entrada, investigar los metadatos públicos y la lectura
+desde la terminal. Conservar depuración 0 durante cualquier autenticación.
