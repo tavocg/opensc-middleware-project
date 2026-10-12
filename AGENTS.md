@@ -1,26 +1,26 @@
 # libjcop3p11: contexto para continuar
 
-Estado actualizado el **12 de octubre de 2026**, tras revisar las capturas
-GUI de **02:35 y 02:36 de Costa Rica** (08:35/08:36 UTC), GbaOMELO y j0FPyGAS,
-OpenSC `8842f394b` limpio. **Bloqueo nuevo antes de la primera firma:** seis
-C_Login fallidos con CKR_ARGUMENTS_BAD; CARD_PIN_VERIFY devuelve -1300
-(SC_ERROR_INVALID_ARGUMENTS). No se alcanzó ninguna operación de firma y los
-locks pasan. No hay informes del segundo cliente; su prueba queda pendiente.
-El usuario indicó que pegó el PIN en la GUI. No atribuir el error a esa acción
-sin evidencia, ni pedir el PIN o su longitud. El marcador existente está
-fuera de ISO: no demuestra por sí solo que se transmitiera un VERIFY con PIN.
-Se añaden marcas optativas PIN_APDU_BUILD y PIN_TRANSMIT en ISO para distinguir
-preparación local y transporte/respuesta. Solo referencia pública, resultado
-y SW cuando el transporte tiene éxito; sin PIN, longitud, hash o APDU.
-No cambia la validación ni el camino de firma; siete regresiones sintéticas
-nuevas comprueban límites, transporte, PIN incorrecto y ausencia de reintentos.
+Estado actualizado el **12 de octubre de 2026**, tras revisar la GUI de
+**02:51 de Costa Rica** (08:51 UTC), captura PkFq1kEy, OpenSC `c052ee925`
+limpio. **Bloqueo confirmado localmente antes de enviar el PIN:** 147 eventos,
+dos PIN_APDU_BUILD con -1300, dos C_Login CKR_ARGUMENTS_BAD, cero PIN_TRANSMIT
+y cero firmas. Ambos VERIFY autenticados se rechazaron antes de transmitir.
+El usuario confirma que es el mismo PIN de las firmas anteriores; no atribuir
+el fallo a copia/pegado. No conocemos el motivo exacto dentro del encoder.
+La revisión estática del diálogo GUI muestra getPassword → PasswordProtection,
+sin relleno o normalización explícitos; no prueba los bytes recibidos en C.
+No se registra valor, longitud, hash o APDU del PIN. No relajar límites,
+recortar o normalizarlo como solución. El módulo no cambia en esta revisión.
+Git al iniciar: principal `1452044`, submódulo `c052ee925`, limpios; las marcas
+ISO y sus siete casos ya están comprometidos. Pasan 269 comprobaciones y
+compilación completa sin PC/SC; no repetirlas por cambios de documentación.
 Las firmas GUI consecutivas, reinserciones repetidas y CLI anteriores sí
-están verificadas; preservarlas. Git al iniciar esta revisión: principal
-`f214746`, submódulo `8842f394b`, limpios. El agente no dispone del lector,
-no usa pass ni firma. Próximo paso: compilar las marcas y un único intento
-GUI con el PIN escrito manualmente, sin ejecutar aún el helper del segundo
-cliente. Detenerse ante fallo; revisar la etapa antes de continuar.
-Leer este archivo y las capturas al retomar; no publicar upstream sin master.
+están verificadas; preservar esa evidencia. Segundo cliente sigue pendiente.
+**Próxima intervención:** cerrar GUI y ejecutar una vez el CLI existente,
+con pass por stdin y salida nueva local/jcop3-pin-stage-cli.pdf. No recompilar.
+Detenerse ante fallo y revisar etapas; si firma, verificar PDF antes de dar
+por resuelto el problema. El agente no usa pass ni firma y no tiene lector.
+Leer este archivo y capturas al retomar; no publicar upstream sin master.
 
 ## Objetivo y alcance
 
@@ -121,18 +121,15 @@ pero no valida comunicación con la tarjeta.
 
 Los últimos commits guardados son:
 
-- Repositorio principal al iniciar la revisión: **`f214746`**, `Add peer context probe`.
-- Submódulo OpenSC: **`8842f394b`**, `Handle card changes before event shortcut`.
+- Repositorio principal al iniciar la revisión: **`1452044`**, `Diagnose login argument failure`.
+- Submódulo OpenSC: **`c052ee925`**, `Trace PIN command stages`.
 - Base upstream original: `c7a377af971df03f879c1697e91ebac1f7e28c56`.
 
-Ambos árboles estaban limpios al comenzar esta revisión. Correcciones y
-regresiones del driver ya están comprometidas y compiladas por el usuario.
-Los ciclos GUI pasaron y sus seis PDF/sellos se verificaron. El helper público
-peer-context ya está comprometido en f214746. Cambios nuevos del submódulo:
-marcas ISO de preparación y transporte; principal: fixture de siete casos,
-runner y documentación. Dar comandos de commit primero para el submódulo y
-luego para el principal, actualizando su puntero. Es necesario recompilar
-antes de probar las marcas nuevas. No hay commits del agente.
+Ambos árboles estaban limpios al comenzar esta revisión. Las marcas ISO y
+sus regresiones ya están comprometidas y compiladas por el usuario. Cambios
+nuevos solo en documentación: fallo local confirmado y comparación CLI
+pendiente. Dar al usuario comandos de commit del principal. No se requiere
+recompilar para la siguiente intervención; el agente no hizo commits.
 
 La URL del submódulo aún es `https://github.com/OpenSC/OpenSC.git`. Los commits
 locales del driver necesitarán publicarse en un fork y actualizar esa URL
@@ -300,6 +297,7 @@ abrió Java ni accedió al lector.
 | **`jcop3-firmador-api-Z0aJ18Ge/api-reviewed.log`** | 12 de octubre, 08:11:29 UTC, 8842f394b limpio: primer CLI, 174 eventos; VERIFY/login/RSA OK, llave 3 de 2048 bits, firma de 256 bytes y PDF/sello verificados |
 | **`jcop3-firmador-api-tYcckn70/api-reviewed.log`** | 12 de octubre, 08:18:56 UTC, 8842f394b limpio: 1170 eventos, seis VERIFY y RSA exitosas, cuatro cambios con limpieza; cinco PDF previstos y un extra, todos con firma/sello verificados |
 | **`jcop3-firmador-api-GbaOMELO/api-reviewed.log`**, **`jcop3-firmador-api-j0FPyGAS/api-reviewed.log`** | 08:35/08:36 UTC, 8842f394b limpio: 241/145 eventos, cuatro/dos logins CKR_ARGUMENTS_BAD; VERIFY -1300, sin firma ni fallos de lock; causa pendiente de marcas ISO |
+| **`jcop3-firmador-api-PkFq1kEy/api-reviewed.log`** | 08:51:29 UTC, c052ee925 limpio: 147 eventos, dos builds -1300, ningún PIN_TRANSMIT o firma; rechazo local confirmado, comparación CLI pendiente |
 
 Los informes PKCS#11 y DOCP RSA de las 21:34 UTC ya se revisaron: **no pedir ejecutarlos de nuevo como
 primer paso**. Los DOCP RSA se reprodujeron en las regresiones del parser
@@ -501,8 +499,10 @@ internos de parsing: revisar las respuestas y el contexto.
    GbaOMELO (241 eventos, cuatro logins fallidos) y j0FPyGAS (145, dos)
    muestran -1300 al verificar CHV 1 y C_Login 0x7, sin firma o fallo de lock.
    El usuario pegó el PIN; no se conoce la causa ni se capturó el valor.
-   Añadir compilación de las marcas ISO y realizar solo un intento GUI con
-   entrada manual, sin helper entre clientes. PIN_APDU_BUILD < 0 indica
+   La nueva captura PkFq1kEy (147 eventos) confirma PIN_APDU_BUILD -1300
+   dos veces y cero PIN_TRANSMIT: rechazo antes del envío. El usuario confirma
+   el mismo PIN. No repetir GUI como primer paso ni recompilar; comparar
+   una vez con CLI/pass por stdin hacia local/jcop3-pin-stage-cli.pdf. PIN_APDU_BUILD < 0 indica
    rechazo antes del envío; build=0 seguido de PIN_TRANSMIT identifica
    transporte/SW. No normalizar, recortar ni relajar límites del PIN.
    Si falla, detenerse y revisar antes de otro intento autenticado.

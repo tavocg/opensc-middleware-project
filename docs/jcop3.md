@@ -2482,3 +2482,38 @@ ante fallo para revisar las etapas. No ejecutar aún el helper peer-context.
 Pasan **269 comprobaciones, cero FAIL**, incluidas las siete nuevas, en
 `build/opensc-offline/pin-stage-tests.log`. Compilación completa sin PC/SC
 en `build/opensc-offline/pin-stage-build.log`; esto no valida hardware.
+
+
+## Marcas ISO: rechazo local confirmado, 2026-10-12, 02:51
+
+Principal `1452044`, OpenSC `c052ee925` limpio. La GUI PkFq1kEy comienza
+08:51:29 UTC y registra 147 eventos. Copia privada api-reviewed.log y
+analysis.json preservan los resultados. PIN_APDU_BUILD en líneas 114 y 145
+devuelve -1300; CARD_PIN_VERIFY 115/146 y C_Login 116/147 repiten -1300/0x7.
+**No hay PIN_TRANSMIT:** iso7816_pin_cmd retorna por error de construcción
+antes de llamar al transporte. Estos dos logins no enviaron el PIN. No se
+alcanzó ninguna operación de firma. Las instancias EWSyeCKN y X6HHvZ3m,
+a las 08:50:50 y 08:51:03 UTC, tienen 28/31 eventos y ningún login o firma.
+
+El usuario confirma el mismo PIN que usaba antes; no atribuir el fallo al
+portapapeles o a un PIN diferente. En sc_build_pin los posibles -1300 son
+límite excedido y validaciones GLP; iso7816_build_pin_apdu también rechaza
+tipos de autenticación desconocidos. IAS fuerza CHV y PKCS#15 elige ASCII
+para el tipo público observado, pero aún no se verificaron los parámetros
+concretos de estas llamadas. No inferir longitud o valor del PIN ni modificar
+los límites por esta evidencia. El rechazo local tampoco valida el PIN.
+
+La revisión estática del jar instalado (javap, sin ejecutar login) muestra
+que RequestPinWindow.showandwait entrega JPasswordField.getPassword a
+PasswordProtection y limpia el campo; no agrega relleno ni normaliza el
+contenido explícitamente. No demuestra qué bytes llegan al encoder C.
+No se abrió el gestor de contraseñas desde el agente y no se guardó un PIN.
+
+No se modifica el módulo. Continúan vigentes las 269 comprobaciones y la
+compilación previas; no repetirlas por documentación. Próxima comparación:
+cerrar instancias GUI, usar el CLI existente con el flujo pass autorizado
+por stdin y guardar en local/jcop3-pin-stage-cli.pdf. Una sola ejecución,
+sin recompilar ni helper peer-context; ante fallo, detenerse y revisar
+build/transporte antes de otro intento. Si produce PDF, verificarlo antes
+de concluir que el problema está limitado a GUI. La prueba entre clientes
+permanece pendiente y las firmas anteriores conservan su validez comprobada.
