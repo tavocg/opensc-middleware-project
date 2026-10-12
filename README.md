@@ -9,29 +9,29 @@ El driver de tarjeta es `iasecc` y el módulo PKCS#11 compilado se llama
 
 Primer objetivo: reconocer una tarjeta JCOP3 emitida en Costa Rica, leer su
 certificado y producir una firma verificable mediante PKCS#11 de OpenSC.
-La compatibilidad con su aplicación interna todavía está por comprobar.
+La enumeración pública funciona; la primera firma todavía está pendiente.
 
 ## Punto actual para continuar
 
 Consultar [AGENTS.md](AGENTS.md) y las últimas secciones de
 [docs/jcop3.md](docs/jcop3.md). Ya se leen certificados RSA y la política
 del PIN (7 intentos restantes en la última consulta). Todavía no hay una
-firma exitosa. Se corrigió la lectura de todos los grupos de ACL de los
-objetos RSA. SE 3 ya apunta al PIN global 1. Se preparó una corrección de
-la ruta de firma: la llave es un objeto nativo en ChipDoc y `0003` no es
-seleccionable como archivo. Pasan 63 comprobaciones locales. Falta validar
-esa corrección y comprobar las referencias de algoritmo:
+firma exitosa. Se corrigieron las ACL RSA y la ruta de firma: la llave es
+un objeto nativo en ChipDoc y `0003` no es seleccionable como archivo.
+SE 3 apunta al PIN global 1. La tarjeta acepta las configuraciones MSE de
+RSA PKCS#1 y RSA/SHA-256; se agregó una adaptación limitada a las referencias
+medidas de la llave de firma. Pasan 80 comprobaciones locales. El siguiente
+paso es un único intento de firma:
 
 ```bash
 nix develop
 make test/iasecc JOBS="$(nproc)"
-make inspect/jcop3-pkcs11
-make inspect/jcop3-algorithms
+make sign/jcop3
 ```
 
-Las consultas guardan informes locales, no solicitan PIN y no ejecutan firmas.
-El diagnóstico de algoritmos configura temporalmente el entorno mediante MSE
-y compara los contadores del PIN antes y después; no modifica objetos almacenados.
+El helper solicita el PIN sin eco, con depuración y caché de PIN desactivadas,
+firma un texto técnico y verifica con OpenSSL. Ejecutarlo directamente en la
+terminal, sin redirigir stdout ni usar `tee`; no reintentar tras un fallo.
 Las secciones siguientes conservan los pasos anteriores de preparación e
 investigación; no es necesario repetirlos al retomar este directorio.
 

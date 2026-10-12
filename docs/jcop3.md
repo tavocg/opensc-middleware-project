@@ -681,3 +681,60 @@ la plantilla privada `7F48` mediante `iasecc_sdo_get_data()`, aunque para
 configurar la operación usa tamaño y ACL del DOCP. Evaluar una lectura limitada
 a DOCP para el perfil observado. No se ha ejecutado esa consulta privada en
 estos diagnósticos ni producido una firma.
+
+## MSE aceptado y preparación del próximo intento: 2026-10-11, 19:16 de Costa Rica
+
+`local/jcop3-pkcs11-OwOOGiF2.txt`, de las 01:16:15 UTC del 12 de octubre,
+usa OpenSC `fb767b3dd`. Confirma que la emulación aplica la nueva ruta de
+firma: selecciona ChipDoc para el SDO 3, sin abrir el archivo `0003`.
+La política del PIN sigue reportando límites 14/4 e intentos 7/7. Persisten
+los avisos conocidos de PuKDF; no se produjo un nuevo login.
+
+`local/jcop3-algorithms-FinI8oaD.txt`, de las 01:16:28 UTC, contiene las
+nueve respuestas previstas, todas `9000`. La tarjeta acepta HT `40`, DST
+`42` y AT `02` con referencia local de llave `83`. Los DOCP del CHV 1 al
+principio y al final son idénticos y conservan máximo/restantes 7/7. Esto
+confirma la aceptación de las configuraciones MSE probadas, no una firma.
+
+Se agregó un fallback de referencias en `card-iasecc.c`, limitado al contexto
+observado: Amos, DF seleccionado por nombre con AID Generic PKI, RSA 2048,
+referencia nativa 3 y tabla de algoritmos vacía. Resuelve exclusivamente
+SHA-256 (`40`), RSA/SHA-256 (`42`) y RSA PKCS#1 (`02`). Una tabla declarada,
+incluso incompleta o con referencia cero, tiene prioridad. No se infieren
+SHA-1, descifrado, otras llaves, tamaños, algoritmos o aplicaciones.
+
+En ese mismo perfil, `iasecc_set_security_env()` solicita únicamente DOCP
+para obtener tamaño y ACL, y comprueba tamaño 256 bytes. No solicita la
+plantilla RSA privada `7F48`. Conserva el camino previo para otros perfiles.
+Los metadatos temporales se liberan después de convertir las condiciones
+de acceso y antes de configurar MSE, también si falla su preparación.
+
+`tests/iasecc-sign-setup.c` ejecuta el driver y parser reales con transporte
+simulado que solo acepta el DOCP público capturado y las tres plantillas
+MSE observadas. Rechaza consultas privadas, PIN y operaciones criptográficas.
+Verifica la preparación HT/DST y AT, propagación de un rechazo MSE sin
+reintento, exclusión de perfiles distintos y prioridad de tablas declaradas.
+Antes del cambio fallaban las cuatro comprobaciones iniciales; después pasan
+**80 comprobaciones** en toda la suite. La compilación completa sin PC/SC
+terminó; registro `build/opensc-offline/sign-setup-build.log`.
+
+El helper de firma añade `use_pin_caching = no` a su configuración PKCS#15.
+`sc_pkcs15_pincache_revalidate()` devuelve error sin volver a verificar el
+PIN cuando esa opción está desactivada. Así, un fallo posterior de firma
+no causa la revalidación automática de un PIN guardado por PKCS#15. Se
+mantienen `OPENSC_DEBUG=0`, `debug = 0`, entrada interactiva sin eco y un
+solo comando autenticado, sin bucle de reintentos.
+
+La siguiente prueba necesita la terminal y la tarjeta del usuario:
+
+```bash
+make test/iasecc JOBS="$(nproc)"
+make sign/jcop3
+```
+
+Ejecutar la firma una vez, directamente en la terminal, sin redirigir stdout
+ni pasar el comando por `tee`. Firmará el texto técnico que muestra el helper;
+no un PDF. Todavía no se ha validado login con este conjunto de correcciones,
+ni una operación RSA efectiva. Revisar el informe de
+`local/jcop3-signature-*` para distinguir login, firma y verificación OpenSSL.
+Si falla, detenerse e investigar el resultado antes de otra autenticación.

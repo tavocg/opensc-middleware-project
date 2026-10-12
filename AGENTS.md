@@ -1,8 +1,8 @@
 # libjcop3p11: contexto para continuar
 
 Estado documentado el **11 de octubre de 2026**, después de revisar los informes
-de las 21:34 UTC y las consultas de SE 3 de las 18:49 de Costa Rica
-(00:49 UTC del 12 de octubre). Leer este archivo
+de las 21:34 UTC, SE 3 y las consultas MSE de las 19:16 de Costa Rica
+(01:16 UTC del 12 de octubre). Leer este archivo
 al retomar el proyecto y contrastarlo con Git y las capturas más recientes.
 Es un punto de partida, no una afirmación
 de soporte completo de la tarjeta.
@@ -96,14 +96,15 @@ pero no valida comunicación con la tarjeta.
 
 Los últimos commits guardados del driver y su diagnóstico son:
 
-- Repositorio principal: **`ab153d2`**, `Record missing reader`.
-- Submódulo OpenSC: **`0c3e1c4f5`**, `iasecc: parse all SDO ACL groups`.
+- Repositorio principal: **`f40cc4d`**, `Test signing path and algorithm setup`.
+- Submódulo OpenSC: **`fb767b3dd`**, `iasecc: fix ChipDoc signing key path`.
 - Base upstream original: `c7a377af971df03f879c1697e91ebac1f7e28c56`.
 
-La corrección de ACL de SDO y su diagnóstico ya están comprometidos.
-Está preparada, sin commit al momento de esta edición, la corrección de ruta
-de firma en `pkcs15-iasecc.c`, las regresiones `iasecc-key-path.c` y de SE 3,
-y el diagnóstico `inspect/jcop3-algorithms`, con documentación actualizada.
+Las correcciones de ACL, ruta de firma y su diagnóstico ya están comprometidas.
+Está preparado, sin commit al momento de esta edición, el fallback de
+referencias de algoritmo y lectura RSA limitada a DOCP en `card-iasecc.c`,
+con `tests/iasecc-sign-setup.c`. El helper de firma desactiva la caché de PIN;
+también están actualizados el runner de pruebas y la documentación.
 Confirmar siempre este estado mediante Git.
 
 La URL del submódulo aún es `https://github.com/OpenSC/OpenSC.git`. Los commits
@@ -167,12 +168,19 @@ Anunciar un mecanismo no demuestra que funcione en esta tarjeta.
    repeticiones idénticas y rechaza alternativas distintas y truncamientos.
    Las condiciones de firma, autenticación interna y descifrado apuntan al
    entorno de seguridad 3. No se ejecutaron operaciones administrativas.
-6. **Ruta de la llave de firma** (pendiente de commit):
+6. **Ruta de la llave de firma** (`fb767b3dd`):
    `_iasecc_fixup_signing_key_paths()` conserva el AID ChipDoc y la referencia
    nativa RSA 3, eliminando la ruta de archivo `0003`, cuya selección devuelve
    `6A82`. Se limita a Amos + Generic PKI + RSA nativa de 2048 bits y ese AID
    en la ruta. La llave 2 y otros perfiles quedan intactos. La corrección se
    aplica al cargar PrKDF y a los objetos ya cargados en la inicialización.
+7. **Referencias medidas y DOCP público** (pendiente de commit):
+   `card-iasecc.c` resuelve HT SHA-256 `40`, DST RSA/SHA-256 `42` y AT RSA_PKCS
+   `02` cuando no hay tabla declarada. Se limita a Amos, DF seleccionado con
+   el AID Generic PKI, RSA 2048 y referencia de llave 3. Tablas declaradas y
+   otros perfiles no reciben fallback. La preparación de esa llave lee solo
+   DOCP, comprueba tamaño 256 bytes y libera los metadatos; no solicita `7F48`.
+   No se ha producido aún una firma con esa adaptación.
 
 La condición `00` de VERIFY permite ejecutar el comando sin autenticación
 previa; **no acredita el PIN ni evita su comprobación por la tarjeta**.
@@ -186,12 +194,13 @@ o resolver la selección del perfil. No basta con cambiar la ruta de la .so.
 
 ## Verificación y últimas capturas
 
-Hay **63 comprobaciones de regresión** en cinco archivos: `iasecc-fci.c`,
-`iasecc-pin-path.c`, `iasecc-key-path.c`, `iasecc-sdo.c`, `iasecc-pin-policy.c`. Incluyen respuestas
+Hay **80 comprobaciones de regresión** en seis archivos: `iasecc-fci.c`,
+`iasecc-pin-path.c`, `iasecc-key-path.c`, `iasecc-sdo.c`, `iasecc-pin-policy.c`
+y `iasecc-sign-setup.c`. Incluyen respuestas
 capturadas, conservación/copia de metadatos, rechazo de perfiles distintos y
 transporte simulado que verifica que cambio/desbloqueo no autentican.
 Pasaron en la comprobación local; también terminó la compilación completa
-sin PC/SC, registrada en `build/opensc-offline/signing-path-build.log`.
+sin PC/SC, registrada en `build/opensc-offline/sign-setup-build.log`.
 Esto no sustituye pruebas de firma en hardware.
 
 | Captura local | Resultado relevante |
@@ -205,6 +214,8 @@ Esto no sustituye pruebas de firma en hardware.
 | **`jcop3-key-policy-egE7wr1j.txt`** | Última consulta, 21:34:35 UTC: SELECT ChipDoc y GET DOCP de RSA_PRIVATE 2 y 3 devuelven `9000` |
 | **`jcop3-security-env-MMjEmIcC.txt`** | 12 de octubre, 00:31:57 UTC (11 de octubre, 18:31 en Costa Rica): PC/SC no encuentra lectores; ninguna consulta SE/ruta se ejecutó |
 | **`jcop3-security-env-yw7ohMX7.txt`**, **`jcop3-security-env-OQCXHYVH.txt`** | 12 de octubre, 00:49:16 y 00:49:19 UTC: seis respuestas idénticas; SE 3 legible en ambos AID, AT USER PASSWORD referencia 1; SELECT `0003` devuelve `6A82` |
+| **`jcop3-pkcs11-OwOOGiF2.txt`** | 12 de octubre, 01:16:15 UTC: corrección de ruta de firma aplicada por PKCS#15 y PKCS#11; límites PIN 14/4, intentos 7/7 |
+| **`jcop3-algorithms-FinI8oaD.txt`** | 12 de octubre, 01:16:28 UTC: nueve respuestas `9000`; HT `40`, DST `42` y AT `02` aceptados; DOCP CHV 1 antes/después idénticos, 7/7 intentos |
 
 Los informes PKCS#11 y DOCP RSA de las 21:34 UTC ya se revisaron: **no pedir ejecutarlos de nuevo como
 primer paso**. Los DOCP RSA se reprodujeron en las regresiones del parser
@@ -214,11 +225,10 @@ las nuevas capturas confirman que su AT refiere al CHV 1. Las consultas solicita
 DOCP `A0`, nunca la plantilla `7F48` ni componentes privados.
 
 TokenInfo no incluye `supportedAlgorithms`, y las llaves muestran
-`Algo_refs: 0`. El camino actual de `iasecc_set_security_env()` necesita esa
-tabla para resolver las referencias de algoritmo de RSA. Todavía no se ha
-preparado una adaptación para su ausencia. La ruta de firma `ChipDoc::0003`
-no es seleccionable; se corrigió su representación como objeto nativo.
-Falta validar esa corrección en hardware y las referencias de algoritmo.
+`Algo_refs: 0`. Se preparó el fallback limitado a las tres referencias MSE
+aceptadas. La corrección de ruta ya aparece en la enumeración de la tarjeta.
+El siguiente hito es un intento de login/firma, que todavía no se ha ejecutado
+con el conjunto actual. Aceptar MSE no demuestra una operación RSA correcta.
 
 Las consultas vacías de VERIFY devuelven `63 C7`: PIN no verificado, 7 intentos
 restantes. No llevan el valor del PIN. El primer intento de firma no tuvo
@@ -229,31 +239,21 @@ internos de parsing: revisar las respuestas y el contexto.
 
 ## Próximo trabajo, en orden
 
-1. El usuario confirmó una desconexión accidental, ya resuelta; no repetir
-   el diagnóstico SE 3. Dar comandos de commit para la corrección de ruta,
-   regresiones y diagnóstico. Dentro de `nix develop`, ejecutar desde su
-   terminal `make test/iasecc JOBS="$(nproc)"`, `make inspect/jcop3-pkcs11`
-   y `make inspect/jcop3-algorithms`, sin PIN.
-2. Revisar la nueva ruta de firma y `local/jcop3-algorithms-*`.
-   El diagnóstico prueba HT SHA2 `40`, DST RSA/SHA2 `42` y AT RSA_PKCS `02`
-   con las plantillas ya definidas por OpenSC y referencia de llave local `83`.
-   Son nueve APDU: cuatro SELECT, dos GET DATA de DOCP CHV 1 (controles antes
-   y después), y tres MSE. **MSE configura estado temporal**, no es solo lectura;
-   no autentica, firma ni modifica objetos almacenados. Se verificó con
-   transporte simulado, todavía no en tarjeta. Un `9000` solo demostraría
-   aceptación de configuración; no prueba una operación RSA correcta.
-   Resolver la tabla de algoritmos ausente a partir de los resultados.
-   Antes de autenticación, evaluar limitar `iasecc_set_security_env()` a DOCP
-   para este perfil: hoy llama `iasecc_sdo_get_data()` y pide `7F48` además
-   de DOCP, aunque solo usa tamaño y ACL. No se pidió esa plantilla privada
-   en los diagnósticos. Revisar también la caché de PIN para evitar que un
-   fallo posterior de firma provoque revalidación automática del PIN.
+1. Los últimos diagnósticos ya se revisaron; no repetir SE 3, ruta ni MSE
+   sin un motivo nuevo. Dar comandos de commit para `card-iasecc.c`, las
+   regresiones y el helper de firma actualizado, primero en el submódulo.
+2. Dentro de `nix develop`, indicar al usuario `make test/iasecc JOBS="$(nproc)"`
+   y **una ejecución** de `make sign/jcop3`, directamente en su terminal.
+   El helper configura `use_pin_caching = no`, `OPENSC_DEBUG=0` y `debug = 0`.
+   No redirigir stdout ni pedir capturas APDU autenticadas. Revisar el nuevo
+   `local/jcop3-signature-*/report.txt`, separando C_Login, C_Sign y OpenSSL.
+   Si falla, no repetir autenticación: investigar primero el resultado.
 3. Si aparece otro fallo reproducible, preparar una corrección con evidencia
    y regresión pertinente. Dar comandos para commit primero en el submódulo
    y luego en el repositorio principal, registrando su nuevo puntero.
-4. Cuando los prerrequisitos estén resueltos, indicar al usuario **un intento**
-   con `make sign/jcop3`. Revisar login, firma y verificación OpenSSL; ante
-   fallo, detenerse e investigar, sin reintentos automáticos de PIN.
+4. Confirmar una firma únicamente si OpenSSL verifica `signature.bin` contra
+   la llave pública del certificado y el texto técnico guardado. Una respuesta
+   MSE, login exitoso o archivo de salida por sí solos no completan ese hito.
 5. Después de una firma verificada, probar firmador con la biblioteca local
    y la configuración PKCS#15 pertinente. La variable que usa su lanzador es:
 
@@ -277,6 +277,9 @@ del firmador usando OpenSC.**
 - `sign-jcop3.sh` exige stdin y stdout TTY porque `util_getpass` usa stdout
   para desactivar el eco. No redirigir ni pasar por `tee` la salida del comando
   autenticado. El helper fija `OPENSC_DEBUG=0` y `debug = 0`.
+- El helper desactiva `use_pin_caching`: impide la revalidación automática
+  de PKCS#15 después de un fallo de firma. No volver a activarla durante
+  la investigación de compatibilidad.
 - No habilitar capturas APDU durante login/firma: podrían contener el PIN.
   No se ha capturado una sesión autenticada de Idopte.
 - La prueba firma el texto técnico visible en `message.txt`, no un PDF.
