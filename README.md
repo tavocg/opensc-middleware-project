@@ -25,7 +25,7 @@ medidas de la llave de firma. El mecanismo combinado `SHA256-RSA-PKCS`
 falló en `C_SignFinal`: el camino QSign no soporta OpenSSL 3. El helper
 prepara el DigestInfo SHA-256 en el equipo y pide `RSA-PKCS` a la tarjeta.
 El 11 de octubre de 2026 a las 20:18 de Costa Rica, esta ruta produjo una
-firma de 256 bytes y OpenSSL confirmó `Verified OK`. Pasan 86 comprobaciones
+firma de 256 bytes y OpenSSL confirmó `Verified OK`. Pasan 104 comprobaciones
 locales. Para reproducir la prueba técnica:
 
 ```bash
@@ -36,12 +36,14 @@ make sign/jcop3
 
 El helper solicita el PIN sin eco, con depuración y caché de PIN desactivadas,
 firma un texto técnico mediante RSA PKCS#1 v1.5 y verifica con OpenSSL.
-El mecanismo combinado `SHA256-RSA-PKCS` sigue pendiente. Ejecutarlo directamente en la
+El mecanismo combinado `SHA256-RSA-PKCS` tiene una corrección pendiente de
+validación en hardware, mediante `make sign/jcop3-sha256` después de compilar
+y pasar las pruebas. Ejecutar la firma directamente en la
 terminal, sin redirigir stdout ni usar `tee`; no reintentar tras un fallo.
 Las secciones siguientes conservan los pasos anteriores de preparación e
 investigación; no es necesario repetirlos al retomar este directorio.
 
-El siguiente paso es probar el firmador instalado con el módulo local:
+Para abrir el firmador instalado con el módulo local:
 
 ```bash
 make firmador/jcop3
@@ -52,7 +54,11 @@ y `OPENSC_CONF` a una configuración privada en `local/`, con emulación
 PKCS#15 prioritaria, cachés de archivos/PIN desactivadas y depuración 0.
 Utilizar un PDF de prueba y realizar una sola firma; si falla, detenerse
 para revisar el error. La firma técnica verificada no demuestra todavía
-compatibilidad con firmador, que podría elegir otro mecanismo PKCS#11.
+compatibilidad con firmador. El primer intento falló con
+`CKR_FUNCTION_NOT_SUPPORTED` y `signatureValue cannot be null!`.
+Antes de otro intento, validar `make sign/jcop3-sha256`: se corrigió la
+negociación del hashing SHA-256 para el perfil observado, de modo que el
+mecanismo combinado utilice la operación RSA-PKCS ya verificada.
 
 ## Organización
 

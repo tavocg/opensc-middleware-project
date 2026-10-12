@@ -8,9 +8,16 @@ task_module="$task_root/build/opensc/src/pkcs11/.libs/opensc-pkcs11.so"
 task_slot_index=${SLOT_INDEX:-0}
 # ID observado de LlaveDeFirma; selecciona el certificado y su llave asociada.
 task_key_id=4c6c61766544654669726d61
+task_mechanism=RSA-PKCS
 
-if (( $# != 0 )) || [[ ! $task_slot_index =~ ^[0-9]+$ ]]; then
-    printf 'Uso: make sign/jcop3 [SLOT_INDEX=0]\n' >&2
+if (( $# == 1 )) && [[ $1 == --sha256 ]]; then
+    task_mechanism=SHA256-RSA-PKCS
+elif (( $# != 0 )); then
+    printf 'Uso: make sign/jcop3 o make sign/jcop3-sha256 [SLOT_INDEX=0]\n' >&2
+    exit 2
+fi
+if [[ ! $task_slot_index =~ ^[0-9]+$ ]]; then
+    printf 'SLOT_INDEX debe ser un índice numérico de slot PKCS#11.\n' >&2
     exit 2
 fi
 if [[ ! -t 0 || ! -t 1 ]]; then
@@ -28,8 +35,8 @@ task_report="$task_output/report.txt"
 task_config="$task_output/opensc.conf"
 task_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 printf 'Resultado y archivos: %s\n' "$task_output"
-printf 'date_utc=%s\nmodule=%s\nslot_index=%s\nkey_id=%s\nmechanism=RSA-PKCS\ndigest_algorithm=SHA256\n' \
-    "$task_date" "$task_module" "$task_slot_index" "$task_key_id" > "$task_report"
+printf 'date_utc=%s\nmodule=%s\nslot_index=%s\nkey_id=%s\nmechanism=%s\ndigest_algorithm=SHA256\n' \
+    "$task_date" "$task_module" "$task_slot_index" "$task_key_id" "$task_mechanism" > "$task_report"
 git -C "$task_root/vendor/opensc" rev-parse HEAD >> "$task_report"
 git -C "$task_root/vendor/opensc" status --short >> "$task_report"
 
@@ -76,14 +83,20 @@ bash "$task_root/scripts/sha256-digestinfo.sh" "$task_output/message.txt" \
 
 printf '\nSe firmara este texto con LlaveDeFirma:\n'
 cat -- "$task_output/message.txt"
-printf '\nSHA-256 se calcula en el equipo; la tarjeta realiza RSA PKCS#1 v1.5.\n'
+task_input="$task_output/digest-info.der"
+if [[ $task_mechanism == SHA256-RSA-PKCS ]]; then
+    task_input="$task_output/message.txt"
+    printf '\nOpenSC recibe el texto y prepara SHA-256 y DigestInfo; la tarjeta realiza RSA PKCS#1 v1.5.\n'
+else
+    printf '\nSHA-256 se calcula en el equipo; la tarjeta realiza RSA PKCS#1 v1.5.\n'
+fi
 printf '\nIntroduce tu PIN cuando lo solicite pkcs11-tool.\n'
-task_record "${task_common[@]}" --login --sign --mechanism RSA-PKCS \
-    --input-file "$task_output/digest-info.der" --output-file "$task_output/signature.bin"
+task_record "${task_common[@]}" --login --sign --mechanism "$task_mechanism" \
+    --input-file "$task_input" --output-file "$task_output/signature.bin"
 # stdout debe seguir conectado a la terminal: util_getpass lo utiliza para
 # desactivar el eco. No registrar APDU ni pasar el PIN en argumentos.
-"${task_common[@]}" --login --sign --mechanism RSA-PKCS \
-    --input-file "$task_output/digest-info.der" --output-file "$task_output/signature.bin" 2>> "$task_report"
+"${task_common[@]}" --login --sign --mechanism "$task_mechanism" \
+    --input-file "$task_input" --output-file "$task_output/signature.bin" 2>> "$task_report"
 
 task_record openssl dgst -sha256 -verify "$task_output/public-key.pem" \
     -signature "$task_output/signature.bin" "$task_output/message.txt"

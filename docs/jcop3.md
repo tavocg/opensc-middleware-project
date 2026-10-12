@@ -951,3 +951,62 @@ La verificación técnica no demuestra compatibilidad con el firmador:
 podría seleccionar otro mecanismo. `SHA256-RSA-PKCS` y QSign siguen pendientes,
 al igual que PuKDF `-1402`, concurrencia, otras llaves/mecanismos y validación
 de versiones/plataformas. No se reclama soporte completo de IAS/ECC o JCOP3.
+
+## Integración con firmador: mecanismo combinado y firma nula
+
+El usuario ejecutó `make firmador/jcop3` y recibió
+`sun.security.pkcs11.wrapper.PKCS11Exception: CKR_FUNCTION_NOT_SUPPORTED`,
+seguido de un aviso sobre sello de tiempo/revocación y
+`signatureValue cannot be null!`. No hay una firma PDF verificada. El aviso
+no demuestra un problema de Internet: la ausencia del valor de firma basta
+para impedir las operaciones posteriores. No se capturaron APDU autenticadas
+ni un stack trace que identifique la función PKCS#11 exacta que falló.
+
+La revisión estática del firmador instalado confirma que configura
+SunPKCS11. El código fuente de OpenJDK 21 incluido en su `lib/src.zip`
+registra `SHA256withRSA` con preferencia por `CKM_SHA256_RSA_PKCS`, seguido
+de `CKM_RSA_PKCS` y `CKM_RSA_X_509`. Esto señala el mecanismo combinado ya
+fallido como candidato, sin confirmar qué operación ejecutó esa sesión.
+
+La ruta reproducible de OpenSC tiene un problema de negociación: al no
+declarar `algo_refs`, PKCS#11 calcula SHA-256 en software y entrega el digest
+de 32 bytes a PKCS#15, pero los flags predeterminados de IAS/ECC todavía
+encaminan ese digest a QSign. Ese camino espera el mensaje para calcular
+su estado de hash y devuelve `SC_ERROR_NOT_SUPPORTED` con OpenSSL 3.
+
+Se agregó `_iasecc_fixup_signature_algorithms()` en `pkcs15-iasecc.c`,
+aplicado después de corregir la ruta de firma. Solo actúa en Amos + Generic
+PKI, con llave nativa RSA 2048, referencia 3, permiso SIGN, ruta corregida
+al AID y ausencia de algoritmos declarados tanto en la llave como en
+TokenInfo. Si RSA 2048 ofrece PKCS#1 y HASH_NONE y no anuncia RSA RAW,
+retira únicamente su flag de hash SHA-256. Esta capacidad es compartida
+por las llaves RSA 2048 de la tarjeta; no se valida por ello la llave de
+autenticación. No cambia SHA-1, otros tamaños de RSA ni ECC.
+
+Con esa capacidad corregida, `sc_get_encoding_flags()` hace que PKCS#15
+agregue DigestInfo al digest ya calculado y seleccione RSA-PKCS con AT `02`.
+El mecanismo combinado sigue disponible mediante hashing en software;
+no se rebaja SHA-256 ni se modifica el firmador. No se implementó QSign
+con hashing en hardware.
+
+Pasan **104 comprobaciones**, registradas en
+`build/opensc-offline/chipdoc-software-hash-tests.log`. Las nuevas regresiones
+comprueban el DigestInfo completo de `abc` en la ruta real PKCS#15/driver,
+rechazo de un digest de longitud incorrecta antes del transporte, conservación
+de RSA-PKCS explícito y rechazo de perfiles/algoritmos fuera del ajuste.
+La compilación completa sin PC/SC terminó correctamente en
+`chipdoc-software-hash-build.log`. Esto no valida el mecanismo combinado
+en hardware ni una firma PDF.
+
+Se añadió `make sign/jcop3-sha256` para probar `SHA256-RSA-PKCS` con el texto
+original como entrada, sin hashearlo en el script antes de enviarlo al módulo.
+Se conserva la preparación de DigestInfo como archivo de referencia local.
+El helper mantiene terminal obligatoria, depuración 0, caché PIN desactivada,
+un comando autenticado y verificación OpenSSL sobre el texto original.
+`make sign/jcop3` sigue usando RSA-PKCS explícito.
+
+Después de guardar los commits y pasar `make test/iasecc JOBS="$(nproc)"`,
+realizar **una ejecución** de `make sign/jcop3-sha256`. Revisar el informe
+antes de repetir login o volver al firmador. Solo si OpenSSL confirma
+`Verified OK`, probar nuevamente `make firmador/jcop3` tras cerrar cualquier
+instancia anterior, con un PDF de prueba y sin depuración APDU.

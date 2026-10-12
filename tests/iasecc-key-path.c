@@ -66,6 +66,8 @@ int main(void)
 	struct sc_card card = {0};
 	struct sc_app_info app = {0};
 	struct sc_pkcs15_card p15card = {0};
+	struct sc_pkcs15_tokeninfo tokeninfo = {0};
+	struct sc_algorithm_info algorithms[3] = {0};
 	struct sc_pkcs15_object obj = {0};
 	struct sc_pkcs15_prkey_info info;
 	struct sc_security_env env = {0};
@@ -77,6 +79,14 @@ int main(void)
 	p15card.card = &card;
 	p15card.app = &app;
 	p15card.obj_list = &obj;
+	p15card.tokeninfo = &tokeninfo;
+	card.algorithms = algorithms;
+	card.algorithm_count = 3;
+	algorithms[0].algorithm = algorithms[1].algorithm = SC_ALGORITHM_RSA;
+	algorithms[0].key_length = 2048;
+	algorithms[1].key_length = 1024;
+	algorithms[2].algorithm = SC_ALGORITHM_EC;
+	algorithms[2].key_length = 256;
 	obj.type = SC_PKCS15_TYPE_PRKEY_RSA;
 	obj.data = &info;
 	for (int variant = 0; variant < 9; variant++) {
@@ -87,6 +97,7 @@ int main(void)
 		info.native = 1;
 		info.key_reference = 3;
 		info.modulus_length = 2048;
+		info.usage = SC_PKCS15_PRKEY_USAGE_SIGN;
 		sc_format_path("0003", &info.path);
 		info.path.aid = app.aid;
 		switch (variant) {
@@ -104,6 +115,15 @@ int main(void)
 		check(names[variant], variant ? !memcmp(&info.path, &original, sizeof(original)) :
 				!info.path.len && info.path.aid.len == sizeof(aid) &&
 				!memcmp(info.path.aid.value, aid, sizeof(aid)) && info.key_reference == 3);
+		unsigned long caps = SC_ALGORITHM_RSA_PAD_PKCS1_TYPE_01 | SC_ALGORITHM_RSA_HASH_NONE |
+				SC_ALGORITHM_RSA_HASH_SHA1 | SC_ALGORITHM_RSA_HASH_SHA256;
+		for (int i = 0; i < 3; i++)
+			algorithms[i].flags = caps;
+		_iasecc_fixup_signature_algorithms(&p15card);
+		check(variant ? "SHA-256 capabilities stay unchanged outside the observed signing profile" :
+				"ChipDoc software SHA-256 preserves SHA-1, RSA-PKCS, other sizes and ECC",
+				algorithms[0].flags == (variant ? caps : caps & ~SC_ALGORITHM_RSA_HASH_SHA256) &&
+				algorithms[1].flags == caps && algorithms[2].flags == caps);
 		if (!variant) {
 			fixed = info.path;
 			_iasecc_fixup_signing_key_paths(&p15card);
@@ -113,6 +133,25 @@ int main(void)
 					selections == 1 && !selected.len && selected.aid.len == sizeof(aid) &&
 					!memcmp(selected.aid.value, aid, sizeof(aid)) &&
 					!(env.flags & SC_SEC_ENV_FILE_REF_PRESENT));
+			for (int guard = 0; guard < 6; guard++) {
+				info.algo_refs[0] = 0;
+				tokeninfo.supported_algos[0].reference = 0;
+				info.usage = SC_PKCS15_PRKEY_USAGE_SIGN;
+				algorithms[0].flags = caps;
+				switch (guard) {
+				case 0: info.algo_refs[0] = 1; break;
+				case 1: tokeninfo.supported_algos[0].reference = 1; break;
+				case 2: info.usage = SC_PKCS15_PRKEY_USAGE_DECRYPT; break;
+				case 3: algorithms[0].flags &= ~SC_ALGORITHM_RSA_HASH_NONE; break;
+				case 4: algorithms[0].flags |= SC_ALGORITHM_RSA_RAW; break;
+				case 5: p15card.tokeninfo = NULL; break;
+				}
+				unsigned long original_flags = algorithms[0].flags;
+				_iasecc_fixup_signature_algorithms(&p15card);
+				check("declared algorithms or unverified software-hash prerequisites are preserved",
+						algorithms[0].flags == original_flags);
+				p15card.tokeninfo = &tokeninfo;
+			}
 		}
 	}
 	return failures ? 1 : 0;

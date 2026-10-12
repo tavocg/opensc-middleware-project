@@ -22,6 +22,7 @@
 #include "libopensc/card-iasecc.c"
 #include "libopensc/iasecc-sdo.c"
 #include "libopensc/padding.c"
+#include "libopensc/pkcs15-iasecc.c"
 
 /* SHA-256 DigestInfo for the standard vector "abc". */
 static const unsigned char digest_info[] = {
@@ -151,6 +152,7 @@ int main(void)
 	struct sc_file df = {0};
 	struct sc_pkcs15_card p15card = {0};
 	struct sc_pkcs15_tokeninfo tokeninfo = {0};
+	struct sc_app_info app = {0};
 	struct sc_pkcs15_object key = {0};
 	struct sc_pkcs15_prkey_info key_info = {0};
 	struct sc_algorithm_info algorithm = {0};
@@ -178,6 +180,9 @@ int main(void)
 	memcpy(df.path.value, aid, sizeof(aid));
 	p15card.card = &card;
 	p15card.tokeninfo = &tokeninfo;
+	p15card.app = &app;
+	app.aid.len = sizeof(aid);
+	memcpy(app.aid.value, aid, sizeof(aid));
 	p15card.opts.use_pin_cache = 0;
 	key.type = SC_PKCS15_TYPE_PRKEY_RSA;
 	key.data = &key_info;
@@ -185,6 +190,7 @@ int main(void)
 	key_info.modulus_length = 2048;
 	key_info.key_reference = 3;
 	key_info.usage = SC_PKCS15_PRKEY_USAGE_SIGN;
+	p15card.obj_list = &key;
 	key_info.path.type = SC_PATH_TYPE_PATH;
 	key_info.path.aid.len = sizeof(aid);
 	memcpy(key_info.path.aid.value, aid, sizeof(aid));
@@ -211,8 +217,28 @@ int main(void)
 	flags = SC_ALGORITHM_RSA_PAD_PKCS1_TYPE_01 | SC_ALGORITHM_RSA_HASH_SHA256;
 	result = fixture_compute_signature(&p15card, &key, flags, digest_info + 19, 32,
 			signature, sizeof(signature), NULL);
-	check("current combined SHA-256 route fails in host QSign with OpenSSL 3", result == SC_ERROR_NOT_SUPPORTED &&
+	check("unadapted combined SHA-256 route fails in host QSign with OpenSSL 3", result == SC_ERROR_NOT_SUPPORTED &&
 			selections == 1 && metadata_queries == 1 && mse_queries == 2 && !signature_queries && !forbidden_commands);
 #endif
+	reset_transport();
+	_iasecc_fixup_signature_algorithms(&p15card);
+	flags = SC_ALGORITHM_RSA_PAD_PKCS1_TYPE_01 | SC_ALGORITHM_RSA_HASH_SHA256;
+	result = fixture_compute_signature(&p15card, &key, flags, digest_info + 19, 32,
+			signature, sizeof(signature), NULL);
+	check("ChipDoc software SHA-256 digest uses the verified RSA-PKCS path", result == 256 &&
+			selections == 1 && metadata_queries == 1 && mse_queries == 1 && signature_queries == 1 &&
+			!forbidden_commands && private_data.security_env.operation == SC_SEC_OPERATION_AUTHENTICATE);
+	reset_transport();
+	result = fixture_compute_signature(&p15card, &key, flags, digest_info + 19, 31,
+			signature, sizeof(signature), NULL);
+	check("invalid SHA-256 digest length is rejected before card transport", result < 0 &&
+			!selections && !metadata_queries && !mse_queries && !signature_queries && !forbidden_commands);
+	reset_transport();
+	flags = SC_ALGORITHM_RSA_PAD_PKCS1_TYPE_01 | SC_ALGORITHM_RSA_HASH_NONE;
+	result = fixture_compute_signature(&p15card, &key, flags, digest_info, sizeof(digest_info),
+			signature, sizeof(signature), NULL);
+	check("explicit RSA-PKCS remains unchanged after the capability fixup", result == 256 &&
+			selections == 1 && metadata_queries == 1 && mse_queries == 1 && signature_queries == 1 &&
+			!forbidden_commands);
 	return failures ? 1 : 0;
 }
