@@ -36,9 +36,10 @@ make sign/jcop3
 
 El helper solicita el PIN sin eco, con depuración y caché de PIN desactivadas,
 firma un texto técnico mediante RSA PKCS#1 v1.5 y verifica con OpenSSL.
-El mecanismo combinado `SHA256-RSA-PKCS` tiene una corrección pendiente de
-validación en hardware, mediante `make sign/jcop3-sha256` después de compilar
-y pasar las pruebas. Ejecutar la firma directamente en la
+El mecanismo combinado `SHA256-RSA-PKCS` también produjo una firma verificada
+el mismo día a las 20:37, con OpenSC `34a040c32`. La corrección hace que
+OpenSC prepare SHA-256 y DigestInfo en software y use RSA-PKCS en la tarjeta.
+Para reproducir esa modalidad, usar `make sign/jcop3-sha256`. Ejecutar la firma directamente en la
 terminal, sin redirigir stdout ni usar `tee`; no reintentar tras un fallo.
 Las secciones siguientes conservan los pasos anteriores de preparación e
 investigación; no es necesario repetirlos al retomar este directorio.
@@ -56,9 +57,10 @@ Utilizar un PDF de prueba y realizar una sola firma; si falla, detenerse
 para revisar el error. La firma técnica verificada no demuestra todavía
 compatibilidad con firmador. El primer intento falló con
 `CKR_FUNCTION_NOT_SUPPORTED` y `signatureValue cannot be null!`.
-Antes de otro intento, validar `make sign/jcop3-sha256`: se corrigió la
-negociación del hashing SHA-256 para el perfil observado, de modo que el
-mecanismo combinado utilice la operación RSA-PKCS ya verificada.
+La negociación del hashing SHA-256 ya se corrigió y validó en la tarjeta
+mediante `make sign/jcop3-sha256`. El siguiente paso es volver a probar
+`make firmador/jcop3` después de cerrar cualquier instancia anterior, sin
+recompilar ni repetir la firma técnica.
 
 ## Organización
 
@@ -199,7 +201,8 @@ Utiliza la compilación existente y guarda el informe en `local/`. Consulta
 metadatos de llaves y PIN, slots, mecanismos y objetos. `READER=0` selecciona
 el lector PC/SC y `SLOT_INDEX=0` el slot PKCS#11; estos índices pueden diferir.
 La consulta PKCS#11 ya publica certificados y llaves públicas. Aunque anuncia
-`SHA256-RSA-PKCS`, ese mecanismo falla con la compilación actual. La prueba
+`SHA256-RSA-PKCS`, ese mecanismo fallaba antes de corregir la negociación de
+hashing en `34a040c32`; ahora ambas modalidades están verificadas. La prueba
 usa `RSA-PKCS` con un DigestInfo SHA-256 preparado antes de solicitar el PIN:
 
 ```bash

@@ -5,7 +5,8 @@ de las 21:34 UTC, SE 3, MSE y el fallo de firma posterior al login de las
 19:41 de Costa Rica, el rechazo de longitud del PIN de las 19:59, la
 consulta pública de las 20:12 y la primera firma verificada de las 20:18
 (01:41, 01:59, 02:12 y 02:18 UTC del 12 de octubre), y el fallo posterior
-del firmador con `CKR_FUNCTION_NOT_SUPPORTED`. Leer este archivo
+del firmador con `CKR_FUNCTION_NOT_SUPPORTED` y la firma combinada verificada
+de las 20:37 de Costa Rica (02:37 UTC del 12 de octubre). Leer este archivo
 al retomar el proyecto y contrastarlo con Git y las capturas más recientes.
 Es un punto de partida, no una afirmación
 de soporte completo de la tarjeta.
@@ -105,8 +106,8 @@ pero no valida comunicación con la tarjeta.
 
 Los últimos commits guardados del driver y su diagnóstico son:
 
-- Repositorio principal: **`f05427f`**, `Record verified signature and add firmador launcher`.
-- Submódulo OpenSC: **`70d7afc20`**, `iasecc: add ChipDoc signing algorithms`.
+- Repositorio principal: **`3dd45c9`**, `Test ChipDoc software SHA256 signing`.
+- Submódulo OpenSC: **`34a040c32`**, `iasecc: use software SHA256 for ChipDoc`.
 - Base upstream original: `c7a377af971df03f879c1697e91ebac1f7e28c56`.
 
 Las correcciones de ACL, ruta de firma, fallback de referencias de algoritmo
@@ -114,10 +115,11 @@ y lectura RSA limitada a DOCP ya están comprometidas, junto con sus pruebas.
 El helper de firma desactiva la caché de PIN. Ambos árboles estaban limpios
 al comenzar a revisar el informe de las 20:18. El helper para usar DigestInfo
 SHA-256 y `RSA-PKCS`, las nuevas regresiones y su documentación están
-comprometidos, al igual que el lanzador de firmador. Quedan por guardar
-la corrección de capacidades SHA-256 en `pkcs15-iasecc.c` del submódulo y,
-en el repositorio principal, sus regresiones, `sign/jcop3-sha256` y
-documentación. Confirmar mediante Git antes de cambiar el puntero.
+comprometidos, al igual que el lanzador de firmador, la corrección de
+capacidades SHA-256 en el submódulo, sus regresiones y `sign/jcop3-sha256`.
+Ambos árboles estaban limpios al revisar el informe de las 20:37.
+Queda por guardar la documentación de la firma combinada verificada.
+Confirmar mediante Git antes de cambiar el puntero.
 
 La URL del submódulo aún es `https://github.com/OpenSC/OpenSC.git`. Los commits
 locales del driver necesitarán publicarse en un fork y actualizar esa URL
@@ -155,8 +157,8 @@ El módulo anuncia Cryptoki 3.0 y mecanismos RSA, incluido `SHA256-RSA-PKCS`.
 Anunciar un mecanismo no demuestra que funcione en esta tarjeta.
 La prueba de las 19:41 falla con `SHA256-RSA-PKCS` después de pasar el login.
 El helper ahora usa `RSA-PKCS` con DigestInfo SHA-256 y esa ruta se verificó
-en hardware. El mecanismo combinado tiene una corrección de negociación
-probada sin tarjeta, pendiente de validación en hardware. No se implementó
+en hardware. El mecanismo combinado también produjo una firma verificada
+después de la corrección de negociación (`34a040c32`). No se implementó
 QSign con hashing en hardware.
 
 ## Cambios realizados y límites
@@ -197,7 +199,8 @@ QSign con hashing en hardware.
    el AID Generic PKI, RSA 2048 y referencia de llave 3. Tablas declaradas y
    otros perfiles no reciben fallback. La preparación de esa llave lee solo
    DOCP, comprueba tamaño 256 bytes y libera los metadatos; no solicita `7F48`.
-   No se ha producido aún una firma con esa adaptación.
+   La operación AT RSA-PKCS produjo firmas SHA-256 verificadas tanto con
+   DigestInfo explícito como mediante el mecanismo combinado.
 
 La condición `00` de VERIFY permite ejecutar el comando sin autenticación
 previa; **no acredita el PIN ni evita su comprobación por la tarjeta**.
@@ -210,7 +213,7 @@ corrección: al integrar con firmador habrá que conservar esta configuración
 o resolver la selección del perfil. No basta con cambiar la ruta de la .so.
 El nuevo objetivo `make firmador/jcop3` proporciona esa configuración local.
 
-5. **Hash SHA-256 en software para ChipDoc** (pendiente de commit):
+8. **Hash SHA-256 en software para ChipDoc** (`34a040c32`):
    `_iasecc_fixup_signature_algorithms()` en `pkcs15-iasecc.c` retira el flag
    SHA-256 de la capacidad RSA 2048 cuando coincide el perfil y la llave
    observados, no hay algoritmos declarados y se dispone de PKCS#1/HASH_NONE
@@ -255,6 +258,7 @@ código de salida. Esa comprobación no abrió Java ni accedió al lector.
 | **`jcop3-signature-Pwfndadv/report.txt`** | 12 de octubre, 01:59:58 UTC: helper `RSA-PKCS`, certificado y DigestInfo preparados; `C_Login` devuelve `CKR_PIN_LEN_RANGE`; no se llegó a la firma |
 | **`jcop3-pkcs11-EqveuSwF.txt`** | 12 de octubre, 02:12:28 UTC: mismo módulo y ATR, slot 0 y objetos RSA visibles; AODF 4–20, CHV 4–14, intentos 7/7; no hubo login |
 | **`jcop3-signature-crUXrnAi/report.txt`** | 12 de octubre, 02:18:39 UTC: login y RSA-PKCS exitosos, firma de 256 bytes, OpenSSL `Verified OK`, estado 0; primera firma verificada |
+| **`jcop3-signature-kiHbc1Qh/report.txt`** | 12 de octubre, 02:37:33 UTC, OpenSC `34a040c32`: login y SHA256-RSA-PKCS exitosos, texto original como entrada, firma de 256 bytes, OpenSSL `Verified OK`, estado 0 |
 
 Los informes PKCS#11 y DOCP RSA de las 21:34 UTC ya se revisaron: **no pedir ejecutarlos de nuevo como
 primer paso**. Los DOCP RSA se reprodujeron en las regresiones del parser
@@ -315,8 +319,12 @@ falta primero el valor de firma. No hay stack trace ni APDU autenticadas para
 identificar la función exacta. La revisión estática confirma SunPKCS11, cuyo
 código OpenJDK 21 prefiere CKM_SHA256_RSA_PKCS sobre CKM_RSA_PKCS. La regresión
 reproduce la ruta QSign fallida y la corrige con DigestInfo + RSA-PKCS mediante
-el ajuste de capacidades. La validación del mecanismo combinado y del PDF
-sigue pendiente.
+el ajuste de capacidades. El intento posterior de las 20:37 con
+`make sign/jcop3-sha256` produjo una firma verificada del texto original.
+La llave pública extraída nuevamente del certificado y el DigestInfo
+recalculado coinciden con los archivos guardados; una verificación OpenSSL
+independiente también devolvió `Verified OK`. El mecanismo combinado queda
+validado en esta prueba técnica. La validación del PDF sigue pendiente.
 
 Las consultas vacías de VERIFY devuelven `63 C7`: PIN no verificado, 7 intentos
 restantes. No llevan el valor del PIN. El primer intento de firma no tuvo
@@ -328,17 +336,14 @@ internos de parsing: revisar las respuestas y el contexto.
 
 ## Próximo trabajo, en orden
 
-1. El primer hito está completo: RSA-PKCS con SHA-256 de las 20:18 verificado.
-   Guardar primero la corrección de capacidades en el submódulo y luego
-   las regresiones, el objetivo Make y la documentación en el repositorio
-   principal. Dar los comandos al usuario, sin hacer commits desde el agente.
-2. Ejecutar `make test/iasecc JOBS="$(nproc)"` desde `nix develop` para compilar
-   con PC/SC y comprobar el código nuevo. Solo si pasa, **una ejecución** de
-   `make sign/jcop3-sha256`. Este objetivo envía `message.txt` al mecanismo
-   SHA256-RSA-PKCS; OpenSC calcula SHA-256 y prepara DigestInfo. Verifica la
-   firma contra el texto original con OpenSSL. Ante fallo, revisar el informe
-   antes de otro login. No repetir el helper RSA-PKCS anterior como primer paso.
-3. Solo tras verificar el mecanismo combinado, volver a `make firmador/jcop3`
+1. El primer hito está completo: RSA-PKCS explícito y SHA256-RSA-PKCS
+   produjeron firmas SHA-256 verificadas. La corrección y sus regresiones ya
+   están comprometidas. Guardar la documentación nueva en el repositorio
+   principal; dar los comandos al usuario, sin hacer commits desde el agente.
+2. No repetir pruebas, consultas o firmas técnicas como primer paso: el
+   informe combinado de las 20:37 ya fue revisado y verificado. No recompilar
+   sin cambios. Mantener depuración 0 y caché de PIN desactivada.
+3. Con el mecanismo combinado ya verificado, volver a `make firmador/jcop3`
    después de cerrar cualquier instancia anterior. El helper abre el
    firmador instalado con el módulo compilado y un archivo privado en
    `local/jcop3-firmador-*.conf`: emulación PKCS#15 primero, cachés de archivos
@@ -346,7 +351,7 @@ internos de parsing: revisar las respuestas y el contexto.
    mismo, no redirige ni captura la salida y no recompila ni instala.
    Comprobar que aparece el certificado y realizar una firma de un PDF de
    prueba. Ante fallo, revisar el mensaje antes de otro intento. Firmador
-   podría elegir un mecanismo combinado todavía no soportado.
+   podría presentar otro fallo de integración aún no reproducido.
 4. Verificar el PDF producido y confirmar la carga del módulo local antes
    de declarar compatible el firmador. No habilitar depuración APDU durante
    autenticación ni cambiar PIN, llaves o parámetros persistentes de tarjeta.

@@ -1010,3 +1010,26 @@ realizar **una ejecución** de `make sign/jcop3-sha256`. Revisar el informe
 antes de repetir login o volver al firmador. Solo si OpenSSL confirma
 `Verified OK`, probar nuevamente `make firmador/jcop3` tras cerrar cualquier
 instancia anterior, con un PDF de prueba y sin depuración APDU.
+
+## Mecanismo combinado verificado: 2026-10-11, 20:37 de Costa Rica
+
+`local/jcop3-signature-kiHbc1Qh/report.txt`, de las 02:37:33 UTC del 12 de
+octubre, usa OpenSC `34a040c32`, sin cambios locales, y el helper comprometido
+en el repositorio principal `3dd45c9`. Lee el certificado y acepta el login.
+La entrada de `SHA256-RSA-PKCS` es el `message.txt` original de 82 bytes.
+Produce una firma de 256 bytes; OpenSSL confirma `Verified OK` sobre ese
+texto, con estado final 0. Se mantuvo depuración APDU desactivada.
+
+La comprobación independiente extrajo nuevamente la llave pública del
+certificado DER y la comparó con `public-key.pem`, recalculó y comparó el
+DigestInfo y volvió a verificar la firma contra el texto original. Todas
+las comprobaciones pasaron, sin acceder al lector ni introducir el PIN.
+Esto valida el mecanismo combinado en la tarjeta observada mediante hashing
+en software y la operación RSA-PKCS; no acredita hashing QSign en hardware.
+
+La corrección ya está comprometida en el submódulo y registrada por el
+repositorio principal. No se necesita recompilar ni repetir esta firma.
+El siguiente paso es cerrar cualquier instancia anterior de firmador y
+ejecutar `make firmador/jcop3` desde `nix develop`, con un PDF de prueba.
+Revisar cualquier fallo antes de otro intento y verificar el PDF si se
+produce. Todavía no hay una firma PDF verificada con el firmador y OpenSC.
