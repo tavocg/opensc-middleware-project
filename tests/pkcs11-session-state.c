@@ -6,12 +6,26 @@
 #include "pkcs11/framework-pkcs15.c"
 
 struct sc_context *context;
-static int failures, status_queries, session_state_events;
+static int failures, status_queries, session_state_events, query_error, token_events;
+static CK_RV token_pin_rv;
+static struct sc_pkcs11_slot *fixture_slot;
+
+CK_RV sc_pkcs11_lock(void) { return CKR_OK; }
+void sc_pkcs11_unlock(void) {}
+const char *lookup_enum(CK_ULONG type, CK_ULONG value) { return NULL; }
+CK_RV sc_to_cryptoki_error(int rc, const char *ctx) { return CKR_GENERAL_ERROR; }
+CK_RV slot_get_token(CK_SLOT_ID id, struct sc_pkcs11_slot **slot)
+{
+	if (id != 0) return CKR_SLOT_ID_INVALID;
+	*slot = fixture_slot;
+	return CKR_OK;
+}
 
 int sc_pkcs15_get_pin_info(struct sc_pkcs15_card *p15card, struct sc_pkcs15_object *obj)
 {
 	(void)p15card;
 	status_queries++;
+	if (query_error) return SC_ERROR_CARD_RESET;
 	((struct sc_pkcs15_auth_info *)obj->data)->logged_in = SC_PIN_STATE_LOGGED_OUT;
 	return SC_SUCCESS;
 }
@@ -20,6 +34,10 @@ void sc_pkcs11_api_trace(enum sc_api_trace_event event, CK_SESSION_HANDLE sessio
 		CK_RV rv, CK_ULONG a, CK_ULONG b)
 {
 	(void)session;
+	if (event == SC_API_TOKEN_INFO_BEGIN || event == SC_API_TOKEN_INFO)
+		token_events++;
+	if (event == SC_API_TOKEN_PIN_STATUS)
+		token_pin_rv = rv;
 	if (event == SC_API_SESSION_LOGIN_STATE && rv == CKR_OK &&
 			a == SC_PIN_STATE_UNKNOWN && b == CKU_USER)
 		session_state_events++;
@@ -128,6 +146,22 @@ int main(void)
 		}
 		check(names[variant], excluded && session_state_events == 2);
 	}
+	pin_info = original;
+	card.type = SC_CARD_TYPE_IASECC_AMOS;
+	p15card.app = &app;
+	memcpy(app.aid.value, aid, sizeof(aid));
+	slot.login_user = CKU_USER;
+	fixture_slot = &slot;
+	CK_TOKEN_INFO token_info;
+	status_queries = 0;
+	CK_RV rv = C_GetTokenInfo(0, &token_info);
+	check("token-info still queries the card when the session-info experiment is enabled",
+			rv == CKR_OK && status_queries == 1 && token_events == 2 && token_pin_rv == SC_SUCCESS);
+	query_error = 1;
+	rv = C_GetTokenInfo(0, &token_info);
+	check("token-info diagnostic preserves its return while reporting the failed PIN query",
+			rv == CKR_OK && status_queries == 2 && token_events == 4 &&
+			token_pin_rv == (CK_RV)SC_ERROR_CARD_RESET);
 	unsetenv("OPENSC_JCOP3_SESSION_STATE");
 	return failures ? 1 : 0;
 }

@@ -1268,3 +1268,78 @@ el PDF y diseñar la corrección definitiva con esa evidencia; si falla,
 la hipótesis no se confirma y habrá que revisar las otras diferencias de
 contexto. No activar este experimento por defecto ni reclamar una solución
 validada antes de esa comparación. No repetir la firma técnica previa.
+
+## El experimento no resuelve RSA: 2026-10-11, 21:39
+
+`local/jcop3-firmador-api-HQ6utMiv/report.txt` registra 03:39:50 UTC del
+12 de octubre, OpenSC `ca8f65684`, sin cambios locales, y
+`session_state_experiment=yes`. El repositorio principal está en `78189a3`;
+ambos árboles estaban limpios al revisar la captura.
+
+El registro contiene un login exitoso y una operación de firma fallida.
+Tres eventos `SESSION_LOGIN_STATE` confirman que se omitieron las consultas
+físicas de `C_GetSessionInfo`; la sesión informa RW USER. Se selecciona
+llave 3, RSA 2048, mecanismo SHA256-RSA-PKCS. Selección, DOCP y MSE pasan,
+pero RSA AT vuelve a devolver **`6982`**, traducido a `-1211` y después
+`CKR_USER_NOT_LOGGED_IN`. La revalidación queda rechazada por caché PIN
+desactivada y no repite RSA. No hay logout ni cierre intermedio.
+
+El experimento se ejecutó, pero **no confirmó que omitir las consultas de
+`C_GetSessionInfo` resuelva la condición de seguridad**. No volver a
+recomendarlo como corrección ni repetirlo con la misma compilación.
+Eso no descarta todas las consultas de PIN: en `framework-pkcs15.c`,
+`C_GetTokenInfo` llama directamente a `sc_pkcs15_get_pin_info`. El
+experimento no afecta esa llamada y el registro anterior no la observaba.
+Tampoco mostraba selecciones individuales ni resets detectados al obtener
+el bloqueo del lector. El código del driver realiza SELECT incluso al
+volver a un mismo AID; aún no hay evidencia que justifique omitirlo.
+
+Se amplió únicamente el diagnóstico optativo, sin modificar la secuencia
+de comandos, autenticación, reintentos o resultados:
+
+| Evento | `rv` | `a` | `b` |
+| --- | --- | --- | --- |
+| `C_GetTokenInfo_BEGIN` | 0, marcador tras obtener mutex | slot | 0 |
+| `TOKEN_PIN_STATUS` | resultado OpenSC de la consulta existente | estado de PIN almacenado | usuario software del slot |
+| `C_GetTokenInfo` | resultado PKCS#11 | slot | 0 |
+| `CARD_SELECT` | resultado OpenSC de transporte o comprobación SW | categoría pública fija del destino | SW, 0 si falla transporte |
+| `CARD_PIN_INFO_BEGIN` | 0, marcador de la consulta existente | referencia pública de PIN | 0 |
+| `CARD_PIN_INFO` | resultado OpenSC de la etapa | estado numérico observado | 1 estado, 2 política |
+| `CARD_LOCK` | resultado OpenSC del bloqueo | cantidad de reset/reattachment detectados | bloqueo del lector obtenido, booleano |
+| `CARD_RESET` | resultado de la llamada existente de reset | cold reset solicitado, booleano | 0 |
+
+Las categorías SELECT son **0** otro archivo, **1** MF, **2** AID raíz
+IAS ECC, **3** AID ChipDoc y **4** otro AID. No se escriben rutas, AIDs,
+identificadores de archivos ni buffers. Cada evento representa una
+transmisión SELECT existente; no afirma que el parsing posterior de FCP
+haya pasado. En las consultas de PIN, interpretar el estado solo si
+`rv=0`; un error puede dejar un estado anterior almacenado.
+`C_GetTokenInfo` conserva su comportamiento previo de no propagar el
+error de la consulta PIN: ambos resultados se registran por separado.
+`CARD_LOCK` observa lo que recibe OpenSC al bloquear el lector; no prueba
+que no hayan ocurrido cambios de contexto por otros procesos. `CARD_RESET`
+no provoca ningún reset nuevo. Todo el registro sigue apagado por defecto,
+con nombres fijos y enteros, preservando errno y sin PIN, longitud del PIN,
+atributos, certificados, documentos, digest, firma ni datos APDU.
+
+La siguiente prueba de hardware utiliza el modo diagnóstico ordinario,
+**`make firmador/jcop3-diagnose`**, después de compilar los cambios con
+`make test/iasecc JOBS="$(nproc)"`. Cerrar otras instancias, intentar una
+sola firma y cerrar. Analizar el registro completo antes de otra prueba;
+no activar caché PIN ni cambiar parámetros persistentes para eludir `6982`.
+La firma PDF sigue pendiente, mientras las dos firmas técnicas verificadas
+continúan siendo evidencia de la ruta RSA SHA-256 básica.
+
+Pasan **136 comprobaciones** sin tarjeta: las dos nuevas del framework
+comprueban que token-info conserva su consulta física al activar el
+experimento y que el resultado PKCS#11 se mantiene aunque la consulta
+falle. Cinco pruebas nuevas en `tests/iasecc-context-trace.c` usan SELECT
+real con transporte simulado y el bloqueo real de la biblioteca compilada:
+registro apagado por defecto, selección exitosa, rechazo de seguridad,
+fallo de transporte y reset detectado durante bloqueo. Comprueban los
+contadores para detectar comandos/reintentos añadidos y la conservación
+de resultados. El reset y los rechazos son simulados; no son nuevas
+observaciones de hardware. La compilación completa sin PC/SC pasó.
+Informes: `build/opensc-offline/chipdoc-context-trace-tests.log` y
+`chipdoc-context-trace-build.log`. Falta ejecutar este registro ampliado
+en el lector del usuario; no se ha corregido aún el rechazo RSA del firmador.
