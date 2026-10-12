@@ -1961,3 +1961,114 @@ repetir la operación fallida. El registro permitirá comprobar recuperación,
 nuevo VERIFY y firma tras el cambio de estado; después seguirán concurrencia
 y contexto cambiado por otro cliente. No activar la candidata por defecto
 antes de validar estos límites.
+
+## Retirada/reinserción: error antes de VERIFY, 2026-10-12, 01:15
+
+`local/jcop3-firmador-api-9ujB6ts6/report.txt` registra 07:15:42 UTC,
+OpenSC `381c469b2` limpio y candidata de consulta física/VERIFY real activa.
+El principal está en `ecc6f22`, también limpio al comenzar la revisión.
+El usuario comunica NullPointerException de Java: no puede llamar
+`sun.security.pkcs11.KeyCache.clear()` porque `this.secretCache` es null.
+También informa que firmador admite `-dargs entrada.pdf salida.pdf` y PIN
+desde stdin mediante `pass personal/firma-digital/pin | firmador ...`.
+Luego confirma que desea conservar la GUI para probar reinserción.
+
+Los 238 eventos muestran una primera firma exitosa con un VERIFY real,
+C_Login OK, llave 3, RSA AT `9000`, 256 bytes y C_SignFinal OK. El PDF
+`local/jcop3-reinsert-before.pdf` de 80465 bytes tiene CAdES, certificado de
+LlaveDeFirma, CMS RFC 3161 e imprint SHA-512 verificados con OpenSSL. Conserva
+original y página sin anotaciones. Copia privada e informe:
+`local/jcop3-pdf-verification-gp6kyfuv/report.json`. No se validaron confianza
+ni revocación. No hay PDF posterior a reinserción guardado.
+
+Después de esa primera firma:
+
+- Cinco CARD_LOCK devuelven **SC_ERROR_CARD_REMOVED (-1105)**. Cuatro pertenecen
+  a consultas token y uno al segundo login; no son rechazos del PIN ni RSA.
+- Las consultas invalidan las observaciones físicas, pero C_GetTokenInfo
+  devuelve CKR_OK porque el framework no propaga ese error de lectura del PIN.
+  Esto es comportamiento del camino existente, no una corrección de recuperación.
+- Un logout software pasa. El segundo C_Login devuelve **CKR_DEVICE_REMOVED
+  (0x32)** desde sc_lock, antes de seleccionar ruta o ejecutar VERIFY real.
+- Una nueva C_OpenSession devuelve OK, pero C_GetSessionInfo termina con
+  **CKR_SESSION_HANDLE_INVALID (0xB3)**. No hay segundo VERIFY, operación RSA,
+  revalidación ni firma. No se registra CARD_RESET.
+
+Resumen privado: `local/jcop3-firmador-api-9ujB6ts6/analysis.json`.
+La captura no contiene C_GetSlotInfo, detección de presencia o invalidación
+del token; no permite reconstruir exactamente cuándo ocurrió el cambio de
+tarjeta o por qué se invalidó la última sesión. No afirmar todavía que toda
+reinserción falla, ni que sea un PIN incorrecto o un problema de Internet.
+
+Se revisaron **sin ejecutar la aplicación** el lanzador y el bytecode del
+firmador 2.0.0 instalado, y el código fuente local del OpenJDK
+21.0.12.1+1 fijado por su wrapper. En `Token.java`, el constructor obtiene
+una sesión antes de asignar `secretCache`, `privateCache` y `sessionManager`.
+`Session.id()` llama a `Token.isPresent()`, que consulta slot y sesión; ante
+error puede llamar a `destroy()`. Esta rutina ejecuta `secretCache.clear()`
+sin comprobar inicialización. Es una explicación consistente con la excepción
+y la sesión inválida durante inicialización; falta un stack trace completo
+para confirmar la cadena exacta de esa ejecución. No se confirmó una versión
+Java que lo resuelva ni se cambió Java o firmador. La consulta de fuentes
+externas no aportó un reporte exacto; la evidencia usada es el código local.
+
+### Diagnóstico GUI preparado y modo CLI adicional
+
+Se ampliaron exclusivamente los metadatos optativos, sin nuevos comandos
+a la tarjeta ni cambios de resultados/recuperación:
+
+| Evento | Campos públicos |
+| --- | --- |
+| C_GetSlotInfo_BEGIN | a = slot ID, b = 0 |
+| C_GetSlotInfo | rv = resultado PKCS#11, a = slot ID, b = flags solo si pasa |
+| CARD_PRESENCE | rv = resultado firmado de sc_detect_card_presence, a/b = 0 |
+| SLOT_TOKEN_REMOVED | a = slot ID, b = si antes estaba presente; inicio de limpieza de sesiones/objetos |
+
+El diagnóstico conserva PIN y APDU fuera de los informes, depuración 0,
+consultas físicas y VERIFY real. El próximo caso sigue siendo **la GUI**:
+compilar, guardar commits y abrir `make firmador/jcop3-pin-status-in-place`.
+Firmar el original hacia `local/jcop3-hotplug-trace-before.pdf`; retirar
+solo la tarjeta, esperar cinco segundos, reinsertar la misma, esperar otros
+cinco y abrir de nuevo el original para
+`local/jcop3-hotplug-trace-after.pdf`. Mantener lector conectado y GUI abierta.
+Anotar si la interfaz indicó retirada/reinserción. Detenerse ante un error
+sin repetir la operación y cerrar al terminar. Las esperas permiten observar
+presencia fuera de la tarjeta; un pase no valida reinserción rápida o todos
+los cambios de sesión. No son una corrección implementada en el driver.
+
+Se añadió `make firmador/jcop3-cli`, con `PDF_INPUT=doc.pdf` y
+`PDF_OUTPUT=local/jcop3-cli.pdf` por defecto. El wrapper activa la misma
+candidata, configuración privada y diagnóstico, y ejecuta
+`firmador -dargs entrada salida` preservando stdin. No invoca pass ni lee,
+copia, registra o exporta el PIN; rechaza entrada ausente, salida existente
+y directorio de salida inexistente antes de llamar a firmador. El informe
+incluye `launch_mode=cli` o `gui`. Las rutas PDF son argumentos, el PIN no.
+
+La revisión estática de GUISelector/GUIArgs confirma `-dargs`, lectura
+sin eco mediante Console si es interactivo, y lectura de stdin por caracteres
+si recibe un pipe. GUIArgs limpia su char[] y destruye la protección del PIN
+al terminar. Esto no prueba todo el tratamiento de credenciales en Java;
+no se registró una sesión autenticada ni se ejecutó pass desde el agente.
+Su consulta pública de lectores terminó con `No smart card readers found`.
+El usuario puede ejecutar explícitamente:
+
+```bash
+set -o pipefail
+pass personal/firma-digital/pin | make firmador/jcop3-cli
+```
+
+Es una prueba adicional en un proceso nuevo, no sustituto del caso de GUI
+con retirada/reinserción. No incorporó el almacén de pass al proyecto ni
+guardó secretos en archivos. El helper técnico sign-jcop3.sh sigue exigiendo
+TTY y no admite ese pipe.
+
+Pasan **237 comprobaciones** sin tarjeta: las 228 anteriores, con cobertura
+de nombres/metadatos nuevos, y nueve pruebas del lanzador con firmador/git
+simulados y stdin sintético. Cubren argumentos con espacios, flujo stdin sin
+incluirlo en informe/argv, propagación de salida, rechazo de archivos inválidos,
+permisos privados y conservación de los cuatro modos GUI con variables
+heredadas adversas. No usan el pass real ni Java, lector o PIN real.
+La compilación completa sin PC/SC y sintaxis Bash pasaron; informes
+`build/opensc-offline/chipdoc-hotplug-trace-build.log` y
+`build/opensc-offline/chipdoc-hotplug-trace-tests.log`.
+El diagnóstico ampliado y el CLI aún no se probaron en hardware.

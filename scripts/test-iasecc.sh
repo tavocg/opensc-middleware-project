@@ -28,3 +28,4 @@ for task_test in iasecc-fci iasecc-pin-path iasecc-key-path iasecc-sdo iasecc-pi
 done
 bash "$task_root/tests/sha256-digestinfo.sh"
 bash "$task_root/tests/pkcs11-sign-fallback.sh" "$task_build"
+bash "$task_root/tests/firmador-launcher.sh"

@@ -42,12 +42,20 @@ int main(void)
 	int preserved_errno = errno;
 	sc_pkcs11_api_trace(SC_API_SIGN_FINAL, 2, CKR_USER_NOT_LOGGED_IN, 1, 0);
 	sc_pkcs11_api_trace(SC_API_SIGN_KEY, 2, CKR_OK, 3, 2048);
+	sc_pkcs11_api_trace(SC_API_SLOT_INFO_BEGIN, 0, CKR_OK, 5, 0);
+	sc_pkcs11_api_trace(SC_API_CARD_PRESENCE, 0, 0, 0, 0);
+	sc_pkcs11_api_trace(SC_API_SLOT_TOKEN_REMOVED, 0, CKR_OK, 5, 1);
+	sc_pkcs11_api_trace(SC_API_SLOT_INFO, 0, CKR_OK, 5, CKF_REMOVABLE_DEVICE);
 	read_trace(path, output, sizeof(output));
 	check("API trace contains only fixed event names and numeric metadata, preserving errno",
 			preserved_errno == EDOM && !strcmp(output,
 			"C_Login session=0x1 rv=0x0 a=0x1 b=0x0\n"
 			"C_SignFinal session=0x2 rv=0x101 a=0x1 b=0x0\n"
-			"SIGN_KEY session=0x2 rv=0x0 a=0x3 b=0x800\n"));
+			"SIGN_KEY session=0x2 rv=0x0 a=0x3 b=0x800\n"
+			"C_GetSlotInfo_BEGIN session=0x0 rv=0x0 a=0x5 b=0x0\n"
+			"CARD_PRESENCE session=0x0 rv=0x0 a=0x0 b=0x0\n"
+			"SLOT_TOKEN_REMOVED session=0x0 rv=0x0 a=0x5 b=0x1\n"
+			"C_GetSlotInfo session=0x0 rv=0x0 a=0x5 b=0x2\n"));
 	size_t length = strlen(output);
 	sc_pkcs11_api_trace((enum sc_api_trace_event)-1, 0, 0, 0, 0);
 	sc_pkcs11_api_trace((enum sc_api_trace_event)999, 0, 0, 0, 0);

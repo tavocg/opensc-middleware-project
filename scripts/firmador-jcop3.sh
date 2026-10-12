@@ -7,6 +7,8 @@ task_module="$task_root/build/opensc/src/pkcs11/.libs/opensc-pkcs11.so"
 task_trace_api=no
 task_session_state=no
 task_pin_status_in_place=no
+task_launch_mode=gui
+task_args=()
 
 if (( $# == 1 )) && [[ $1 == --trace-api ]]; then
     task_trace_api=yes
@@ -16,8 +18,25 @@ elif (( $# == 1 )) && [[ $1 == --session-state ]]; then
 elif (( $# == 1 )) && [[ $1 == --pin-status-in-place ]]; then
     task_trace_api=yes
     task_pin_status_in_place=yes
+elif (( $# == 3 )) && [[ $1 == --cli ]]; then
+    task_trace_api=yes
+    task_pin_status_in_place=yes
+    task_launch_mode=cli
+    task_input=$2
+    task_result=$3
+    [[ $task_input == /* ]] || task_input="$task_root/$task_input"
+    [[ $task_result == /* ]] || task_result="$task_root/$task_result"
+    if [[ ! -f "$task_input" || ! -r "$task_input" ]]; then
+        printf 'No se puede leer el PDF de entrada.\n' >&2
+        exit 2
+    fi
+    if [[ -e "$task_result" || -L "$task_result" ]]; then
+        printf 'La salida ya existe; elegir otro nombre para conservar las pruebas.\n' >&2
+        exit 2
+    fi
+    task_args=(-dargs "$task_input" "$task_result")
 elif (( $# != 0 )); then
-    printf 'Uso: make firmador/jcop3, make firmador/jcop3-diagnose, make firmador/jcop3-session-state o make firmador/jcop3-pin-status-in-place\n' >&2
+    printf 'Uso: make firmador/jcop3, make firmador/jcop3-diagnose, make firmador/jcop3-session-state, make firmador/jcop3-pin-status-in-place o make firmador/jcop3-cli\n' >&2
     exit 2
 fi
 if [[ ! -r "$task_module" ]]; then
@@ -30,6 +49,10 @@ if ! command -v firmador >/dev/null 2>&1; then
 fi
 
 mkdir -p -- "$task_root/local"
+if [[ $task_launch_mode == cli && ! -d $(dirname -- "$task_result") ]]; then
+    printf 'No existe el directorio de salida.\n' >&2
+    exit 2
+fi
 task_env=(env -u OPENSC_API_TRACE_FILE -u OPENSC_JCOP3_SESSION_STATE
     -u OPENSC_JCOP3_POST_LOGIN_STATUS -u OPENSC_JCOP3_POST_LOGIN_SELECT
     -u OPENSC_JCOP3_PIN_STATUS_IN_PLACE
@@ -42,6 +65,7 @@ if [[ $task_trace_api == yes ]]; then
     {
         printf 'date_utc=%s\nmodule=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$task_module"
         printf 'session_state_experiment=%s\n' "$task_session_state"
+        printf 'launch_mode=%s\n' "$task_launch_mode"
         printf 'pin_status_in_place_experiment=%s\n' "$task_pin_status_in_place"
         if [[ $task_session_state == yes ]]; then
             printf 'pin_query_experiment=session_and_token_info\n'
@@ -80,4 +104,6 @@ app default {
 CONFIG
 
 printf 'Módulo: %s\nConfiguración: %s\n' "$task_module" "$task_config"
-exec "${task_env[@]}" OPENSC_CONF="$task_config" firmador
+# Preserve stdin directly: in CLI mode firmador reads the PIN itself.
+# Do not read/store it in Bash, pass it in argv/environment, or redirect logs.
+exec "${task_env[@]}" OPENSC_CONF="$task_config" firmador "${task_args[@]}"

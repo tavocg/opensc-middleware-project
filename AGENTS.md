@@ -1,26 +1,25 @@
 # libjcop3p11: contexto para continuar
 
 Estado actualizado el **12 de octubre de 2026**, después de revisar la
-prueba de las **01:07 de Costa Rica** (07:07 UTC). **Pasaron dos firmas del
-original en la misma instancia de firmador, con dos VERIFY reales y ambos
-PDF y sellos de tiempo verificados con OpenSSL.** Captura:
-`local/jcop3-firmador-api-fgRfkdCF/`, OpenSC `381c469b2`.
-Firmador hace logout entre documentos y un nuevo login; pedir PIN dos veces
-es esperado en esta secuencia. La candidata no almacena el hash del PIN y
-mantiene consultas físicas sin reseleccionar raíz después de autenticar.
-Cada operación RSA usa llave 3, SHA256-RSA-PKCS y produce 256 bytes.
-Informes privados de PDF: `jcop3-pdf-verification-w2t9vw2q` y
-`jcop3-pdf-verification-_5f871pd`. Certificado de LlaveDeFirma, CMS CAdES,
-CMS RFC 3161 e imprint SHA-512 verificados; página original conservada.
-No se validaron confianza ni revocación. La candidata sigue optativa.
-Pasan las 228 regresiones y la compilación anteriores; no hubo cambios de
-código durante esta revisión. **No recompilar ni repetir firmas consecutivas
-como primer paso.** Siguiente intervención: retirada/reinserción tras una
-firma en la misma instancia, manteniendo el lector conectado. Después faltan
-concurrencia y contexto cambiado por otro cliente antes de decidir activar
-el comportamiento por defecto.
-Leer este archivo al retomar y contrastar Git y las capturas más recientes;
-no afirma soporte completo de la tarjeta.
+prueba de retirada/reinserción de las **01:15 de Costa Rica** (07:15 UTC).
+Las dos firmas consecutivas anteriores siguen verificadas con OpenSSL.
+**La recuperación en la misma GUI falló antes del segundo VERIFY**:
+sc_lock devuelve SC_ERROR_CARD_REMOVED (-1105), C_Login CKR_DEVICE_REMOVED
+(0x32) y una sesión posterior CKR_SESSION_HANDLE_INVALID (0xB3). El usuario
+recibió NullPointerException de Java al limpiar Token.secretCache aún null.
+Captura: `local/jcop3-firmador-api-9ujB6ts6/`, OpenSC `381c469b2`.
+El PDF previo a retirar la tarjeta tiene firma/sello verificados; no hay
+PDF posterior. El registro no observa todavía presencia/invalidación de slot.
+Se prepararon metadatos adicionales, sin cambiar recuperación ni comandos,
+y `make firmador/jcop3-cli` para el modo -dargs con PIN directo por stdin.
+El usuario autoriza usar `pass personal/firma-digital/pin | firmador ...`,
+pero confirma que se debe conservar **la GUI para investigar reinserción**.
+El agente no ejecutó pass ni una firma CLI; no detecta lectores. Pasan 237
+comprobaciones y compilación sin PC/SC. El diagnóstico nuevo requiere
+compilar desde la terminal del usuario antes de la siguiente prueba GUI.
+La candidata sigue optativa. No afirmar soporte completo o recuperación
+resuelta ni validar confianza/revocación solo por las firmas comprobadas.
+Leer este archivo al retomar y contrastar Git y las capturas más recientes.
 
 ## Objetivo y alcance
 
@@ -109,7 +108,7 @@ selecciona slot PKCS#11; no son necesariamente el mismo índice.
 `inspect/jcop3-pkcs11`, los diagnósticos de política, `sign/jcop3`,
 `sign/jcop3-sha256`, `sign/jcop3-pin-status`, `sign/jcop3-select-root`,
 `firmador/jcop3`, `firmador/jcop3-diagnose`, `firmador/jcop3-session-state` y
-`firmador/jcop3-pin-status-in-place` utilizan
+`firmador/jcop3-pin-status-in-place` y `firmador/jcop3-cli` utilizan
 la compilación existente: **no recompilan**.
 
 Las restricciones del entorno del agente pueden impedir usar el daemon de
@@ -120,17 +119,17 @@ pero no valida comunicación con la tarjeta.
 
 Los últimos commits guardados son:
 
-- Repositorio principal: **`2ab0042`**, `Test consecutive ChipDoc logins`.
+- Repositorio principal: **`ecc6f22`**, `Document consecutive signing success`.
 - Submódulo OpenSC: **`381c469b2`**, `Verify ChipDoc PIN on each login`.
 - Base upstream original: `c7a377af971df03f879c1697e91ebac1f7e28c56`.
 
-Ambos árboles estaban limpios al comenzar a revisar la captura de las 01:07.
-La ampliación de la candidata (VERIFY real por login y sin atajo SHA-1),
-eventos numéricos, regresiones y lanzador ya están comprometidos y compilados
-por el usuario. La prueba de dos firmas consecutivas pasó en hardware y
-ambos PDF se verificaron localmente. Los cambios nuevos solo documentan
-este resultado y el próximo caso; no requieren recompilar. No hay commits
-nuevos del agente.
+Ambos árboles estaban limpios al comenzar a revisar la captura de las 01:15.
+La candidata de consultas sin reselección y VERIFY real por login ya está
+comprometida y compilada por el usuario. Los cambios locales nuevos solo
+amplían diagnóstico de presencia/slots/invalidez de sesiones, agregan modo
+CLI al lanzador y Make, sus regresiones y documentación. No cambian RSA,
+PIN, APDU ni recuperación. Falta compilarlos con PC/SC y probarlos en GUI;
+el CLI aún no se probó con tarjeta. No hay commits nuevos del agente.
 
 La URL del submódulo aún es `https://github.com/OpenSC/OpenSC.git`. Los commits
 locales del driver necesitarán publicarse en un fork y actualizar esa URL
@@ -236,18 +235,18 @@ El nuevo objetivo `make firmador/jcop3` proporciona esa configuración local.
 
 ## Verificación y últimas capturas
 
-Hay **228 comprobaciones de regresión** en doce fixtures C: `iasecc-fci.c`,
+Hay **237 comprobaciones de regresión** en doce fixtures C: `iasecc-fci.c`,
 `iasecc-pin-path.c`, `iasecc-key-path.c`, `iasecc-sdo.c`, `iasecc-pin-policy.c`
 y `iasecc-sign-setup.c`, más `iasecc-rsa-pkcs.c`, `pkcs11-api-trace.c`,
 `pkcs11-session-state.c`, `iasecc-context-trace.c`,
 `iasecc-post-login-status.c`, `pkcs15-pin-status-in-place.c`, y los scripts
-`sha256-digestinfo.sh` y `pkcs11-sign-fallback.sh`, este último con un módulo C
+`sha256-digestinfo.sh`, `firmador-launcher.sh` y `pkcs11-sign-fallback.sh`, este último con un módulo C
 PKCS#11 completamente simulado. Incluyen respuestas
 capturadas, conservación/copia de metadatos, rechazo de perfiles distintos y
 transporte simulado que verifica que cambio/desbloqueo no autentican.
 Pasaron en la comprobación local; también terminó la compilación completa
-sin PC/SC, registrada en `build/opensc-offline/chipdoc-fresh-verify-build.log`.
-Las últimas regresiones están en `build/opensc-offline/chipdoc-fresh-verify-tests.log`.
+sin PC/SC, registrada en `build/opensc-offline/chipdoc-hotplug-trace-build.log`.
+Las últimas regresiones están en `build/opensc-offline/chipdoc-hotplug-trace-tests.log`.
 Esto no sustituye pruebas de firma en hardware.
 El lanzador de firmador, en modos normal, diagnóstico y experimento de sesión,
 pasó sintaxis y una ejecución con
@@ -290,6 +289,7 @@ abrió Java ni accedió al lector.
 | **`jcop3-firmador-api-UpCXoCn0/api.log`** | 12 de octubre, 06:47:51 UTC, OpenSC `23b3d25fa`: un login y una firma RSA exitosa, cuatro consultas físicas autenticadas |
 | **`jcop3-firmador-api-LB7oJvqS/api.log`** | 12 de octubre, 06:48:43 UTC: primera firma exitosa, logout software, CHV sigue autenticado, un SELECT raíz antes de segundo login exitoso; segunda RSA `6982`; primer PDF consecutivo y sello verificados |
 | **`jcop3-firmador-api-fgRfkdCF/api.log`** | 12 de octubre, 07:07:46 UTC, OpenSC `381c469b2`: dos logins con VERIFY real, logout intermedio, consultas físicas autenticadas sin reselección, ambas RSA `9000` de 256 bytes; los dos PDF y sellos se verificaron |
+| **`jcop3-firmador-api-9ujB6ts6/api.log`** | 12 de octubre, 07:15:42 UTC: primera firma OK y PDF verificado; tras retirada/reinserción cinco bloqueos -1105, segundo login CKR_DEVICE_REMOVED antes de VERIFY y sesión final inválida; Java NullPointerException Token.secretCache null |
 
 Los informes PKCS#11 y DOCP RSA de las 21:34 UTC ya se revisaron: **no pedir ejecutarlos de nuevo como
 primer paso**. Los DOCP RSA se reprodujeron en las regresiones del parser
@@ -425,19 +425,31 @@ internos de parsing: revisar las respuestas y el contexto.
    original, texto y página sin anotaciones conservados. No se validaron
    confianza ni revocación. Para versiones previas usar las copias y hashes
    de cada informe, no nombres o tamaños. No publicar esos archivos.
-3. **Siguiente intervención: retirada/reinserción en la misma instancia.**
-   Guardar la documentación mediante comandos de commit para el usuario,
-   sin tocar el submódulo ni recompilar este mismo código. Cerrar instancias
-   previas y abrir `make firmador/jcop3-pin-status-in-place`. Firmar el original
-   `doc.pdf` con LlaveDeFirma, guardando `local/jcop3-reinsert-before.pdf`.
-   Después de completar y guardar, retirar solo la tarjeta, dejar el lector
-   conectado y firmador abierto, reinsertar la misma tarjeta y volver a abrir
-   el original para guardar `local/jcop3-reinsert-after.pdf`. Observar detección
-   de tarjeta y petición de PIN. Detenerse ante el primer error, sin repetir
-   la operación fallida; cerrar al terminar. Esta prueba tiene un motivo
-   nuevo: recuperación tras cambio real de estado, no otra repetición de las
-   firmas consecutivas. Revisar reset/reattachment, estado, VERIFY, sesiones y
-   firma; verificar ambos PDF localmente después. El agente no tiene lector.
+3. **La reinserción ya se probó y falló; no repetir el mismo diagnóstico.**
+   Captura `9ujB6ts6`, resumen privado `analysis.json`. Una primera firma
+   y su sello se verificaron: `local/jcop3-reinsert-before.pdf`, informe
+   `local/jcop3-pdf-verification-gp6kyfuv/report.json`. No hay PDF after.
+   Segundo login se detiene en sc_lock antes de VERIFY; no es rechazo RSA.
+   C_GetTokenInfo devuelve OK pese al error de consulta de PIN; eso no
+   acredita presencia de tarjeta ni recuperación. Falta ver cuándo se
+   actualiza presencia y se invalidan sesiones. El código local Java 21
+   abre una sesión antes de inicializar secretCache; Session.id verifica
+   presencia y puede llamar destroy, que no comprueba null. La excepción
+   encaja con esa inicialización incompleta; sin stack trace no afirmar la
+   cadena exacta ni que se arregle cambiando solo Java o solo OpenSC.
+   **Próxima intervención GUI con metadatos ampliados:** compilar mediante
+   `make test/iasecc JOBS="$(nproc)"`, guardar commits primero en submódulo
+   (api-trace.h, pkcs11-global.c, slot.c), después principal con su puntero,
+   lanzador, Make, tests y documentación. Cerrar otras instancias y abrir
+   `make firmador/jcop3-pin-status-in-place`. Firmar el original doc.pdf hacia
+   `local/jcop3-hotplug-trace-before.pdf`. Mantener GUI abierta y lector
+   conectado; retirar solo tarjeta, esperar cinco segundos, reinsertar la
+   misma y esperar cinco segundos antes de abrir y firmar el original hacia
+   `local/jcop3-hotplug-trace-after.pdf`. Anotar si la GUI muestra el cambio.
+   Detenerse ante el primer error, sin repetir; cerrar al terminar. Las
+   esperas permiten observar ausencia; no son una corrección ni validan
+   reinserción rápida. Revisar C_GetSlotInfo_BEGIN/fin, CARD_PRESENCE y
+   SLOT_TOKEN_REMOVED, sesiones, nuevo VERIFY y firma. Verificar PDF después.
 4. La candidata sigue **optativa** mediante
    `OPENSC_JCOP3_PIN_STATUS_IN_PLACE=yes`. PKCS#15 usa estado físico sin SELECT,
    limitado a Amos + Generic PKI + CHV global 1 + MF FILE_ID, excluyendo SO/PUK.
@@ -449,7 +461,7 @@ internos de parsing: revisar las respuestas y el contexto.
    para VERIFY explícito Amos + Generic PKI completo + CHV global 1. Conserva
    estado previo, política/ACL/límites y un VERIFY real con la entrada del
    usuario, sin reintentos. No modifica logout físico. Fuera del opt-in se
-   conserva el camino anterior. Pasan 228 regresiones. No activar caché PIN.
+   conserva el camino anterior. Pasan 237 regresiones. No activar caché PIN.
 5. CARD_PIN_VERIFY y CARD_PIN_VERIFY_CACHED indican resultado del VERIFY
    mediante el driver ISO o retorno anticipado por hash. Llevan retorno y
    referencia pública, sin valor, longitud ni hash del PIN. El informe
@@ -462,23 +474,45 @@ internos de parsing: revisar las respuestas y el contexto.
    raíz aislado ya reprodujo `6982`; C9 sigue sin significado confirmado.
    No activar atomic/lock_login, modificar PIN/llaves/ACL, forzar reset/logout
    físico ni capturar APDU autenticadas como arreglo especulativo.
-6. Tras reinserción, validar sesiones, pérdida de autenticación, concurrencia
-   y contexto cambiado por otro cliente. Preparar intervenciones concretas y
-   no automatizar reintentos de PIN. Decidir activación por defecto con evidencia
-   suficiente. Antes de upstream, preservar la rama y reproducir contra master
+6. **Modo CLI adicional preparado, no sustituto del caso GUI.** El usuario
+   informó -dargs y autorizó PIN desde pass por stdin. Revisión estática de
+   GUISelector/GUIArgs confirma entrada desde pipe, sin argumentos del PIN,
+   y limpieza de su char[]. `make firmador/jcop3-cli` activa misma candidata,
+   configuración privada y metadatos; PDF_INPUT=doc.pdf y
+   PDF_OUTPUT=local/jcop3-cli.pdf por defecto. El wrapper no ejecuta pass ni
+   lee/copia/guarda PIN: exec conserva stdin hacia firmador. Rechaza entrada
+   ausente, salida existente y directorio inexistente. Usar explícitamente:
+
+   ```bash
+   set -o pipefail
+   pass personal/firma-digital/pin | make firmador/jcop3-cli
+   ```
+
+   El agente aún no ejecutó una firma CLI y sigue sin lectores. Nueve pruebas
+   nuevas del lanzador usan firmador/git falsos y stdin sintético, no pass ni
+   Java reales; no son repositorios alternativos ni commits. Verifican rutas
+   con espacios, stdin, salida 17, privacidad, rechazos y cuatro modos GUI.
+   El helper técnico sign-jcop3.sh conserva su requisito TTY.
+7. Tras recuperar reinserción, validar sesiones, pérdida de autenticación,
+   concurrencia y contexto cambiado por otro cliente. Preparar intervenciones
+   concretas, sin reintentos automáticos de PIN. Decidir activación por defecto
+   con evidencia. Antes de upstream, preservar rama y reproducir contra master
    actual según vendor/opensc/AGENTS.md. Si cambia código, dar comandos de commit
    al usuario: submódulo primero, principal después con su puntero. Ampliar
    mecanismos y plataformas antes de afirmar soporte completo. No generar llaves.
 
-**Dos firmas consecutivas del firmador y ambos PDF/sellos están verificados
-con la candidata que consulta estado físico sin reselección y ejecuta VERIFY
-real por login. Recuperación/reinserción, concurrencia, activación por defecto
-y confianza/revocación siguen pendientes.**
+**Dos firmas consecutivas y ambos PDF/sellos están verificados. Reinserción
+falló antes de VERIFY y hay diagnóstico ampliado preparado; el usuario
+prefiere investigar este caso con GUI. CLI con stdin está preparado como
+prueba adicional. Recuperación, concurrencia y activación siguen pendientes.**
 
 ## PIN, privacidad e Idopte
 
-- El PIN se introduce únicamente por el usuario en una terminal, sin eco;
-  nunca en argumentos, variables de entorno, archivos, chat o informes.
+- El PIN lo introduce el usuario sin eco en terminal/GUI, o lo entrega a
+  firmador CLI por stdin desde pass, según su autorización explícita.
+  Nunca ponerlo en argumentos, variables de entorno, archivos nuevos, chat,
+  informes o capturas. El almacén existente de pass queda fuera del proyecto;
+  el wrapper no lee ni guarda el flujo. No automatizar reintentos de PIN.
 - `sign-jcop3.sh` exige stdin y stdout TTY porque `util_getpass` usa stdout
   para desactivar el eco. No redirigir ni pasar por `tee` la salida del comando
   autenticado. El helper fija `OPENSC_DEBUG=0` y `debug = 0`.

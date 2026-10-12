@@ -25,7 +25,7 @@ medidas de la llave de firma. El mecanismo combinado `SHA256-RSA-PKCS`
 falló en `C_SignFinal`: el camino QSign no soporta OpenSSL 3. El helper
 prepara el DigestInfo SHA-256 en el equipo y pide `RSA-PKCS` a la tarjeta.
 El 11 de octubre de 2026 a las 20:18 de Costa Rica, esta ruta produjo una
-firma de 256 bytes y OpenSSL confirmó `Verified OK`. Pasan 228 comprobaciones
+firma de 256 bytes y OpenSSL confirmó `Verified OK`. Pasan 237 comprobaciones
 locales. Para reproducir la prueba técnica:
 
 ```bash
@@ -128,12 +128,33 @@ firmas consecutivas pasaron**. El registro confirma dos VERIFY reales y
 dos operaciones RSA de 256 bytes; OpenSSL verificó la firma y el sello de
 ambos PDF. Firmador hace logout entre documentos y un nuevo login, por eso
 pidió PIN dos veces en esta prueba. No se validaron confianza ni revocación.
-La candidata sigue desactivada por defecto. El siguiente caso es retirar y
-reinsertar la misma tarjeta después de una firma, manteniendo firmador abierto
-y el lector conectado. Usar el mismo objetivo y biblioteca ya compilada,
-guardando ambos resultados en `local/`; detenerse ante un error sin repetirlo.
-El registro numérico incluye CARD_PIN_VERIFY/CARD_PIN_VERIFY_CACHED, sin
-valor, longitud ni hash del PIN. Recuperación y concurrencia siguen pendientes.
+La prueba de retirada/reinserción falló antes del segundo VERIFY: los bloqueos
+devuelven tarjeta retirada, el login CKR_DEVICE_REMOVED y Java termina con
+NullPointerException al limpiar `Token.secretCache`. La firma anterior a
+retirar la tarjeta sí se verificó. El diagnóstico nuevo añade consultas de
+slot, presencia y comienzo de invalidación de tokens, sin cambiar recuperación
+ni registrar PIN/APDU. Compilar con `make test/iasecc JOBS="$(nproc)"` antes de
+repetir este caso en `make firmador/jcop3-pin-status-in-place`. Mantener lector
+y GUI abiertos; esperar cinco segundos con tarjeta retirada y otros cinco
+tras reinsertarla antes de la siguiente firma. Detenerse ante un error.
+La candidata sigue desactivada por defecto; recuperación y concurrencia
+siguen pendientes.
+
+También está preparado el modo de terminal, usando la misma candidata:
+
+```bash
+set -o pipefail
+pass personal/firma-digital/pin | make firmador/jcop3-cli
+```
+
+Firma `doc.pdf` hacia `local/jcop3-cli.pdf`; se pueden cambiar con `PDF_INPUT`
+y `PDF_OUTPUT`. Rechaza una salida ya existente. El usuario autorizó enviar
+el PIN desde su gestor por stdin: el wrapper no lo lee, almacena ni pasa en
+argumentos o variables; firmador `-dargs` recibe el flujo directamente.
+No redirigir ni capturar ese flujo como registro. El agente no ejecutó `pass`
+ni esta firma: su entorno no detecta lectores. La prueba GUI de reinserción
+sigue siendo el próximo caso; una ejecución CLI nueva no valida recuperación
+en una instancia existente.
 
 ## Organización
 
