@@ -29,3 +29,4 @@ done
 bash "$task_root/tests/sha256-digestinfo.sh"
 bash "$task_root/tests/pkcs11-sign-fallback.sh" "$task_build"
 bash "$task_root/tests/firmador-launcher.sh"
+bash "$task_root/tests/peer-context-launcher.sh"

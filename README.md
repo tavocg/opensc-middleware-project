@@ -141,7 +141,7 @@ La prueba rápida de las 01:46 reprodujo el fallo: OpenSC observó tarjeta
 cambiada pero conservó el token/conexión anterior. Se corrigió localmente
 card_detect para procesar CARD_CHANGED aunque la espera de eventos no vea
 novedades, invalidar sesiones y reconectar. El límite de reintentos ahora
-se renueva por llamada. Pasan 256 comprobaciones sin tarjeta, incluyendo
+se renueva por llamada. Pasan 262 comprobaciones sin tarjeta, incluyendo
 19 de detección, sesiones nuevas sin autenticación y fallos de reconexión.
 Con OpenSC `8842f394b`, la prueba GUI de las 02:02 **pasó con reinserción
 rápida**: se procesó el cambio aunque no se observó ausencia, se limpió el
@@ -168,9 +168,19 @@ SHA256-RSA-PKCS, firma de 256 bytes y PDF/sello verificados con OpenSSL.
 La página original se conserva; no se validaron confianza ni revocación.
 El agente no ejecutó pass ni la firma: verificó el resultado sin lector,
 PIN o red. La salida ya existe, por lo que otra prueba requiere otro PDF_OUTPUT.
-El próximo caso GUI son cuatro reinserciones sucesivas en la misma instancia,
-con cinco firmas del original y archivos nuevos. Las 256 regresiones siguen
-vigentes; no se modificó el driver tras el pase. La candidata sigue optativa.
+La prueba GUI de ciclos repetidos también pasó: seis VERIFY/firmas, cuatro
+cambios de tarjeta procesados y seis PDF/sellos verificados (cinco previstos
+y uno extra). El driver no cambió tras el pase; la candidata sigue optativa.
+Ahora pasan 262 regresiones, con seis nuevas del helper de segundo cliente.
+
+El próximo caso deja la GUI en reposo después de firmar el original hacia
+`local/jcop3-peer-before.pdf`, manteniendo tarjeta y lector conectados. Desde
+otra terminal con nix develop, ejecutar `make inspect/jcop3-peer-context`.
+Este helper manda solo SELECT raíz IAS observada, sin PIN/firma, con debug 0,
+y exige transporte exitoso y SW 9000. Si pasa, firmar nuevamente el original
+hacia `local/jcop3-peer-after.pdf`. Detenerse al primer error y cerrar al terminar.
+Así se prueba otro cliente entre firmas; no operaciones de firma simultáneas.
+El helper usa la compilación existente; no requiere recompilar.
 
 ## Organización
 

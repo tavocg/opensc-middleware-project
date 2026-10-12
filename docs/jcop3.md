@@ -55,7 +55,8 @@ Git; el script ahora usa `--info` para registrar la versión y funciones habilit
 - [x] Una firma con el mecanismo observado se verifica externamente.
 - [x] Firma reproducida sin cargar Idopte, en GUI y CLI.
 - [x] Retirada/reinserción rápida en la misma GUI, con PDF verificados.
-- [ ] Ciclos reales repetidos, errores adicionales y clientes concurrentes comprobados.
+- [x] Cuatro ciclos reales de reinserción con seis firmas verificadas.
+- [ ] Errores adicionales y clientes concurrentes comprobados.
 
 ## Registro de comandos observados
 
@@ -2347,3 +2348,92 @@ cinco firmas y cuatro reinserciones. Detenerse al primer error sin reintentar
 PIN y cerrar al terminar. Revisar nuevo VERIFY por login, limpieza/sesiones
 y cada PDF antes de declarar recuperación repetida. Después, comprobar
 interferencia de otro cliente y concurrencia, preservando esta evidencia.
+
+## Ciclos repetidos: cuatro cambios y seis firmas verificadas, 2026-10-12, 02:18
+
+`local/jcop3-firmador-api-tYcckn70/report.txt` registra 08:18:56 UTC,
+modo GUI y candidata activa, OpenSC `8842f394b` limpio. Principal `e72fa35`;
+ambos árboles limpios al comenzar la revisión. El usuario terminó el caso
+de firmas y reinserciones sucesivas en la misma instancia.
+
+La copia privada api-reviewed.log y analysis.json tienen **1170 eventos**:
+
+| Firma en orden de eventos | VERIFY | Login OK | C_SignFinal OK | Consultas físicas tras login | Limpieza de token activo desde firma anterior |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 1 | 152 | 153 | 246 | 4 | 0 |
+| 2 | 292 | 293 | 386 | 4 | 0 |
+| 3 | 490 | 491 | 576 | 3 | 1 |
+| 4 | 680 | 681 | 774 | 4 | 1 |
+| 5 | 878 | 879 | 972 | 4 | 1 |
+| 6 | 1076 | 1077 | 1170 | 4 | 1 |
+
+Los números son líneas de la copia revisada, no marcas de tiempo. Las seis
+operaciones usan LlaveDeFirma, referencia 3 RSA 2048, SHA256-RSA-PKCS, RSA AT
+`9000` y 256 bytes. No hay CARD_PIN_VERIFY_CACHED ni SELECT raíz entre login
+y firma. Todos los locks, sesiones abiertas y consultas de sesión pasan.
+
+Se observan **cuatro limpiezas de token activo**, en 388, 578, 776 y 974,
+seguidas cada una de nueva autenticación y firma. Las 32 marcas totales de
+SLOT_TOKEN_REMOVED también incluyen slots vacíos y rondas repetidas; solo
+cuatro tienen b=1. CARD_PRESENCE=3 y 7 incluyen CHANGED; 7 agrega INUSE
+(`SC_READER_CARD_INUSE=4`), no es un código de error. No se observó ausencia.
+El driver procesó los cambios sin mantener la conexión anterior. Las primeras
+dos firmas no tienen limpieza intermedia y prueban también login/VERIFY de
+nuevo después de logout software. Cinco consultas iniciales STATUS_ONLY
+NOT_SUPPORTED permiten cargar política tras conexión inicial y cuatro cambios.
+
+Había **seis PDF distintos**, incluidos los cinco previstos y un extra
+`local/jcop3-cycle-.pdf`. Todos se verificaron sin lector, PIN o red:
+
+| PDF | Tamaño | Informe privado bajo local/ |
+| --- | ---: | --- |
+| `jcop3-cycle-0.pdf` | 80485 | `jcop3-pdf-verification-fllc7uda/report.json` |
+| `jcop3-cycle-1.pdf` | 80485 | `jcop3-pdf-verification-dunhg6fo/report.json` |
+| `jcop3-cycle-2.pdf` | 80465 | `jcop3-pdf-verification-2060rvi6/report.json` |
+| `jcop3-cycle-3.pdf` | 80465 | `jcop3-pdf-verification-bxydwf47/report.json` |
+| `jcop3-cycle-4.pdf` | 80485 | `jcop3-pdf-verification-s_76kbg8/report.json` |
+| `jcop3-cycle-.pdf` | 80485 | `jcop3-pdf-verification-2d2zvgbi/report.json` |
+
+OpenSSL verifica CAdES con el certificado exacto de LlaveDeFirma y cada CMS
+RFC 3161/imprint SHA-512. Original, texto y render sin anotaciones se conservan.
+Las copias privadas conservan hashes distintos; no asignar cada evento a un
+nombre por su sufijo, dado que el registro no lleva nombres ni tiempos de
+firma. No se validaron confianza, revocación o LTV. El driver no cambió.
+Este resultado valida los ciclos observados; no otros lectores o concurrencia.
+
+### Segundo cliente público preparado
+
+Se añade `make inspect/jcop3-peer-context` y `scripts/peer-context-jcop3.sh`,
+usando opensc-tool de la compilación existente. Abre un cliente distinto,
+selecciona solo la raíz IAS observada (`F0496173456363526F6F74`) con driver
+default y termina. No solicita PIN, firma, lee componentes privados ni fuerza
+reset. Stdin vacío, OPENSC_DEBUG y configuración debug a 0, cachés desactivadas
+y variables heredadas de diagnóstico/experimentos eliminadas. El informe y
+configuración quedan privados en local/, prefijo jcop3-peer-context-.
+La salida normal de opensc-tool contiene solo el SELECT público y su respuesta;
+no se activa una captura APDU autenticada.
+
+El helper exige salida exitosa y la respuesta `SW1=0x90, SW2=0x00`, ya que
+opensc-tool puede devolver cero aunque el SELECT sea rechazado. Ante transporte,
+SW diferente o respuesta ausente se detiene, sin reintentos. La prueba incluye
+conexión, SELECT y desconexión conjuntamente; no aísla sus respectivos efectos.
+
+Seis regresiones nuevas con herramienta/git simulados comprueban un único
+SELECT exacto, stdin vacío, diagnóstico heredado desactivado, privacidad,
+propagación del fallo de transporte, rechazo de SW 6982 pese a salida cero,
+respuesta ausente, lector/argumentos inválidos y herramienta no compilada.
+Pasan **262 comprobaciones, cero FAIL** en
+`build/opensc-offline/peer-context-tests.log`; sintaxis Bash y ejecución Make
+simulada pasan. No se ejecutó el helper con tarjeta desde el agente y el
+caso del segundo cliente todavía está pendiente en hardware.
+
+Próxima intervención: cerrar otras instancias y abrir el objetivo GUI existente,
+firmar el original doc.pdf hacia `local/jcop3-peer-before.pdf`, dejar la GUI
+abierta y en reposo con tarjeta/lector conectados. Desde otra terminal con
+nix develop, ejecutar una vez `make inspect/jcop3-peer-context`. Solo si confirma
+SELECT 9000, abrir otra vez el original y firmar hacia
+`local/jcop3-peer-after.pdf`. No retirar la tarjeta ni ejecutar el helper
+durante login/firma. Detenerse al primer error sin repetir PIN y cerrar al
+terminar. Revisar ambas capturas y PDF. Esto prueba un segundo cliente entre
+firmas, no dos firmas simultáneas. Después se delimitará concurrencia real y
+se decidirá activación del perfil; no se ha preparado un reporte upstream.

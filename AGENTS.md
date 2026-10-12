@@ -1,25 +1,28 @@
 # libjcop3p11: contexto para continuar
 
-Estado actualizado el **12 de octubre de 2026**, tras revisar el primer CLI
-de las **02:11 de Costa Rica** (08:11 UTC), captura
-`local/jcop3-firmador-api-Z0aJ18Ge/`, OpenSC `8842f394b` limpio.
-**El CLI pasó y su PDF/sello están verificados con OpenSSL.** Hay 174 eventos:
-VERIFY real, login OK, llave 3 RSA 2048, SHA256-RSA-PKCS y firma de 256 bytes.
-Dos consultas físicas después del login, sin SELECT raíz ni atajo por hash.
-Informe privado `local/jcop3-pdf-verification-fttds461/report.json`, PDF
-`local/jcop3-cli.pdf` de 76918 bytes: original, texto y render conservados.
-No se validaron confianza/revocación o LTV. El usuario ejecutó pass por stdin;
-el agente no accedió a pass ni firmó, verificó resultados sin lector/PIN/red.
-La GUI ya pasó firmas consecutivas y reinserción rápida tras la corrección
-8842f394b. Sus copias privadas y capturas siguen en local/.
-Git al iniciar: principal `feaca6f`, submódulo `8842f394b`, limpios.
-Esta revisión cambia solo documentación; siguen vigentes las 256 regresiones.
-No recompilar ni repetir el primer CLI o el caso único de reinserción.
-Próxima intervención GUI: ciclos repetidos de reinserción en la misma instancia,
-con archivos nuevos y sin reintentos de PIN ante fallos. Después, otro cliente
-modificando contexto y concurrencia. La candidata de firma sigue optativa.
-No afirmar soporte completo ni publicar upstream sin contrastar master.
-Leer este archivo al retomar y contrastar Git y las capturas más recientes.
+Estado actualizado el **12 de octubre de 2026**, tras revisar los ciclos GUI
+iniciados a las **02:18 de Costa Rica** (08:18 UTC), captura
+`local/jcop3-firmador-api-tYcckn70/`, OpenSC `8842f394b` limpio.
+**Recuperación repetida pasó:** 1170 eventos, seis VERIFY/logins/firmas OK y
+cuatro cambios de tarjeta con limpieza del token antes de nuevas firmas.
+Los cinco PDF cycle-0 a cycle-4 y el extra cycle-.pdf están verificados con
+OpenSSL, incluidos sellos CMS/imprint SHA-512 y conservación del original.
+Hay seis PDF distintos; no se atribuye cada evento a un nombre por su sufijo.
+No hubo atajo por hash, SELECT raíz tras login ni errores de lock/sesión.
+Resumen privado analysis.json y copia estable api-reviewed.log en la captura.
+GUI, firmas consecutivas, reinserción única/repetida y CLI están verificados
+para la tarjeta/lector observados; no confianza/revocación/LTV o soporte completo.
+Git al iniciar: principal `e72fa35`, submódulo `8842f394b`, limpios.
+No se cambia el driver. Se añade un helper público de segundo cliente,
+`make inspect/jcop3-peer-context`, y seis pruebas simuladas: pasan 262
+regresiones. El helper solo SELECT raíz IAS observada con driver default,
+stdin vacío, depuración 0 y sin login/firma; valida transporte y SW 9000.
+No se ha ejecutado en hardware. Próxima intervención: GUI en reposo entre dos
+firmas, ejecutar el helper desde otra terminal manteniendo la tarjeta puesta.
+Esto comprueba contexto alterado por otro cliente; no firmas simultáneas.
+El agente no usa pass ni firma y no dispone del lector. La candidata sigue
+optativa. No repetir los ciclos ya comprobados como primer paso ni publicar
+upstream sin contrastar master. Leer este archivo y las capturas al retomar.
 
 ## Objetivo y alcance
 
@@ -83,6 +86,7 @@ Directorio de trabajo: `/home/tavo/Projects/middleware-project`.
 | `scripts/sign-jcop3.sh` | Firma interactiva de texto y verificación OpenSSL |
 | `scripts/sha256-digestinfo.sh` | Prepara DigestInfo SHA-256 DER para `RSA-PKCS`, sin PIN |
 | `scripts/firmador-jcop3.sh` | Abre firmador con módulo local y configuración PKCS#15, sin depuración APDU |
+| `scripts/peer-context-jcop3.sh` | Segundo cliente: solo SELECT raíz IAS, sin PIN/firma y debug 0; comprueba SW 9000 |
 | `scripts/test-iasecc.sh`, `tests/` | Regresiones sin tarjeta |
 | `docs/jcop3.md` | Evidencia técnica y evolución de la investigación |
 | `docs/idopte.md` | Localización del módulo privativo instalado |
@@ -119,15 +123,16 @@ pero no valida comunicación con la tarjeta.
 
 Los últimos commits guardados son:
 
-- Repositorio principal: **`feaca6f`**, `Document hotplug recovery success`.
+- Repositorio principal: **`e72fa35`**, `Document CLI signing success`.
 - Submódulo OpenSC: **`8842f394b`**, `Handle card changes before event shortcut`.
 - Base upstream original: `c7a377af971df03f879c1697e91ebac1f7e28c56`.
 
-Ambos árboles estaban limpios al comenzar esta revisión. La corrección de
-reinserción, candidata y regresiones ya están comprometidas y compiladas por
-el usuario. El primer CLI pasó y su PDF/sello se verificaron. Solo se actualiza
-la documentación, sin cambios nuevos del driver ni commits del agente. Dar
-al usuario los comandos para guardar el resultado en el principal.
+Ambos árboles estaban limpios al comenzar esta revisión. Correcciones y
+regresiones del driver ya están comprometidas y compiladas por el usuario.
+Los ciclos GUI pasaron y sus seis PDF/sellos se verificaron. Cambios nuevos
+solo en principal: helper público peer-context, Make, seis pruebas del helper,
+runner y documentación. El submódulo no cambia; no recompilar para este helper.
+Dar al usuario los comandos de commit en el principal. No hay commits del agente.
 
 La URL del submódulo aún es `https://github.com/OpenSC/OpenSC.git`. Los commits
 locales del driver necesitarán publicarse en un fork y actualizar esa URL
@@ -233,19 +238,19 @@ El nuevo objetivo `make firmador/jcop3` proporciona esa configuración local.
 
 ## Verificación y últimas capturas
 
-Hay **256 comprobaciones de regresión** en trece fixtures C: `iasecc-fci.c`,
+Hay **262 comprobaciones de regresión** en trece fixtures C: `iasecc-fci.c`,
 `iasecc-pin-path.c`, `iasecc-key-path.c`, `iasecc-sdo.c`, `iasecc-pin-policy.c`
 y `iasecc-sign-setup.c`, más `iasecc-rsa-pkcs.c`, `pkcs11-api-trace.c`,
 `pkcs11-session-state.c`, `iasecc-context-trace.c`,
 `iasecc-post-login-status.c`, `pkcs15-pin-status-in-place.c`,
 `pkcs11-card-change.c`, y los scripts
-`sha256-digestinfo.sh`, `firmador-launcher.sh` y `pkcs11-sign-fallback.sh`, este último con un módulo C
+`sha256-digestinfo.sh`, `firmador-launcher.sh`, `peer-context-launcher.sh` y `pkcs11-sign-fallback.sh`, este último con un módulo C
 PKCS#11 completamente simulado. Incluyen respuestas
 capturadas, conservación/copia de metadatos, rechazo de perfiles distintos y
 transporte simulado que verifica que cambio/desbloqueo no autentican.
 Pasaron en la comprobación local; también terminó la compilación completa
 sin PC/SC, registrada en `build/opensc-offline/card-change-build.log`.
-Las últimas regresiones están en `build/opensc-offline/card-change-tests.log`.
+Las últimas regresiones están en `build/opensc-offline/peer-context-tests.log`.
 Esto no sustituye pruebas de firma en hardware.
 El lanzador de firmador, en modos normal, diagnóstico y experimento de sesión,
 pasó sintaxis y una ejecución con
@@ -293,6 +298,7 @@ abrió Java ni accedió al lector.
 | **`jcop3-firmador-api-y17eLwTD/api.log`** | 12 de octubre, 07:46:21 UTC, 1736ce3a9 limpio: 260 eventos, primera firma verificada, diez CARD_PRESENCE=3 sin limpieza del token, segundo login 0x32 antes de VERIFY y sesión 0xB3; regresión reproducida y corrección local preparada |
 | **`jcop3-firmador-api-und1k27k/api-reviewed.log`** | 12 de octubre, 08:02:29 UTC, 8842f394b limpio: 463 eventos revisados; dos CARD_CHANGED procesados y limpieza del token, dos VERIFY reales y dos RSA de 256 bytes; reinserción rápida y ambos PDF/sellos verificados |
 | **`jcop3-firmador-api-Z0aJ18Ge/api-reviewed.log`** | 12 de octubre, 08:11:29 UTC, 8842f394b limpio: primer CLI, 174 eventos; VERIFY/login/RSA OK, llave 3 de 2048 bits, firma de 256 bytes y PDF/sello verificados |
+| **`jcop3-firmador-api-tYcckn70/api-reviewed.log`** | 12 de octubre, 08:18:56 UTC, 8842f394b limpio: 1170 eventos, seis VERIFY y RSA exitosas, cuatro cambios con limpieza; cinco PDF previstos y un extra, todos con firma/sello verificados |
 
 Los informes PKCS#11 y DOCP RSA de las 21:34 UTC ya se revisaron: **no pedir ejecutarlos de nuevo como
 primer paso**. Los DOCP RSA se reprodujeron en las regresiones del parser
@@ -490,25 +496,36 @@ internos de parsing: revisar las respuestas y el contexto.
    a los 38403 de las pruebas GUI, y contenido/render coinciden. No se atribuye
    esa diferencia a una causa concreta. No inferir identidad byte a byte de archivos firmados por ambos
    modos. Nueve regresiones del lanzador y helper TTY siguen vigentes.
-7. **Próxima intervención: ciclos repetidos en una sola GUI.** Cerrar otras
-   instancias y abrir `make firmador/jcop3-pin-status-in-place`, sin recompilar.
-   Firmar siempre el original doc.pdf, guardar `local/jcop3-cycle-0.pdf`.
-   Retirar solo la tarjeta y reinsertar después de aproximadamente un segundo;
-   esperar cinco tras insertar y volver a firmar el original, como cycle-1.pdf.
-   Repetir ese ciclo hasta cycle-4.pdf: cinco firmas y cuatro reinserciones,
-   manteniendo lector y GUI conectados. Detenerse al primer error sin reintentar;
-   cerrar al terminar. Revisar nuevos VERIFY, limpieza, sesiones y los cinco
-   PDF antes de declarar recuperación repetida. Después validar sesiones, pérdida de autenticación,
-   concurrencia y contexto cambiado por otro cliente. Preparar intervenciones
-   concretas, sin reintentos automáticos de PIN. Decidir activación por defecto
-   con evidencia. Antes de upstream, preservar rama y reproducir contra master
-   actual según vendor/opensc/AGENTS.md. Si cambia código, dar comandos de commit
-   al usuario: submódulo primero, principal después con su puntero. Ampliar
-   mecanismos y plataformas antes de afirmar soporte completo. No generar llaves.
+7. **Ciclos repetidos ya pasaron; siguiente caso: otro cliente entre firmas.**
+   Captura tYcckn70, 1170 eventos. Seis VERIFY reales/logins/firmas, llave 3,
+   RSA AT 9000 y 256 bytes. Primeras dos firmas sin retirada intermedia;
+   después cuatro limpiezas de token activo y nueva autenticación/firma.
+   CARD_PRESENCE 3 y 7 tienen CHANGED; 7 incluye INUSE, no un error.
+   No hubo atajo, omisión de consultas ni SELECT raíz entre login y firma.
+   Cinco PDF cycle-0..4 y un extra cycle-.pdf tienen hashes distintos y se
+   verificaron, con copias privadas; tabla de informes en docs/jcop3.md.
+   No afirmar una correspondencia exacta evento/PDF por sufijos de archivo.
+   **Intervención preparada:** cerrar otras instancias, abrir
+   `make firmador/jcop3-pin-status-in-place`, sin recompilar. Firmar original
+   doc.pdf hacia `local/jcop3-peer-before.pdf`. Dejar GUI abierta y en reposo,
+   mantener tarjeta y lector conectados. Desde otra terminal con nix develop,
+   ejecutar una vez `make inspect/jcop3-peer-context`. Solo si confirma SELECT
+   9000, abrir original y firmar hacia `local/jcop3-peer-after.pdf`. Detenerse
+   al primer error sin repetir PIN; cerrar al terminar. El helper manda solo
+   SELECT raíz observada, sin PIN, firma, reset explícito o depuración; el
+   efecto de conexión/SELECT/desconexión se prueba conjuntamente, no se aísla.
+   Informe privado jcop3-peer-context-*.txt y configuración privada con debug 0.
+   Revisar el informe del helper y VERIFY/sesiones/firmas/PDF de la GUI.
+   Esto no prueba firmas simultáneas; concurrencia auténtica queda pendiente.
+   Después validar pérdida de autenticación y operaciones paralelas acotadas.
+   Decidir activación por defecto con evidencia. Antes de upstream, preservar
+   rama y reproducir contra master actual según vendor/opensc/AGENTS.md. Si
+   cambia driver, submódulo primero y principal después. No generar llaves.
 
-**Firmas consecutivas, reinserción con espera, reinserción rápida corregida
-y primer CLI pasaron con PDF/sellos verificados. El próximo caso son ciclos
-repetidos en una GUI. Concurrencia y activación por defecto siguen pendientes.**
+
+**Firmas consecutivas, reinserciones únicas/repetidas y CLI pasaron con
+PDF/sellos verificados. El próximo caso altera contexto desde otro cliente
+entre firmas GUI. Concurrencia simultánea y activación siguen pendientes.**
 
 ## PIN, privacidad e Idopte
 

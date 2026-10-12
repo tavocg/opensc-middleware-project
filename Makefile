@@ -2,6 +2,7 @@
 .PHONY: sign/jcop3-select-root
 .PHONY: firmador/jcop3-pin-status-in-place
 .PHONY: firmador/jcop3-cli
+.PHONY: inspect/jcop3-peer-context
 
 PDF_INPUT ?= doc.pdf
 PDF_OUTPUT ?= local/jcop3-cli.pdf
@@ -26,6 +27,7 @@ help:
 		'make test/iasecc           Comprueba el parser con datos capturados, sin tarjeta.' \
 		'make inspect/jcop3-built   Compila e inspecciona con el OpenSC modificado, sin PIN.' \
 		'make inspect/jcop3-pkcs11  Consulta llaves, slots, mecanismos y objetos, sin PIN.' \
+		'make inspect/jcop3-peer-context Selecciona raíz IAS desde otro cliente, sin PIN ni depuración.' \
 		'make inspect/jcop3-pin-context  Compara contextos del PIN mediante consultas sin PIN.' \
 		'make inspect/jcop3-pin-policy   Consulta campos estándar de la política, sin PIN.' \
 		'make inspect/jcop3-key-policy   Consulta permisos DOCP de las llaves RSA, sin PIN.' \
@@ -61,6 +63,9 @@ inspect/jcop3-built: build/opensc
 
 inspect/jcop3-pkcs11:
 	@PATH="$(CURDIR)/build/opensc/src/tools:$$PATH" bash scripts/probe-jcop3.sh "$$READER" --pkcs11
+
+inspect/jcop3-peer-context:
+	@bash scripts/peer-context-jcop3.sh
 
 inspect/jcop3-pin-context:
 	@PATH="$(CURDIR)/build/opensc/src/tools:$$PATH" bash scripts/probe-jcop3.sh "$$READER" --pin-context
