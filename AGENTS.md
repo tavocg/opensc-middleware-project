@@ -1,8 +1,10 @@
 # libjcop3p11: contexto para continuar
 
-Estado actualizado el **12 de octubre de 2026**, después de verificar la
-firma con consulta vacía aislada de las **00:04 de Costa Rica**. La siguiente
-prueba preparada aísla un SELECT raíz; aún no se ejecutó en hardware.
+Estado actualizado el **12 de octubre de 2026**, después de revisar las
+dos pruebas SELECT de las **00:13 de Costa Rica**. Ambas aceptan VERIFY y
+SELECT raíz, pero RSA devuelve `6982`. La consulta vacía aislada de las
+00:04 había permitido firmar. Se preparó una candidata que consulta el
+estado físico sin reselección; aún no se ejecutó en hardware.
 Los PDF aportados por el usuario se verificaron
 a las **23:39 de Costa Rica del día 11** (05:39 UTC del 12).
 **El firmador produjo un PDF cuya firma y sello de tiempo se verificaron
@@ -13,9 +15,9 @@ RFC 3161 y su huella SHA-512 sobre los rangos del PDF final. Se conserva la
 página original. No se validaron confianza ni revocación de certificados.
 El modo normal conserva las consultas y su fallo previo; el experimento
 sigue desactivado por defecto. Falta diseñar una corrección definitiva de
-consultas/contexto y validar sus límites. Una consulta vacía inmediatamente
-posterior al VERIFY permitió firmar; no descarta selecciones, política,
-consultas repetidas ni efectos de transacciones.
+consultas/contexto y validar sus límites. La selección de raíz aislada
+reproduce el fallo en dos capturas; no explica todas las condiciones del
+perfil ni resuelve cambios externos de aplicación/transacciones.
 No repetir las firmas anteriores. Leer este archivo al retomar y contrastar Git y las capturas más
 recientes; no afirma soporte completo.
 
@@ -104,7 +106,8 @@ make test/iasecc JOBS="$(nproc)"
 selecciona slot PKCS#11; no son necesariamente el mismo índice.
 `inspect/jcop3-pkcs11`, los diagnósticos de política, `sign/jcop3`,
 `sign/jcop3-sha256`, `sign/jcop3-pin-status`, `sign/jcop3-select-root`,
-`firmador/jcop3`, `firmador/jcop3-diagnose` y `firmador/jcop3-session-state` utilizan
+`firmador/jcop3`, `firmador/jcop3-diagnose`, `firmador/jcop3-session-state` y
+`firmador/jcop3-pin-status-in-place` utilizan
 la compilación existente: **no recompilan**.
 
 Las restricciones del entorno del agente pueden impedir usar el daemon de
@@ -115,13 +118,14 @@ pero no valida comunicación con la tarjeta.
 
 Los últimos commits guardados del driver y su diagnóstico son:
 
-- Repositorio principal: **`c7fdbd0`**, `Test isolated PIN status query`.
-- Submódulo OpenSC: **`0e7549960`**, `Probe ChipDoc post-login status`.
+- Repositorio principal: **`b8c1f19`**, `Test isolated root selection`.
+- Submódulo OpenSC: **`416c11c7b`**, `Probe ChipDoc root selection`.
 - Base upstream original: `c7a377af971df03f879c1697e91ebac1f7e28c56`.
 
-Sobre esos commits hay cambios locales de la prueba `sign/jcop3-select-root`,
-sus regresiones y documentación. Aún no se guardaron ni probaron en tarjeta.
-Ambos árboles estaban limpios al revisar las capturas de las 00:02–00:04.
+Sobre esos commits hay cambios locales de la candidata de estado sin
+selección, bloqueo optativo del fallback de firma del CLI, regresiones y
+documentación. Aún no se guardaron ni probaron en tarjeta. Ambos árboles
+estaban limpios al revisar las dos capturas SELECT de las 00:13.
 
 Las correcciones de ACL, ruta de firma, fallback de referencias de algoritmo
 y lectura RSA limitada a DOCP ya están comprometidas, junto con sus pruebas.
@@ -249,17 +253,18 @@ El nuevo objetivo `make firmador/jcop3` proporciona esa configuración local.
 
 ## Verificación y últimas capturas
 
-Hay **178 comprobaciones de regresión** en once archivos C: `iasecc-fci.c`,
+Hay **210 comprobaciones de regresión** en doce fixtures C: `iasecc-fci.c`,
 `iasecc-pin-path.c`, `iasecc-key-path.c`, `iasecc-sdo.c`, `iasecc-pin-policy.c`
 y `iasecc-sign-setup.c`, más `iasecc-rsa-pkcs.c`, `pkcs11-api-trace.c`,
 `pkcs11-session-state.c`, `iasecc-context-trace.c`,
-`iasecc-post-login-status.c`, y el script
-`sha256-digestinfo.sh`. Incluyen respuestas
+`iasecc-post-login-status.c`, `pkcs15-pin-status-in-place.c`, y los scripts
+`sha256-digestinfo.sh` y `pkcs11-sign-fallback.sh`, este último con un módulo C
+PKCS#11 completamente simulado. Incluyen respuestas
 capturadas, conservación/copia de metadatos, rechazo de perfiles distintos y
 transporte simulado que verifica que cambio/desbloqueo no autentican.
 Pasaron en la comprobación local; también terminó la compilación completa
-sin PC/SC, registrada en `build/opensc-offline/chipdoc-select-probe-build.log`.
-Las últimas regresiones están en `build/opensc-offline/chipdoc-select-probe-tests.log`.
+sin PC/SC, registrada en `build/opensc-offline/chipdoc-in-place-build.log`.
+Las últimas regresiones están en `build/opensc-offline/chipdoc-in-place-tests.log`.
 Esto no sustituye pruebas de firma en hardware.
 El lanzador de firmador, en modos normal, diagnóstico y experimento de sesión,
 pasó sintaxis y una ejecución con
@@ -297,6 +302,7 @@ abrió Java ni accedió al lector.
 | **`jcop3-firmador-api-WV8KnIjI/api.log`** | 12 de octubre, 05:34:00 UTC, OpenSC `da1edb457`: experimento sesión+token activo; login OK, llave 3, SHA256-RSA-PKCS; ninguna selección raíz después del login; RSA AT `9000`, retorno 256 y `C_SignFinal CKR_OK`; firma PDF y sello verificados posteriormente con OpenSSL |
 | **`jcop3-signature-rwfMn3zh/report.txt`**, **`jcop3-signature-ELmY1jCa/report.txt`** | 12 de octubre, 06:02:54 y 06:03:14 UTC, OpenSC `0e7549960`: lectura del certificado detenida en `C_OpenSession CKR_TOKEN_NOT_PRESENT`, slot 0; no login ni consulta experimental |
 | **`jcop3-signature-QfdEBgds/report.txt`**, **`api.log`** | 12 de octubre, 06:04:31 UTC: consulta vacía inmediatamente después del VERIFY con retorno 0 y estado LOGGED_IN; login OK; llave 3; RSA AT `9000`, 256 bytes; OpenSSL `Verified OK`, estado 0 |
+| **`jcop3-signature-zPoqBbBZ/api.log`**, **`jcop3-signature-rb2JHk1X/api.log`** | 12 de octubre, 06:13:20 y 06:13:35 UTC, OpenSC `416c11c7b`: un SELECT raíz aislado `9000` después de VERIFY; login OK; cada ejecución tiene dos rechazos RSA `6982` debido al fallback multipart del CLI; no firma ni segundo login |
 
 Los informes PKCS#11 y DOCP RSA de las 21:34 UTC ya se revisaron: **no pedir ejecutarlos de nuevo como
 primer paso**. Los DOCP RSA se reprodujeron en las regresiones del parser
@@ -431,8 +437,8 @@ internos de parsing: revisar las respuestas y el contexto.
 3. Diseñar la corrección definitiva con la diferencia observada: las
    consultas normales de sesión/token ejecutan selecciones de raíz y
    consultas de PIN/política después del login; al omitirlas la firma pasó.
-   Aún no está demostrado cuál de esas operaciones altera la condición de
-   seguridad, ni el significado de `C9`. No convertir el experimento en
+   Un SELECT raíz aislado reprodujo el rechazo en dos capturas. El significado
+   de `C9` sigue pendiente. No convertir el experimento en
    comportamiento predeterminado sin resolver estado/flags de PIN y cambios
    de tarjeta. Mantener desactivada la caché del valor del PIN.
    **La prueba de estado ya terminó:** los dos errores iniciales fueron
@@ -442,22 +448,39 @@ internos de parsing: revisar las respuestas y el contexto.
    firma verificada independientemente. El certificado, la llave pública y
    DigestInfo coinciden con sus archivos; informe privado `verification.json`.
    No inferir efectos de repetición, política o transacciones de ese éxito.
-   **Nueva intervención pendiente:** compilar los cambios preparados con
-   `make test/iasecc JOBS="$(nproc)"`, guardar commits (submódulo primero) y
-   hacer un único intento con `make sign/jcop3-select-root`, cerrando firmador.
-   `OPENSC_JCOP3_POST_LOGIN_SELECT=yes` reutiliza las restricciones Amos +
-   Generic PKI enumerado + CHV global 1 + política ChipDoc observada. Después
-   de un VERIFY exitoso envía un único SELECT del AID raíz IAS mediante el
-   driver, sin añadir consulta de estado ni política. Los eventos
-   `POST_LOGIN_SELECT_BEGIN`, `CARD_SELECT` (destino 2) y `POST_LOGIN_SELECT`
-   permiten confirmar su ejecución; están en el `api.log` privado de firma.
-   El helper conserva `--pin-status` con su variable anterior, pero los dos
-   experimentos no se combinan; un opt-in conflictivo se rechaza sin comandos
-   de prueba. Un VERIFY rechazado o su atajo existente no ejecutan el hook.
-   La marca esperada es obligatoria para evitar resultados con módulo antiguo.
-   Todos los lanzadores eliminan variables de prueba heredadas en otros modos.
-   Pasan 178 regresiones y diez ejecuciones simuladas de lanzadores, sin
-   tarjeta ni PIN. Todavía falta el resultado de SELECT en hardware.
+   **SELECT ya se probó:** `zPoqBbBZ` y `rb2JHk1X` tienen VERIFY exitoso,
+   una sola reselección raíz dentro del hook (`9000`) y login exitoso; luego
+   selección ChipDoc/DOCP/MSE pasan, pero RSA devuelve `6982`. Esto aísla la
+   reselección como trigger suficiente en el contexto observado. Cada CLI
+   hizo dos operaciones RSA: tras el rechazo de C_Sign, pkcs11-tool cambió a
+   multipart y también falló C_SignFinal. No hizo otro login ni VERIFY con PIN;
+   la revalidación PKCS#15 fue rechazada por caché desactivada. El helper
+   actualizado fija `OPENSC_PKCS11_TOOL_NO_SIGN_FALLBACK=yes` y el CLI ahora
+   se detiene en el primer error C_Sign, incluido CKR_CANCEL. Es optativo en
+   el CLI y requiere recompilar; la conducta predeterminada queda cubierta.
+   **Nueva intervención pendiente:** compilar con
+   `make test/iasecc JOBS="$(nproc)"`, guardar commits y probar una sola firma
+   de PDF con `make firmador/jcop3-pin-status-in-place`, cerrando las otras
+   instancias y luego el programa. No repetir los probes SELECT o estado.
+   `OPENSC_JCOP3_PIN_STATUS_IN_PLACE=yes` activa la candidata PKCS#15 solo
+   para Amos + Generic PKI + CHV global 1 + ruta MF, excluyendo SO/PUK.
+   Solicita GET INFO con `SC_PIN_CMD_STATUS_ONLY` sin SELECT previo. El driver
+   acepta el flag solo tras conocer la política ChipDoc y su máximo público
+   de intentos; consulta ISO vacía sin política/selecciones, y nunca reutiliza
+   login o intentos restantes anteriores. Un contador ausente queda en -1.
+   Antes de conocer esa política, NOT_SUPPORTED permite la consulta completa
+   de inicialización. VERIFY conserva sus consultas completas antes del PIN.
+   La política pública máxima vive en el objeto de tarjeta; no es un secreto,
+   no se elimina por SELECT y un objeto nuevo comienza sin ese dato. Fallos
+   de consulta/bloqueo invalidan las observaciones físicas; no afirmar que
+   resuelvan por sí solos el estado software PKCS#11 o cambios externos.
+   `PIN_STATUS_IN_PLACE` lleva resultado, estado físico (a) y referencia 1 (b).
+   En esta candidata no deben aparecer omisiones TOKEN_PIN_CACHED ni
+   SESSION_LOGIN_STATE; usa lecturas reales, no el experimento anterior.
+   Los lanzadores excluyen variables heredadas de otros modos. Pasan 210
+   regresiones, cinco casos de CLI con módulo falso y cuatro verificaciones
+   del lanzador firmador sin GUI/tarjeta/PIN. Falta evidencia en hardware,
+   recuperación real, concurrencia y semántica de estado tras firmar.
 4. El modo experimental `firmador/jcop3-session-state` está disponible y
    probado en una firma, limitado a Amos + Generic PKI + CHV 1 global + MF
    tras login CKU_USER. Omite consultas físicas de `C_GetSessionInfo` y

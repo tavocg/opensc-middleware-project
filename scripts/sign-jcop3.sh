@@ -48,6 +48,7 @@ printf 'date_utc=%s\nmodule=%s\nslot_index=%s\nkey_id=%s\nmechanism=%s\ndigest_a
     "$task_date" "$task_module" "$task_slot_index" "$task_key_id" "$task_mechanism" > "$task_report"
 printf 'post_login_status_experiment=%s\n' "$task_post_login_status" >> "$task_report"
 printf 'post_login_select_experiment=%s\n' "$task_post_login_select" >> "$task_report"
+printf 'sign_fallback=disabled\n' >> "$task_report"
 git -C "$task_root/vendor/opensc" rev-parse HEAD >> "$task_report"
 git -C "$task_root/vendor/opensc" status --short >> "$task_report"
 
@@ -81,6 +82,7 @@ trap task_on_exit EXIT
 
 task_common=(env -u OPENSC_API_TRACE_FILE -u OPENSC_JCOP3_SESSION_STATE
     -u OPENSC_JCOP3_POST_LOGIN_STATUS -u OPENSC_JCOP3_POST_LOGIN_SELECT
+    -u OPENSC_JCOP3_PIN_STATUS_IN_PLACE OPENSC_PKCS11_TOOL_NO_SIGN_FALLBACK=yes
     OPENSC_DEBUG=0 OPENSC_CONF="$task_config" "$task_tool"
     --module "$task_module" --slot-index "$task_slot_index" --id "$task_key_id")
 
@@ -110,7 +112,8 @@ if [[ -n $task_probe_event ]]; then
     : > "$task_trace"
     # Insert experiment variables before the tool, never credentials.
     task_authenticated=(env -u OPENSC_JCOP3_SESSION_STATE
-        -u OPENSC_JCOP3_POST_LOGIN_STATUS -u OPENSC_JCOP3_POST_LOGIN_SELECT OPENSC_DEBUG=0
+        -u OPENSC_JCOP3_POST_LOGIN_STATUS -u OPENSC_JCOP3_POST_LOGIN_SELECT
+        -u OPENSC_JCOP3_PIN_STATUS_IN_PLACE OPENSC_PKCS11_TOOL_NO_SIGN_FALLBACK=yes OPENSC_DEBUG=0
         OPENSC_CONF="$task_config" OPENSC_API_TRACE_FILE="$task_trace"
         "OPENSC_JCOP3_POST_LOGIN_STATUS=$task_post_login_status"
         "OPENSC_JCOP3_POST_LOGIN_SELECT=$task_post_login_select" "$task_tool"

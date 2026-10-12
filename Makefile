@@ -1,5 +1,6 @@
 .DEFAULT_GOAL := help
 .PHONY: sign/jcop3-select-root
+.PHONY: firmador/jcop3-pin-status-in-place
 
 READER ?= 0
 export READER
@@ -31,6 +32,7 @@ help:
 		'make sign/jcop3-select-root Aísla una selección de raíz IAS después del login y firma un texto.' \
 		'make firmador/jcop3        Abre firmador con el módulo y perfil locales, sin depuración APDU.' \
 		'make firmador/jcop3-diagnose Registra únicamente metadatos de sesiones y firma, sin PIN ni APDU.' \
+		'make firmador/jcop3-pin-status-in-place Consulta el PIN conservando el contexto; corrección candidata optativa.' \
 		'make firmador/jcop3-session-state Prueba aislada: omite consultas físicas de PIN de sesión y token tras login.'
 
 probe/jcop3:
@@ -89,3 +91,6 @@ firmador/jcop3-diagnose:
 
 firmador/jcop3-session-state:
 	@bash scripts/firmador-jcop3.sh --session-state
+
+firmador/jcop3-pin-status-in-place:
+	@bash scripts/firmador-jcop3.sh --pin-status-in-place

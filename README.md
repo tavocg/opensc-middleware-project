@@ -25,7 +25,7 @@ medidas de la llave de firma. El mecanismo combinado `SHA256-RSA-PKCS`
 falló en `C_SignFinal`: el camino QSign no soporta OpenSSL 3. El helper
 prepara el DigestInfo SHA-256 en el equipo y pide `RSA-PKCS` a la tarjeta.
 El 11 de octubre de 2026 a las 20:18 de Costa Rica, esta ruta produjo una
-firma de 256 bytes y OpenSSL confirmó `Verified OK`. Pasan 178 comprobaciones
+firma de 256 bytes y OpenSSL confirmó `Verified OK`. Pasan 210 comprobaciones
 locales. Para reproducir la prueba técnica:
 
 ```bash
@@ -99,13 +99,21 @@ previos se detuvieron en `C_OpenSession CKR_TOKEN_NOT_PRESENT` antes del login.
 Ese éxito no descarta efectos de selección, política, consultas repetidas o
 cambios de transacción.
 
-La siguiente prueba preparada es `make sign/jcop3-select-root`, después de
-compilar con `make test/iasecc JOBS="$(nproc)"`. Añade **una selección de la raíz
-IAS justo después del VERIFY exitoso**, sin añadir consultas de estado ni
-lecturas de política, y firma el texto técnico con RSA-PKCS. Aún no se probó
-en hardware. Ambos experimentos están desactivados por defecto y registran
-solo metadatos en `local/jcop3-signature-*/api.log`; el PIN se introduce sin eco.
-Cerrar firmador, hacer un solo intento y revisar antes de repetir.
+Los dos intentos de `make sign/jcop3-select-root` de las 00:13 reprodujeron
+el rechazo RSA `6982` después de un VERIFY y un único SELECT raíz exitosos.
+Esto reduce el fallo a la reselección en el contexto observado. El CLI además
+intentó multipart tras fallar C_Sign; el helper ahora desactiva ese fallback
+con el módulo actualizado, sin cambiar el modo normal del CLI.
+
+La siguiente prueba es `make firmador/jcop3-pin-status-in-place`, después de
+compilar con `make test/iasecc JOBS="$(nproc)"`. La corrección candidata mantiene
+consultas físicas de estado de PIN, sin reseleccionar ni releer política una
+vez conocida. Solo conserva el máximo público de intentos; estado e intentos
+restantes proceden de la respuesta actual, incluso si quedan desconocidos.
+No omite las consultas como el experimento anterior ni guarda el PIN.
+Está desactivada por defecto y **aún no se probó en hardware**. Cerrar las
+instancias anteriores, realizar una sola firma de un PDF de prueba y cerrar
+firmador. El registro numérico privado sigue en `local/jcop3-firmador-api-*/`.
 
 ## Organización
 

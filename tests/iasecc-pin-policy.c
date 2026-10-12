@@ -8,6 +8,8 @@
 #include "libopensc/iasecc-sdo.c"
 
 static int forbidden_commands;
+static int status_queries, metadata_queries, status_error;
+static int status_state = SC_PIN_STATE_LOGGED_OUT, status_tries = 7;
 
 static int mock_pin_cmd(struct sc_card *card, struct sc_pin_cmd_data *data)
 {
@@ -17,9 +19,11 @@ static int mock_pin_cmd(struct sc_card *card, struct sc_pin_cmd_data *data)
 		return SC_ERROR_NOT_SUPPORTED;
 	}
 	/* Result of the captured empty VERIFY / 63 C7 status query. */
+	status_queries++;
+	if (status_error) return status_error;
 	data->pin1.max_tries = -1;
-	data->pin1.tries_left = 7;
-	data->pin1.logged_in = SC_PIN_STATE_LOGGED_OUT;
+	data->pin1.tries_left = status_tries;
+	data->pin1.logged_in = status_state;
 	return SC_SUCCESS;
 }
 
@@ -62,6 +66,7 @@ int sc_transmit_apdu(struct sc_card *card, struct sc_apdu *apdu)
 	if (apdu->resplen < length)
 		return SC_ERROR_BUFFER_TOO_SMALL;
 	memcpy(apdu->resp, response, length);
+	metadata_queries++;
 	apdu->resplen = length;
 	apdu->sw1 = 0x90;
 	apdu->sw2 = 0;
@@ -89,6 +94,13 @@ int main(void)
 	data.pin_type = SC_AC_CHV;
 	data.pin_reference = 1;
 	data.cmd = SC_PIN_CMD_GET_INFO;
+	data.flags = SC_PIN_CMD_STATUS_ONLY;
+	result = iasecc_pin_get_info(&card, &data);
+	if (result != SC_ERROR_NOT_SUPPORTED || status_queries || metadata_queries) {
+		fprintf(stderr, "FAIL uninitialized policy refuses status-only before card commands\n");
+		failures++;
+	} else puts("PASS uninitialized policy refuses status-only before card commands");
+	data.flags = 0;
 	result = iasecc_pin_get_info(&card, &data);
 	if (result || data.pin1.max_tries != 7 || data.pin1.tries_left != 7) {
 		fprintf(stderr, "FAIL driver reads ChipDoc retry counts: %d\n", result);
@@ -96,6 +108,50 @@ int main(void)
 	} else {
 		puts("PASS driver reads ChipDoc retry counts");
 	}
+	data.flags = SC_PIN_CMD_STATUS_ONLY;
+	status_state = SC_PIN_STATE_LOGGED_IN;
+	status_tries = -1;
+	result = iasecc_pin_get_info(&card, &data);
+	if (result || data.pin1.max_tries != 7 || data.pin1.tries_left != -1 ||
+			data.pin1.logged_in != SC_PIN_STATE_LOGGED_IN || status_queries != 2 || metadata_queries != 2) {
+		fprintf(stderr, "FAIL status-only preserves unknown remaining count without policy reads\n");
+		failures++;
+	} else puts("PASS status-only preserves unknown remaining count without policy reads");
+	status_state = SC_PIN_STATE_LOGGED_OUT;
+	status_tries = 2;
+	result = iasecc_pin_get_info(&card, &data);
+	if (result || data.pin1.tries_left != 2 || data.pin1.logged_in != SC_PIN_STATE_LOGGED_OUT ||
+			status_queries != 3 || metadata_queries != 2) {
+		fprintf(stderr, "FAIL status-only detects changed authentication and remaining tries\n");
+		failures++;
+	} else puts("PASS status-only detects changed authentication and remaining tries");
+	status_error = SC_ERROR_TRANSMIT_FAILED;
+	result = iasecc_pin_get_info(&card, &data);
+	if (result != status_error || status_queries != 4 || metadata_queries != 2) {
+		fprintf(stderr, "FAIL status-only transport error does not retry or select\n");
+		failures++;
+	} else puts("PASS status-only transport error does not retry or select");
+	status_error = 0;
+	card.type = SC_CARD_TYPE_IASECC_SAGEM;
+	result = iasecc_pin_get_info(&card, &data);
+	if (result != SC_ERROR_NOT_SUPPORTED || status_queries != 4) failures++;
+	else puts("PASS status-only excludes other card types");
+	card.type = SC_CARD_TYPE_IASECC_AMOS;
+	data.pin_reference = 1 | IASECC_OBJECT_REF_LOCAL;
+	result = iasecc_pin_get_info(&card, &data);
+	if (result != SC_ERROR_NOT_SUPPORTED || status_queries != 4) failures++;
+	else puts("PASS status-only excludes local CHVs");
+	data.pin_reference = 2;
+	result = iasecc_pin_get_info(&card, &data);
+	if (result != SC_ERROR_NOT_SUPPORTED || status_queries != 4) failures++;
+	else puts("PASS status-only excludes other CHV references");
+	data.pin_reference = 1;
+	data.pin_type = SC_AC_AUT;
+	result = iasecc_pin_get_info(&card, &data);
+	if (result != SC_ERROR_NOT_SUPPORTED || status_queries != 4) failures++;
+	else puts("PASS status-only excludes other authentication methods");
+	data.pin_type = SC_AC_CHV;
+	data.flags = 0;
 	data.cmd = SC_PIN_CMD_CHANGE;
 	result = iasecc_pin_change(&card, &data);
 	if (result != SC_ERROR_NOT_SUPPORTED || forbidden_commands) {

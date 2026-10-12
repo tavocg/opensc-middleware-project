@@ -1630,3 +1630,90 @@ detección de marca incorrecta o ausente y propagación de error sin reintento.
 La compilación completa sin PC/SC pasó. Informes locales:
 `build/opensc-offline/chipdoc-select-probe-build.log` y
 `build/opensc-offline/chipdoc-select-probe-tests.log`.
+
+## SELECT aislado reproduce el rechazo RSA: 2026-10-12, 00:13
+
+`local/jcop3-signature-zPoqBbBZ/report.txt` y
+`local/jcop3-signature-rb2JHk1X/report.txt` registran 06:13:20 y 06:13:35 UTC,
+OpenSC `416c11c7b` limpio, `post_login_select_experiment=yes` y estado 1.
+En ambos, el hook ejecuta **un único SELECT de raíz IAS** con `9000` después
+de un VERIFY exitoso; `C_Login` también termina con `CKR_OK`. No incorpora
+consultas de estado ni lecturas de política. La firma selecciona ChipDoc,
+lee DOCP y prepara MSE correctamente; RSA AT devuelve `6982`, traducido a
+`SC_ERROR_SECURITY_STATUS_NOT_SATISFIED` y `CKR_USER_NOT_LOGGED_IN`.
+No se detectó reset durante el bloqueo del lector; esto no excluye cambios
+externos de contexto. No hay firma para verificar.
+
+Frente a la firma exitosa con consulta vacía de las 00:04, esto identifica
+la **reselección raíz como operación suficiente para reproducir el fallo
+en el contexto observado**. No define el significado de `C9`, no demuestra
+que todo SELECT pierda autenticación y no sustituye pruebas de concurrencia.
+El estado verificado del CHV por sí solo tampoco garantiza permiso RSA.
+
+Los registros revelan una segunda operación RSA en **cada ejecución**:
+`pkcs11-tool sign_data()` cambia de C_Sign a C_SignInit/Update/Final cuando
+falla la firma directa. Ambas rutas reciben `6982`; el mensaje final menciona
+C_SignFinal. No hubo segundo login ni VERIFY con PIN. Los eventos de
+revalidación PKCS#15 corresponden al rechazo por caché de PIN desactivada.
+No confundir dos ejecuciones del usuario con las cuatro operaciones RSA.
+
+Se añadió `OPENSC_PKCS11_TOOL_NO_SIGN_FALLBACK=yes` al helper de firma y una
+comprobación optativa en el CLI: tras un error C_Sign termina inmediatamente,
+incluida cancelación. Conserva el comportamiento predeterminado del CLI y
+su ruta multipart para entradas grandes que no intentaron C_Sign. Requiere
+recompilar. El informe del helper nuevo lleva `sign_fallback=disabled`.
+Cinco pruebas con módulo PKCS#11 falso verifican el fallback normal, parada
+sin multipart ante error de autenticación/dispositivo/cancelación y éxito.
+No usan PIN, lector, llaves ni firmas reales.
+
+## Candidata preparada: leer estado sin reseleccionar
+
+El nuevo objetivo `make firmador/jcop3-pin-status-in-place` activa únicamente
+`OPENSC_JCOP3_PIN_STATUS_IN_PLACE=yes`, con diagnóstico numérico y sin el
+experimento de omisión de sesiones/token. **Aún no se probó en hardware.**
+Mantiene login real, caché del valor del PIN desactivada y depuración 0.
+
+`sc_pkcs15_get_pin_info()` solo cambia para Amos + AID Generic PKI + CHV
+global 1 + ruta MF `3F00` de tipo FILE_ID, excluyendo SO/PUK. Solicita
+`SC_PIN_CMD_GET_INFO` con el nuevo flag `SC_PIN_CMD_STATUS_ONLY`, sin seleccionar
+la ruta. El driver IAS/ECC exige que se haya leído la política ChipDoc
+observada y un máximo público de intentos positivo. La rutina consulta el
+estado ISO vacío sin SELECT ni política; conserva solo ese máximo público.
+El estado físico y los intentos restantes son los de la respuesta actual.
+En una respuesta autenticada sin contador, usa `-1` y no recupera un contador
+anterior para pintar banderas. El máximo es un dato de política ya observado,
+no una nueva lectura ni un secreto. No cachea estado físico, PIN ni su valor.
+
+Si la política aún no se conoce, el driver rechaza el flag antes de emitir
+comandos, y PKCS#15 usa la consulta completa de inicialización. El VERIFY
+real conserva sus lecturas de política y selecciones antes de autenticar.
+Un nuevo objeto de tarjeta empieza sin la política pública conocida; un
+SELECT no borra ese dato estático. Esto no valida cambios administrativos
+externos de política. Ante error de consulta/bloqueo, se invalidan el estado
+físico y el contador restantes; no afirmar que eso resuelve por sí solo
+el estado software de todas las sesiones PKCS#11 o la recuperación del lector.
+
+`PIN_STATUS_IN_PLACE` registra resultado (`rv`), estado físico (`a`, UNKNOWN
+si falla) y referencia pública 1 (`b`). Antes de conocer la política puede
+registrar NOT_SUPPORTED y después la consulta completa. Tras un login real
+debe verse resultado 0 sin selecciones raíz alrededor de las consultas. No
+deben aparecer TOKEN_PIN_CACHED o SESSION_LOGIN_STATE en esta candidata.
+El informe lleva `pin_status_in_place_experiment=yes`,
+`session_state_experiment=no` y `pin_query_experiment=status_without_selection`.
+Todos los otros lanzadores eliminan el nuevo opt-in heredado. El objetivo
+usa la biblioteca existente: primero compilar con
+`make test/iasecc JOBS="$(nproc)"`, guardar commits, cerrar instancias previas,
+hacer una sola firma de un PDF de prueba y cerrar el programa. No repetir
+los experimentos SELECT o consulta vacía como primer paso.
+
+Pasan **210 comprobaciones** sin tarjeta. Cubren la consulta física sin
+selección, contador desconocido y actualizado, pérdida de autenticación,
+errores/reset simulado sin reintento, inicialización, exclusiones de perfil
+y fallback del CLI. El fixture aborta si se intenta cachear contenido de PIN.
+El lanzador pasó cuatro modos simulados con variables heredadas adversas,
+configuración sin caché de PIN, permisos privados y salida propagada.
+La compilación completa sin PC/SC pasó; informes
+`build/opensc-offline/chipdoc-in-place-build.log` y
+`build/opensc-offline/chipdoc-in-place-tests.log`.
+Faltan consultas repetidas y firma en hardware, recuperación real,
+concurrencia y estado después de usar la llave; sigue siendo optativo.

@@ -15,7 +15,7 @@ task_build=$(cd -- "$task_build" && pwd)
 
 read -r -a task_crypto_cflags <<< "$(pkg-config --cflags libcrypto)"
 read -r -a task_crypto_libs <<< "$(pkg-config --libs libcrypto)"
-for task_test in iasecc-fci iasecc-pin-path iasecc-key-path iasecc-sdo iasecc-pin-policy iasecc-sign-setup iasecc-rsa-pkcs pkcs11-api-trace pkcs11-session-state iasecc-context-trace iasecc-post-login-status; do
+for task_test in iasecc-fci iasecc-pin-path iasecc-key-path iasecc-sdo iasecc-pin-policy iasecc-sign-setup iasecc-rsa-pkcs pkcs11-api-trace pkcs11-session-state iasecc-context-trace iasecc-post-login-status pkcs15-pin-status-in-place; do
     "${CC:-cc}" -std=c99 -D_GNU_SOURCE -DHAVE_CONFIG_H \
         -ffunction-sections -fdata-sections -Wall -Wextra -Werror \
         -Wno-unused-function -Wno-unused-parameter -Wno-deprecated-declarations \
@@ -27,3 +27,4 @@ for task_test in iasecc-fci iasecc-pin-path iasecc-key-path iasecc-sdo iasecc-pi
     "$task_build/$task_test-regression"
 done
 bash "$task_root/tests/sha256-digestinfo.sh"
+bash "$task_root/tests/pkcs11-sign-fallback.sh" "$task_build"
