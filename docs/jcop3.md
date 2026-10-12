@@ -498,3 +498,84 @@ recuento se comprobaron con una herramienta simulada, sin tarjeta.
 Todavía no se ejecuta otra firma. Revisar primero el nuevo estado del PIN y
 los permisos reales de las llaves; las referencias PKCS#15 no demuestran por
 sí solas cómo se selecciona el objeto criptográfico para una operación RSA.
+
+## Política RSA y prerrequisitos de firma: 2026-10-11
+
+Se revisaron los informes `local/jcop3-pkcs11-cRVr2acc.txt` y
+`local/jcop3-key-policy-egE7wr1j.txt`, de las 21:34 UTC, con OpenSC `840a7b204`.
+El primero confirma que el parser acepta la política observada del PIN y
+`iasecc_pin_get_policy()` devuelve límites máximo/mínimo 14/4 e intentos 7/7.
+Las consultas vacías de estado siguen devolviendo `63 C7`. Persiste el error
+ASN.1 de PuKDF; no impide esta enumeración ni es evidencia de PIN incorrecto.
+
+Las dos referencias RSA_PRIVATE, 2 y 3, devuelven DOCP con `9000`. El tamaño
+declarado es `01 00`, 256 bytes, compatible con RSA 2048. Ambas respuestas
+contienen las mismas ACL de contacto y sin contacto:
+
+```text
+C0 13 90 13 A0 13 88 13 82 D3 81 00
+```
+
+Aplicando las máscaras de operaciones IAS/ECC definidas por OpenSC:
+
+| Grupo | Operación | Condición conservada |
+| --- | --- | --- |
+| `C0 13` | PSO COMPUTE SIGNATURE | Autenticación de usuario mediante SE 3 |
+| `90 13` | PSO DECIPHER | Autenticación de usuario mediante SE 3 |
+| `A0 13` | INTERNAL AUTHENTICATE | Autenticación de usuario mediante SE 3 |
+| `88 13` | GENERATE KEY | Autenticación de usuario mediante SE 3; no se prueba |
+| `82 D3` | PUT DATA | SCB combinado `D3`, conservado sin ejecutar administración |
+| `81 00` | GET DATA | Sin autenticación previa |
+
+La referencia SE 3 no es necesariamente el PIN 3. Falta leer su plantilla
+de autenticación para conocer qué CHV referencia. Los permisos del DOCP
+tampoco demuestran por sí solos que una operación criptográfica funcione.
+
+`iasecc_parse_acls()` solo procesaba el primer grupo, perdiendo los permisos
+posteriores. Se amplió para recorrer toda la ACL, acumular las máscaras de
+operaciones y conservar cada SCB. Acepta repeticiones idénticas y rechaza
+condiciones alternativas distintas, que el arreglo `scbs[]` no representa.
+También detecta truncamientos de grupos posteriores. Se mantiene la adaptación
+limitada de CHV 1 con `C9`, incluido el rechazo de cambio y desbloqueo.
+
+Las nuevas regresiones reproducen ambos DOCP RSA capturados, verifican las
+conversiones a métodos/referencias de OpenSC y prueban duplicados, alternativas
+y truncamientos. Pasan **49 comprobaciones** en total. La compilación completa
+sin PC/SC terminó y quedó registrada en
+`build/opensc-offline/rsa-acl-build.log`. Falta compilar y validar estos últimos
+cambios con el entorno PC/SC del usuario.
+
+Hay otro prerrequisito pendiente: TokenInfo no incluye `supportedAlgorithms`
+y las llaves enumeradas muestran `Algo_refs: 0`. `format_senv()` copia la
+tabla de TokenInfo al entorno usado por `iasecc_set_security_env()`, cuyo
+`iasecc_get_algorithm()` necesita referencias para configurar RSA. Con esa
+tabla vacía, el camino actual no encuentra referencias para SHA-256/RSA ni
+para RSA PKCS#1 mediante INTERNAL AUTHENTICATE. No asignar valores a ciegas
+ni tratar la lista de mecanismos PKCS#11 como prueba de estas referencias.
+
+Antes de pedir otra autenticación, consultar:
+
+```bash
+make test/iasecc JOBS="$(nproc)"
+make inspect/jcop3-security-env
+```
+
+El segundo objetivo no recompila ni solicita PIN. Lee exclusivamente la
+plantilla pública de SE 3 en ChipDoc y en la raíz, usando el GET DATA de
+`iasecc_se_get_info()`:
+
+```text
+00 CB 3F FF 0A 4D 08 70 06 BF FB 03 02 7B 80 00
+```
+
+También selecciona ChipDoc y prueba la ruta `0003` declarada para la llave
+de firma mediante `00 A4 09 04 02 00 03 00`, como el camino de selección
+por ruta de IAS/ECC. No lee el objeto seleccionado. Esta comprobación permite
+detectar una ruta no seleccionable antes del próximo intento autenticado.
+
+Se esperan **seis respuestas**: tres selecciones de AID, dos consultas de SE
+y una selección de ruta. El informe se guarda en
+`local/jcop3-security-env-*`. No envía VERIFY, MSE, firma, consultas `7F48`
+ni comandos administrativos. Una prueba con transporte simulado verificó
+longitudes, referencias, contextos y número de respuestas. Su compatibilidad
+real y el contenido de SE 3 siguen pendientes de la tarjeta.

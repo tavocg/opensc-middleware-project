@@ -3,8 +3,8 @@ set -euo pipefail
 umask 077
 
 task_mode=${2:---probe}
-if (( $# > 2 )) || [[ ! ${1:-0} =~ ^[0-9]+$ ]] || [[ $task_mode != --probe && $task_mode != --inspect && $task_mode != --read-dir && $task_mode != --pkcs11 && $task_mode != --pin-context && $task_mode != --pin-policy && $task_mode != --key-policy ]]; then
-    printf 'Uso: bash scripts/probe-jcop3.sh [índice de lector] [--probe|--inspect|--read-dir|--pkcs11|--pin-context|--pin-policy|--key-policy]\n' >&2
+if (( $# > 2 )) || [[ ! ${1:-0} =~ ^[0-9]+$ ]] || [[ $task_mode != --probe && $task_mode != --inspect && $task_mode != --read-dir && $task_mode != --pkcs11 && $task_mode != --pin-context && $task_mode != --pin-policy && $task_mode != --key-policy && $task_mode != --security-env ]]; then
+    printf 'Uso: bash scripts/probe-jcop3.sh [índice de lector] [--probe|--inspect|--read-dir|--pkcs11|--pin-context|--pin-policy|--key-policy|--security-env]\n' >&2
     exit 2
 fi
 
@@ -45,6 +45,8 @@ elif [[ $task_mode == --pin-policy ]]; then
     task_report=$(mktemp "$task_root/local/jcop3-pin-policy-XXXXXXXX.txt")
 elif [[ $task_mode == --key-policy ]]; then
     task_report=$(mktemp "$task_root/local/jcop3-key-policy-XXXXXXXX.txt")
+elif [[ $task_mode == --security-env ]]; then
+    task_report=$(mktemp "$task_root/local/jcop3-security-env-XXXXXXXX.txt")
 else
     task_report=$(mktemp "$task_root/local/jcop3-inventory-XXXXXXXX.txt")
 fi
@@ -186,7 +188,25 @@ if [[ $task_mode == --key-policy ]] && (( task_failed == 0 )); then
     done
 fi
 
-if [[ $task_mode == --read-dir || $task_mode == --pin-context || $task_mode == --pin-policy || $task_mode == --key-policy ]]; then
+if [[ $task_mode == --security-env ]] && (( task_failed == 0 )); then
+    # The captured RSA ACL's SCB 13 means user authentication through SE 3.
+    # Match iasecc_se_get_info(): class 7B, reference 3, public CRT template.
+    # Compare app and root; no VERIFY, MSE, signature or private-key query.
+    for task_select_aid in 00A404040EE828BD080FD25047656E6572696300 00A404040BF0496173456363526F6F7400; do
+        printf '\nquery=SE_03_public_metadata\nselect_aid=%s\n' "$task_select_aid" >> "$task_report"
+        task_record env OPENSC_DEBUG=9 opensc-tool --reader "$task_reader" --card-driver default \
+            --send-apdu "$task_select_aid" \
+            --send-apdu 00CB3FFF0A4D087006BFFB03027B8000 || task_failed=1
+    done
+    # use_key() also selects the signing key's declared PKCS#15 path.
+    # Check only that known path, without reading the selected object.
+    printf '\nquery=signing_key_path_0003\n' >> "$task_report"
+    task_record env OPENSC_DEBUG=9 opensc-tool --reader "$task_reader" --card-driver default \
+        --send-apdu 00A404040EE828BD080FD25047656E6572696300 \
+        --send-apdu 00A4090402000300 || task_failed=1
+fi
+
+if [[ $task_mode == --read-dir || $task_mode == --pin-context || $task_mode == --pin-policy || $task_mode == --key-policy || $task_mode == --security-env ]]; then
     # opensc-tool puede devolver 0 aunque una APDU devuelva un SW de error.
     # En el diagnóstico de contexto, los SW negativos también son evidencia.
     task_expected_responses=4
@@ -194,6 +214,8 @@ if [[ $task_mode == --read-dir || $task_mode == --pin-context || $task_mode == -
         task_expected_responses=16
     elif [[ $task_mode == --pin-policy ]]; then
         task_expected_responses=22
+    elif [[ $task_mode == --security-env ]]; then
+        task_expected_responses=6
     fi
     task_responses=0
     while IFS= read -r task_line; do

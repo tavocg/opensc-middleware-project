@@ -1,8 +1,9 @@
 # libjcop3p11: contexto para continuar
 
 Estado documentado el **11 de octubre de 2026**, después de revisar los informes
-de las 21:34 UTC. Leer este archivo al retomar el proyecto y contrastarlo con
-Git y las capturas más recientes. Es un punto de partida, no una afirmación
+de las 21:34 UTC y corregir la lectura de ACL de los SDO RSA. Leer este archivo
+al retomar el proyecto y contrastarlo con Git y las capturas más recientes.
+Es un punto de partida, no una afirmación
 de soporte completo de la tarjeta.
 
 ## Objetivo y alcance
@@ -92,12 +93,17 @@ pero no valida comunicación con la tarjeta.
 
 ## Git al momento de esta documentación
 
-Los cambios previos están comprometidos y ambos árboles estaban limpios antes
-de agregar este documento:
+Los commits guardados antes de la última corrección son:
 
-- Repositorio principal: **`5386d9d`**, `Test ChipDoc PIN policy and probe RSA metadata`.
+- Repositorio principal: **`6a3d4a6`**, `Consolidate agent instructions`.
 - Submódulo OpenSC: **`840a7b204`**, `iasecc: support observed ChipDoc PIN policy`.
 - Base upstream original: `c7a377af971df03f879c1697e91ebac1f7e28c56`.
+
+Está preparada, todavía sin commit, la corrección de ACL de SDO en
+`vendor/opensc/src/libopensc/iasecc-sdo.c`, con regresiones en
+`tests/iasecc-sdo.c`, un nuevo diagnóstico `inspect/jcop3-security-env` y
+actualizaciones de documentación. Confirmar este estado mediante Git;
+el usuario puede haber hecho los commits desde su terminal.
 
 La URL del submódulo aún es `https://github.com/OpenSC/OpenSC.git`. Los commits
 locales del driver necesitarán publicarse en un fork y actualizar esa URL
@@ -154,6 +160,12 @@ Anunciar un mecanismo no demuestra que funcione en esta tarjeta.
    de esa ACL se rechazan. No implementa la política contactless.
    `card-iasecc.c` marca `read_verify_only` y bloquea cambio/desbloqueo antes
    de cualquier autenticación.
+5. **Todos los grupos de ACL de SDO** (pendiente de commit):
+   `iasecc_parse_acls()` también perdía los grupos posteriores al primero.
+   Ahora conserva todas las condiciones de los DOCP RSA capturados, acepta
+   repeticiones idénticas y rechaza alternativas distintas y truncamientos.
+   Las condiciones de firma, autenticación interna y descifrado apuntan al
+   entorno de seguridad 3. No se ejecutaron operaciones administrativas.
 
 La condición `00` de VERIFY permite ejecutar el comando sin autenticación
 previa; **no acredita el PIN ni evita su comprobación por la tarjeta**.
@@ -167,12 +179,12 @@ o resolver la selección del perfil. No basta con cambiar la ruta de la .so.
 
 ## Verificación y últimas capturas
 
-Hay **38 comprobaciones de regresión** en cuatro archivos: `iasecc-fci.c`,
+Hay **49 comprobaciones de regresión** en cuatro archivos: `iasecc-fci.c`,
 `iasecc-pin-path.c`, `iasecc-sdo.c`, `iasecc-pin-policy.c`. Incluyen respuestas
 capturadas, conservación/copia de metadatos, rechazo de perfiles distintos y
 transporte simulado que verifica que cambio/desbloqueo no autentican.
 Pasaron en la comprobación local; también terminó la compilación completa
-sin PC/SC, registrada en `build/opensc-offline/chipdoc-policy-build.log`.
+sin PC/SC, registrada en `build/opensc-offline/rsa-acl-build.log`.
 Esto no sustituye pruebas de firma en hardware.
 
 | Captura local | Resultado relevante |
@@ -185,11 +197,19 @@ Esto no sustituye pruebas de firma en hardware.
 | **`jcop3-pkcs11-cRVr2acc.txt`** | Última consulta, 21:34:21 UTC, OpenSC `840a7b204`: política del PIN leída, límites 14/4 e intentos 7/7 |
 | **`jcop3-key-policy-egE7wr1j.txt`** | Última consulta, 21:34:35 UTC: SELECT ChipDoc y GET DOCP de RSA_PRIVATE 2 y 3 devuelven `9000` |
 
-Los dos últimos informes ya existen: **no pedir ejecutarlos de nuevo como
-primer paso**. Su interpretación completa, especialmente la política RSA,
-queda pendiente. El DOCP RSA contiene ACL de varios grupos; no asumir que
-el parser existente las interpreta correctamente. Las consultas solicitaron
-solo DOCP `A0`, nunca la plantilla `7F48` ni componentes privados.
+Los dos últimos informes ya se revisaron: **no pedir ejecutarlos de nuevo como
+primer paso**. Los DOCP RSA se reprodujeron en las regresiones del parser
+corregido; ambos declaran tamaño 256 bytes y ACL idénticas. La condición de
+firma `13` significa autenticación de usuario mediante SE 3 según OpenSC;
+falta conocer su plantilla y CHV asociado. Las consultas solicitaron solo
+DOCP `A0`, nunca la plantilla `7F48` ni componentes privados.
+
+TokenInfo no incluye `supportedAlgorithms`, y las llaves muestran
+`Algo_refs: 0`. El camino actual de `iasecc_set_security_env()` necesita esa
+tabla para resolver las referencias de algoritmo de RSA. Todavía no se ha
+preparado una adaptación para su ausencia. Tampoco se ha comprobado que la
+ruta de firma `ChipDoc::0003` sea seleccionable. Estos prerrequisitos se
+investigan antes de otro intento autenticado.
 
 Las consultas vacías de VERIFY devuelven `63 C7`: PIN no verificado, 7 intentos
 restantes. No llevan el valor del PIN. El primer intento de firma no tuvo
@@ -200,13 +220,16 @@ internos de parsing: revisar las respuestas y el contexto.
 
 ## Próximo trabajo, en orden
 
-1. Revisar los dos informes de las 21:34 UTC y añadir su interpretación a
-   `docs/jcop3.md`. Confirmar el camino de política del PIN y distinguir
-   advertencias persistentes (PuKDF/configuración) del bloqueo de firma.
-2. Interpretar los DOCP RSA de referencias 2 y 3 frente al parser IAS/ECC.
-   Determinar qué grupos ACL, security environments y selección MSE necesita
-   la firma. Obtener metadatos adicionales sin PIN solo si hacen falta;
-   evitar barridos arbitrarios de referencias y comandos administrativos.
+1. Dar al usuario los comandos de commit para la corrección de ACL de SDO
+   y el diagnóstico, y ejecutar desde su terminal:
+   `make test/iasecc JOBS="$(nproc)"` y `make inspect/jcop3-security-env`.
+   El último objetivo no recompila ni solicita PIN. Envía seis APDU:
+   SELECT/GET DATA de SE 3 en ChipDoc y raíz, y SELECT ChipDoc/ruta `0003`.
+   Se verificó con transporte simulado, todavía no con la tarjeta.
+2. Revisar `local/jcop3-security-env-*` cuando exista una captura real:
+   identificar el CHV de SE 3 y si la ruta `0003` es seleccionable. Resolver
+   las referencias de algoritmo ausentes mediante evidencia, sin asignarlas
+   a ciegas. Evitar barridos arbitrarios y comandos administrativos.
 3. Si aparece otro fallo reproducible, preparar una corrección con evidencia
    y regresión pertinente. Dar comandos para commit primero en el submódulo
    y luego en el repositorio principal, registrando su nuevo puntero.

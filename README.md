@@ -11,6 +11,25 @@ Primer objetivo: reconocer una tarjeta JCOP3 emitida en Costa Rica, leer su
 certificado y producir una firma verificable mediante PKCS#11 de OpenSC.
 La compatibilidad con su aplicación interna todavía está por comprobar.
 
+## Punto actual para continuar
+
+Consultar [AGENTS.md](AGENTS.md) y las últimas secciones de
+[docs/jcop3.md](docs/jcop3.md). Ya se leen certificados RSA y la política
+del PIN (7 intentos restantes en la última consulta). Todavía no hay una
+firma exitosa. Se corrigió la lectura de todos los grupos de ACL de los
+objetos RSA, con 49 comprobaciones locales. Falta validar el entorno de
+seguridad 3, la ruta de la llave y las referencias de algoritmo:
+
+```bash
+nix develop
+make test/iasecc JOBS="$(nproc)"
+make inspect/jcop3-security-env
+```
+
+La consulta guarda un informe local, no solicita PIN y no ejecuta firmas.
+Las secciones siguientes conservan los pasos anteriores de preparación e
+investigación; no es necesario repetirlos al retomar este directorio.
+
 ## Organización
 
 - `vendor/opensc/`: submódulo de OpenSC.

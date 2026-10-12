@@ -79,6 +79,83 @@ static void check_chipdoc(void)
 	}
 }
 
+static void check_rsa_policy(void)
+{
+	struct sc_context ctx = {0};
+	struct sc_card card = {0};
+	struct iasecc_sdo sdo = {0};
+	/* Captured DOCP only: no RSA private components. Both references have
+	 * identical metadata apart from the object reference byte.
+	 */
+	unsigned char captured[] = {
+		0x70,0x2B,0xBF,0x90,0x02,0x27,0xA0,0x25,0x9E,0x01,0x00,
+		0x80,0x02,0x01,0x00,0xA1,0x1C,
+		0x8C,0x0C,0xC0,0x13,0x90,0x13,0xA0,0x13,0x88,0x13,0x82,0xD3,0x81,0x00,
+		0x9C,0x0C,0xC0,0x13,0x90,0x13,0xA0,0x13,0x88,0x13,0x82,0xD3,0x81,0x00
+	};
+	static const unsigned char expected[] = {0x13,0x13,0x13,0x13,0xFF,0xD3,0x00};
+	unsigned char duplicate[] = {0x40,0x13,0x40,0x13};
+	unsigned char conflicting[] = {0x40,0x13,0x40,0x00};
+	unsigned char truncated[] = {0x40,0x13,0x03,0x00};
+	unsigned method, reference;
+	int result;
+
+	ctx.app_name = "iasecc-rsa-policy-regression";
+	card.ctx = &ctx;
+	card.type = SC_CARD_TYPE_IASECC_AMOS;
+	for (int key_ref = 2; key_ref <= 3; key_ref++) {
+		sdo.sdo_class = IASECC_SDO_CLASS_RSA_PRIVATE;
+		sdo.sdo_ref = captured[4] = key_ref;
+		result = iasecc_sdo_parse(&card, captured, sizeof(captured), &sdo);
+		check(key_ref == 2 ? "captured RSA reference 2 retains all ACL groups" :
+				"captured RSA reference 3 retains all ACL groups",
+				result == SC_SUCCESS && sdo.sdo_class == IASECC_SDO_CLASS_RSA_PRIVATE &&
+				sdo.sdo_ref == key_ref && sdo.docp.amb == 0x7B &&
+				!memcmp(sdo.docp.scbs, expected, sizeof(expected)) &&
+				sdo.docp.size.size == 2 && sdo.docp.size.value[0] == 1 &&
+				sdo.docp.size.value[1] == 0);
+		if (key_ref == 2)
+			iasecc_sdo_free_fields(&card, &sdo);
+	}
+	result = iasecc_sdo_convert_acl(&card, &sdo, SC_AC_OP_PSO_COMPUTE_SIGNATURE, &method, &reference);
+	check("RSA PSO signature requires user authentication through SE 3",
+			result == SC_SUCCESS && method == SC_AC_SEN && reference == 3);
+	result = iasecc_sdo_convert_acl(&card, &sdo, SC_AC_OP_INTERNAL_AUTHENTICATE, &method, &reference);
+	check("RSA internal authentication retains its later SE 3 rule",
+			result == SC_SUCCESS && method == SC_AC_SEN && reference == 3);
+	result = iasecc_sdo_convert_acl(&card, &sdo, SC_AC_OP_READ, &method, &reference);
+	check("RSA metadata GET DATA retains its later unrestricted rule",
+			result == SC_SUCCESS && method == SC_AC_NONE);
+	result = iasecc_sdo_convert_acl(&card, &sdo, SC_AC_OP_PSO_DECRYPT, &method, &reference);
+	check("RSA decipher retains its later SE 3 authentication rule",
+			result == SC_SUCCESS && method == SC_AC_SEN && reference == 3);
+	result = iasecc_sdo_convert_acl(&card, &sdo, SC_AC_OP_UPDATE, &method, &reference);
+	check("RSA PUT DATA preserves its combined protection byte",
+			result == SC_SUCCESS && method == SC_AC_SCB && reference == 0xD3);
+	result = iasecc_parse_acls(&card, &sdo.docp, 1);
+	check("RSA contactless metadata is parsed without performing contactless operations",
+			result == SC_SUCCESS && sdo.docp.amb == 0x7B &&
+			!memcmp(sdo.docp.scbs, expected, sizeof(expected)));
+	iasecc_sdo_free_fields(&card, &sdo);
+
+	/* Direct ACL fixtures also exercise malformed later groups, which the
+	 * former parser silently ignored. These buffers are not heap-owned.
+	 */
+	sdo.docp.acls_contact.value = duplicate;
+	sdo.docp.acls_contact.size = sizeof(duplicate);
+	result = iasecc_parse_acls(&card, &sdo.docp, 0);
+	check("identical repeated SDO conditions are accepted", result == SC_SUCCESS &&
+			sdo.docp.amb == 0x40 && sdo.docp.scbs[0] == 0x13);
+	sdo.docp.acls_contact.value = conflicting;
+	sdo.docp.acls_contact.size = sizeof(conflicting);
+	result = iasecc_parse_acls(&card, &sdo.docp, 0);
+	check("different alternative SDO conditions are rejected", result == SC_ERROR_NOT_SUPPORTED);
+	sdo.docp.acls_contact.value = truncated;
+	sdo.docp.acls_contact.size = sizeof(truncated);
+	result = iasecc_parse_acls(&card, &sdo.docp, 0);
+	check("a truncated later SDO group is rejected", result == SC_ERROR_INVALID_DATA);
+}
+
 int main(void)
 {
 	struct sc_context ctx = {0};
@@ -132,5 +209,6 @@ int main(void)
 	check("unknown CHV data still returns an error", result == SC_ERROR_UNKNOWN_DATA_RECEIVED);
 	iasecc_sdo_free_fields(&card, &sdo);
 	check_chipdoc();
+	check_rsa_policy();
 	return failures ? 1 : 0;
 }
