@@ -3,6 +3,7 @@
  */
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 
 #define sc_pkcs15_decipher fixture_decipher
 #define sc_pkcs15_derive fixture_derive
@@ -31,7 +32,8 @@ static const unsigned char digest_info[] = {
 	0xB0,0x03,0x61,0xA3,0x96,0x17,0x7A,0x9C,0xB4,0x10,0xFF,0x61,0xF2,0x00,0x15,0xAD
 };
 static int failures, selections, metadata_queries, mse_queries, signature_queries, forbidden_commands;
-static int reject_mse, reject_signature;
+static int reject_mse, reject_signature, reject_select, reject_security_status;
+static int revalidation_queries;
 
 static void check(const char *name, int valid)
 {
@@ -50,7 +52,7 @@ int sc_pkcs15_pincache_revalidate(struct sc_pkcs15_card *card, const struct sc_p
 {
 	(void)card;
 	(void)obj;
-	forbidden_commands++;
+	revalidation_queries++;
 	return SC_ERROR_SECURITY_STATUS_NOT_SATISFIED;
 }
 
@@ -83,6 +85,8 @@ int sc_select_file(struct sc_card *card, const struct sc_path *path, struct sc_f
 	struct iasecc_private_data *private_data = card->drv_data;
 	struct sc_file *df = private_data->cache.current_df;
 	(void)file;
+	if (reject_select)
+		return SC_ERROR_SECURITY_STATUS_NOT_SATISFIED;
 	if (path->len || path->aid.len != df->path.len ||
 			memcmp(path->aid.value, df->path.value, df->path.len))
 		return SC_ERROR_INVALID_ARGUMENTS;
@@ -123,6 +127,12 @@ int sc_transmit_apdu(struct sc_card *card, struct sc_apdu *apdu)
 			apdu->datalen == sizeof(digest_info) && !memcmp(apdu->data, digest_info, sizeof(digest_info))) {
 		signature_queries++;
 		if (reject_signature) return SC_ERROR_NOT_SUPPORTED;
+		if (reject_security_status) {
+			apdu->sw1 = 0x69;
+			apdu->sw2 = 0x82;
+			apdu->resplen = 0;
+			return SC_SUCCESS;
+		}
 		if (apdu->resplen < 256) return SC_ERROR_BUFFER_TOO_SMALL;
 		/* Synthetic response, not evidence of any real RSA signature. */
 		memset(apdu->resp, 0xA5, 256);
@@ -138,6 +148,24 @@ static void reset_transport(void)
 {
 	selections = metadata_queries = mse_queries = signature_queries = forbidden_commands = 0;
 	reject_mse = reject_signature = 0;
+	reject_select = reject_security_status = revalidation_queries = 0;
+}
+
+static void read_trace(const char *path, char *output, size_t size)
+{
+	FILE *file = fopen(path, "r");
+	size_t length = 0;
+	if (file) {
+		length = fread(output, 1, size - 1, file);
+		fclose(file);
+	}
+	output[length] = 0;
+}
+
+static void clear_trace(const char *path)
+{
+	FILE *file = fopen(path, "w");
+	if (file) fclose(file);
 }
 
 int main(void)
@@ -240,5 +268,61 @@ int main(void)
 	check("explicit RSA-PKCS remains unchanged after the capability fixup", result == 256 &&
 			selections == 1 && metadata_queries == 1 && mse_queries == 1 && signature_queries == 1 &&
 			!forbidden_commands);
+
+	/* Diagnostic scenarios use only simulated transport and no PIN. */
+	char trace_path[] = "/tmp/jcop3-sign-stages-XXXXXX";
+	char trace[2048], error_line[128];
+	int trace_fd = mkstemp(trace_path);
+	if (trace_fd < 0) return 1;
+	close(trace_fd);
+	setenv("OPENSC_API_TRACE_FILE", trace_path, 1);
+	reset_transport();
+	result = fixture_compute_signature(&p15card, &key, flags, digest_info, sizeof(digest_info),
+			signature, sizeof(signature), NULL);
+	read_trace(trace_path, trace, sizeof(trace));
+	check("successful trace reports selection, MSE, card result and compute without extra commands",
+			result == 256 && selections == 1 && metadata_queries == 1 && mse_queries == 1 &&
+			signature_queries == 1 && !forbidden_commands && !revalidation_queries &&
+			strstr(trace, "KEY_SELECT ") && strstr(trace, "KEY_MSE ") &&
+			strstr(trace, "CARD_KEY_DOCP ") && strstr(trace, "CARD_MSE session=0x0 rv=0x0 a=0x9000 ") &&
+			strstr(trace, "CARD_SIGN_AT session=0x0 rv=0x0 a=0x9000 b=0x0\n") &&
+			strstr(trace, "KEY_COMPUTE session=0x0 rv=0x100 "));
+	clear_trace(trace_path);
+	reset_transport();
+	reject_mse = 1;
+	result = fixture_compute_signature(&p15card, &key, flags, digest_info, sizeof(digest_info),
+			signature, sizeof(signature), NULL);
+	read_trace(trace_path, trace, sizeof(trace));
+	snprintf(error_line, sizeof(error_line), "KEY_MSE session=0x0 rv=0x%lX ", (unsigned long)result);
+	check("failed MSE trace stops before computing or revalidating", result < 0 &&
+			!signature_queries && !forbidden_commands && !revalidation_queries &&
+			strstr(trace, error_line) && !strstr(trace, "KEY_COMPUTE ") &&
+			strstr(trace, "CARD_KEY_DOCP ") && strstr(trace, "a=0x6A80 ") &&
+			!strstr(trace, "CARD_SIGN_AT ") && !strstr(trace, "KEY_REVALIDATE "));
+	clear_trace(trace_path);
+	reset_transport();
+	reject_security_status = 1;
+	result = fixture_compute_signature(&p15card, &key, flags, digest_info, sizeof(digest_info),
+			signature, sizeof(signature), NULL);
+	read_trace(trace_path, trace, sizeof(trace));
+	snprintf(error_line, sizeof(error_line), "CARD_SIGN_AT session=0x0 rv=0x%lX a=0x6982 b=0x0\n",
+			(unsigned long)SC_ERROR_SECURITY_STATUS_NOT_SATISFIED);
+	check("card security rejection reports status and blocked revalidation without repeating RSA",
+			result == SC_ERROR_SECURITY_STATUS_NOT_SATISFIED && signature_queries == 1 &&
+			revalidation_queries == 1 && !forbidden_commands && strstr(trace, error_line) &&
+			strstr(trace, "KEY_COMPUTE ") && strstr(trace, "KEY_REVALIDATE "));
+	clear_trace(trace_path);
+	reset_transport();
+	reject_select = 1;
+	result = fixture_compute_signature(&p15card, &key, flags, digest_info, sizeof(digest_info),
+			signature, sizeof(signature), NULL);
+	read_trace(trace_path, trace, sizeof(trace));
+	snprintf(error_line, sizeof(error_line), "KEY_SELECT session=0x0 rv=0x%lX ", (unsigned long)result);
+	check("selection rejection trace never reaches MSE or crypto", result == SC_ERROR_SECURITY_STATUS_NOT_SATISFIED &&
+			!metadata_queries && !mse_queries && !signature_queries && !forbidden_commands &&
+			revalidation_queries == 1 && strstr(trace, error_line) && !strstr(trace, "KEY_MSE ") &&
+			!strstr(trace, "KEY_COMPUTE ") && !strstr(trace, "CARD_SIGN_AT "));
+	unsetenv("OPENSC_API_TRACE_FILE");
+	unlink(trace_path);
 	return failures ? 1 : 0;
 }

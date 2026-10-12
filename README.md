@@ -25,7 +25,7 @@ medidas de la llave de firma. El mecanismo combinado `SHA256-RSA-PKCS`
 falló en `C_SignFinal`: el camino QSign no soporta OpenSSL 3. El helper
 prepara el DigestInfo SHA-256 en el equipo y pide `RSA-PKCS` a la tarjeta.
 El 11 de octubre de 2026 a las 20:18 de Costa Rica, esta ruta produjo una
-firma de 256 bytes y OpenSSL confirmó `Verified OK`. Pasan 108 comprobaciones
+firma de 256 bytes y OpenSSL confirmó `Verified OK`. Pasan 112 comprobaciones
 locales. Para reproducir la prueba técnica:
 
 ```bash
@@ -59,8 +59,10 @@ compatibilidad con firmador. El primer intento falló con
 `CKR_FUNCTION_NOT_SUPPORTED` y `signatureValue cannot be null!`.
 La negociación del hashing SHA-256 ya se corrigió y validó en la tarjeta
 mediante `make sign/jcop3-sha256`. El intento posterior del firmador pidió
-el PIN y falló con `CKR_USER_NOT_LOGGED_IN`; no se confirmó el certificado
-seleccionado. Para investigar las sesiones sin capturar PIN ni APDU:
+el PIN y falló con `CKR_USER_NOT_LOGGED_IN`. El diagnóstico de las 21:06
+confirmó login exitoso, llave de firma 3 y fallo en `C_SignFinal`, sin logout
+intermedio. Se amplió el registro para distinguir selección, MSE y operación
+RSA, sin capturar PIN ni contenido de APDU. Para usarlo:
 
 ```bash
 make test/iasecc JOBS="$(nproc)"

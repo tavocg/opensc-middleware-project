@@ -1114,3 +1114,80 @@ de repetir login. No se necesita repetir las firmas técnicas verificadas.
 Todavía no se ha capturado este diagnóstico en hardware ni se ha corregido
 el fallo de autenticación. No activar caché de PIN, `atomic` ni `lock_login`
 sin resolver qué interacción falla.
+
+## Diagnóstico del firmador revisado: 2026-10-11, 21:06 de Costa Rica
+
+`local/jcop3-firmador-api-1LBmDPbP/report.txt`, de las 03:06:20 UTC del 12
+de octubre, registra OpenSC `f7752be36`, sin cambios locales. El repositorio
+principal está en `7eb8fb0`. Ambos árboles estaban limpios al iniciar esta
+revisión. `api.log` contiene 88 líneas de metadatos, con la siguiente secuencia:
+
+1. La enumeración inicial abre y cierra sesiones. Un `C_Logout` previo al
+   login devuelve `CKR_USER_NOT_LOGGED_IN`; no es el fallo de firma posterior.
+2. `C_Login` con `CKU_USER` devuelve **`CKR_OK`**. No hay otro login en el registro.
+3. Después del login, cuatro `C_GetSessionInfo` informan `CKS_RW_USER_FUNCTIONS`.
+   Las consultas existentes de PIN retornan éxito y `SC_PIN_STATE_LOGGED_IN`.
+4. `C_SignInit` con `CKM_SHA256_RSA_PKCS (0x40)` pasa; `C_SignUpdate` también.
+5. `SIGN_KEY` confirma referencia **3**, RSA **2048**: es `LlaveDeFirma`.
+6. El único `C_SignFinal` devuelve **`CKR_USER_NOT_LOGGED_IN (0x101)`**.
+
+No hay logout, cierre de sesión ni reinserción indicada entre el login y
+la firma. La sesión utilizada para firmar es distinta de la de login;
+PKCS#11 comparte autenticación entre sesiones del token, y las consultas
+la reconocen en la nueva sesión. El usuario comunicó tres mensajes iguales,
+pero esta captura contiene una sola operación final de firma, no tres
+verificaciones del PIN. No consta una firma PDF válida.
+
+La evidencia descarta una elección de la llave de autenticación para esta
+operación y confirma que el login pasó. Las consultas de estado indican
+autenticación en ese momento; no prueban que conserve todas las condiciones
+de acceso al terminar las selecciones posteriores. No se conoce todavía el
+punto interno del rechazo. No modificar PIN, ACL o sesiones para eludirlo.
+
+La ruta `pkcs15_prkey_sign → sc_pkcs15_compute_signature → use_key` puede
+recibir `SC_ERROR_SECURITY_STATUS_NOT_SATISFIED` al seleccionar la llave,
+preparar MSE o ejecutar RSA. PKCS#11 lo traduce a `CKR_USER_NOT_LOGGED_IN`.
+El intento de revalidación de PKCS#15 queda rechazado al estar desactivada
+la caché PIN; no se debe habilitar para ocultar la causa. El registro de
+sesiones inicial no distingue esas etapas.
+
+Se amplió el diagnóstico existente, sin comandos adicionales ni cambios
+de autenticación. `libopensc/api-trace.h` comparte el mismo logger de nombres
+fijos y enteros entre PKCS#11, PKCS#15 y el driver. Continúa desactivado por
+defecto y conserva `errno`; `sc_pkcs11_api_trace()` delega en él. El nuevo
+header está incluido en la distribución mediante `noinst_HEADERS`.
+
+| Evento nuevo | Resultado `rv` | `a` | `b` |
+| --- | --- | --- | --- |
+| `KEY_SELECT` | selección de la ruta de llave | operación PKCS#15 solicitada | 0 |
+| `KEY_MSE` | preparación del entorno de seguridad | operación solicitada | 0 |
+| `KEY_COMPUTE` | operación criptográfica, longitud si tuvo éxito | operación solicitada | 0 |
+| `KEY_REVALIDATE` | llamada existente de revalidación; se espera rechazo con caché desactivada | operación solicitada | 0 |
+| `CARD_KEY_DOCP` | lectura de metadatos públicos de la llave ChipDoc | referencia de llave | 0 |
+| `CARD_MSE` | verificación del resultado de MSE | palabra de estado de respuesta | operación efectiva del driver |
+| `CARD_SIGN_AT` | retorno del transporte o verificación de resultado RSA AT | palabra de estado, 0 si falla transporte | 0 |
+
+Estos resultados son enteros internos de OpenSC convertidos a `unsigned long`,
+no códigos PKCS#11. El retorno negativo conserva su representación en
+hexadecimal. Las palabras de estado son únicamente códigos de resultado:
+no se registran encabezados, datos ni buffers APDU, PIN, longitud del PIN,
+documento, digest, firma o componentes de llaves. El logger no reintenta
+ninguna operación ni cambia los errores que recibe el llamador.
+
+Pasan **112 comprobaciones**. Las cuatro nuevas usan transporte simulado
+y comprueban la separación de selección/MSE/RSA, un rechazo de MSE que
+detiene RSA, un rechazo de seguridad simulado `6982` con revalidación
+bloqueada y una selección rechazada que no alcanza MSE. El estado `6982`
+de esta prueba es sintético: **todavía no se observó en esta sesión real**.
+Se comprueban también los contadores de transporte para asegurar que el
+registro no añade comandos ni repite RSA. Las regresiones están en
+`build/opensc-offline/chipdoc-sign-stages-tests.log`; la compilación completa
+sin PC/SC está en `chipdoc-sign-stages-build.log`.
+
+Falta ejecutar la ampliación en hardware: guardar sus commits, compilar
+con `make test/iasecc JOBS="$(nproc)"`, cerrar instancias anteriores del
+firmador y hacer una sola prueba con `make firmador/jcop3-diagnose`.
+Cerrar el programa y revisar el nuevo registro antes de otro intento.
+No repetir las firmas técnicas verificadas ni ejecutar el diagnóstico
+con la versión anterior esperando obtener estos eventos. El problema de
+autenticación sigue pendiente de localizar y corregir.

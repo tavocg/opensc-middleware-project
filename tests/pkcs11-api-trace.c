@@ -49,8 +49,8 @@ int main(void)
 			"C_SignFinal session=0x2 rv=0x101 a=0x1 b=0x0\n"
 			"SIGN_KEY session=0x2 rv=0x0 a=0x3 b=0x800\n"));
 	size_t length = strlen(output);
-	sc_pkcs11_api_trace((enum sc_pkcs11_api_event)-1, 0, 0, 0, 0);
-	sc_pkcs11_api_trace((enum sc_pkcs11_api_event)999, 0, 0, 0, 0);
+	sc_pkcs11_api_trace((enum sc_api_trace_event)-1, 0, 0, 0, 0);
+	sc_pkcs11_api_trace((enum sc_api_trace_event)999, 0, 0, 0, 0);
 	check("unrecognized events cannot append arbitrary diagnostic text",
 			read_trace(path, output, sizeof(output)) == length);
 	snprintf(invalid_path, sizeof(invalid_path), "%s/missing", path);
