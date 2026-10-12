@@ -17,7 +17,7 @@
 | AID de aplicación anunciado en EF.DIR | `E828BD080FD25047656E65726963`, etiqueta `ChipDoc`; OpenSC lo identifica como `ECC Generic PKI` |
 | Versión de aplicación | Pendiente |
 | Tipo y tamaño de llave del certificado | RSA de 2048 bits en ambos certificados, comprobado con OpenSSL sobre los DER leídos |
-| Mecanismo de firma usado por el firmador | Pendiente |
+| Mecanismo de firma usado por el firmador | SHA256-RSA-PKCS (0x40), llave 3 RSA 2048; GUI y CLI producen PDF verificados |
 
 Un ATR o AID coincidente es una pista, no una demostración de compatibilidad.
 Las capacidades del chip tampoco demuestran qué permiten las llaves emitidas.
@@ -52,9 +52,10 @@ Git; el script ahora usa `--info` para registrar la versión y funciones habilit
 - [x] Ambos certificados leídos sin PIN; algoritmo y tamaño corroborados.
 - [x] PKCS#11 publica certificados, llaves públicas y mecanismos de firma.
 - [ ] OpenSC enumera los objetos correctamente.
-- [ ] Una firma con el mecanismo observado se verifica externamente.
-- [ ] Firma reproducida sin cargar Idopte.
-- [ ] Retirada, reinserción, errores y varias sesiones comprobados.
+- [x] Una firma con el mecanismo observado se verifica externamente.
+- [x] Firma reproducida sin cargar Idopte, en GUI y CLI.
+- [x] Retirada/reinserción rápida en la misma GUI, con PDF verificados.
+- [ ] Ciclos reales repetidos, errores adicionales y clientes concurrentes comprobados.
 
 ## Registro de comandos observados
 
@@ -2286,3 +2287,63 @@ ante un error sin reintentar PIN. Revisar certificado/llave seleccionada,
 login, VERIFY, firma y PDF antes de declarar el CLI probado. No lo ejecutó
 el agente ni se accedió al pass real. Después quedan ciclos reales repetidos,
 concurrencia y selección del perfil por defecto antes de preparar upstream.
+
+## Primer CLI: firma y PDF verificados, 2026-10-12, 02:11
+
+El usuario ejecutó el pipe autorizado de pass hacia `make firmador/jcop3-cli`.
+`local/jcop3-firmador-api-Z0aJ18Ge/report.txt` registra 08:11:29 UTC,
+launch_mode=cli, candidata activa y OpenSC `8842f394b` limpio. Principal
+`feaca6f`; ambos árboles limpios antes de actualizar esta documentación.
+El agente no ejecutó pass ni firmador autenticado ni accedió al PIN.
+
+Los **174 eventos** se conservaron en api-reviewed.log, con resumen privado
+analysis.json. Confirman VERIFY real en 96, login OK en 97, selección de
+llave nativa **3 (LlaveDeFirma), RSA 2048**, y C_SignFinal OK en 174.
+El mecanismo es SHA256-RSA-PKCS (`0x40`), RSA AT devuelve `9000` y la
+operación produce 256 bytes. Dos consultas físicas después del login pasan
+sin SELECT raíz. No hay CARD_PIN_VERIFY_CACHED ni errores de lock/sesión.
+La consulta STATUS_ONLY inicial devuelve NOT_SUPPORTED y se lee política
+pública, como en la GUI. No hubo un segundo VERIFY o reintento de firma.
+
+`local/jcop3-cli.pdf` tiene **76918 bytes**. Informe privado y copias:
+`local/jcop3-pdf-verification-fttds461/report.json`. Verificación sin tarjeta,
+PIN o red:
+
+- CAdES con el certificado exacto de LlaveDeFirma, CMS verificado por OpenSSL
+  sobre los rangos del PDF. La revisión firmada tiene 34916 bytes.
+- Sello RFC 3161, CMS verificado y messageImprint SHA-512 coincidente con
+  los rangos del PDF; cubre la revisión final salvo su propio Contents.
+- Original de 6967 bytes preservado como prefijo, texto conservado y render
+  idéntico sin anotaciones. Los distintos tamaños/revisiones respecto a la
+  GUI no invalidan estos resultados; no se atribuye la diferencia a una
+  causa concreta ni se exige identidad byte a byte entre modos.
+
+No se validaron confianza, revocación o LTV. Estos resultados prueban una
+firma CLI con el módulo local y la misma candidata ya usada en GUI; no
+prueban otras selecciones de certificado, documentos o clientes concurrentes.
+El wrapper conserva stdin directo hacia firmador y no ejecuta pass ni
+almacena el PIN; las regresiones previas del lanzador siguen vigentes.
+El helper técnico sign-jcop3.sh sigue exigiendo TTY. La salida CLI ya existe;
+el wrapper la rechazaría en otro intento salvo elegir otro PDF_OUTPUT.
+
+No se modificó código ni se repitieron comprobaciones sin necesidad: las
+**256 regresiones** y compilación previas permanecen vigentes. La candidata
+sigue optativa. GUI, firmas consecutivas, reinserción rápida y CLI están
+verificados para la tarjeta/lector observados.
+
+### Próxima intervención: recuperación repetida en una sola GUI
+
+La simulación cubre cinco reemplazos, pero la prueba real corregida solo
+observó una reinserción. El siguiente caso comprobará que sesiones, política
+pública y autenticación vuelvan a inicializarse durante ciclos sucesivos.
+No recompilar ni repetir por separado el primer CLI.
+
+Cerrar otras instancias, abrir `make firmador/jcop3-pin-status-in-place` y
+firmar el original doc.pdf hacia `local/jcop3-cycle-0.pdf`. Mantener lector
+conectado y GUI abierta; retirar solo tarjeta, reinsertar tras aproximadamente
+un segundo y esperar cinco tras insertar. Firmar nuevamente el original como
+`local/jcop3-cycle-1.pdf`. Repetir el ciclo hasta `local/jcop3-cycle-4.pdf`:
+cinco firmas y cuatro reinserciones. Detenerse al primer error sin reintentar
+PIN y cerrar al terminar. Revisar nuevo VERIFY por login, limpieza/sesiones
+y cada PDF antes de declarar recuperación repetida. Después, comprobar
+interferencia de otro cliente y concurrencia, preservando esta evidencia.

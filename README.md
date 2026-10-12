@@ -151,7 +151,7 @@ No se validaron confianza ni revocación. El segundo PDF quedó en la raíz y
 los archivos /jcop3-*.pdf se excluyen de Git. La candidata sigue optativa;
 ciclos repetidos con tarjeta y concurrencia siguen pendientes.
 
-También está preparado el modo de terminal, usando la misma candidata:
+El modo de terminal usa la misma candidata y ya produjo un PDF verificado:
 
 ```bash
 set -o pipefail
@@ -162,11 +162,15 @@ Firma `doc.pdf` hacia `local/jcop3-cli.pdf`; se pueden cambiar con `PDF_INPUT`
 y `PDF_OUTPUT`. Rechaza una salida ya existente. El usuario autorizó enviar
 el PIN desde su gestor por stdin: el wrapper no lo lee, almacena ni pasa en
 argumentos o variables; firmador `-dargs` recibe el flujo directamente.
-No redirigir ni capturar ese flujo como registro. El agente no ejecutó `pass`
-ni esta firma: su entorno no detecta lectores. El CLI es el siguiente caso:
-cerrar previamente la GUI y ejecutar una sola vez el pipe, sin recompilar.
-Detenerse al primer error sin reintentar PIN. La reinserción ya se validó
-en la GUI; una ejecución CLI nueva comprueba un flujo diferente.
+No redirigir ni capturar ese flujo como registro. La prueba del usuario de
+las 02:11 pasó con OpenSC `8842f394b`: VERIFY real, llave LlaveDeFirma,
+SHA256-RSA-PKCS, firma de 256 bytes y PDF/sello verificados con OpenSSL.
+La página original se conserva; no se validaron confianza ni revocación.
+El agente no ejecutó pass ni la firma: verificó el resultado sin lector,
+PIN o red. La salida ya existe, por lo que otra prueba requiere otro PDF_OUTPUT.
+El próximo caso GUI son cuatro reinserciones sucesivas en la misma instancia,
+con cinco firmas del original y archivos nuevos. Las 256 regresiones siguen
+vigentes; no se modificó el driver tras el pase. La candidata sigue optativa.
 
 ## Organización
 
