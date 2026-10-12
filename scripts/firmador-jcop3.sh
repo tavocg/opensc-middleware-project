@@ -27,7 +27,8 @@ fi
 
 mkdir -p -- "$task_root/local"
 task_env=(env -u OPENSC_API_TRACE_FILE -u OPENSC_JCOP3_SESSION_STATE
-    -u OPENSC_JCOP3_POST_LOGIN_STATUS OPENSC_DEBUG=0 LIBASEP11="$task_module")
+    -u OPENSC_JCOP3_POST_LOGIN_STATUS -u OPENSC_JCOP3_POST_LOGIN_SELECT
+    OPENSC_DEBUG=0 LIBASEP11="$task_module")
 if [[ $task_trace_api == yes ]]; then
     task_output=$(mktemp -d "$task_root/local/jcop3-firmador-api-XXXXXXXX")
     task_config="$task_output/opensc.conf"

@@ -25,7 +25,7 @@ medidas de la llave de firma. El mecanismo combinado `SHA256-RSA-PKCS`
 falló en `C_SignFinal`: el camino QSign no soporta OpenSSL 3. El helper
 prepara el DigestInfo SHA-256 en el equipo y pide `RSA-PKCS` a la tarjeta.
 El 11 de octubre de 2026 a las 20:18 de Costa Rica, esta ruta produjo una
-firma de 256 bytes y OpenSSL confirmó `Verified OK`. Pasan 168 comprobaciones
+firma de 256 bytes y OpenSSL confirmó `Verified OK`. Pasan 178 comprobaciones
 locales. Para reproducir la prueba técnica:
 
 ```bash
@@ -92,15 +92,20 @@ original. Esta comprobación local no valida confianza ni revocación de
 certificados. Falta diseñar la corrección definitiva; el experimento sigue
 desactivado por defecto.
 
-La siguiente prueba controlada es `make sign/jcop3-pin-status`, después de
-compilar con `make test/iasecc JOBS="$(nproc)"`. Firma el mismo texto técnico
-con RSA-PKCS, pero añade **una consulta vacía de estado del PIN justo después
-del VERIFY exitoso**, sin agregar SELECT ni lecturas de política. El nuevo
-experimento está desactivado por defecto y registra únicamente metadatos en
-`local/jcop3-signature-*/api.log`; el PIN sigue introduciéndose sin eco.
-Hacer un solo intento y revisar antes de repetir. Un resultado exitoso no
-descartaría efectos de selección, lectura de política, consultas repetidas
-o cambios de transacción; la prueba solo aísla esa consulta inmediata.
+La consulta vacía aislada de `make sign/jcop3-pin-status` **permitió firmar**
+el 12 de octubre a las 00:04 de Costa Rica. El registro confirma la consulta
+inmediata después del VERIFY y la firma RSA; OpenSSL la verificó. Dos intentos
+previos se detuvieron en `C_OpenSession CKR_TOKEN_NOT_PRESENT` antes del login.
+Ese éxito no descarta efectos de selección, política, consultas repetidas o
+cambios de transacción.
+
+La siguiente prueba preparada es `make sign/jcop3-select-root`, después de
+compilar con `make test/iasecc JOBS="$(nproc)"`. Añade **una selección de la raíz
+IAS justo después del VERIFY exitoso**, sin añadir consultas de estado ni
+lecturas de política, y firma el texto técnico con RSA-PKCS. Aún no se probó
+en hardware. Ambos experimentos están desactivados por defecto y registran
+solo metadatos en `local/jcop3-signature-*/api.log`; el PIN se introduce sin eco.
+Cerrar firmador, hacer un solo intento y revisar antes de repetir.
 
 ## Organización
 

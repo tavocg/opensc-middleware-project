@@ -1565,3 +1565,68 @@ con stdout TTY y variables heredadas adversas; no se pidió PIN. La compilación
 completa sin PC/SC pasó. Informes locales:
 `build/opensc-offline/chipdoc-status-probe-build.log` y
 `build/opensc-offline/chipdoc-status-probe-tests.log`.
+
+## Consulta vacía permite firmar; próxima prueba SELECT: 2026-10-12, 00:04
+
+Los informes `local/jcop3-signature-rwfMn3zh/report.txt` y
+`jcop3-signature-ELmY1jCa/report.txt`, de 06:02:54 y 06:03:14 UTC,
+registran OpenSC `0e7549960`, árbol limpio y experimento de estado activado.
+Ambos fallaron en la lectura previa del certificado: `C_OpenSession`
+devuelve `CKR_TOKEN_NOT_PRESENT (0xe0)` para slot índice 0, ID 0. No
+ejecutaron el comando con `--login --sign`, ni VERIFY con el PIN, ni el hook.
+No hay certificado, firma ni `api.log` en esas carpetas. No demuestran un
+fallo de consulta de estado o firma, ni explican por sí solos por qué el
+token no estaba disponible. No se confirmó si fue conexión, inserción,
+enumeración del slot o binding del token.
+
+El siguiente informe, `local/jcop3-signature-QfdEBgds/report.txt`, de
+06:04:31 UTC (00:04 de Costa Rica), usa el mismo commit limpio. Confirma
+`RSA-PKCS`, `post_login_status_experiment=yes`, `Verified OK` y estado 0.
+El `api.log` confirma:
+
+- `POST_LOGIN_STATUS_BEGIN` y `POST_LOGIN_STATUS` son consecutivos; el
+  segundo devuelve 0 y estado físico `SC_PIN_STATE_LOGGED_IN (2)`.
+- `C_Login CKR_OK`, después del hook; no hay consultas adicionales de PIN
+  ni SELECT raíz entre ese login y la firma.
+- Un SELECT ChipDoc `9000`, llave nativa 3, RSA 2048; DOCP y MSE pasan.
+- `CARD_SIGN_AT SW=9000`, `KEY_COMPUTE=256` y `C_Sign CKR_OK` con salida;
+  no hay revalidación ni segunda operación RSA.
+
+Una comprobación independiente con OpenSSL también devolvió `Verified OK`.
+Se recalculó DigestInfo SHA-256, se comparó la llave pública con la extraída
+del certificado y se confirmó firma de 256 bytes. El resumen privado está
+en `local/jcop3-signature-QfdEBgds/verification.json`. No se validó confianza
+ni revocación, ni se volvió a usar lector/PIN en esa comprobación.
+
+**Una consulta vacía inmediata en ese contexto permite firmar.** El resultado
+no descarta efectos de consultas repetidas, transacciones separadas, SELECT
+o lecturas de política, y no resuelve el fallo normal del firmador. No
+convertir el experimento de sesión/token en comportamiento predeterminado.
+
+Se preparó `make sign/jcop3-select-root`: mismo texto técnico, DigestInfo,
+RSA-PKCS y verificación, con `OPENSC_JCOP3_POST_LOGIN_SELECT=yes` después del
+VERIFY exitoso. Conserva las restricciones de perfil observadas y añade
+solo la selección del AID raíz `F0496173456363526F6F74` mediante el driver;
+no añade consulta vacía ni GET DATA/política. Los eventos nuevos son
+`POST_LOGIN_SELECT_BEGIN` y `POST_LOGIN_SELECT`, con destino público 2 en
+`a`; entre ellos debe aparecer `CARD_SELECT a=2`. Ambos hooks comparten la
+validación de perfil y son mutuamente excluyentes. Un error de selección
+detiene el login, sin repetir VERIFY ni el comando de prueba.
+
+El informe lleva `post_login_select_experiment=yes` y
+`post_login_status_experiment=no`. La marca de selección exitosa es
+obligatoria para detectar módulos antiguos; una marca de estado no la
+sustituye. Todos los modos de lanzadores eliminan ambos opt-ins heredados,
+salvo la selección explícita del experimento correspondiente.
+
+**SELECT aún no se ha probado en hardware.** Antes de esa intervención hay
+que compilar con `make test/iasecc JOBS="$(nproc)"`, guardar commits,
+cerrar firmador y ejecutar `make sign/jcop3-select-root` una sola vez.
+Pasan **178 comprobaciones** sin tarjeta, incluidas diez nuevas de selección:
+un solo comando raíz, ausencia de consultas posteriores de estado/política,
+fallos de transporte/estado, VERIFY rechazado, exclusiones y opt-ins en
+conflicto. Pasaron diez ejecuciones simuladas de lanzadores, incluida la
+detección de marca incorrecta o ausente y propagación de error sin reintento.
+La compilación completa sin PC/SC pasó. Informes locales:
+`build/opensc-offline/chipdoc-select-probe-build.log` y
+`build/opensc-offline/chipdoc-select-probe-tests.log`.

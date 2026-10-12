@@ -8,7 +8,7 @@
 #include "libopensc/iasecc-sdo.c"
 
 static int failures, status_queries, verifies, metadata_queries, forbidden;
-static int authenticated, verify_error, status_error;
+static int authenticated, verify_error, status_error, selects, select_error, select_rejected;
 
 static void check(const char *name, int valid)
 {
@@ -53,6 +53,15 @@ int sc_transmit_apdu(struct sc_card *card, struct sc_apdu *apdu)
 	const unsigned char *response;
 	size_t length;
 	(void)card;
+	if (authenticated && apdu->ins == 0xA4 && apdu->p1 == 0x04 &&
+			apdu->datalen == 11 && !memcmp(apdu->data, "\xF0IasEccRoot", 11)) {
+		selects++;
+		if (select_error) return select_error;
+		apdu->resplen = 0;
+		apdu->sw1 = select_rejected ? 0x69 : 0x90;
+		apdu->sw2 = select_rejected ? 0x82 : 0;
+		return SC_SUCCESS;
+	}
 	if (authenticated || apdu->ins != 0xCB || apdu->p1 != 0x3F || apdu->p2 != 0xFF ||
 			apdu->datalen < 10 || apdu->data[5] != 0x81 || apdu->data[6] != 1) {
 		forbidden++;
@@ -80,8 +89,10 @@ int sc_transmit_apdu(struct sc_card *card, struct sc_apdu *apdu)
 static void clear_run(struct sc_card *card, struct sc_pin_cmd_data *pin)
 {
 	iasecc_chv_cache_clean(card, pin);
+	sc_invalidate_cache(card);
 	status_queries = verifies = metadata_queries = forbidden = 0;
 	authenticated = verify_error = status_error = 0;
+	selects = select_error = select_rejected = 0;
 }
 
 int main(void)
@@ -105,6 +116,7 @@ int main(void)
 	close(fd);
 	unsetenv("OPENSC_API_TRACE_FILE");
 	unsetenv("OPENSC_JCOP3_POST_LOGIN_STATUS");
+	unsetenv("OPENSC_JCOP3_POST_LOGIN_SELECT");
 	card.ctx = &ctx;
 	card.type = SC_CARD_TYPE_IASECC_AMOS;
 	card.drv_data = &private_data;
@@ -155,47 +167,102 @@ int main(void)
 			rv == status_error && verifies == 1 && status_queries == 2 && !forbidden);
 	clear_run(&card, &pin);
 	setenv("OPENSC_JCOP3_POST_LOGIN_STATUS", "no", 1);
-	rv = iasecc_chipdoc_post_login_status(&card, &pin, &policy);
+	rv = iasecc_chipdoc_post_login_probe(&card, &pin, &policy);
 	check("probe requires exact opt-in value", rv == 0 && !status_queries);
 	setenv("OPENSC_JCOP3_POST_LOGIN_STATUS", "yes", 1);
 	card.type = SC_CARD_TYPE_IASECC_SAGEM;
-	iasecc_chipdoc_post_login_status(&card, &pin, &policy);
+	iasecc_chipdoc_post_login_probe(&card, &pin, &policy);
 	check("probe excludes other card types", !status_queries);
 	card.type = SC_CARD_TYPE_IASECC_AMOS;
 	policy.read_verify_only = 0;
-	iasecc_chipdoc_post_login_status(&card, &pin, &policy);
+	iasecc_chipdoc_post_login_probe(&card, &pin, &policy);
 	check("probe requires the observed parsed policy", !status_queries);
 	policy.read_verify_only = 1;
 	pin.pin_reference = 1 | IASECC_OBJECT_REF_LOCAL;
-	iasecc_chipdoc_post_login_status(&card, &pin, &policy);
+	iasecc_chipdoc_post_login_probe(&card, &pin, &policy);
 	check("probe excludes local PINs", !status_queries);
 	pin.pin_reference = 2;
-	iasecc_chipdoc_post_login_status(&card, &pin, &policy);
+	iasecc_chipdoc_post_login_probe(&card, &pin, &policy);
 	check("probe excludes other PIN references", !status_queries);
 	pin.pin_reference = 1;
 	pin.pin_type = SC_AC_AUT;
-	iasecc_chipdoc_post_login_status(&card, &pin, &policy);
+	iasecc_chipdoc_post_login_probe(&card, &pin, &policy);
 	check("probe excludes other authentication types", !status_queries);
 	pin.pin_type = SC_AC_CHV;
 	pin.cmd = SC_PIN_CMD_CHANGE;
-	iasecc_chipdoc_post_login_status(&card, &pin, &policy);
+	iasecc_chipdoc_post_login_probe(&card, &pin, &policy);
 	check("probe excludes administrative operations", !status_queries);
 	pin.cmd = SC_PIN_CMD_VERIFY;
 	app.aid.value[0] ^= 1;
-	iasecc_chipdoc_post_login_status(&card, &pin, &policy);
+	iasecc_chipdoc_post_login_probe(&card, &pin, &policy);
 	check("probe excludes other application AIDs", !status_queries);
 	app.aid.value[0] ^= 1;
 	app.aid.len--;
-	iasecc_chipdoc_post_login_status(&card, &pin, &policy);
+	iasecc_chipdoc_post_login_probe(&card, &pin, &policy);
 	check("probe rejects partial AID matches", !status_queries);
 	app.aid.len++;
 	card.app[0] = NULL;
-	iasecc_chipdoc_post_login_status(&card, &pin, &policy);
+	iasecc_chipdoc_post_login_probe(&card, &pin, &policy);
 	check("probe tolerates absent application metadata", !status_queries);
 	card.app_count = 0;
-	iasecc_chipdoc_post_login_status(&card, &pin, &policy);
+	iasecc_chipdoc_post_login_probe(&card, &pin, &policy);
 	check("probe requires an enumerated application", !status_queries);
 	unsetenv("OPENSC_JCOP3_POST_LOGIN_STATUS");
+	card.app_count = 1;
+	card.app[0] = &app;
+	setenv("OPENSC_JCOP3_POST_LOGIN_SELECT", "yes", 1);
+	setenv("OPENSC_API_TRACE_FILE", path, 1);
+	file = fopen(path, "w");
+	if (!file) return 1;
+	fclose(file);
+	rv = iasecc_pin_verify(&card, &pin);
+	check("select opt-in adds one root selection without a post-login status or policy query",
+			rv == 0 && verifies == 1 && status_queries == 1 && metadata_queries == 2 && selects == 1 && !forbidden);
+	file = fopen(path, "r");
+	length = file ? fread(output, 1, sizeof(output) - 1, file) : 0;
+	if (file) fclose(file);
+	output[length] = 0;
+	check("root selection trace encloses exactly the actual public root command",
+			!strcmp(output, "POST_LOGIN_SELECT_BEGIN session=0x0 rv=0x0 a=0x2 b=0x0\n"
+			"CARD_SELECT session=0x0 rv=0x0 a=0x2 b=0x9000\n"
+			"POST_LOGIN_SELECT session=0x0 rv=0x0 a=0x2 b=0x0\n"));
+	unsetenv("OPENSC_API_TRACE_FILE");
+	clear_run(&card, &pin);
+	verify_error = SC_ERROR_PIN_CODE_INCORRECT;
+	rv = iasecc_pin_verify(&card, &pin);
+	check("failed VERIFY never runs or retries the root selection",
+			rv == verify_error && verifies == 1 && !selects && status_queries == 1 && !forbidden);
+	clear_run(&card, &pin);
+	select_error = SC_ERROR_TRANSMIT_FAILED;
+	rv = iasecc_pin_verify(&card, &pin);
+	check("root selection transport error stops without retries",
+			rv == select_error && verifies == 1 && selects == 1 && status_queries == 1 && !forbidden);
+	clear_run(&card, &pin);
+	select_rejected = 1;
+	rv = iasecc_pin_verify(&card, &pin);
+	check("root selection status rejection preserves the error without retry",
+			rv == SC_ERROR_SECURITY_STATUS_NOT_SATISFIED && verifies == 1 && selects == 1 && !forbidden);
+	clear_run(&card, &pin);
+	setenv("OPENSC_JCOP3_POST_LOGIN_STATUS", "yes", 1);
+	rv = iasecc_chipdoc_post_login_probe(&card, &pin, &policy);
+	check("conflicting probe opt-ins issue no commands", rv == SC_ERROR_INVALID_ARGUMENTS && !status_queries && !selects);
+	unsetenv("OPENSC_JCOP3_POST_LOGIN_STATUS");
+	card.type = SC_CARD_TYPE_IASECC_SAGEM;
+	rv = iasecc_chipdoc_post_login_probe(&card, &pin, &policy);
+	check("root selection excludes other card types", rv == 0 && !selects);
+	card.type = SC_CARD_TYPE_IASECC_AMOS;
+	app.aid.value[0] ^= 1;
+	rv = iasecc_chipdoc_post_login_probe(&card, &pin, &policy);
+	check("root selection requires the observed application", rv == 0 && !selects);
+	app.aid.value[0] ^= 1;
+	pin.pin_reference |= IASECC_OBJECT_REF_LOCAL;
+	rv = iasecc_chipdoc_post_login_probe(&card, &pin, &policy);
+	check("root selection excludes local PINs", rv == 0 && !selects);
+	pin.pin_reference = 1;
+	policy.read_verify_only = 0;
+	rv = iasecc_chipdoc_post_login_probe(&card, &pin, &policy);
+	check("root selection requires the observed PIN policy", rv == 0 && !selects);
+	unsetenv("OPENSC_JCOP3_POST_LOGIN_SELECT");
 	unlink(path);
 	return failures ? 1 : 0;
 }

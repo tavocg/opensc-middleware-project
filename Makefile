@@ -1,4 +1,5 @@
 .DEFAULT_GOAL := help
+.PHONY: sign/jcop3-select-root
 
 READER ?= 0
 export READER
@@ -27,6 +28,7 @@ help:
 		'make sign/jcop3            Firma un texto de prueba con PIN y verifica con OpenSSL.' \
 		'make sign/jcop3-sha256     Prueba SHA256-RSA-PKCS con el mismo texto y verificación.' \
 		'make sign/jcop3-pin-status Aísla una consulta vacía de estado después del login y firma un texto.' \
+		'make sign/jcop3-select-root Aísla una selección de raíz IAS después del login y firma un texto.' \
 		'make firmador/jcop3        Abre firmador con el módulo y perfil locales, sin depuración APDU.' \
 		'make firmador/jcop3-diagnose Registra únicamente metadatos de sesiones y firma, sin PIN ni APDU.' \
 		'make firmador/jcop3-session-state Prueba aislada: omite consultas físicas de PIN de sesión y token tras login.'
@@ -72,6 +74,9 @@ sign/jcop3:
 
 sign/jcop3-pin-status:
 	@bash scripts/sign-jcop3.sh --pin-status
+
+sign/jcop3-select-root:
+	@bash scripts/sign-jcop3.sh --select-root
 
 sign/jcop3-sha256:
 	@bash scripts/sign-jcop3.sh --sha256
