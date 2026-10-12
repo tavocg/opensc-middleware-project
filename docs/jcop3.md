@@ -2581,3 +2581,81 @@ instancia. Si ya se cerró, no ejecutar helper aislado; reconstruir después
 el caso en una sola GUI. Detenerse ante fallo. La copia revisada tiene 210
 eventos; api.log puede crecer. No sobrescribirla al revisar el nuevo segmento;
 conservar otra copia para la prueba peer. No recompilar ni repetir CLI/ciclos.
+
+
+## Segundo cliente con diálogo PIN abierto: RSA 6982 tras login aceptado
+
+2026-10-12, principal 7cad4cb y OpenSC c052ee925 limpios al comenzar revisión.
+El usuario informa dos fallos al ejecutar inspect/jcop3-peer-context justo
+antes de proporcionar el PIN en firmador. No repetirlos como primer paso.
+
+| Captura GUI | Inicio UTC | Eventos | VERIFY/login | RSA AT / C_SignFinal |
+| --- | --- | ---: | --- | --- |
+| XVK9ZA8V | 14:28:56 | 582 | 133–136, 332–335, 494–497: todos OK | 227/229 OK; 426/429 = 6982/0x101; 580/582 OK |
+| xDibKvHa | 14:32:56 | 230 | 133–136 OK | 227/230 = 6982/0x101 |
+
+Se preservan api-reviewed.log y analysis.json privados. Los cuatro VERIFY
+reciben 9000 y C_Login devuelve OK. En los dos fallos, selección ChipDoc y
+MSE pasan, pero INTERNAL AUTHENTICATE RSA devuelve 6982
+(SC_ERROR_SECURITY_STATUS_NOT_SATISFIED → CKR_USER_NOT_LOGGED_IN).
+No atajo por hash, revalidación de PIN o fallos de locks. Consultas físicas
+continúan informando CHV autenticado. Es diferente del rechazo local -1300
+anterior: aquí el PIN fue enviado y aceptado. No tomar otro login como remedio
+sin investigar; se desactiva la revalidación automática de PIN.
+
+Los informes del helper son Bpr8civj (14:27:02), 9oASsRGl (14:30:38),
+HqnS20vq (14:31:50) y rhal9Uiu (14:33:43), todos transporte/SELECT raíz 9000
+con c052ee925. API no tiene tiempos individuales: no permite asignar
+inequívocamente cada SELECT externo antes/después de cada login. La colocación
+antes de introducir PIN proviene del relato del usuario. El control anterior
+al arranque de la GUI y la recuperación posterior también muestran que no
+todo acceso raíz provoca necesariamente este fallo.
+
+Dos archivos existentes se verificaron y copiaron privadamente:
+local/jcop3-peer-after.pdf (80465 bytes, s1ln5vpd/report.json) y
+local/jcop3-peer-after-again.pdf (80465, p5twbze6/report.json), bajo local/
+jcop3-pdf-verification-. CAdES con certificado exacto LlaveDeFirma y sellos
+CMS RFC3161/imprint SHA-512 válidos; original/texto/render preservados.
+No asociar eventos de fallo a esos nombres ni concluir que un fallo guardó
+una firma válida; no hay nombres/tiempos de documento en API. No confianza,
+revocación/LTV. No incorporar PDF o capturas a Git.
+
+### Seleccionar explícitamente ChipDoc antes de VERIFY, pendiente de tarjeta
+
+pkcs15-pin.c selecciona la ruta global MF del PIN. iasecc_pin_merge_policy
+lee en raíz y restaura la selección anterior, que también puede ser raíz.
+El VERIFY resultante puede autenticar CHV sin restablecer autorización RSA
+después de un cambio de contexto externo. Es una hipótesis de contexto,
+no un significado demostrado de C9 ni de las condiciones administrativas.
+
+La candidata agrega iasecc_chipdoc_select_for_verify después de merge_policy
+(y preparación de PIN-pad) y antes del único iasecc_chv_verify. Selecciona
+el AID ChipDoc observado una vez, solo con el opt-in PIN_STATUS_IN_PLACE y
+Amos/ChipDoc/CHV global 1/política read_verify_only ya reconocidos. Deja las
+consultas físicas sin reselección después del login. No cambia validación,
+algoritmos, PIN o caché de credenciales; no reintenta PIN al fallar firma.
+Fallo de SELECT impide llegar a VERIFY, conservando el error. No selección
+para VERIFY vacío/GET_INFO, otro perfil o administración. Evento
+PRE_VERIFY_SELECT contiene solo resultado/categoría pública 3; CARD_SELECT
+existente identifica SW. No capturas APDU autenticadas ni datos/longitud PIN.
+
+Diecisiete regresiones nuevas en iasecc-pin-application.c usan política
+capturada y transporte simulado; ejercitan orquestación real IAS, SELECT y
+RSA AT con una salida sintética que no es una firma criptográfica. El modelo
+distingue CHV verificado de autorización RSA de la aplicación. Control:
+VERIFY raíz OK y RSA 6982. Candidata: SELECT ChipDoc antes de único VERIFY,
+SELECT de llave y RSA permitido. Comprueban orden/traza sin secreto, errores
+de transporte/SELECT, PIN incorrecto sin retry, política fallida/consulta
+vacía sin selección y nueve variantes excluidas. Se adapta el mock antiguo
+para aceptar el SELECT adicional bajo la candidata. Pasan 286 comprobaciones;
+logs pin-application-tests.log/build.log bajo build/opensc-offline.
+Esto prueba secuencia/camino de errores; la hipótesis aún requiere hardware.
+
+Próxima intervención: cerrar GUI, compilar candidata, abrir GUI y original
+doc.pdf hasta diálogo PIN. Sin introducirlo, ejecutar una sola vez helper
+desde otra terminal; solo tras 9000 introducir PIN una vez y guardar en
+local/jcop3-peer-fixed.pdf. Detenerse al primer error y cerrar al terminar.
+Revisar PRE_VERIFY_SELECT antes de VERIFY, RSA y PDF. No pedir dos intentos,
+ni usar helper mientras autenticación/firma ya está en curso. Este caso
+restaura contexto antes del login; interferencia posterior al login y firmas
+concurrentes siguen pendientes. No activar por defecto ni reportar upstream.

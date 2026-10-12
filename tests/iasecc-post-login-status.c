@@ -56,6 +56,13 @@ int sc_transmit_apdu(struct sc_card *card, struct sc_apdu *apdu)
 	const unsigned char *response;
 	size_t length;
 	(void)card;
+	if (apdu->ins == 0xA4 && apdu->p1 == 0x04 && apdu->datalen == 14 &&
+			!memcmp(apdu->data, "\xE8\x28\xBD\x08\x0F\xD2\x50\x47\x65\x6E\x65\x72\x69\x63", 14)) {
+		apdu->resplen = 0;
+		apdu->sw1 = 0x90;
+		apdu->sw2 = 0;
+		return SC_SUCCESS;
+	}
 	if (authenticated && apdu->ins == 0xA4 && apdu->p1 == 0x04 &&
 			apdu->datalen == 11 && !memcmp(apdu->data, "\xF0IasEccRoot", 11)) {
 		selects++;

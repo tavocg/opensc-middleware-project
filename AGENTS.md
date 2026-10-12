@@ -1,34 +1,42 @@
 # libjcop3p11: contexto para continuar
 
-Estado actualizado el **12 de octubre de 2026**, tras verificar el CLI de
-**02:56 y la GUI de 03:00 de Costa Rica** (08:56/09:00 UTC), DgJlCm1N e
-Ie57KYQq, ambos OpenSC `c052ee925` limpio. **CLI y GUI volvieron a firmar**
-sin cambiar el módulo: 176/210 eventos, un build/VERIFY/login/firma exitosos
-en cada captura. PDF CLI local/jcop3-pin-stage-cli.pdf de 76900 bytes y GUI
-doc-firmado.pdf de 80482 bytes; ambos verificados y copiados privadamente:
-local/jcop3-pdf-verification-0xwdzxbh/report.json y bkt8tbsu/report.json.
-Certificado exacto LlaveDeFirma, CMS/sello RFC3161/imprint SHA-512 válidos,
-original/texto/render conservados; no confianza/revocación/LTV.
-El rechazo GUI anterior de PkFq1kEy sigue sin causa exacta establecida:
-dos builds -1300 antes del envío. El usuario confirmó mismo PIN; no atribuir
-el error a copia/pegado ni a un PIN diferente. La GUI posterior pasó, pero
-no sabemos cómo introdujo el PIN en ella. No afirmar una corrección nueva:
-solo se habían añadido marcas diagnósticas, sin relajar límites o transformar
-el PIN. No ejecutar la comparación pass -c propuesta anteriormente como
-primer paso: el usuario ya confirmó otra firma GUI y el PDF está verificado.
-Git al iniciar: principal `5cf474b`, submódulo `c052ee925`, limpios. Solo se
-documentan resultados; siguen vigentes 269 comprobaciones y compilación.
-**Próxima intervención:** si la GUI Ie57KYQq sigue abierta y en reposo,
-mantener tarjeta conectada y ejecutar una vez inspect/jcop3-peer-context
-desde otra terminal. Solo si SELECT devuelve 9000, firmar de nuevo el original
-doc.pdf hacia local/jcop3-peer-after.pdf en esa misma GUI. No retirar tarjeta
-ni usar doc-firmado.pdf como entrada. Si la GUI ya se cerró, no ejecutar el
-helper aún: el caso requiere una firma previa y una posterior en la misma
-instancia. Detenerse al primer error. La primera firma ya está preservada
-en bkt8tbsu; revisar después informe peer, nuevo segmento API y PDF posterior.
-La copia de 210 eventos es estable; api.log de GUI puede seguir creciendo.
-El agente no usa pass ni firma y no tiene lector. No repetir CLI o ciclos
-como primer paso. No publicar upstream sin contrastar master.
+Estado actualizado el **12 de octubre de 2026**, tras revisar las GUI de
+**08:28 y 08:32 de Costa Rica** (14:28/14:32 UTC), XVK9ZA8V y xDibKvHa,
+OpenSC `c052ee925` limpio. **Segundo cliente produjo dos fallos RSA:** los
+cuatro logins de ambas capturas aceptan el PIN (VERIFY 9000); XVK tiene tres
+operaciones RSA (9000, 6982, 9000), xDib una (6982). El error se traduce a
+CKR_USER_NOT_LOGGED_IN. No es el rechazo local CKR_ARGUMENTS_BAD anterior.
+El usuario ejecutó el helper mientras GUI esperaba el PIN. Los cuatro informes
+peer Bpr8civj, 9oASsRGl, HqnS20vq y rhal9Uiu confirman SELECT raíz 9000.
+Los eventos API no llevan tiempos individuales: no asignar orden exacto del
+helper respecto al login sin la descripción del usuario. Copias privadas
+api-reviewed.log y analysis.json, 582/230 eventos, conservan esta evidencia.
+Dos PDF existentes peer-after y peer-after-again se verificaron/copias en
+s1ln5vpd y p5twbze6; 80465 bytes cada uno, certificados/sellos/imprint válidos,
+original/texto/render preservados. No asignarlos por nombre a eventos de fallo;
+no confianza/revocación/LTV. Las operaciones fallidas no produjeron firma.
+**Candidata nueva, aún sin validar en tarjeta:** bajo el opt-in existente,
+Amos + ChipDoc + CHV global 1 + política observada, seleccionar ChipDoc después
+de lecturas/restauraciones de política y antes del único VERIFY. Una selección
+explícita, sin restaurar raíz tras login ni reenviar un PIN después de falla.
+PRE_VERIFY_SELECT registra solo resultado y categoría pública 3. Si SELECT
+falla, no se envía el PIN. Sin cambiar validación/caché de PIN/algoritmos ni
+activar por defecto. El significado exacto del estado perdido sigue pendiente;
+las simulaciones comprueban orden de comandos, no la hipótesis en hardware.
+Git al iniciar: principal `7cad4cb`, submódulo `c052ee925`, limpios. Cambios
+nuevos en card-iasecc.c/api-trace.h; principal: fixture de aplicación, ajuste
+mock anterior, runner y docs. Pasan **286 comprobaciones** (17 nuevas); build
+sin PC/SC en pin-application-build.log. Dar comandos de commit del submódulo
+primero, principal después; el agente no escribe Git ni firma/lee pass.
+**Próxima intervención:** cerrar GUI, compilar con make test/iasecc y abrir
+make firmador/jcop3-pin-status-in-place. Abrir original doc.pdf, iniciar firma
+hasta el diálogo PIN sin enviarlo. Desde otra terminal, ejecutar una vez
+inspect/jcop3-peer-context; solo tras SELECT 9000 enviar PIN una vez y guardar
+en local/jcop3-peer-fixed.pdf. Detenerse al primer error; cerrar al terminar.
+Revisar PRE_VERIFY_SELECT antes de VERIFY y RSA/PDF. No pedir dos reproducciones
+ni repetir automáticamente PIN. No probar helper después de login como parte
+de este caso: interferencia durante sesión autenticada/concurrencia pendiente.
+El agente no tiene lector. No publicar upstream sin contrastar master.
 
 ## Objetivo y alcance
 
@@ -129,15 +137,16 @@ pero no valida comunicación con la tarjeta.
 
 Los últimos commits guardados son:
 
-- Repositorio principal al iniciar la revisión: **`5cf474b`**, `Document local PIN rejection`.
+- Repositorio principal al iniciar la revisión: **`7cad4cb`**, `Document CLI and GUI recovery`.
 - Submódulo OpenSC: **`c052ee925`**, `Trace PIN command stages`.
 - Base upstream original: `c7a377af971df03f879c1697e91ebac1f7e28c56`.
 
-Ambos árboles estaban limpios al comenzar esta revisión. Las marcas ISO y
-sus regresiones ya están comprometidas y compiladas por el usuario. Cambios
-nuevos solo en documentación: CLI y GUI recuperados/verificados; causa del
-rechazo local anterior desconocida. Segundo cliente sigue pendiente. Dar al usuario comandos de commit del principal. No se requiere
-recompilar para la siguiente intervención; el agente no hizo commits.
+Ambos árboles estaban limpios al comenzar esta revisión. Ahora el submódulo
+agrega selección ChipDoc antes del VERIFY en la candidata. Principal agrega
+17 regresiones, adapta transporte simulado anterior, runner y documentación.
+Dar comandos de commit primero para submódulo y luego principal, actualizando
+puntero. Se requiere recompilar antes de probar en tarjeta. No hay commits,
+logins o firmas ejecutados por el agente.
 
 La URL del submódulo aún es `https://github.com/OpenSC/OpenSC.git`. Los commits
 locales del driver necesitarán publicarse en un fork y actualizar esa URL
@@ -243,19 +252,19 @@ El nuevo objetivo `make firmador/jcop3` proporciona esa configuración local.
 
 ## Verificación y últimas capturas
 
-Hay **269 comprobaciones de regresión** en catorce fixtures C: `iasecc-fci.c`,
+Hay **286 comprobaciones de regresión** en quince fixtures C: `iasecc-fci.c`,
 `iasecc-pin-path.c`, `iasecc-key-path.c`, `iasecc-sdo.c`, `iasecc-pin-policy.c`
 y `iasecc-sign-setup.c`, más `iasecc-rsa-pkcs.c`, `pkcs11-api-trace.c`,
 `pkcs11-session-state.c`, `iasecc-context-trace.c`,
 `iasecc-post-login-status.c`, `pkcs15-pin-status-in-place.c`,
-`pkcs11-card-change.c`, `iso7816-pin-trace.c`, y los scripts
+`pkcs11-card-change.c`, `iso7816-pin-trace.c`, `iasecc-pin-application.c`, y los scripts
 `sha256-digestinfo.sh`, `firmador-launcher.sh`, `peer-context-launcher.sh` y `pkcs11-sign-fallback.sh`, este último con un módulo C
 PKCS#11 completamente simulado. Incluyen respuestas
 capturadas, conservación/copia de metadatos, rechazo de perfiles distintos y
 transporte simulado que verifica que cambio/desbloqueo no autentican.
 Pasaron en la comprobación local; también terminó la compilación completa
-sin PC/SC, registrada en `build/opensc-offline/pin-stage-build.log`.
-Las últimas regresiones están en `build/opensc-offline/pin-stage-tests.log`.
+sin PC/SC, registrada en `build/opensc-offline/pin-application-build.log`.
+Las últimas regresiones están en `build/opensc-offline/pin-application-tests.log`.
 Esto no sustituye pruebas de firma en hardware.
 El lanzador de firmador, en modos normal, diagnóstico y experimento de sesión,
 pasó sintaxis y una ejecución con
@@ -421,6 +430,24 @@ consta en `jcop3-signature-crUXrnAi/report.txt`.
 Un `exit_status=0` en una herramienta no garantiza que no haya errores
 internos de parsing: revisar las respuestas y el contexto.
 
+## Interferencia de otro cliente: nueva candidata
+
+XVK9ZA8V: 582 eventos, tres logins con VERIFY real 9000; RSA 9000/6982/9000.
+xDibKvHa: 230 eventos, login real 9000 y RSA 6982. Locks/presencia normales,
+sin retirada o atajo VERIFY_CACHED. Helper SELECT raíz 9000 en los informes
+Bpr8civj/9oASsRGl/HqnS20vq/rhal9Uiu; el usuario reporta ejecución con diálogo
+PIN abierto. El mecanismo exacto que pierde autorización no está demostrado.
+La candidata agrega iasecc_chipdoc_select_for_verify después de merge_policy
+antes de iasecc_chv_verify, solo opt-in y perfil/política conocidos. No afecta
+GET_INFO o VERIFY vacío; errores de SELECT/política paran antes del PIN.
+Diecisiete regresiones modelan CHV aceptado pero RSA sin autorización desde
+raíz, control anterior, nueva secuencia, transporte/SW/PIN incorrecto sin
+reintentos, fallo de política/consulta vacía y nueve perfiles excluidos.
+Son simulaciones de contexto, no criptografía/hardware. Mantener la candidata
+optativa hasta una reproducción en tarjeta con PRE_VERIFY_SELECT → VERIFY →
+RSA 9000 y PDF verificado. Próximo comando/protocolo en el encabezado de este
+archivo **tiene prioridad sobre los pasos históricos que siguen**.
+
 ## Próximo trabajo, en orden
 
 1. **Las dos firmas consecutivas ya pasaron y se verificaron.** No pedir
@@ -505,59 +532,27 @@ internos de parsing: revisar las respuestas y el contexto.
    a los 38403 de las pruebas GUI, y contenido/render coinciden. No se atribuye
    esa diferencia a una causa concreta. No inferir identidad byte a byte de archivos firmados por ambos
    modos. Nueve regresiones del lanzador y helper TTY siguen vigentes.
-7. **Resolver primero CKR_ARGUMENTS_BAD; segundo cliente pendiente.**
-   GbaOMELO (241 eventos, cuatro logins fallidos) y j0FPyGAS (145, dos)
-   muestran -1300 al verificar CHV 1 y C_Login 0x7, sin firma o fallo de lock.
-   El usuario pegó el PIN; no se conoce la causa ni se capturó el valor.
-   La nueva captura PkFq1kEy (147 eventos) confirma PIN_APDU_BUILD -1300
-   dos veces y cero PIN_TRANSMIT: rechazo antes del envío. El usuario confirma
-   el mismo PIN. No repetir GUI como primer paso ni recompilar; comparar
-   una vez con CLI/pass por stdin hacia local/jcop3-pin-stage-cli.pdf.
-   **Esa comparación pasó** en DgJlCm1N: 176 eventos y PDF/sello verificados
-   (0xwdzxbh). **La GUI también pasó después** en Ie57KYQq, 210 eventos y
-   doc-firmado.pdf verificado en bkt8tbsu. No sabemos el método de entrada
-   del PIN y no se identifica causa exacta del rechazo previo. No repetir
-   la comparación pass -c: reutilizar la GUI abierta para el segundo cliente. PIN_APDU_BUILD < 0 indica
-   rechazo antes del envío; build=0 seguido de PIN_TRANSMIT identifica
-   transporte/SW. No normalizar, recortar ni relajar límites del PIN.
-   Si falla, detenerse y revisar antes de otro intento autenticado.
-   **Hay CLI y GUI verificados de nuevo**; retomar el caso que sigue sin
-   afirmar que se corrigió la causa del rechazo local. Si sigue abierta
-   Ie57KYQq, su primera firma es baseline; helper 9000 y segundo original
-   hacia local/jcop3-peer-after.pdf en la misma instancia. Si se cerró,
-   reconstruir ese caso después, sin ejecutar el helper aislado.
+7. **Validar selección ChipDoc antes de VERIFY tras otro cliente.**
+   El rechazo local -1300 anterior no se repitió en los últimos casos:
+   PIN/LOGIN 9000, pero dos RSA 6982 tras helper mientras esperaba PIN.
+   Candidata nueva y protocolo exacto en el encabezado y la sección
+   Interferencia. Compilar, reproducir una sola vez y detenerse ante fallo.
+   PRE_VERIFY_SELECT debe preceder PIN_APDU_BUILD/PIN_TRANSMIT/VERIFY y no
+   debe haber SELECT raíz después del login. Si pasa RSA y PDF, comprobar
+   nuevamente firma consecutiva y reinserción porque el contexto del VERIFY
+   cambió; no asumir que los éxitos del código anterior validan esta versión.
+   Después volver al caso de otro cliente entre dos firmas con GUI en reposo.
+   Interferencia durante sesión autenticada y firmas simultáneas siguen
+   pendientes: lock_login vale 0 en la configuración actual, y esta candidata
+   solo restablece contexto antes de autenticación. No activar revalidación
+   automática del PIN para compensarlo. Preparar pruebas acotadas después.
+   Decidir activación por defecto solo con evidencia; antes de upstream,
+   preservar rama y reproducir contra master actual según vendor/opensc/AGENTS.md.
+   Si cambia driver, submódulo primero y principal después. No generar llaves.
 
-   **Ciclos repetidos ya pasaron; caso preparado: otro cliente entre firmas.**
-   Captura tYcckn70, 1170 eventos. Seis VERIFY reales/logins/firmas, llave 3,
-   RSA AT 9000 y 256 bytes. Primeras dos firmas sin retirada intermedia;
-   después cuatro limpiezas de token activo y nueva autenticación/firma.
-   CARD_PRESENCE 3 y 7 tienen CHANGED; 7 incluye INUSE, no un error.
-   No hubo atajo, omisión de consultas ni SELECT raíz entre login y firma.
-   Cinco PDF cycle-0..4 y un extra cycle-.pdf tienen hashes distintos y se
-   verificaron, con copias privadas; tabla de informes en docs/jcop3.md.
-   No afirmar una correspondencia exacta evento/PDF por sufijos de archivo.
-   **Intervención preparada:** cerrar otras instancias, abrir
-   `make firmador/jcop3-pin-status-in-place`, sin recompilar. Firmar original
-   doc.pdf hacia `local/jcop3-peer-before.pdf`. Dejar GUI abierta y en reposo,
-   mantener tarjeta y lector conectados. Desde otra terminal con nix develop,
-   ejecutar una vez `make inspect/jcop3-peer-context`. Solo si confirma SELECT
-   9000, abrir original y firmar hacia `local/jcop3-peer-after.pdf`. Detenerse
-   al primer error sin repetir PIN; cerrar al terminar. El helper manda solo
-   SELECT raíz observada, sin PIN, firma, reset explícito o depuración; el
-   efecto de conexión/SELECT/desconexión se prueba conjuntamente, no se aísla.
-   Informe privado jcop3-peer-context-*.txt y configuración privada con debug 0.
-   Revisar el informe del helper y VERIFY/sesiones/firmas/PDF de la GUI.
-   Esto no prueba firmas simultáneas; concurrencia auténtica queda pendiente.
-   Después validar pérdida de autenticación y operaciones paralelas acotadas.
-   Decidir activación por defecto con evidencia. Antes de upstream, preservar
-   rama y reproducir contra master actual según vendor/opensc/AGENTS.md. Si
-   cambia driver, submódulo primero y principal después. No generar llaves.
-
-
-**Firmas consecutivas, reinserciones únicas/repetidas y CLI pasaron con
-PDF/sellos verificados. CLI y GUI posteriores al CKR_ARGUMENTS_BAD volvieron
-a pasar; causa del rechazo local anterior desconocida. Sigue pendiente
-segundo cliente entre firmas, concurrencia simultánea y activación.**
+**Candidata nueva compilada y 286 regresiones pasan; falta reproducir en
+hardware el helper antes de PIN. Firmas/reinserciones del código anterior
+siguen verificadas, pero no validan el nuevo contexto de VERIFY.**
 
 ## PIN, privacidad e Idopte
 
