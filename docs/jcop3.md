@@ -769,3 +769,29 @@ make inspect/jcop3-pkcs11
 Ejecutarlo dentro de `nix develop`, con el lector conectado y la tarjeta
 insertada. Revisar primero lector y ATR, después slots y objetos. No repetir
 firma ni los diagnósticos MSE mientras esté pendiente ese resultado.
+
+## Enumeración recuperada: 2026-10-11, 19:39 de Costa Rica
+
+`local/jcop3-pkcs11-XtNrgvHO.txt`, de las 01:39:13 UTC del 12 de octubre,
+usa OpenSC `70d7afc20`. PC/SC detecta el lector OMNIKEY con tarjeta y el
+ATR esperado. El mismo módulo PKCS#11 devuelve el slot 0 y enumera los dos
+certificados y dos llaves públicas RSA de 2048 bits, incluida `LlaveDeFirma`.
+Las herramientas terminan con estado 0; persiste el aviso conocido de
+PuKDF `-1402`, por lo que no se considera resuelto ese parsing.
+
+La emulación aplica las correcciones de ruta del PIN global y de la llave
+de firma. Las consultas públicas del PIN indican límites máximo/mínimo
+14/4 e intentos máximo/restantes 7/7. No se ejecutó un login ni una firma.
+
+El error `No slots.` no se reprodujo. Esto confirma disponibilidad del lector
+y enumeración con esa configuración en este diagnóstico, sin determinar
+por qué fallaron los tres comandos anteriores. La inspección usa depuración
+9 y no fija `use_pin_caching`; el helper de firma mantiene depuración 0 y
+caché de PIN desactivada. No se deben cambiar esas protecciones para firmar.
+
+El siguiente paso es **una ejecución** de `make sign/jcop3`, directamente
+en la terminal del usuario dentro de `nix develop`, sin recompilar ni
+redirigir stdout. El helper primero intenta leer el certificado y solo
+después ejecuta el comando autenticado. Revisar el nuevo informe ante
+cualquier fallo antes de repetirlo. Sigue pendiente producir y verificar
+una firma real con el conjunto actual.

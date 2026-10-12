@@ -1,8 +1,8 @@
 # libjcop3p11: contexto para continuar
 
 Estado documentado el **11 de octubre de 2026**, después de revisar los informes
-de las 21:34 UTC, SE 3, las consultas MSE y los tres fallos de firma de las
-19:28 de Costa Rica (01:28 UTC del 12 de octubre). Leer este archivo
+de las 21:34 UTC, SE 3, las consultas MSE, los tres fallos de firma y la
+enumeración recuperada de las 19:39 de Costa Rica (01:39 UTC del 12 de octubre). Leer este archivo
 al retomar el proyecto y contrastarlo con Git y las capturas más recientes.
 Es un punto de partida, no una afirmación
 de soporte completo de la tarjeta.
@@ -96,14 +96,14 @@ pero no valida comunicación con la tarjeta.
 
 Los últimos commits guardados del driver y su diagnóstico son:
 
-- Repositorio principal: **`f796cb7`**, `Test signing setup and disable PIN cache`.
+- Repositorio principal: **`6e164ed`**, `Record signing failure before login`.
 - Submódulo OpenSC: **`70d7afc20`**, `iasecc: add ChipDoc signing algorithms`.
 - Base upstream original: `c7a377af971df03f879c1697e91ebac1f7e28c56`.
 
 Las correcciones de ACL, ruta de firma, fallback de referencias de algoritmo
 y lectura RSA limitada a DOCP ya están comprometidas, junto con sus pruebas.
 El helper de firma desactiva la caché de PIN. Ambos árboles estaban limpios
-antes de documentar los tres fallos nuevos. Confirmar siempre mediante Git.
+antes de documentar la enumeración recuperada de las 19:39. Confirmar siempre mediante Git.
 
 La URL del submódulo aún es `https://github.com/OpenSC/OpenSC.git`. Los commits
 locales del driver necesitarán publicarse en un fork y actualizar esa URL
@@ -215,6 +215,7 @@ Esto no sustituye pruebas de firma en hardware.
 | **`jcop3-pkcs11-OwOOGiF2.txt`** | 12 de octubre, 01:16:15 UTC: corrección de ruta de firma aplicada por PKCS#15 y PKCS#11; límites PIN 14/4, intentos 7/7 |
 | **`jcop3-algorithms-FinI8oaD.txt`** | 12 de octubre, 01:16:28 UTC: nueve respuestas `9000`; HT `40`, DST `42` y AT `02` aceptados; DOCP CHV 1 antes/después idénticos, 7/7 intentos |
 | **`jcop3-signature-FktWTv57/report.txt`**, **`jcop3-signature-jQYkimJu/report.txt`**, **`jcop3-signature-54OpXE2f/report.txt`** | 12 de octubre, 01:28:26, 01:28:46 y 01:28:53 UTC, OpenSC `70d7afc20`: `No slots.` en lectura del certificado; no se ejecutó el comando autenticado |
+| **`jcop3-pkcs11-XtNrgvHO.txt`** | 12 de octubre, 01:39:13 UTC, OpenSC `70d7afc20`: lector y ATR visibles, slot 0 presente, dos certificados y dos llaves públicas RSA; correcciones de rutas aplicadas, intentos PIN 7/7 |
 
 Los informes PKCS#11 y DOCP RSA de las 21:34 UTC ya se revisaron: **no pedir ejecutarlos de nuevo como
 primer paso**. Los DOCP RSA se reprodujeron en las regresiones del parser
@@ -230,8 +231,11 @@ Con el conjunto actual hubo tres ejecuciones del helper, pero todas se
 detuvieron en la enumeración de slots previa a leer el certificado. Ninguna
 ejecutó `--login --sign` ni verificó un PIN. Los informes no distinguen entre
 lector no visible, servicio PC/SC inaccesible o configuración de slots.
-La compilación tiene PC/SC habilitado y existe la biblioteca del proveedor
-configurado; falta diagnosticar su disponibilidad en la terminal del usuario.
+El diagnóstico posterior `jcop3-pkcs11-XtNrgvHO.txt` sí detecta lector,
+tarjeta y slot 0 con el mismo módulo y proveedor PC/SC. No se reprodujo
+`No slots.` y su causa sigue sin confirmarse. Persiste el aviso conocido
+de PuKDF, pero no impide esa enumeración. No hubo autenticación; el PIN
+conserva 7/7 intentos. Falta el intento autenticado con el conjunto actual.
 Aceptar MSE no demuestra una operación RSA correcta.
 
 Las consultas vacías de VERIFY devuelven `63 C7`: PIN no verificado, 7 intentos
@@ -243,12 +247,10 @@ internos de parsing: revisar las respuestas y el contexto.
 
 ## Próximo trabajo, en orden
 
-1. Los tres fallos de las 19:28 ya se revisaron: el bloqueo actual es
-   `No slots.`. Pedir `make inspect/jcop3-pkcs11` dentro de `nix develop`,
-   con el lector conectado y la tarjeta insertada. Este diagnóstico usa
-   la compilación actual y no pide PIN. No repetir firma, SE 3 ni MSE
-   hasta distinguir disponibilidad PC/SC de enumeración PKCS#11.
-2. Después de resolver ese bloqueo, indicar al usuario **una ejecución**
+1. El informe de las 19:39 ya se revisó y recupera la enumeración. No repetir
+   automáticamente inspección, SE 3 ni MSE. La causa de `No slots.` sigue
+   pendiente; no atribuirla a una desconexión sin evidencia adicional.
+2. Indicar al usuario **una ejecución**
    de `make sign/jcop3`, directamente en su terminal.
    El helper configura `use_pin_caching = no`, `OPENSC_DEBUG=0` y `debug = 0`.
    No redirigir stdout ni pedir capturas APDU autenticadas. Revisar el nuevo
