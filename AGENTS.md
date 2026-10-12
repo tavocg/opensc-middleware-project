@@ -1,24 +1,24 @@
 # libjcop3p11: contexto para continuar
 
 Estado actualizado el **12 de octubre de 2026**, después de revisar la
-prueba de retirada/reinserción de las **01:15 de Costa Rica** (07:15 UTC).
-Las dos firmas consecutivas anteriores siguen verificadas con OpenSSL.
-**La recuperación en la misma GUI falló antes del segundo VERIFY**:
-sc_lock devuelve SC_ERROR_CARD_REMOVED (-1105), C_Login CKR_DEVICE_REMOVED
-(0x32) y una sesión posterior CKR_SESSION_HANDLE_INVALID (0xB3). El usuario
-recibió NullPointerException de Java al limpiar Token.secretCache aún null.
-Captura: `local/jcop3-firmador-api-9ujB6ts6/`, OpenSC `381c469b2`.
-El PDF previo a retirar la tarjeta tiene firma/sello verificados; no hay
-PDF posterior. El registro no observa todavía presencia/invalidación de slot.
-Se prepararon metadatos adicionales, sin cambiar recuperación ni comandos,
-y `make firmador/jcop3-cli` para el modo -dargs con PIN directo por stdin.
-El usuario autoriza usar `pass personal/firma-digital/pin | firmador ...`,
-pero confirma que se debe conservar **la GUI para investigar reinserción**.
-El agente no ejecutó pass ni una firma CLI; no detecta lectores. Pasan 237
-comprobaciones y compilación sin PC/SC. El diagnóstico nuevo requiere
-compilar desde la terminal del usuario antes de la siguiente prueba GUI.
-La candidata sigue optativa. No afirmar soporte completo o recuperación
-resuelta ni validar confianza/revocación solo por las firmas comprobadas.
+prueba GUI de las **01:39 de Costa Rica** (07:39 UTC), captura
+`local/jcop3-firmador-api-oJtaNn1s/`. **La retirada/reinserción pasó** con
+el procedimiento de cinco segundos fuera y cinco tras reinsertar. Los 430
+eventos observan ausencia, limpieza del token, nueva presencia, un nuevo
+VERIFY real y la segunda firma. Ambos PDF y sellos se verificaron con OpenSSL.
+El diagnóstico añadido no cambia recuperación; el fallo anterior de las
+01:15 (`9ujB6ts6`, tarjeta retirada/sesión inválida y NullPointerException
+Token.secretCache) sigue sin explicación completa. No afirmar que está
+corregido ni que la reinserción rápida funciona. Los eventos no llevan tiempos.
+La captura comenzó sobre `381c469b2` con los tres archivos de trazas
+modificados; luego se comprometieron como `1736ce3a9`. Principal `f7b74e3`.
+Los árboles están limpios antes de esta actualización documental.
+El usuario prefiere conservar la GUI para estos casos. El modo CLI con
+stdin está preparado y autorizado, pero aún no probado con tarjeta.
+El agente no ejecutó pass ni firmas; verificó los PDF sin PIN, tarjeta o red.
+Siguen vigentes las 237 regresiones; esta revisión no cambia código.
+La candidata sigue optativa. No afirmar soporte completo ni validar
+confianza/revocación solo por las firmas comprobadas.
 Leer este archivo al retomar y contrastar Git y las capturas más recientes.
 
 ## Objetivo y alcance
@@ -119,17 +119,17 @@ pero no valida comunicación con la tarjeta.
 
 Los últimos commits guardados son:
 
-- Repositorio principal: **`ecc6f22`**, `Document consecutive signing success`.
-- Submódulo OpenSC: **`381c469b2`**, `Verify ChipDoc PIN on each login`.
+- Repositorio principal: **`f7b74e3`**, `Add CLI signing and hotplug checks`.
+- Submódulo OpenSC: **`1736ce3a9`**, `Trace token removal`.
 - Base upstream original: `c7a377af971df03f879c1697e91ebac1f7e28c56`.
 
-Ambos árboles estaban limpios al comenzar a revisar la captura de las 01:15.
-La candidata de consultas sin reselección y VERIFY real por login ya está
-comprometida y compilada por el usuario. Los cambios locales nuevos solo
-amplían diagnóstico de presencia/slots/invalidez de sesiones, agregan modo
-CLI al lanzador y Make, sus regresiones y documentación. No cambian RSA,
-PIN, APDU ni recuperación. Falta compilarlos con PC/SC y probarlos en GUI;
-el CLI aún no se probó con tarjeta. No hay commits nuevos del agente.
+Ambos árboles estaban limpios al comenzar a revisar la captura de las 01:39.
+La candidata y las trazas están compiladas por el usuario y comprometidas.
+La captura registra la base anterior y tres archivos modificados porque el
+lanzador se abrió antes de hacer los commits. Los eventos nuevos confirman
+que cargó las trazas ampliadas; no confundir su base con un árbol limpio.
+La GUI pasó retirada/reinserción con las esperas indicadas; el CLI aún no
+se probó con tarjeta. Esta actualización modifica solo documentación.
 
 La URL del submódulo aún es `https://github.com/OpenSC/OpenSC.git`. Los commits
 locales del driver necesitarán publicarse en un fork y actualizar esa URL
@@ -290,6 +290,7 @@ abrió Java ni accedió al lector.
 | **`jcop3-firmador-api-LB7oJvqS/api.log`** | 12 de octubre, 06:48:43 UTC: primera firma exitosa, logout software, CHV sigue autenticado, un SELECT raíz antes de segundo login exitoso; segunda RSA `6982`; primer PDF consecutivo y sello verificados |
 | **`jcop3-firmador-api-fgRfkdCF/api.log`** | 12 de octubre, 07:07:46 UTC, OpenSC `381c469b2`: dos logins con VERIFY real, logout intermedio, consultas físicas autenticadas sin reselección, ambas RSA `9000` de 256 bytes; los dos PDF y sellos se verificaron |
 | **`jcop3-firmador-api-9ujB6ts6/api.log`** | 12 de octubre, 07:15:42 UTC: primera firma OK y PDF verificado; tras retirada/reinserción cinco bloqueos -1105, segundo login CKR_DEVICE_REMOVED antes de VERIFY y sesión final inválida; Java NullPointerException Token.secretCache null |
+| **`jcop3-firmador-api-oJtaNn1s/api.log`** | 12 de octubre, 07:39:06 UTC: 430 eventos; ausencia y limpieza de token observadas, nueva presencia, dos VERIFY reales y dos RSA de 256 bytes; ambos PDF y sellos verificados. Base 381c469b2 con trazas modificadas, luego comprometidas como 1736ce3a9 |
 
 Los informes PKCS#11 y DOCP RSA de las 21:34 UTC ya se revisaron: **no pedir ejecutarlos de nuevo como
 primer paso**. Los DOCP RSA se reprodujeron en las regresiones del parser
@@ -425,31 +426,40 @@ internos de parsing: revisar las respuestas y el contexto.
    original, texto y página sin anotaciones conservados. No se validaron
    confianza ni revocación. Para versiones previas usar las copias y hashes
    de cada informe, no nombres o tamaños. No publicar esos archivos.
-3. **La reinserción ya se probó y falló; no repetir el mismo diagnóstico.**
-   Captura `9ujB6ts6`, resumen privado `analysis.json`. Una primera firma
-   y su sello se verificaron: `local/jcop3-reinsert-before.pdf`, informe
-   `local/jcop3-pdf-verification-gp6kyfuv/report.json`. No hay PDF after.
-   Segundo login se detiene en sc_lock antes de VERIFY; no es rechazo RSA.
-   C_GetTokenInfo devuelve OK pese al error de consulta de PIN; eso no
-   acredita presencia de tarjeta ni recuperación. Falta ver cuándo se
-   actualiza presencia y se invalidan sesiones. El código local Java 21
-   abre una sesión antes de inicializar secretCache; Session.id verifica
-   presencia y puede llamar destroy, que no comprueba null. La excepción
-   encaja con esa inicialización incompleta; sin stack trace no afirmar la
-   cadena exacta ni que se arregle cambiando solo Java o solo OpenSC.
-   **Próxima intervención GUI con metadatos ampliados:** compilar mediante
-   `make test/iasecc JOBS="$(nproc)"`, guardar commits primero en submódulo
-   (api-trace.h, pkcs11-global.c, slot.c), después principal con su puntero,
-   lanzador, Make, tests y documentación. Cerrar otras instancias y abrir
-   `make firmador/jcop3-pin-status-in-place`. Firmar el original doc.pdf hacia
-   `local/jcop3-hotplug-trace-before.pdf`. Mantener GUI abierta y lector
-   conectado; retirar solo tarjeta, esperar cinco segundos, reinsertar la
-   misma y esperar cinco segundos antes de abrir y firmar el original hacia
-   `local/jcop3-hotplug-trace-after.pdf`. Anotar si la GUI muestra el cambio.
-   Detenerse ante el primer error, sin repetir; cerrar al terminar. Las
-   esperas permiten observar ausencia; no son una corrección ni validan
-   reinserción rápida. Revisar C_GetSlotInfo_BEGIN/fin, CARD_PRESENCE y
-   SLOT_TOKEN_REMOVED, sesiones, nuevo VERIFY y firma. Verificar PDF después.
+3. **La reinserción con espera ya pasó; no repetir este caso como primer paso.**
+   Captura `oJtaNn1s`, resumen privado `analysis.json`: 430 eventos, primera
+   C_SignFinal en línea 208, CARD_PRESENCE=0 en 209 y 214, inicio de limpieza
+   del slot 0 antes presente en 210, CARD_PRESENCE=3 (PRESENT|CHANGED) en 219.
+   Nuevo VERIFY real en 336, C_Login OK en 337 y segunda C_SignFinal en 430.
+   Las 12 marcas SLOT_TOKEN_REMOVED incluyen slots vacíos y limpieza repetida;
+   solo una tiene b=1. No equivalen a 12 retiradas físicas. Cada login tiene
+   cuatro consultas físicas antes de firmar, sin SELECT raíz en ese intervalo.
+   Todos los locks y C_GetSessionInfo pasan, sin atajo por hash ni sesión inválida.
+   Dos C_Logout CKR_USER_NOT_LOGGED_IN ocurren antes de los logins; no son
+   errores de firma. STATUS_ONLY devuelve NOT_SUPPORTED una vez por nueva
+   instancia de tarjeta, seguido de inicialización pública y estado físico OK.
+   PDF before de 80485 bytes y after de 80465, informes privados
+   `local/jcop3-pdf-verification-z_xushy2/report.json` y
+   `local/jcop3-pdf-verification-sblid4m2/report.json`: firma LlaveDeFirma,
+   sello CMS/imprint SHA-512, original y render sin anotaciones verificados.
+   No se validaron confianza ni revocación. Se conservan copias privadas.
+   La captura registra base 381c469b2 y tres archivos de trazas modificados;
+   los informes conservan esa distinción y el commit posterior 1736ce3a9.
+   **El fallo anterior sigue pendiente:** captura `9ujB6ts6`, login -1105/0x32
+   antes de VERIFY y sesión 0xB3; Java Token.secretCache null encaja con
+   inicialización incompleta, sin stack trace que confirme toda la cadena.
+   Las trazas nuevas no modifican recuperación. El pase con esperas no demuestra
+   que se haya corregido el fallo ni que funcione la reinserción rápida.
+   **Siguiente intervención GUI:** cerrar otras instancias y abrir el objetivo
+   existente `make firmador/jcop3-pin-status-in-place`, sin recompilar.
+   Firmar el original doc.pdf hacia `local/jcop3-hotplug-fast-before.pdf`.
+   Mantener lector conectado y GUI abierta; retirar solo tarjeta y reinsertar
+   después de aproximadamente un segundo, sin esperar cinco fuera. Esperar
+   cinco segundos tras insertar antes de abrir el original y firmar hacia
+   `local/jcop3-hotplug-fast-after.pdf`. Esto acorta únicamente la ausencia,
+   para comprobar detección del cambio. Detenerse al primer error sin reintentar;
+   cerrar al terminar. Observar si la GUI muestra retirada y nueva tarjeta.
+   Revisar presencia, limpieza, nueva sesión, VERIFY y PDF. No forzar resets.
 4. La candidata sigue **optativa** mediante
    `OPENSC_JCOP3_PIN_STATUS_IN_PLACE=yes`. PKCS#15 usa estado físico sin SELECT,
    limitado a Amos + Generic PKI + CHV global 1 + MF FILE_ID, excluyendo SO/PUK.
@@ -493,7 +503,7 @@ internos de parsing: revisar las respuestas y el contexto.
    Java reales; no son repositorios alternativos ni commits. Verifican rutas
    con espacios, stdin, salida 17, privacidad, rechazos y cuatro modos GUI.
    El helper técnico sign-jcop3.sh conserva su requisito TTY.
-7. Tras recuperar reinserción, validar sesiones, pérdida de autenticación,
+7. Después de delimitar reinserción rápida, validar sesiones, pérdida de autenticación,
    concurrencia y contexto cambiado por otro cliente. Preparar intervenciones
    concretas, sin reintentos automáticos de PIN. Decidir activación por defecto
    con evidencia. Antes de upstream, preservar rama y reproducir contra master
@@ -501,10 +511,10 @@ internos de parsing: revisar las respuestas y el contexto.
    al usuario: submódulo primero, principal después con su puntero. Ampliar
    mecanismos y plataformas antes de afirmar soporte completo. No generar llaves.
 
-**Dos firmas consecutivas y ambos PDF/sellos están verificados. Reinserción
-falló antes de VERIFY y hay diagnóstico ampliado preparado; el usuario
-prefiere investigar este caso con GUI. CLI con stdin está preparado como
-prueba adicional. Recuperación, concurrencia y activación siguen pendientes.**
+**Firmas consecutivas y reinserción con espera pasaron; cuatro PDF/sellos
+están verificados en esos dos casos. El fallo anterior sigue sin explicación
+completa y la reinserción rápida es el siguiente caso GUI. CLI está preparado
+como prueba adicional; concurrencia y activación siguen pendientes.**
 
 ## PIN, privacidad e Idopte
 

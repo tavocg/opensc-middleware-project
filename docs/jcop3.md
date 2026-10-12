@@ -2072,3 +2072,68 @@ La compilación completa sin PC/SC y sintaxis Bash pasaron; informes
 `build/opensc-offline/chipdoc-hotplug-trace-build.log` y
 `build/opensc-offline/chipdoc-hotplug-trace-tests.log`.
 El diagnóstico ampliado y el CLI aún no se probaron en hardware.
+
+## Retirada/reinserción con espera: pase verificado, 2026-10-12, 01:39
+
+El usuario terminó el caso GUI propuesto e informa que parece exitoso.
+`local/jcop3-firmador-api-oJtaNn1s/report.txt` registra 07:39:06 UTC,
+modo GUI y candidata de estado físico sin selección/VERIFY real activa.
+La captura comenzó sobre `381c469b2` con `api-trace.h`, `pkcs11-global.c`
+y `slot.c` modificados. Al revisar, ambos árboles están limpios: principal
+`f7b74e3` y submódulo `1736ce3a9`. Este último compromete exclusivamente
+las trazas nuevas, sin cambiar comandos, PIN ni recuperación. Los informes
+privados distinguen la base y estado modificado al abrir del commit posterior.
+
+Los **430 eventos** confirman la recuperación en esta ejecución:
+
+- VERIFY real en línea 114, C_Login OK en 115 y primera C_SignFinal OK en 208.
+- CARD_PRESENCE devuelve 0 en 209 y 214: el lector observó ausencia.
+  SLOT_TOKEN_REMOVED en 210 marca el comienzo de limpieza del slot 0 que
+  estaba presente. Hay 12 marcas en total, también para slots vacíos y
+  limpieza repetida; solo una tiene b=1. No son 12 retiradas de tarjeta.
+- CARD_PRESENCE devuelve 3 en 219: PRESENT|CHANGED. Se reinicializa la tarjeta
+  y se abren sesiones nuevas. Un STATUS_ONLY devuelve NOT_SUPPORTED porque
+  todavía no se ha leído su política pública; la inicialización completa
+  posterior pasa. Ocurrió también antes del primer login, como estaba previsto.
+- Segundo VERIFY real en 336, C_Login OK en 337 y segunda C_SignFinal OK en 430.
+  Ambas usan llave 3, RSA 2048, SHA256-RSA-PKCS, RSA AT `9000` y 256 bytes.
+  Cada login tiene cuatro consultas físicas antes de firmar, sin SELECT raíz
+  en ese intervalo. No hay CARD_PIN_VERIFY_CACHED ni omisión de consultas.
+- Todos los CARD_LOCK, C_OpenSession y C_GetSessionInfo registrados pasan.
+  Dos C_Logout `CKR_USER_NOT_LOGGED_IN` antes de los respectivos logins no
+  impiden firmar. No aparece CKR_DEVICE_REMOVED o CKR_SESSION_HANDLE_INVALID.
+
+Resumen privado: `local/jcop3-firmador-api-oJtaNn1s/analysis.json`.
+Los eventos ordenan las operaciones, pero no tienen marcas de tiempo:
+las esperas de cinco segundos corresponden al procedimiento indicado,
+no a duraciones medidas por el registro. El código añadido solo diagnostica.
+**El fallo anterior de las 01:15 no está explicado ni corregido por este pase.**
+No extrapolar a reinserción rápida, otros lectores o cambios concurrentes.
+
+Se verificaron ambos PDF sin lector, PIN ni red:
+
+| PDF | Tamaño | Informe privado |
+| --- | ---: | --- |
+| `local/jcop3-hotplug-trace-before.pdf` | 80485 bytes | `local/jcop3-pdf-verification-z_xushy2/report.json` |
+| `local/jcop3-hotplug-trace-after.pdf` | 80465 bytes | `local/jcop3-pdf-verification-sblid4m2/report.json` |
+
+Cada firma CAdES cubre la revisión de 38403 bytes y usa el certificado exacto
+de LlaveDeFirma. OpenSSL verifica la firma CMS y el CMS del sello RFC 3161;
+su imprint SHA-512 coincide con los rangos del PDF y cubre la revisión final,
+excluyendo su propio Contents. Se conserva el original de 6967 bytes como
+prefijo, su texto y el render sin anotaciones. Se guardaron copias privadas
+con permisos restrictivos. No se validaron confianza, revocación o LTV.
+
+La siguiente intervención mantiene **la GUI y el lector conectado**, y acorta
+solo la ausencia para delimitar el fallo anterior. No recompilar ni repetir
+el caso de cinco segundos sin motivo nuevo. Cerrar otras instancias, abrir
+`make firmador/jcop3-pin-status-in-place`, firmar el original doc.pdf hacia
+`local/jcop3-hotplug-fast-before.pdf`, retirar solo la tarjeta y reinsertar
+después de aproximadamente un segundo. Esperar cinco segundos tras insertar,
+abrir otra vez el original y firmar hacia `local/jcop3-hotplug-fast-after.pdf`.
+Anotar si la GUI muestra retirada/reinserción; detenerse al primer error,
+sin reintentar, y cerrar al terminar. Revisar cambio de presencia, limpieza,
+sesiones y nuevo VERIFY antes de atribuir un pase a recuperación correcta.
+
+No se cambió código en esta revisión: siguen vigentes las 237 regresiones.
+No se ejecutó pass ni una firma CLI. La candidata continúa optativa.

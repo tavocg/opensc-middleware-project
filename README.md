@@ -128,17 +128,19 @@ firmas consecutivas pasaron**. El registro confirma dos VERIFY reales y
 dos operaciones RSA de 256 bytes; OpenSSL verificó la firma y el sello de
 ambos PDF. Firmador hace logout entre documentos y un nuevo login, por eso
 pidió PIN dos veces en esta prueba. No se validaron confianza ni revocación.
-La prueba de retirada/reinserción falló antes del segundo VERIFY: los bloqueos
-devuelven tarjeta retirada, el login CKR_DEVICE_REMOVED y Java termina con
-NullPointerException al limpiar `Token.secretCache`. La firma anterior a
-retirar la tarjeta sí se verificó. El diagnóstico nuevo añade consultas de
-slot, presencia y comienzo de invalidación de tokens, sin cambiar recuperación
-ni registrar PIN/APDU. Compilar con `make test/iasecc JOBS="$(nproc)"` antes de
-repetir este caso en `make firmador/jcop3-pin-status-in-place`. Mantener lector
-y GUI abiertos; esperar cinco segundos con tarjeta retirada y otros cinco
-tras reinsertarla antes de la siguiente firma. Detenerse ante un error.
-La candidata sigue desactivada por defecto; recuperación y concurrencia
-siguen pendientes.
+Una primera prueba de retirada/reinserción falló antes del segundo VERIFY,
+con tarjeta retirada/sesión inválida y NullPointerException de Java.
+El diagnóstico añadido registra presencia y comienzo de limpieza del token,
+sin cambiar recuperación ni registrar PIN/APDU. La siguiente prueba GUI de
+las 01:39 **pasó con cinco segundos fuera y cinco tras reinsertar**: OpenSC
+observó ausencia y cambio de tarjeta, y ejecutó un nuevo VERIFY antes de
+la segunda firma. Ambos PDF y sellos se verificaron con OpenSSL, sin validar
+confianza ni revocación. El fallo anterior sigue pendiente; este pase no
+prueba reinserción rápida. La candidata continúa desactivada por defecto.
+El siguiente caso GUI acorta la ausencia a aproximadamente un segundo,
+manteniendo cinco segundos tras insertar y el lector conectado. Usar el
+objetivo existente, guardar archivos nuevos y detenerse al primer error.
+Concurrencia y recuperación bajo otros cambios de estado siguen pendientes.
 
 También está preparado el modo de terminal, usando la misma candidata:
 
@@ -152,8 +154,8 @@ y `PDF_OUTPUT`. Rechaza una salida ya existente. El usuario autorizó enviar
 el PIN desde su gestor por stdin: el wrapper no lo lee, almacena ni pasa en
 argumentos o variables; firmador `-dargs` recibe el flujo directamente.
 No redirigir ni capturar ese flujo como registro. El agente no ejecutó `pass`
-ni esta firma: su entorno no detecta lectores. La prueba GUI de reinserción
-sigue siendo el próximo caso; una ejecución CLI nueva no valida recuperación
+ni esta firma: su entorno no detecta lectores. La reinserción rápida
+es el próximo caso GUI; una ejecución CLI nueva no valida recuperación
 en una instancia existente.
 
 ## Organización
