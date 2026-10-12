@@ -1,26 +1,34 @@
 # libjcop3p11: contexto para continuar
 
-Estado actualizado el **12 de octubre de 2026**, tras revisar la GUI de
-**02:51 de Costa Rica** (08:51 UTC), captura PkFq1kEy, OpenSC `c052ee925`
-limpio. **Bloqueo confirmado localmente antes de enviar el PIN:** 147 eventos,
-dos PIN_APDU_BUILD con -1300, dos C_Login CKR_ARGUMENTS_BAD, cero PIN_TRANSMIT
-y cero firmas. Ambos VERIFY autenticados se rechazaron antes de transmitir.
-El usuario confirma que es el mismo PIN de las firmas anteriores; no atribuir
-el fallo a copia/pegado. No conocemos el motivo exacto dentro del encoder.
-La revisión estática del diálogo GUI muestra getPassword → PasswordProtection,
-sin relleno o normalización explícitos; no prueba los bytes recibidos en C.
-No se registra valor, longitud, hash o APDU del PIN. No relajar límites,
-recortar o normalizarlo como solución. El módulo no cambia en esta revisión.
-Git al iniciar: principal `1452044`, submódulo `c052ee925`, limpios; las marcas
-ISO y sus siete casos ya están comprometidos. Pasan 269 comprobaciones y
-compilación completa sin PC/SC; no repetirlas por cambios de documentación.
-Las firmas GUI consecutivas, reinserciones repetidas y CLI anteriores sí
-están verificadas; preservar esa evidencia. Segundo cliente sigue pendiente.
-**Próxima intervención:** cerrar GUI y ejecutar una vez el CLI existente,
-con pass por stdin y salida nueva local/jcop3-pin-stage-cli.pdf. No recompilar.
-Detenerse ante fallo y revisar etapas; si firma, verificar PDF antes de dar
-por resuelto el problema. El agente no usa pass ni firma y no tiene lector.
-Leer este archivo y capturas al retomar; no publicar upstream sin master.
+Estado actualizado el **12 de octubre de 2026**, tras verificar el CLI de
+**02:56 y la GUI de 03:00 de Costa Rica** (08:56/09:00 UTC), DgJlCm1N e
+Ie57KYQq, ambos OpenSC `c052ee925` limpio. **CLI y GUI volvieron a firmar**
+sin cambiar el módulo: 176/210 eventos, un build/VERIFY/login/firma exitosos
+en cada captura. PDF CLI local/jcop3-pin-stage-cli.pdf de 76900 bytes y GUI
+doc-firmado.pdf de 80482 bytes; ambos verificados y copiados privadamente:
+local/jcop3-pdf-verification-0xwdzxbh/report.json y bkt8tbsu/report.json.
+Certificado exacto LlaveDeFirma, CMS/sello RFC3161/imprint SHA-512 válidos,
+original/texto/render conservados; no confianza/revocación/LTV.
+El rechazo GUI anterior de PkFq1kEy sigue sin causa exacta establecida:
+dos builds -1300 antes del envío. El usuario confirmó mismo PIN; no atribuir
+el error a copia/pegado ni a un PIN diferente. La GUI posterior pasó, pero
+no sabemos cómo introdujo el PIN en ella. No afirmar una corrección nueva:
+solo se habían añadido marcas diagnósticas, sin relajar límites o transformar
+el PIN. No ejecutar la comparación pass -c propuesta anteriormente como
+primer paso: el usuario ya confirmó otra firma GUI y el PDF está verificado.
+Git al iniciar: principal `5cf474b`, submódulo `c052ee925`, limpios. Solo se
+documentan resultados; siguen vigentes 269 comprobaciones y compilación.
+**Próxima intervención:** si la GUI Ie57KYQq sigue abierta y en reposo,
+mantener tarjeta conectada y ejecutar una vez inspect/jcop3-peer-context
+desde otra terminal. Solo si SELECT devuelve 9000, firmar de nuevo el original
+doc.pdf hacia local/jcop3-peer-after.pdf en esa misma GUI. No retirar tarjeta
+ni usar doc-firmado.pdf como entrada. Si la GUI ya se cerró, no ejecutar el
+helper aún: el caso requiere una firma previa y una posterior en la misma
+instancia. Detenerse al primer error. La primera firma ya está preservada
+en bkt8tbsu; revisar después informe peer, nuevo segmento API y PDF posterior.
+La copia de 210 eventos es estable; api.log de GUI puede seguir creciendo.
+El agente no usa pass ni firma y no tiene lector. No repetir CLI o ciclos
+como primer paso. No publicar upstream sin contrastar master.
 
 ## Objetivo y alcance
 
@@ -121,14 +129,14 @@ pero no valida comunicación con la tarjeta.
 
 Los últimos commits guardados son:
 
-- Repositorio principal al iniciar la revisión: **`1452044`**, `Diagnose login argument failure`.
+- Repositorio principal al iniciar la revisión: **`5cf474b`**, `Document local PIN rejection`.
 - Submódulo OpenSC: **`c052ee925`**, `Trace PIN command stages`.
 - Base upstream original: `c7a377af971df03f879c1697e91ebac1f7e28c56`.
 
 Ambos árboles estaban limpios al comenzar esta revisión. Las marcas ISO y
 sus regresiones ya están comprometidas y compiladas por el usuario. Cambios
-nuevos solo en documentación: fallo local confirmado y comparación CLI
-pendiente. Dar al usuario comandos de commit del principal. No se requiere
+nuevos solo en documentación: CLI y GUI recuperados/verificados; causa del
+rechazo local anterior desconocida. Segundo cliente sigue pendiente. Dar al usuario comandos de commit del principal. No se requiere
 recompilar para la siguiente intervención; el agente no hizo commits.
 
 La URL del submódulo aún es `https://github.com/OpenSC/OpenSC.git`. Los commits
@@ -297,7 +305,9 @@ abrió Java ni accedió al lector.
 | **`jcop3-firmador-api-Z0aJ18Ge/api-reviewed.log`** | 12 de octubre, 08:11:29 UTC, 8842f394b limpio: primer CLI, 174 eventos; VERIFY/login/RSA OK, llave 3 de 2048 bits, firma de 256 bytes y PDF/sello verificados |
 | **`jcop3-firmador-api-tYcckn70/api-reviewed.log`** | 12 de octubre, 08:18:56 UTC, 8842f394b limpio: 1170 eventos, seis VERIFY y RSA exitosas, cuatro cambios con limpieza; cinco PDF previstos y un extra, todos con firma/sello verificados |
 | **`jcop3-firmador-api-GbaOMELO/api-reviewed.log`**, **`jcop3-firmador-api-j0FPyGAS/api-reviewed.log`** | 08:35/08:36 UTC, 8842f394b limpio: 241/145 eventos, cuatro/dos logins CKR_ARGUMENTS_BAD; VERIFY -1300, sin firma ni fallos de lock; causa pendiente de marcas ISO |
-| **`jcop3-firmador-api-PkFq1kEy/api-reviewed.log`** | 08:51:29 UTC, c052ee925 limpio: 147 eventos, dos builds -1300, ningún PIN_TRANSMIT o firma; rechazo local confirmado, comparación CLI pendiente |
+| **`jcop3-firmador-api-PkFq1kEy/api-reviewed.log`** | 08:51:29 UTC, c052ee925 limpio: 147 eventos, dos builds -1300, ningún PIN_TRANSMIT o firma; rechazo local confirmado, comparación CLI ya pasó en DgJlCm1N |
+| **`jcop3-firmador-api-DgJlCm1N/api-reviewed.log`** | 08:56:49 UTC, c052ee925 limpio: 176 eventos, build/VERIFY/login/firma exitosos vía CLI; PDF/sello verificados en 0xwdzxbh; rechazo GUI aún sin causa establecida |
+| **`jcop3-firmador-api-Ie57KYQq/api-reviewed.log`** | 09:00:25 UTC, c052ee925 limpio: 210 eventos preservados, build/VERIFY/login/firma GUI exitosos; doc-firmado.pdf verificado/copias en bkt8tbsu; causa del rechazo previo desconocida |
 
 Los informes PKCS#11 y DOCP RSA de las 21:34 UTC ya se revisaron: **no pedir ejecutarlos de nuevo como
 primer paso**. Los DOCP RSA se reprodujeron en las regresiones del parser
@@ -502,11 +512,20 @@ internos de parsing: revisar las respuestas y el contexto.
    La nueva captura PkFq1kEy (147 eventos) confirma PIN_APDU_BUILD -1300
    dos veces y cero PIN_TRANSMIT: rechazo antes del envío. El usuario confirma
    el mismo PIN. No repetir GUI como primer paso ni recompilar; comparar
-   una vez con CLI/pass por stdin hacia local/jcop3-pin-stage-cli.pdf. PIN_APDU_BUILD < 0 indica
+   una vez con CLI/pass por stdin hacia local/jcop3-pin-stage-cli.pdf.
+   **Esa comparación pasó** en DgJlCm1N: 176 eventos y PDF/sello verificados
+   (0xwdzxbh). **La GUI también pasó después** en Ie57KYQq, 210 eventos y
+   doc-firmado.pdf verificado en bkt8tbsu. No sabemos el método de entrada
+   del PIN y no se identifica causa exacta del rechazo previo. No repetir
+   la comparación pass -c: reutilizar la GUI abierta para el segundo cliente. PIN_APDU_BUILD < 0 indica
    rechazo antes del envío; build=0 seguido de PIN_TRANSMIT identifica
    transporte/SW. No normalizar, recortar ni relajar límites del PIN.
    Si falla, detenerse y revisar antes de otro intento autenticado.
-   **Después de resolver este bloqueo**, retomar el caso que sigue.
+   **Hay CLI y GUI verificados de nuevo**; retomar el caso que sigue sin
+   afirmar que se corrigió la causa del rechazo local. Si sigue abierta
+   Ie57KYQq, su primera firma es baseline; helper 9000 y segundo original
+   hacia local/jcop3-peer-after.pdf en la misma instancia. Si se cerró,
+   reconstruir ese caso después, sin ejecutar el helper aislado.
 
    **Ciclos repetidos ya pasaron; caso preparado: otro cliente entre firmas.**
    Captura tYcckn70, 1170 eventos. Seis VERIFY reales/logins/firmas, llave 3,
@@ -536,9 +555,9 @@ internos de parsing: revisar las respuestas y el contexto.
 
 
 **Firmas consecutivas, reinserciones únicas/repetidas y CLI pasaron con
-PDF/sellos verificados. Primero resolver el nuevo CKR_ARGUMENTS_BAD de login;
-la prueba que altera contexto desde otro cliente queda pendiente, al igual
-que concurrencia simultánea y activación.**
+PDF/sellos verificados. CLI y GUI posteriores al CKR_ARGUMENTS_BAD volvieron
+a pasar; causa del rechazo local anterior desconocida. Sigue pendiente
+segundo cliente entre firmas, concurrencia simultánea y activación.**
 
 ## PIN, privacidad e Idopte
 

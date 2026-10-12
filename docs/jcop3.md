@@ -2517,3 +2517,67 @@ sin recompilar ni helper peer-context; ante fallo, detenerse y revisar
 build/transporte antes de otro intento. Si produce PDF, verificarlo antes
 de concluir que el problema está limitado a GUI. La prueba entre clientes
 permanece pendiente y las firmas anteriores conservan su validez comprobada.
+
+
+## Comparación CLI exitosa y PDF verificado, 2026-10-12, 02:56
+
+Principal `5cf474b`, OpenSC `c052ee925` limpio. DgJlCm1N empieza
+08:56:49 UTC, modo CLI, candidata activa y depuración 0. El usuario ejecutó
+el flujo pass por stdin; el agente no abrió pass ni firmó. Copia privada
+api-reviewed.log y analysis.json: 176 eventos; PIN_APDU_BUILD 96 OK,
+PIN_TRANSMIT 97 con 9000, CARD_PIN_VERIFY 98 y C_Login 99 OK. C_SignInit 165,
+CARD_SIGN_AT 174 con 9000, C_SignFinal 176 OK. Llave de firma referencia 3,
+RSA 2048 y 256 bytes; sin fallos de lock o atajo VERIFY_CACHED.
+
+local/jcop3-pin-stage-cli.pdf tiene 76900 bytes. Informe privado
+local/jcop3-pdf-verification-0xwdzxbh/report.json: CMS CAdES verificado con el
+certificado exacto de LlaveDeFirma; revisión firmada de 34916 bytes. CMS del
+sello RFC 3161 válido e imprint SHA-512 coincide con los rangos de la revisión
+final. Original como prefijo, texto y render sin anotaciones conservados.
+No se valida confianza, revocación o LTV. No incorporar PDF/certificados a Git.
+
+Este resultado confirma firma con la misma compilación y tarjeta tras el
+rechazo GUI. Todavía no demuestra un defecto de GUI ni descarta diferencias
+de los parámetros públicos de validación. La revisión estática adicional de
+CardSignInfo muestra setPin/getPin directos; tampoco agrega relleno explícito.
+No se modifica el módulo, ni se repiten regresiones por documentación.
+
+Próxima comprobación acotada: GUI existente, limpiar por completo el campo,
+copiar con pass -c personal/firma-digital/pin y pegar una sola vez. La revisión
+del código instalado de password-store 1.7.4 muestra que -c toma la primera
+línea por defecto, no imprime el secreto y usa el portapapeles; el agente solo
+leyó código, no ejecutó pass. GUIArgs.readPin del CLI toma la primera línea
+hasta CR/LF. Se busca comparar la misma fuente sin pedir, almacenar, medir o
+registrar el PIN. Un intento hacia local/jcop3-pin-stage-gui.pdf; detenerse
+ante fallo. Si pasa, verificar PDF antes de volver a la prueba entre clientes.
+No recompilar ni relajar límites, recortar o normalizar el PIN en el módulo.
+
+
+### GUI volvió a funcionar con el mismo módulo, 2026-10-12, 03:00
+
+Durante la revisión CLI, el usuario comunicó otra firma exitosa con
+firmador/jcop3-pin-status-in-place. Ie57KYQq empieza 09:00:25 UTC, modo GUI,
+OpenSC c052ee925 limpio. Se preservan 210 eventos en api-reviewed.log y
+analysis.json: build 114 OK, transporte 115 con 9000, VERIFY 116/login 117 OK,
+SignInit 199, RSA AT 208 con 9000 y SignFinal 210 OK. Es la misma compilación
+que rechazó localmente la entrada anterior; no se hizo una corrección nueva.
+No sabemos el método de entrada de PIN de este éxito, por lo que no afirmar
+que copiar una línea o escribirlo manualmente resolvió el error previo.
+
+El nuevo doc-firmado.pdf, de 80482 bytes, queda copiado y verificado en
+local/jcop3-pdf-verification-bkt8tbsu/report.json. CAdES con el certificado
+exacto de LlaveDeFirma, revisión de 38402 bytes; sello CMS RFC3161 e imprint
+SHA-512 de la revisión final válidos. Original/texto/render conservados.
+No confianza/revocación/LTV. El archivo fuente puede ser reemplazado por el
+usuario; la copia privada y sus hashes preservan esta evidencia.
+
+La causa del rechazo previo sigue desconocida. El módulo conserva validación
+y credenciales sin transformación. No repetir la comparación GUI/pass -c que
+se había propuesto: ya hay otra GUI verificada. Si Ie57KYQq sigue abierta,
+usar esa firma como baseline y ejecutar el helper del segundo cliente desde
+otra terminal mientras GUI está en reposo y tarjeta conectada. Solo tras SW
+9000, firmar el original doc.pdf hacia local/jcop3-peer-after.pdf en la misma
+instancia. Si ya se cerró, no ejecutar helper aislado; reconstruir después
+el caso en una sola GUI. Detenerse ante fallo. La copia revisada tiene 210
+eventos; api.log puede crecer. No sobrescribirla al revisar el nuevo segmento;
+conservar otra copia para la prueba peer. No recompilar ni repetir CLI/ciclos.
