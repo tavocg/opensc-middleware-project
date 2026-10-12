@@ -137,10 +137,17 @@ observó ausencia y cambio de tarjeta, y ejecutó un nuevo VERIFY antes de
 la segunda firma. Ambos PDF y sellos se verificaron con OpenSSL, sin validar
 confianza ni revocación. El fallo anterior sigue pendiente; este pase no
 prueba reinserción rápida. La candidata continúa desactivada por defecto.
-El siguiente caso GUI acorta la ausencia a aproximadamente un segundo,
-manteniendo cinco segundos tras insertar y el lector conectado. Usar el
-objetivo existente, guardar archivos nuevos y detenerse al primer error.
-Concurrencia y recuperación bajo otros cambios de estado siguen pendientes.
+La prueba rápida de las 01:46 reprodujo el fallo: OpenSC observó tarjeta
+cambiada pero conservó el token/conexión anterior. Se corrigió localmente
+card_detect para procesar CARD_CHANGED aunque la espera de eventos no vea
+novedades, invalidar sesiones y reconectar. El límite de reintentos ahora
+se renueva por llamada. Pasan 256 comprobaciones sin tarjeta, incluyendo
+19 de detección, sesiones nuevas sin autenticación y fallos de reconexión.
+La corrección necesita compilarse con `make test/iasecc JOBS="$(nproc)"` y
+probarse en GUI con archivos nuevos. Conservar lector conectado, retirar
+la tarjeta aproximadamente un segundo y esperar cinco tras reinsertarla.
+Detenerse ante el primer error sin reintentar. Concurrencia y recuperación
+bajo otros cambios de estado siguen pendientes.
 
 También está preparado el modo de terminal, usando la misma candidata:
 
@@ -154,7 +161,7 @@ y `PDF_OUTPUT`. Rechaza una salida ya existente. El usuario autorizó enviar
 el PIN desde su gestor por stdin: el wrapper no lo lee, almacena ni pasa en
 argumentos o variables; firmador `-dargs` recibe el flujo directamente.
 No redirigir ni capturar ese flujo como registro. El agente no ejecutó `pass`
-ni esta firma: su entorno no detecta lectores. La reinserción rápida
+ni esta firma: su entorno no detecta lectores. La corrección de reinserción rápida
 es el próximo caso GUI; una ejecución CLI nueva no valida recuperación
 en una instancia existente.
 

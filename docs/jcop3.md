@@ -2137,3 +2137,86 @@ sesiones y nuevo VERIFY antes de atribuir un pase a recuperación correcta.
 
 No se cambió código en esta revisión: siguen vigentes las 237 regresiones.
 No se ejecutó pass ni una firma CLI. La candidata continúa optativa.
+
+## Reinserción rápida: cambio ignorado y corrección local, 2026-10-12, 01:46
+
+El usuario informa de nuevo NullPointerException al limpiar Token.secretCache.
+`local/jcop3-firmador-api-y17eLwTD/report.txt` registra 07:46:21 UTC,
+modo GUI, candidata activa y OpenSC `1736ce3a9` limpio. Principal `9bd4570`.
+La captura tiene **260 eventos**:
+
+- Primer VERIFY real en línea 114, login OK en 115 y firma OK en 208.
+- Después de firmar, **diez CARD_PRESENCE devuelven 3 (PRESENT|CHANGED)**.
+  No hay SLOT_TOKEN_REMOVED, ausencia observada, reconexión ni inicialización
+  de una tarjeta nueva. C_GetSlotInfo sigue devolviendo flags `7`.
+- Cuatro CARD_LOCK devuelven **SC_ERROR_CARD_REMOVED (-1105)**. Tres son
+  consultas token, cuyo C_GetTokenInfo sigue retornando OK; el cuarto es
+  el segundo login. C_Login devuelve **CKR_DEVICE_REMOVED (0x32)** en 247,
+  antes de un segundo VERIFY. No se ejecuta una segunda operación RSA.
+- Después abre otra sesión con OK; la consulta de presencia aún devuelve 3
+  y C_GetSessionInfo termina en **CKR_SESSION_HANDLE_INVALID (0xB3)** en 260.
+  En el código local, esta consulta invalida todas las sesiones al observar
+  CARD_CHANGED. La inicialización incompleta de Token en Java sigue siendo
+  consistente con el NPE; no se dispone del stack trace completo.
+
+Resumen privado: `local/jcop3-firmador-api-y17eLwTD/analysis.json`.
+Solo existe `local/jcop3-hotplug-fast-before.pdf` (80485 bytes), verificado
+con OpenSSL: firma CAdES con certificado LlaveDeFirma, CMS RFC 3161 e imprint
+SHA-512 correctos, original/texto/render preservados. Informe privado y copia:
+`local/jcop3-pdf-verification-bjaldk_f/report.json`. No se validaron confianza,
+revocación o LTV. No hay PDF posterior; el error no demuestra PIN incorrecto.
+
+### Causa y cambio preparado
+
+En `src/pkcs11/slot.c`, `card_detect()` primero consulta la espera de eventos.
+Si hay timeout o se notifica otro lector, marca `no_change=1`. Después consulta
+presencia, pero el atajo de no_change retorna OK **antes de procesar
+SC_READER_CARD_CHANGED**. Así un cambio detectado por el propio lector deja
+activo el token y la conexión anteriores. Esa ruta explica las diez lecturas
+de cambio sin limpieza. El registro no incluye el resultado de la espera,
+por lo que no distingue timeout de evento de otro lector en esta ejecución.
+
+La corrección local:
+
+1. Solo toma el atajo de no_change si presencia **no** indica CARD_CHANGED.
+2. Cuando procesa un cambio, descarta no_change para que, tras limpiar,
+   la siguiente lectura continúe por conexión y binding del framework.
+3. Usa un presupuesto de reintentos local a la invocación. El presupuesto
+   estático anterior se gastaba entre cambios independientes; la prueba de
+   cinco reemplazos seguidos cubre que se renueve y que el bucle siga acotado.
+
+Es una corrección general de la capa PKCS#11; afecta lectores que detecten
+cambios aunque la espera de eventos no los notifique. Usa las rutas existentes
+de limpieza/conexión, no modifica VERIFY o RSA ni autentica automáticamente.
+Al reconectar se vuelve a inicializar el perfil; las sesiones y autenticación
+anteriores no se conservan. Java, firmador y la candidata de firma optativa
+no se modificaron. No se han preparado reportes upstream ni actualizado master.
+
+### Regresión y siguiente prueba con tarjeta
+
+`tests/pkcs11-card-change.c` ejecuta el código real de slot.c, gestión de
+sesiones y limpieza, con lector y framework simulados. Las **19 comprobaciones**
+cubren timeout, eventos de otro lector, evento coincidente, tarjeta sin cambio,
+ausencia, error de presencia, fallo al conectar, cambio persistente con límite
+y cinco reemplazos sucesivos. Comprueba sesión anterior inválida, nueva sesión
+pública usable y ausencia de autenticación heredada. No usa PIN, APDU o Java.
+Los procesos aislados separan el estado simulado entre escenarios.
+
+Sobre slot.c anterior, el mismo fixture devuelve nueve FAIL y salida 1:
+`build/opensc-offline/card-change-before-tests.log`. Sobre la corrección,
+las 19 comprobaciones pasan. La suite completa suma **256 PASS, cero FAIL**:
+`build/opensc-offline/card-change-tests.log`. Terminó la compilación sin PC/SC,
+`build/opensc-offline/card-change-build.log`, y sintaxis Bash y diff checks.
+Esto reproduce y corrige la decisión de control en simulación; todavía no
+demuestra recuperación real después de reinserción rápida.
+
+La próxima intervención compila mediante `make test/iasecc JOBS="$(nproc)"`,
+guarda primero slot.c en el submódulo y luego tests/documentación/puntero en
+el principal. Cerrar otras instancias, abrir
+`make firmador/jcop3-pin-status-in-place` y firmar el original doc.pdf hacia
+`local/jcop3-hotplug-fixed-before.pdf`. Mantener GUI abierta y lector conectado,
+retirar solo tarjeta y reinsertar después de aproximadamente un segundo.
+Esperar cinco segundos tras insertar, abrir otra vez el original y firmar
+hacia `local/jcop3-hotplug-fixed-after.pdf`. Observar si la GUI muestra cambio.
+Detenerse al primer error sin repetir y cerrar al terminar. Comprobar limpieza,
+conexión nueva, sesiones, VERIFY y PDF antes de declarar el caso resuelto.
