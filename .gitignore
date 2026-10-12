@@ -4,6 +4,7 @@
 # PDF de prueba locales aportados por el usuario.
 /doc.pdf
 /doc-firmado.pdf
+/jcop3-*.pdf
 
 # Artefactos de desarrollo.
 /build/

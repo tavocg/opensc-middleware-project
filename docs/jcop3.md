@@ -2220,3 +2220,69 @@ Esperar cinco segundos tras insertar, abrir otra vez el original y firmar
 hacia `local/jcop3-hotplug-fixed-after.pdf`. Observar si la GUI muestra cambio.
 Detenerse al primer error sin repetir y cerrar al terminar. Comprobar limpieza,
 conexión nueva, sesiones, VERIFY y PDF antes de declarar el caso resuelto.
+
+## Reinserción rápida corregida: pase en hardware, 2026-10-12, 02:02
+
+El usuario confirma que funciona. Captura
+`local/jcop3-firmador-api-und1k27k/report.txt`, 08:02:29 UTC, modo GUI,
+candidata activa y OpenSC `8842f394b` limpio. El principal está en `ceb9c32`;
+corrección y regresiones ya están comprometidas y compiladas por el usuario.
+
+Se guarda una copia estable `api-reviewed.log` con **463 eventos** y su
+resumen `analysis.json`, ambos privados. El original api.log puede crecer
+mientras la GUI siga abierta; estas referencias de línea corresponden
+exclusivamente a la copia revisada.
+
+- VERIFY real en 133, login OK en 134 y primera firma OK en 227.
+- CARD_PRESENCE=3 en 228 y 233: PRESENT|CHANGED. Ahora cada detección pasa
+  por limpieza antes de continuar; luego la presencia vuelve a 1 y se
+  reinicializa el perfil. No se observó ausencia, a diferencia del control
+  con cinco segundos fuera de la tarjeta.
+- Ocho SLOT_TOKEN_REMOVED son dos rondas de cuatro slots; solo la primera
+  marca del slot 0 tiene b=1. Indican limpieza y slots ya vacíos, no ocho
+  retiradas físicas. La captura no incluye callbacks detallados de conexión;
+  la reinicialización posterior y las sesiones válidas demuestran recuperación.
+- Segundo VERIFY real en 331, login OK en 332 y segunda firma OK en 425.
+  Ambas usan llave nativa 3, RSA 2048, SHA256-RSA-PKCS, RSA AT `9000` y
+  producen 256 bytes. Cada login tiene cuatro consultas físicas antes de
+  firmar, sin SELECT raíz en ese intervalo. No hay atajo por hash.
+- Todos los CARD_LOCK, C_OpenSession, C_GetSlotInfo y C_GetSessionInfo pasan.
+  Los dos STATUS_ONLY NOT_SUPPORTED preceden a la inicialización pública
+  de la política; los dos C_Logout USER_NOT_LOGGED_IN preceden a los logins.
+  No se registran DEVICE_REMOVED, SESSION_HANDLE_INVALID ni fallo RSA.
+
+Se verificaron ambos PDF sin tarjeta, PIN o red:
+
+| PDF guardado por el usuario | Tamaño | Informe privado |
+| --- | ---: | --- |
+| `local/jcop3-hotplug-fixed-before.pdf` | 80465 bytes | `local/jcop3-pdf-verification-o7f8m3jn/report.json` |
+| `jcop3-hotplug-fixed-after.pdf` (raíz) | 80485 bytes | `local/jcop3-pdf-verification-m9wzm0yz/report.json` |
+
+OpenSSL verificó CAdES con el certificado exacto de LlaveDeFirma y el CMS
+RFC 3161 con imprint SHA-512 coincidente. CAdES cubre la revisión de 38403
+bytes; el sello cubre la revisión final salvo su propio Contents. Ambos
+preservan el original de 6967 bytes, texto y render sin anotaciones.
+Los informes conservan copias privadas; no se validaron confianza,
+revocación o LTV. El PDF posterior quedó en la raíz: se conserva su ubicación
+y se añade /jcop3-*.pdf a .gitignore para mantener las pruebas fuera de Git.
+
+Este pase valida la corrección en la tarjeta y lector observados, en una
+reinserción rápida siguiendo el procedimiento indicado. Las duraciones no
+están medidas en los eventos. No extrapolar a todas las reinserciones,
+otros lectores o concurrencia. El caso anterior fallido conserva su captura.
+No hay cambios nuevos del driver: siguen vigentes las 256 regresiones.
+
+La próxima intervención prueba el CLI ya preparado. Cerrar antes la GUI y
+otras instancias, no recompilar, ejecutar una sola vez:
+
+```bash
+set -o pipefail
+pass personal/firma-digital/pin | make firmador/jcop3-cli
+```
+
+Usa doc.pdf y salida privada local/jcop3-cli.pdf; si existe, el wrapper la
+rechaza y se debe elegir otro PDF_OUTPUT sin sobrescribir evidencia. Detenerse
+ante un error sin reintentar PIN. Revisar certificado/llave seleccionada,
+login, VERIFY, firma y PDF antes de declarar el CLI probado. No lo ejecutó
+el agente ni se accedió al pass real. Después quedan ciclos reales repetidos,
+concurrencia y selección del perfil por defecto antes de preparar upstream.

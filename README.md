@@ -143,11 +143,13 @@ card_detect para procesar CARD_CHANGED aunque la espera de eventos no vea
 novedades, invalidar sesiones y reconectar. El límite de reintentos ahora
 se renueva por llamada. Pasan 256 comprobaciones sin tarjeta, incluyendo
 19 de detección, sesiones nuevas sin autenticación y fallos de reconexión.
-La corrección necesita compilarse con `make test/iasecc JOBS="$(nproc)"` y
-probarse en GUI con archivos nuevos. Conservar lector conectado, retirar
-la tarjeta aproximadamente un segundo y esperar cinco tras reinsertarla.
-Detenerse ante el primer error sin reintentar. Concurrencia y recuperación
-bajo otros cambios de estado siguen pendientes.
+Con OpenSC `8842f394b`, la prueba GUI de las 02:02 **pasó con reinserción
+rápida**: se procesó el cambio aunque no se observó ausencia, se limpió el
+token y se ejecutó un nuevo VERIFY antes de la segunda firma. Ambos PDF y
+sellos se verificaron con OpenSSL; no hubo errores de login o sesión.
+No se validaron confianza ni revocación. El segundo PDF quedó en la raíz y
+los archivos /jcop3-*.pdf se excluyen de Git. La candidata sigue optativa;
+ciclos repetidos con tarjeta y concurrencia siguen pendientes.
 
 También está preparado el modo de terminal, usando la misma candidata:
 
@@ -161,9 +163,10 @@ y `PDF_OUTPUT`. Rechaza una salida ya existente. El usuario autorizó enviar
 el PIN desde su gestor por stdin: el wrapper no lo lee, almacena ni pasa en
 argumentos o variables; firmador `-dargs` recibe el flujo directamente.
 No redirigir ni capturar ese flujo como registro. El agente no ejecutó `pass`
-ni esta firma: su entorno no detecta lectores. La corrección de reinserción rápida
-es el próximo caso GUI; una ejecución CLI nueva no valida recuperación
-en una instancia existente.
+ni esta firma: su entorno no detecta lectores. El CLI es el siguiente caso:
+cerrar previamente la GUI y ejecutar una sola vez el pipe, sin recompilar.
+Detenerse al primer error sin reintentar PIN. La reinserción ya se validó
+en la GUI; una ejecución CLI nueva comprueba un flujo diferente.
 
 ## Organización
 
