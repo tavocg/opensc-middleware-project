@@ -1,17 +1,18 @@
 # libjcop3p11: contexto para continuar
 
-Estado actualizado el **11 de octubre de 2026**, después de revisar el
-registro del firmador de las **23:34 de Costa Rica** (05:34 UTC del 12).
-**El firmador produjo una operación de firma exitosa con OpenSC** al usar
-el experimento que omite consultas físicas de sesión y token después del
-login: llave 3, SHA256-RSA-PKCS, RSA AT `9000`, 256 bytes y `C_SignFinal CKR_OK`.
-El usuario indica que parece funcionar. Falta verificar el PDF guardado;
-no confundir el éxito PKCS#11 con validación de su archivo final. Se pidió
-su ruta y todavía no se dispone de ella. No repetir la firma como primer paso.
+Estado actualizado el **11 de octubre de 2026**, después de verificar los
+PDF aportados por el usuario a las **23:39 de Costa Rica** (05:39 UTC del 12).
+**El firmador produjo un PDF cuya firma y sello de tiempo se verificaron
+criptográficamente**, usando OpenSC en el experimento de estado de sesión/token.
+La firma CAdES coincide con el certificado de `LlaveDeFirma`; OpenSSL la
+verificó sobre los rangos de su revisión. También verificó el CMS del sello
+RFC 3161 y su huella SHA-512 sobre los rangos del PDF final. Se conserva la
+página original. No se validaron confianza ni revocación de certificados.
 El modo normal conserva las consultas y su fallo previo; el experimento
 sigue desactivado por defecto. Falta diseñar una corrección definitiva de
-consultas/contexto y validar sus límites. Leer este archivo al retomar y
-contrastar Git y las capturas más recientes; no afirma soporte completo.
+consultas/contexto y validar sus límites. No pedir otra firma como primer
+paso. Leer este archivo al retomar y contrastar Git y las capturas más
+recientes; no afirma soporte completo.
 
 ## Objetivo y alcance
 
@@ -20,9 +21,9 @@ digital de Costa Rica**, mediante su interfaz de contacto. El usuario tiene
 la tarjeta y un lector USB. El primer hito es obtener una firma RSA SHA-256
 con `LlaveDeFirma` y verificarla con OpenSSL. **Ese primer hito se completó**
 con RSA-PKCS y DigestInfo SHA-256 el 11 de octubre a las 20:18 de Costa Rica.
-El firmador ya completó una operación de firma con el módulo compilado
-en modo experimental. Ahora se validará el PDF guardado y se diseñará la
-corrección definitiva antes de preparar cambios para OpenSC.
+El firmador ya completó una firma en modo experimental: la firma y el
+sello de tiempo del PDF guardado se verificaron localmente. Ahora se
+diseñará la corrección definitiva antes de preparar cambios para OpenSC.
 
 La cadena de comunicación es:
 
@@ -109,7 +110,7 @@ pero no valida comunicación con la tarjeta.
 
 Los últimos commits guardados del driver y su diagnóstico son:
 
-- Repositorio principal: **`9c4281a`**, `Extend firmador state experiment`.
+- Repositorio principal: **`15c183a`**, `Document successful firmador signing`.
 - Submódulo OpenSC: **`da1edb457`**, `Test cached ChipDoc token info`.
 - Base upstream original: `c7a377af971df03f879c1697e91ebac1f7e28c56`.
 
@@ -129,9 +130,11 @@ Ambos árboles estaban limpios al revisar su registro de las 21:06. Ahora
 la ampliación del registro ya está comprometida y se probó en hardware.
 Ambos árboles estaban limpios al revisar la captura de las 23:34. El
 experimento ampliado está comprometido y su operación de firma pasó en
-hardware. Los cambios nuevos documentan ese resultado y la validación
-pendiente del PDF. No hay una nueva corrección del driver: sigue siendo
-optativo, y el modo normal conserva las consultas físicas. Confirmar
+hardware. El usuario comprometió la documentación en `15c183a` y después aportó
+`doc.pdf` y `doc-firmado.pdf` en la raíz. Ambos se conservan allí y se
+excluyeron mediante `.gitignore`. Los cambios nuevos documentan la
+verificación local del PDF y del sello de tiempo. No hay una nueva
+corrección del driver: sigue siendo optativo, y el modo normal conserva las consultas físicas. Confirmar
 mediante Git antes de cambiar el puntero.
 
 La URL del submódulo aún es `https://github.com/OpenSC/OpenSC.git`. Los commits
@@ -281,7 +284,7 @@ abrió Java ni accedió al lector.
 | **`jcop3-firmador-api-hBIzcp79/api.log`** | 12 de octubre, 03:24:32 UTC, OpenSC `a19ee5927`: un login exitoso; llave 3; selección, DOCP y MSE pasan; RSA AT devuelve `6982`, traducido a `SC_ERROR_SECURITY_STATUS_NOT_SATISFIED (-1211)` y `CKR_USER_NOT_LOGGED_IN`; no reintento RSA |
 | **`jcop3-firmador-api-HQ6utMiv/api.log`** | 12 de octubre, 03:39:50 UTC, OpenSC `ca8f65684`: experimento activo; `C_GetSessionInfo` omite consultas físicas; login, selección y MSE pasan; RSA AT sigue devolviendo `6982`; un login y una firma fallida |
 | **`jcop3-firmador-api-D83Fsxrk/api.log`** | 12 de octubre, 03:54:31 UTC, OpenSC `a3b001ea2`: un login exitoso; una consulta token y cuatro consultas sesión después del login; 15 SELECT raíz y un SELECT ChipDoc; sin reset detectado; RSA AT devuelve `6982` |
-| **`jcop3-firmador-api-WV8KnIjI/api.log`** | 12 de octubre, 05:34:00 UTC, OpenSC `da1edb457`: experimento sesión+token activo; login OK, llave 3, SHA256-RSA-PKCS; ninguna selección raíz después del login; RSA AT `9000`, retorno 256 y `C_SignFinal CKR_OK`; PDF pendiente de validar |
+| **`jcop3-firmador-api-WV8KnIjI/api.log`** | 12 de octubre, 05:34:00 UTC, OpenSC `da1edb457`: experimento sesión+token activo; login OK, llave 3, SHA256-RSA-PKCS; ninguna selección raíz después del login; RSA AT `9000`, retorno 256 y `C_SignFinal CKR_OK`; firma PDF y sello verificados posteriormente con OpenSSL |
 
 Los informes PKCS#11 y DOCP RSA de las 21:34 UTC ya se revisaron: **no pedir ejecutarlos de nuevo como
 primer paso**. Los DOCP RSA se reprodujeron en las regresiones del parser
@@ -379,8 +382,12 @@ confirma `TOKEN_PIN_CACHED` y tres `SESSION_LOGIN_STATE`, ninguna selección
 raíz después del login, y RSA AT `9000` con retorno de 256 bytes y
 `C_SignFinal CKR_OK`. No hay revalidación ni segunda operación RSA. Esto
 sustenta revisar consultas/contexto como origen del fallo, pero no distingue
-el efecto de SELECT, VERIFY vacío y GET DATA individualmente. Falta verificar
-el PDF y diseñar una corrección definitiva; el experimento sigue optativo.
+el efecto de SELECT, VERIFY vacío y GET DATA individualmente. Falta diseñar y validar
+una corrección definitiva; el experimento sigue optativo. Los PDF se
+verificaron después: la firma CAdES coincide con el certificado de la
+tarjeta, y el CMS del sello RFC 3161 y su huella sobre el PDF final pasan.
+Informe: `local/jcop3-pdf-verification-ydbv_z5o/report.json`; no se validaron
+confianza ni revocación de los certificados.
 No hay evidencia de PIN incorrecto, llave equivocada o problema de Internet.
 
 Las consultas vacías de VERIFY devuelven `63 C7`: PIN no verificado, 7 intentos
@@ -398,13 +405,17 @@ internos de parsing: revisar las respuestas y el contexto.
    otra vez sin cambios de código.** La captura usa el módulo local y el
    experimento ampliado, y `C_SignFinal` pasó. Guardar documentación mediante
    comandos de commit para el usuario, sin crear commits desde el agente.
-2. Obtener la ruta del PDF firmado que guardó firmador; ya se preguntó al
-   usuario. Verificar la firma y los rangos firmados localmente, sin enviar
-   el documento ni consultar PIN. `pdfsig` del sistema admite `-nocert` y
-   `-no-ocsp`; esa comprobación omite validación de confianza/revocación.
-   Mantener informes/certificados/documentos en `local/`, con permisos privados,
-   y no volcar identidad ni contenido al chat. No interpretar un retorno 0
-   como prueba de firma válida: revisar el resultado y cobertura de cada firma.
+2. Los PDF **ya se verificaron**: `doc.pdf` (original) y `doc-firmado.pdf`
+   (firmado) están en la raíz y excluidos de Git. Informe privado
+   `local/jcop3-pdf-verification-ydbv_z5o/report.json`. La firma CAdES cubre
+   la revisión de 38403 bytes; el sello RFC 3161 cubre el archivo final de
+   80485 bytes salvo su propio Contents. `pdfsig` da firma principal válida
+   pero no verifica el sello en este registro (retorno 1); OpenSSL verificó
+   ambos CMS y se comparó la huella SHA-512 del sello con los rangos finales.
+   El certificado firmante coincide byte por byte con el del hito técnico.
+   La página se renderiza igual al ocultar anotaciones y se conserva el texto
+   original. Confianza y revocación no se validaron. No repetir estas pruebas
+   sin un nuevo archivo o motivo; no publicar certificados ni documentos.
 3. Diseñar la corrección definitiva con la diferencia observada: las
    consultas normales de sesión/token ejecutan selecciones de raíz y
    consultas de PIN/política después del login; al omitirlas la firma pasó.
@@ -433,9 +444,10 @@ internos de parsing: revisar las respuestas y el contexto.
    recuperación de sesión, mecanismos, caché y plataformas antes de afirmar
    soporte completo o enviar cambios upstream. No generar nuevas llaves.
 
-**Existen dos firmas técnicas RSA SHA-256 verificadas con OpenSSL y una
-operación de firma exitosa del firmador en modo experimental. La validación
-del PDF producido está pendiente.**
+**Existen dos firmas técnicas RSA SHA-256 verificadas con OpenSSL y un
+PDF del firmador cuya firma y sello de tiempo se verificaron localmente
+en modo experimental. La corrección definitiva y la validación de
+confianza/revocación siguen pendientes.**
 
 ## PIN, privacidad e Idopte
 
@@ -457,6 +469,8 @@ del PDF producido está pendiente.**
 - Firmar con la tarjeta no requiere Internet. Descargar dependencias Nix sí
   puede requerirlo; firmador puede usar red para otros servicios como sellado
   de tiempo o comprobación de revocación.
+- `doc.pdf` y `doc-firmado.pdf` son archivos de prueba del usuario,
+  excluidos de Git. No incorporarlos a commits.
 - `local/` contiene certificados y otros datos identificables. Mantenerlo
   fuera de Git y evitar volcar capturas completas al chat. Los scripts usan
   `umask 077`; no publicar los informes sin revisar y anonimizar.

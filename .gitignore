@@ -1,6 +1,10 @@
 # Capturas originales y datos de tarjetas: conservar fuera del historial.
 /local/
 
+# PDF de prueba locales aportados por el usuario.
+/doc.pdf
+/doc-firmado.pdf
+
 # Artefactos de desarrollo.
 /build/
 /.direnv/

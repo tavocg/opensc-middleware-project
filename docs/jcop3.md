@@ -1460,3 +1460,64 @@ Después se diseñará la corrección definitiva y sus regresiones para
 consultas de estado/política. No hubo cambios de código ni nuevas pruebas
 de tarjeta durante esta revisión; siguen pasando las 151 comprobaciones
 registradas antes de este intento.
+
+## PDF y sello de tiempo verificados localmente: 2026-10-11, 23:39
+
+El usuario aportó `doc.pdf` y `doc-firmado.pdf` en la raíz. El repositorio
+principal estaba en `15c183a` y OpenSC en `da1edb457`, sin nuevos cambios del
+driver. Los archivos se conservan en su ubicación y se añadieron sus rutas
+exactas a `.gitignore` para evitar incorporarlos al historial. La evidencia
+identificable queda en `local/jcop3-pdf-verification-ydbv_z5o/`, con permisos
+privados; su resumen es `report.json`, fechado 05:39:50 UTC del 12 de octubre.
+No se accedió al lector ni se solicitó PIN.
+
+Los archivos tienen 6967 y 80485 bytes y una página de tamaño carta. El PDF
+firmado conserva todos los bytes originales como prefijo. El texto original
+normalizado permanece en el firmado; el texto extraído completo incluye
+información adicional. Ambos se renderizaron con `pdftoppm -hide-annotations`
+a 72 dpi y sus imágenes PPM son **idénticas byte por byte**. Esto comprueba
+la conservación de la página subyacente, excluyendo las anotaciones añadidas.
+
+Hay dos objetos de firma:
+
+| Objeto | SubFilter | Rangos `[offset, longitud, offset, longitud]` | Resultado |
+| --- | --- | --- | --- |
+| Firma de la tarjeta | `ETSI.CAdES.detached` | `[0, 7346, 33972, 4431]` | CMS verificado, certificado igual al de `LlaveDeFirma` |
+| Sello del documento | `ETSI.RFC3161` | `[0, 60499, 79445, 1040]` | CMS verificado, huella SHA-512 coincide con los rangos finales |
+
+`pdfsig -backend NSS -nocert -no-ocsp` informa **Signature is Valid** para
+la primera firma. Su revisión termina en el byte 38403; no cubre las
+adiciones posteriores. Para el sello informa cobertura del archivo completo,
+pero **Signature has not yet been verified** y retorna 1. Ese resultado
+no se tomó como prueba suficiente ni como firma principal inválida.
+
+Se extrajo cada CMS de su hueco Contents y se validaron límites/rangos,
+longitud DER y relleno nulo. La primera firma se verificó con
+`openssl cms -verify -binary -noverify -inform DER`, suministrando como
+contenido la concatenación exacta de sus dos rangos: **CMS Verification
+successful**, retorno 0, contenido verificado idéntico. El certificado
+firmante extraído coincide byte por byte con
+`local/jcop3-signature-kiHbc1Qh/certificate.der`, usado en la firma técnica
+verificada; así se confirma el certificado de la tarjeta correspondiente.
+
+El sello se verificó como CMS con TSTInfo encapsulado, sin tratarlo como
+firma detached del PDF. OpenSSL devolvió **CMS Verification successful**,
+retorno 0. Después se leyó el messageImprint del TSTInfo autenticado: usa
+**SHA-512** y coincide con el hash de la concatenación de sus dos rangos.
+El segundo rango termina en el byte 80485, fin del archivo actual. Por tanto,
+se verificaron la firma criptográfica del sello y su vínculo con el PDF
+final, salvo el hueco de su propio Contents, esperado en el formato.
+
+**El PDF generado por firmador usando este módulo en modo experimental
+contiene una firma de la tarjeta válida y un sello de tiempo cuyo CMS y
+vínculo con el documento se verificaron.** No se validaron confianza de
+certificados, revocación, vigencia o una política completa de validación de
+larga duración: `-noverify` y `-nocert` omiten confianza y no se consultó OCSP.
+La cobertura final la aporta el sello; no atribuirla a la firma original de
+la tarjeta. No afirmar todavía soporte completo de OpenSC/JCOP3.
+
+No hubo cambios de código ni nuevas firmas. Continúan las 151 comprobaciones
+previas. El siguiente trabajo es diseñar la corrección definitiva del estado
+PIN/contexto sin banderas de intentos obsoletas, y comprobar recuperación
+ante cambios de tarjeta y concurrencia. El experimento no se activó por
+defecto durante esta revisión.

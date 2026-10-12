@@ -85,7 +85,12 @@ Login sigue verificando el PIN. El experimento está desactivado por defecto,
 no modifica los modos normal/diagnóstico y produjo una firma en hardware.
 La captura de las 23:34 confirmó login, RSA AT y `C_SignFinal` exitosos,
 con una firma de 256 bytes y llave 3. No repetirla como primer paso.
-Falta validar el PDF guardado y diseñar la corrección definitiva.
+La firma del PDF guardado y su sello de tiempo se verificaron después con
+OpenSSL: el certificado firmante coincide con el de la tarjeta y el sello
+abarca los rangos del archivo final. Se conserva el contenido de la página
+original. Esta comprobación local no valida confianza ni revocación de
+certificados. Falta diseñar la corrección definitiva; el experimento sigue
+desactivado por defecto.
 
 ## Organización
 
