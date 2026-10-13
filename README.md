@@ -151,6 +151,15 @@ confirmó SELECT 4109 -> 9000 y un intento de READ BINARY de 4109 bloqueado
 antes de transmitir. **No se habilita READ 4109**; no fue un rechazo de tarjeta.
 Pasaron 44 comprobaciones del observador y 45 del lanzador; no hubo PIN ni firma.
 
+Nuevo modo independiente `make inspect/jcop4-idopte-read4109 READER=0`: permite
+una sola solicitud READ de 17 bytes de 4109, además de la lectura acotada de
+4141. Mantiene bloqueadas autenticación/firma y omite ambos contenidos de los
+registros. El modo compare anterior sigue sin leer 4109. La ejecución real
+obtuvo 9000 en esa lectura y encontró un SELECT posterior de **7001**, bloqueado
+antes de transporte. El ODF observado identifica 7001 como directorio de
+objetos de autenticación; aún no explica VERIFY6982. Pasaron 52 comprobaciones
+del observador, 47 del lanzador y 6 de aislamiento del lanzador de firma.
+
 Capturas privadas bajo local/jcop4-idopte-spy-*/; no agregarlas a Git.
 Pasaron previamente **30 comprobaciones del observador/decoder y 40 del
 lanzador** con transporte ficticio. El diagnóstico de firma pasó además

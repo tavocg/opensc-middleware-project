@@ -35,6 +35,11 @@ if [[ ${FIXTURE_COMPARE_MODE:-0} == 1 ]]; then
 else
     [[ ${JCOP4_DIAGNOSTIC_READ4141-unset} == unset ]] || exit 96
 fi
+if [[ ${FIXTURE_READ4109_MODE:-0} == 1 ]]; then
+    [[ ${JCOP4_DIAGNOSTIC_READ4109-} == 1 ]] || exit 96
+else
+    [[ ${JCOP4_DIAGNOSTIC_READ4109-unset} == unset ]] || exit 96
+fi
 if [[ ${JCOP4_PUBLIC_DISCOVERY_TRACE-unset} != unset ]]; then
     [[ ${LD_PRELOAD-unset} == unset &&
        ${LIBPCSCLITE_DELEGATE-} == "$FIXTURE_PROBE_ROOT/build/diagnostics/pcsc-public-observer.so" &&
@@ -102,7 +107,7 @@ esac
    ${OPENSC_DEEPBIND-unset} == unset &&
    ${LD_PRELOAD-unset} == unset && ${LIBPCSCLITE_DELEGATE-unset} == unset &&
    ${LIBPCSCLITE_SPY_DELEGATE-unset} == unset && ${JCOP4_PUBLIC_SELECT_SPY_TRACE-unset} == unset &&
-   ${JCOP4_DIAGNOSTIC_READ4141-unset} == unset &&
+   ${JCOP4_DIAGNOSTIC_READ4141-unset} == unset && ${JCOP4_DIAGNOSTIC_READ4109-unset} == unset &&
    ${OPENSC_API_TRACE_FILE-unset} == unset &&
    ${OPENSC_JCOP3_SESSION_STATE-unset} == unset &&
    ${OPENSC_JCOP3_PIN_STATUS_IN_PLACE-unset} == unset &&
@@ -150,6 +155,7 @@ SPY
 chmod +x "$task_tmp/bin/pcsc-spy"
 export JCOP4_PUBLIC_SELECT_SPY_TRACE=/should/not/be/used
 export JCOP4_DIAGNOSTIC_READ4141=1
+export JCOP4_DIAGNOSTIC_READ4109=1
 export OPENSC_DEBUG=99 OPENSC_DEBUG_FILE=/should/not/be/used
 export OPENSC_CONF=/should/not/be/used OPENSC_API_TRACE_FILE=/should/not/be/used
 export OPENSC_DEEPBIND=1
@@ -393,6 +399,18 @@ task_run 19 2 --idopte-compare
 [[ ! -e $task_tmp/idopte-called ]]
 printf 'PASS comparison stops before Idopte when its guard cannot be built\n'
 unset FIXTURE_OBSERVER_BUILD_EXIT FIXTURE_COMPARE_MODE
+export FIXTURE_COMPARE_MODE=1 FIXTURE_READ4109_MODE=1
+printf 'synthetic unused stdin\n' | task_run 0 2 --idopte-read4109
+for task_dir in "$task_tmp"/local/jcop4-idopte-read4109-*; do
+    [[ $(stat -c %a "$task_dir") == 700 && $(stat -c %a "$task_dir/report.txt") == 600 &&
+       $(< "$task_dir/report.txt") == *'comparison_scope=read4141_max400_read4109_once17_no_recording_no_authentication'* ]]
+done
+printf 'PASS independent READ4109 mode uses inventory only, empty stdin, private reports and both explicit flags\n'
+export FIXTURE_IDOPTE_EXIT=17
+task_run 17 2 --idopte-read4109
+[[ $(< "$task_tmp/output.txt") != *'Consulta pública de Idopte terminada'* ]]
+printf 'PASS READ4109 mode propagates blocked provider failure without retrying or fallback\n'
+unset FIXTURE_IDOPTE_EXIT FIXTURE_COMPARE_MODE FIXTURE_READ4109_MODE
 task_run 0 2 --idopte-spy
 task_spy_report=$(sed -n 's/^Informe: //p' "$task_tmp/output.txt")
 [[ $(< "$task_spy_report") == *'spy_result=select4141_control_data_only'* &&

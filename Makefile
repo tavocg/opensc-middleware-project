@@ -15,7 +15,7 @@
 .PHONY: inspect/jcop4-pin-policy
 .PHONY: inspect/jcop4-odf-map
 .PHONY: inspect/jcop4-file4141 inspect/jcop4-file4109
-.PHONY: inspect/jcop4-idopte-compare
+.PHONY: inspect/jcop4-idopte-compare inspect/jcop4-idopte-read4109
 .PHONY: inspect/jcop4-idopte
 .PHONY: inspect/jcop4-idopte-discovery inspect/jcop4-idopte-spy test/pcsc-public-observer
 
@@ -51,6 +51,7 @@ help:
 		'make inspect/jcop4-idopte-discovery Observa cabeceras de descubrimiento público con bloqueo de comandos ajenos.' \
 		'make inspect/jcop4-idopte-spy Captura solo SELECT 4141 para pcsc-spy, sin PIN ni lectura del EF.' \
 		'make inspect/jcop4-idopte-compare READ 4141 hasta 400 bytes y SELECT 4109, sin leer 4109, guardar contenido ni autenticar.' \
+		'make inspect/jcop4-idopte-read4109 Compara siguiente paso Idopte tras READ 4109 único de 17 bytes, sin PIN.' \
 		'make test/pcsc-public-observer Comprueba el observador sin lector ni tarjeta.' \
 		'make sign/jcop4-apdu      Firma experimental RSA SHA-256 por APDU y verifica, un intento de PIN.' \
 		'make sign/jcop4-verify-first Mismo diagnóstico, verifica PIN antes de MSE; un intento y verificación OpenSSL.' \
@@ -112,6 +113,9 @@ inspect/jcop4-file4109:
 
 inspect/jcop4-file4141:
 	@bash scripts/probe-jcop4.sh "$$READER" --file4141
+
+inspect/jcop4-idopte-read4109:
+	@bash scripts/probe-jcop4.sh "$$READER" --idopte-read4109
 
 inspect/jcop4-idopte-compare:
 	@bash scripts/probe-jcop4.sh "$$READER" --idopte-compare

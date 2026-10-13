@@ -6,7 +6,40 @@ la tarjeta. El usuario ejecuta las operaciones que requieran PIN o GUI. Esto
 sustituye las restricciones anteriores de no ejecutar Git/hardware/Idopte por
 el agente; conservar límites de cada diagnóstico y privacidad de los registros.
 
-**Último resultado: Idopte SELECT 4109 -> READ bloqueado, 20:04:49 UTC.**
+**Último resultado: READ4109 -> SELECT7001 bloqueado, 20:12:16 UTC.**
+Usuario hizo commit `e37cff1`, principal limpio al comenzar; OpenSC `3dfef6704`
+intacto. Agente preparó/ejecutó modo independiente sin PIN/GUI
+`nix develop --offline -c make inspect/jcop4-idopte-read4109 READER=0`.
+Informe `local/jcop4-idopte-read4109-4qFZ03Qz/report.txt`: inventario/compilación
+correctos, comparison_atr=known_jcop4, 20 APDU transmitidas 0/9000.
+SELECT4109 -> 0/9000, READ4109 con Le17/offset0 -> 0/9000; contenidos omitidos,
+no longitud devuelta en traza. Después SELECT/READ bootstrap sin FID registrado
+(no atribuir archivo), luego **SELECT EF7001 bloqueado antes de transmitir**.
+module_exit_status=1/observer_result=events_recorded por guard, sin respuesta
+de tarjeta a SELECT7001. No PIN/VERIFY/MSE/GA/PSO/escritura ni firma.
+ODF anterior identifica 7001=auth_objects: directorio de metadatos de
+autenticación de esta tarjeta, no una credencial ni una operación VERIFY.
+4141/4109 siguen de propósito desconocido; no asumir CA/PACE/no canal por orden.
+
+Nuevo --idopte-read4109/target inspect/jcop4-idopte-read4109, opt-in separado
+JCOP4_DIAGNOSTIC_READ4109=1 solo junto al READ4141 dentro de Idopte inventario.
+Default/compare/spy mantienen READ4109 bloqueado. Solicitud caso-2 básico corto
+o extendido, Le exactamente17/offset0, una llamada por proceso sin reposición.
+No cambiar Le del proveedor. Buffer temporal19, tamaño2..19 y SW9000/6282;
+otro SW/continuación/transporte/tamaño/logfallido detiene, sin GET RESPONSE,
+reintento ni copia de respuesta al log. Opt-in inválido/sin padre/mixed-spy
+bloquea todo. Launcher inventario/otros modos y firma limpian variable externa.
+Verificación ATR/contexto/secuencia, límite READ4141 y prohibición PIN/firma
+intactos. Informes privados 0700/0600. No incorporar local/ a Git.
+Pasaron **52 observador/decoder/constructor, 47 lanzador y 6 lanzador firma**,
+transporte ficticio/redirector real; biblioteca compilada. Helper público y
+operación de firma sin cambios, suites58/12 previas vigentes, no repetir.
+Siguiente trabajo: estudiar acceso AODF7001 del mismo AID, con precedente
+ODF/PKCS#15 actual; no repetir esta consulta idéntica ni pedir PIN por inercia.
+JCOP4/RSA3072 pendientes. Agente autorizado a Git/no PIN/no GUI; montaje.git
+solo lectura sigue impidiendo commits en este entorno si no cambia.
+
+**Resultado anterior: Idopte SELECT 4109 -> READ bloqueado, 20:04:49 UTC.**
 Principal `40decb2`, OpenSC `3dfef6704`, ambos limpios al comenzar. Usuario hizo
 commit anterior. Agente ejecutó el modo compare actualizado sin PIN/GUI:
 `local/jcop4-idopte-compare-BCIdSIvC/report.txt`. Compilación/inventario correctos,

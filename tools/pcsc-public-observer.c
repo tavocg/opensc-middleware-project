@@ -1,8 +1,8 @@
 /* Observe bounded public discovery. Default log contains headers only.
  * An opt-in pcsc-spy stream captures only permitted SELECT 4141 control
  * information; never authentication buffers or that EF's contents.
- * A separate opt-in comparison permits bounded READ 4141 to Idopte only,
- * without recording its contents or forwarding authentication. */
+ * Separate opt-ins permit bounded READ 4141 and one 17-byte READ 4109 to
+ * Idopte only, without recording contents or forwarding authentication. */
 #define _GNU_SOURCE
 #include <dlfcn.h>
 #include <fcntl.h>
@@ -17,9 +17,9 @@
 
 static int trace_fd = -1, stopped, selected_public_file, selected_mf, selected_app, handle_set, pending_response;
 static int select_spy_fd = -1;
-static int compare_read4141;
+static int compare_read4141, compare_read4109;
 static int comparison_atr_ok;
-static unsigned int read4141_budget, read4141_offset, read4141_calls;
+static unsigned int read4141_budget, read4141_offset, read4141_calls, read4109_calls;
 static unsigned int events;
 static unsigned int lifecycle_events;
 static SCARDHANDLE trace_handle;
@@ -38,6 +38,14 @@ __attribute__((constructor)) static void observer_init(void)
 		else {
 			compare_read4141 = 1;
 			if (dprintf(trace_fd, "comparison=bounded_read4141_contents_omitted\n") < 0) stopped = 1;
+		}
+	}
+	path = getenv("JCOP4_DIAGNOSTIC_READ4109");
+	if (path) {
+		if (strcmp(path, "1") || !compare_read4141 || trace_fd < 0) stopped = 1;
+		else {
+			compare_read4109 = 1;
+			if (dprintf(trace_fd, "comparison_extension=bounded_read4109_contents_omitted\n") < 0) stopped = 1;
 		}
 	}
 	path = getenv("JCOP4_PUBLIC_SELECT_SPY_TRACE");
@@ -207,12 +215,12 @@ static int allowed_command(const unsigned char *cmd, DWORD len, int *next_file, 
 			}
 			if (fid == 0x4109) {
 				/* Observed next SELECT after bounded READ 4141. Metadata
-				 * independently confirmed; no content-read permission. */
+				 * independently confirmed. Reading needs a separate opt-in. */
 				if (!compare_read4141 || !comparison_atr_ok || !selected_app ||
 						selected_public_file != 3 || !read4141_calls ||
 						cmd[0] != 0 || cmd[2] != 2 || cmd[3] != 0 || lc != 2)
 					return 0;
-				*next_file = 0;
+				*next_file = compare_read4109 ? 4 : 0;
 				*next_mf = 0;
 				*next_app = 1;
 				return 1;
@@ -252,13 +260,18 @@ static int allowed_command(const unsigned char *cmd, DWORD len, int *next_file, 
 				offset == read4141_offset && offset <= 400 && size <= 400 - offset &&
 				read4141_budget <= 400 - size && read4141_calls < 2;
 	}
+	if (cmd[1] == 0xB0 && selected_public_file == 4)
+		/* One unchanged case-2 request for the known 17-byte EF, offset zero.
+		 * Do not shrink a larger requested Le or infer permission from tag 86. */
+		return compare_read4109 && comparison_atr_ok && selected_app && !read4109_calls &&
+				read4141_size(cmd, len) == 17 && cmd[2] == 0 && cmd[3] == 0;
 	if (cmd[1] == 0xB0)
 		return selected_public_file && len == 5 && !(cmd[2] & 0x80) &&
 				(selected_public_file != 2 || cmd[0] == 0);
 	if (cmd[1] == 0xB2)
 		return selected_public_file == 1 && len == 5 && !(cmd[3] & 0xF8);
 	if (cmd[1] == 0xC0)
-		return selected_public_file != 3 && pending_response && len == 5 && cmd[2] == 0 && cmd[3] == 0 &&
+		return selected_public_file != 3 && selected_public_file != 4 && pending_response && len == 5 && cmd[2] == 0 && cmd[3] == 0 &&
 				(selected_public_file != 2 || cmd[0] == 0);
 	return 0; /* Includes VERIFY, MSE, PSO, GENERAL AUTHENTICATE and writes. */
 }
@@ -274,7 +287,7 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
 	DWORD capacity = response_len ? *response_len : 0;
 	unsigned char bounded[402];
 	DWORD bounded_size = sizeof(bounded);
-	unsigned int read_size = 0;
+	unsigned int read_size = 0, read_fid = 0;
 	int diagnostic_read = 0;
 	int next_file = -1, next_mf = -1, next_app = -1;
 	unsigned int sw;
@@ -301,6 +314,10 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
 			else
 				dprintf(trace_fd, "blocked_select_form=unsupported\n");
 		}
+		if (selected_public_file == 4 && cmd && len >= 4 && cmd[1] == 0xB0)
+			dprintf(trace_fd, "blocked_read4109_form=%s\n", len == 5 &&
+					!memcmp(cmd, "\x00\xB0\x00\x00", 4) && !cmd[4] ?
+					"short_case2_le256" : "outside_single_17_byte_request");
 		/* Recognize fixed public protocol identifiers without dumping an MSE
 		 * buffer. Classification never authorizes authentication transport. */
 		if (cmd && (len == 17 || len == 18) &&
@@ -312,18 +329,22 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
 		stopped = 1;
 		goto out;
 	}
-	diagnostic_read = selected_public_file == 3 && cmd[1] == 0xB0;
+	diagnostic_read = (selected_public_file == 3 || selected_public_file == 4) && cmd[1] == 0xB0;
 	if (diagnostic_read) {
 		read_size = read4141_size(cmd, len);
+		read_fid = selected_public_file == 4 ? 0x4109 : 0x4141;
 		if (!response || !response_len || capacity < read_size + 2) {
-			dprintf(trace_fd, "blocked=read4141_output_buffer\n");
+			dprintf(trace_fd, "blocked=read%04X_output_buffer\n", read_fid);
 			stopped = 1;
 			goto out;
 		}
 		bounded_size = read_size + 2;
-		read4141_budget += read_size;
-		read4141_calls++;
-		if (dprintf(trace_fd, "diagnostic_read=known_4141_contents_omitted\n") < 0) {
+		if (read_fid == 0x4141) {
+			read4141_budget += read_size;
+			read4141_calls++;
+		} else
+			read4109_calls++;
+		if (dprintf(trace_fd, "diagnostic_read=known_%04X_contents_omitted\n", read_fid) < 0) {
 			stopped = 1;
 			goto out;
 		}
@@ -336,7 +357,8 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
 		dprintf(trace_fd, "public_select=%s\n", compare_read4141 ?
 				"known_4141_bounded_read_comparison" : "known_4141_metadata_only");
 	if (cmd[1] == 0xA4 && cmd[2] == 2 && cmd[4] == 2 && cmd[5] == 0x41 && cmd[6] == 0x09)
-		dprintf(trace_fd, "public_select=known_4109_metadata_only\n");
+		dprintf(trace_fd, "public_select=%s\n", compare_read4109 ?
+				"known_4109_bounded_read_comparison" : "known_4109_metadata_only");
 	if (cmd[0] != 0) selected_app = 0;
 	/* A failed/warning SELECT may still change card context: drop old permission. */
 	if (next_file >= 0)
@@ -353,9 +375,10 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
 			if (sw == 0x9000 || sw == 0x6282) {
 				memcpy(response, bounded, bounded_size);
 				*response_len = bounded_size;
-				read4141_offset += bounded_size - 2;
+				if (read_fid == 0x4141) read4141_offset += bounded_size - 2;
 			} else {
-				dprintf(trace_fd, "read4141_transport=%ld\nread4141_sw=%04X\nblocked=read4141_status\n", (long)rv, sw);
+				dprintf(trace_fd, "read%04X_transport=%ld\nread%04X_sw=%04X\nblocked=read%04X_status\n",
+						read_fid, (long)rv, read_fid, sw, read_fid);
 				stopped = 1;
 				rv = SCARD_E_NOT_TRANSACTED;
 			}

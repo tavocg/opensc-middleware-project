@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 umask 077
-unset JCOP4_DIAGNOSTIC_READ4141
+unset JCOP4_DIAGNOSTIC_READ4141 JCOP4_DIAGNOSTIC_READ4109
 task_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 # Dependency failures must stop before compilation, including failed flag lookup.
 (
@@ -125,12 +125,20 @@ int run_fixture(int mode)
     if (mode == 18) { assert(rv != 0); return 0; }
     assert(rv == 0 && protocol == SCARD_PROTOCOL_T1);
     assert(SCardReconnect(card, SCARD_SHARE_SHARED, SCARD_PROTOCOL_T1, SCARD_LEAVE_CARD, &protocol) == 0);
-    if (mode == 17) {
+    if (mode == 17 || mode == 19) {
         assert(SCardTransmit(card, 0, app, sizeof(app), 0, response, &len) == 0);
         len = sizeof(response);
         assert(SCardTransmit(card, 0, target, sizeof(target), 0, response, &len) == 0);
         len = sizeof(response);
         assert(SCardTransmit(card, 0, read, sizeof(read), 0, response, &len) == 0);
+        if (mode == 19) {
+            const unsigned char next[] = { 0, 0xA4, 2, 0, 2, 0x41, 0x09, 0 };
+            const unsigned char small[] = { 0, 0xB0, 0, 0, 17 };
+            len = sizeof(response);
+            assert(SCardTransmit(card, 0, next, sizeof(next), 0, response, &len) == 0);
+            len = sizeof(response);
+            assert(SCardTransmit(card, 0, small, sizeof(small), 0, response, &len) == 0 && len == 19);
+        }
         len = sizeof(response);
         assert(SCardTransmit(card, 0, pin, sizeof(pin), 0, response, &len) != 0 && !len);
         return 0;
@@ -226,7 +234,7 @@ int main(int argc, char **argv)
     void *core = dlopen(argv[2], RTLD_NOW | RTLD_LOCAL);
     assert(core);
     int (*count)(void) = (int (*)(void))dlsym(core, "fixture_count");
-    assert(count && count() == (mode == 9 || mode == 17 ? 3 : mode == 7 || mode == 14 ? 2 : mode == 0 || mode == 10 || mode == 16 ? 1 : 0));
+    assert(count && count() == (mode == 19 ? 5 : mode == 9 || mode == 17 ? 3 : mode == 7 || mode == 14 ? 2 : mode == 0 || mode == 10 || mode == 16 ? 1 : 0));
     int (*controls)(void) = (int (*)(void))dlsym(core, "fixture_control_count");
     if (controls) assert(controls() == (mode == 10 || mode == 12 || mode == 13 ? 1 : 0));
     return 0;
@@ -313,6 +321,27 @@ task_headers=$(< "$task_tmp/compare.txt")
    $task_headers == *'diagnostic_read=known_4141_contents_omitted'* &&
    $task_headers == *'blocked_header=00200001'* && $task_headers != *'PRIVATE_'* && $task_headers != *'SECRET_PIN'* ]]
 printf 'PASS opt-in comparison uses real PC/SC delegation for bounded READ while VERIFY and payload logging remain blocked\n'
+env -u LD_PRELOAD -u LIBPCSCLITE_SPY_DELEGATE -u JCOP4_PUBLIC_SELECT_SPY_TRACE \
+    LIBPCSCLITE_DELEGATE="$task_tmp/delegate.so" JCOP4_PUBLIC_DISCOVERY_TRACE="$task_tmp/read4109.txt" \
+    JCOP4_DIAGNOSTIC_READ4141=1 JCOP4_DIAGNOSTIC_READ4109=1 \
+    "$task_tmp/local-client" "$task_tmp/redirect-plugin.so" "$task_tmp/libfakepcsc.so" 19
+task_headers=$(< "$task_tmp/read4109.txt")
+[[ $task_headers == *'comparison_extension=bounded_read4109_contents_omitted'* &&
+   $task_headers == *'diagnostic_read=known_4109_contents_omitted'* &&
+   $task_headers == *'blocked_header=00200001'* && $task_headers != *'PRIVATE_'* ]]
+printf 'PASS actual delegation returns the 17-byte file only to its caller and blocks VERIFY after both diagnostic reads\n'
+for task_flag_case in invalid missing_parent mixed; do
+    task_flag_env=("JCOP4_DIAGNOSTIC_READ4109=invalid" "JCOP4_DIAGNOSTIC_READ4141=1")
+    if [[ $task_flag_case == missing_parent ]]; then task_flag_env=("JCOP4_DIAGNOSTIC_READ4109=1"); fi
+    if [[ $task_flag_case == mixed ]]; then
+        task_flag_env=("JCOP4_DIAGNOSTIC_READ4109=1" "JCOP4_DIAGNOSTIC_READ4141=1" "JCOP4_PUBLIC_SELECT_SPY_TRACE=$task_tmp/read4109-mixed.raw")
+    fi
+    env -u JCOP4_DIAGNOSTIC_READ4141 -u LD_PRELOAD -u LIBPCSCLITE_SPY_DELEGATE \
+        LIBPCSCLITE_DELEGATE="$task_tmp/delegate.so" JCOP4_PUBLIC_DISCOVERY_TRACE="$task_tmp/read4109-$task_flag_case.txt" \
+        "${task_flag_env[@]}" "$task_tmp/local-client" "$task_tmp/redirect-plugin.so" "$task_tmp/libfakepcsc.so" 6
+    [[ $(< "$task_tmp/read4109-$task_flag_case.txt") != *'public_header='* ]]
+    printf 'PASS READ4109 rejects %s configuration before transport\n' "$task_flag_case"
+done
 env -u LD_PRELOAD -u LIBPCSCLITE_SPY_DELEGATE -u JCOP4_PUBLIC_SELECT_SPY_TRACE \
     LIBPCSCLITE_DELEGATE="$task_tmp/delegate.so" JCOP4_PUBLIC_DISCOVERY_TRACE="$task_tmp/bad-atr.txt" \
     JCOP4_DIAGNOSTIC_READ4141=1 FIXTURE_COMPARISON_BAD_ATR=1 \

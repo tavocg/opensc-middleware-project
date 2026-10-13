@@ -2222,6 +2222,76 @@ secuencia/contexto/ATR y formas exactas, revocación de READ anterior, bloqueo
 de READ BINARY/RECORD y PIN, y manejo de SELECT pendiente/fallido. Helper público,
 operación de firma y driver intactos; sus pruebas previas siguen vigentes.
 
+## READ 4109 aceptado; siguiente directorio 7001: 13 de octubre, 20:12:16 UTC
+
+El usuario registró la observación SELECT-only en `e37cff1`, principal limpio al
+comenzar; OpenSC `3dfef6704` intacto. El agente preparó el modo independiente
+`inspect/jcop4-idopte-read4109` y lo ejecutó una vez, sin PIN ni GUI. Informe
+privado `local/jcop4-idopte-read4109-4qFZ03Qz/report.txt`.
+
+El nuevo opt-in `JCOP4_DIAGNOSTIC_READ4109=1` requiere el opt-in READ4141 y log
+privado válido; solo el lanzador de este modo lo introduce dentro del proceso
+Idopte --show-info --list-slots, stdin vacío. Inventario y modos anteriores lo
+eliminan; también el lanzador de firma. No se alteran los permisos de compare,
+discovery o spy. Configuración inválida, sin modo padre o mezclada con raw spy
+impide todo transporte.
+
+Se permite una sola solicitud READ BINARY caso-2 básico, corta o extendida,
+con **Le exactamente 17, offset cero**, únicamente tras SELECT4109 exitoso
+bajo el contexto/ATR/secuencia previamente comprobados. No se reduce un Le
+mayor ni se cambia el APDU del proveedor. Buffer temporal Le+2=19; solo
+transporte correcto, tamaño entre 2 y 19 y SW9000/6282 devuelven datos a Idopte.
+Sin contenido en la traza, sin GET RESPONSE, reintento, repetición, SFI, otros
+canales o READ RECORD. El presupuesto global de una llamada no se reinicia por
+SELECT. Los controles de autenticación, SM, MSE/GA/PSO, escrituras y PIN siguen
+bloqueados; los límites de READ4141 no cambian.
+
+```text
+comparison_scope=read4141_max400_read4109_once17_no_recording_no_authentication
+comparison_atr=known_jcop4
+public_select=known_4109_bounded_read_comparison
+transport=0
+sw=9000
+diagnostic_read=known_4109_contents_omitted
+public_header=00B00000
+transport=0
+sw=9000
+blocked_header=00A40200
+blocked_select_ef=7001
+module_exit_status=1
+observer_result=events_recorded
+```
+
+Inventario y compilación correctos; las 20 APDU transmitidas terminaron con
+transporte0/SW9000. READ4109 solicitó 17 bytes y fue aceptado; la traza no
+registra longitud devuelta ni contenido. Después aparecen un SELECT EF y READ
+bootstrap permitidos, cuyos FID no se registran: no asignarlos por las cabeceras.
+Luego **SELECT7001 fue bloqueado antes de transmitir**, sin SW de tarjeta a ese
+comando. El error final corresponde al guard, no a rechazo de READ4109 ni al
+VERIFY6982 anterior. No se llegó a PIN, MSE, GA o PSO.
+
+El ODF observado en `local/jcop4-odf-map-eAjoi575/report.txt` ya identifica
+7001 como `auth_objects`, directorio de objetos de autenticación. Esa asociación
+sí tiene evidencia en esta tarjeta, a diferencia del propósito desconocido de
+4141/4109. Seleccionar 7001 no significa verificar PIN o leer una credencial;
+seguiría siendo necesario distinguir los metadatos de autenticación de una
+operación de autenticación. No afirmar que Idopte estableció canal o descartar
+CA/PACE por esta consulta de inventario. El ZIP no documenta 4109 ni este paso.
+
+Pasaron **52 comprobaciones observador/constructor/decoder, 47 lanzador y 6
+lanzador de firma**, sin tarjeta; delegación real con transporte simulado y
+biblioteca real compilada. Cubren opt-ins aislados, petición exacta/buffer,
+rechazo de formas/Le/offset, SW/continuación/overrun, log fallido, repetición,
+privacidad y bloqueo de VERIFY después de ambas lecturas. Helper público,
+operación de firma y OpenSC intactos. Registros privados: directorio 0700,
+report.txt/public-headers.txt 0600. No capturas de respuestas ni Git local/.
+
+El siguiente paso con precedente aplicable es estudiar/observar acceso al
+AODF7001 del mismo AID, comparando con el inventario PKCS#15 ya obtenido; no
+escanear nuevos FID ni extender lectura por el solo orden de archivos. La
+consulta actual ya respondió qué intenta Idopte después: no repetir idéntica.
+La ruta de canal/VERIFY permanece pendiente, JCOP4 y RSA3072 no están resueltos.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño

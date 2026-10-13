@@ -64,7 +64,7 @@ static FILE *fixture_reset(void)
 	control_size = 16; control_result = 0;
 	fixture_sw = 0x9000;
 	fixture_payload = 16; fixture_overrun = 0;
-	compare_read4141 = read4141_budget = read4141_offset = read4141_calls = 0;
+	compare_read4109 = read4109_calls = compare_read4141 = read4141_budget = read4141_offset = read4141_calls = 0;
 	comparison_atr_ok = 1; /* Unit fixture simulates a validated connection. */
 	return file;
 }
@@ -118,6 +118,73 @@ int main(void)
 			send_command(version, sizeof(version)) == 0 && calls == 5);
 	check_private(file);
 	puts("PASS public observer forwards only allowed discovery and logs no payloads or lengths");
+	{
+		const unsigned char source[] = { 0, 0xA4, 2, 0, 2, 0x41, 0x41, 0 };
+		const unsigned char target[] = { 0, 0xA4, 2, 0, 2, 0x41, 0x09, 0 };
+		const unsigned char small[] = { 0, 0xB0, 0, 0, 17 };
+		const unsigned char extended[] = { 0, 0xB0, 0, 0, 0, 0, 17 };
+		for (int i = 0; i < 2; i++) {
+			file = fixture_reset(); compare_read4141 = compare_read4109 = 1;
+			assert(send_command(app, sizeof(app)) == 0 && send_command(source, sizeof(source)) == 0);
+			assert(send_large(read, sizeof(read)) == 0 && send_command(target, sizeof(target)) == 0);
+			fixture_payload = 17;
+			assert(send_large(i ? extended : small, i ? sizeof(extended) : sizeof(small)) == 0 &&
+					read4109_calls == 1 && read4141_calls == 1 && calls == 5);
+			assert(send_command(pin, sizeof(pin)) != 0 && calls == 5);
+			{
+				char log[2048] = {0};
+				fflush(file); rewind(file); assert(fread(log, 1, sizeof(log)-1, file) < sizeof(log)-1);
+				assert(strstr(log, "diagnostic_read=known_4109_contents_omitted"));
+			}
+			check_private(file);
+		}
+		puts("PASS separate opt-in accepts one unchanged 17-byte case-2 READ 4109, omits contents and blocks PIN");
+		for (int i = 0; i < 9; i++) {
+			unsigned char bad[sizeof(small)]; memcpy(bad, small, sizeof(bad));
+			file = fixture_reset(); compare_read4141 = compare_read4109 = 1;
+			assert(send_command(app, sizeof(app)) == 0 && send_command(source, sizeof(source)) == 0);
+			assert(send_large(read, sizeof(read)) == 0 && send_command(target, sizeof(target)) == 0);
+			if (i == 0) bad[0] = 1;
+			if (i == 1) bad[0] = 0x0C;
+			if (i == 2) bad[2] = 0x80;
+			if (i == 3) bad[3] = 1;
+			if (i == 4) bad[4] = 0;
+			if (i == 5) bad[4] = 18;
+			if (i == 6) bad[4] = 16;
+			if (i == 7) compare_read4109 = 0;
+			if (i == 8) comparison_atr_ok = 0;
+			assert(send_large(bad, sizeof(bad)) != 0 && calls == 4 && !read4109_calls);
+			check_private(file);
+		}
+		puts("PASS READ4109 refuses altered request sizes, SM, channels, SFI, offsets or missing opt-in/ATR before transport");
+		for (int i = 0; i < 6; i++) {
+			file = fixture_reset(); compare_read4141 = compare_read4109 = 1;
+			assert(send_command(app, sizeof(app)) == 0 && send_command(source, sizeof(source)) == 0);
+			assert(send_large(read, sizeof(read)) == 0 && send_command(target, sizeof(target)) == 0);
+			fixture_payload = 17;
+			if (i == 0) fixture_sw = 0x6982;
+			if (i == 1) fixture_sw = 0x6101;
+			if (i == 2) fixture_overrun = 1;
+			if (i == 3) {
+				unsigned char out[18]; DWORD size = sizeof(out);
+				assert(SCardTransmit(7, NULL, small, sizeof(small), NULL, out, &size) != 0 && calls == 4 && !size);
+			} else {
+				if (i == 4) fixture_sw = 0x6282;
+				assert((send_large(small, sizeof(small)) == 0) == (i >= 4));
+			}
+			int before = calls;
+			assert(send_large(small, sizeof(small)) != 0 && send_large(get_response, sizeof(get_response)) != 0 && calls == before);
+			check_private(file);
+		}
+		puts("PASS READ4109 bounds output, accepts 6282/9000 only and prevents repeat reads or GET RESPONSE after failure/success");
+		file = fixture_reset(); compare_read4141 = compare_read4109 = 1;
+		assert(send_command(app, sizeof(app)) == 0 && send_command(source, sizeof(source)) == 0);
+		assert(send_large(read, sizeof(read)) == 0 && send_command(target, sizeof(target)) == 0);
+		int saved = trace_fd; trace_fd = open("/dev/full", O_WRONLY); assert(trace_fd >= 0);
+		assert(send_large(small, sizeof(small)) != 0 && calls == 4);
+		close(trace_fd); trace_fd = saved; check_private(file);
+		puts("PASS READ4109 stops before transport if its private diagnostic marker cannot be written");
+	}
 	{
 		const unsigned char source[] = { 0, 0xA4, 2, 0, 2, 0x41, 0x41, 0 };
 		const unsigned char target[] = { 0, 0xA4, 2, 0, 2, 0x41, 0x09, 0 };
