@@ -1595,6 +1595,84 @@ Compila solo diagnóstico. No introducir PIN, abrir firmador ni repetir firmas;
 examinar primero la respuesta de control de SELECT. No autoriza nuevos comandos,
 READ de archivos desconocidos ni captura de autenticación por esa propuesta.
 
+## Captura revisada: 13 de octubre, 17:33:49 UTC
+
+Informe privado `local/jcop4-idopte-spy-wYs4iWG8/report.txt`, principal
+`4058fdf`, OpenSC `3dfef6704`; ambos árboles limpios al comenzar la revisión.
+Compilación/inventario correctos: lector 0 **Bit4id miniLector-s 00 00**,
+con el ATR JCOP4 conocido. Este lector difiere del OMNIKEY de las consultas
+históricas; no inferir capacidades de autenticación por su nombre.
+Las catorce APDU permitidas devolvieron
+transporte 0/SW 9000 y la consulta de capacidades transporte 0. Resultados:
+
+```text
+module_exit_status=1
+spy_decode_status=0
+spy_result=select4141_control_data_only
+observer_result=events_recorded
+```
+
+**La captura funcionó**. Idopte intentó READ BINARY 00 B0 00 00 después de
+SELECT 4141; el observador lo bloqueó antes del transporte. No existe SW ni
+contenido de ese READ. La segunda conexión tuvo resultado 0, sin rehabilitar
+transporte. Es el límite previsto del diagnóstico, no un nuevo fallo de PIN
+ni un rechazo de tarjeta a la lectura. No repetir para cambiar el estado del
+módulo; el intercambio buscado ya se recuperó.
+
+Se extrajo solo el SELECT y los campos de control previstos de la captura,
+sin volcarla completa ni copiar identificadores del inventario:
+
+| Campo observado | Valor | Interpretación delimitada |
+| --- | --- | --- |
+| Comando SELECT | `00 A4 02 00 02 41 41 00` | Archivo 4141 bajo la aplicación conocida |
+| SW | `9000` | SELECT aceptado |
+| Plantilla exterior | `6F` | FCI en esta respuesta; no plantilla exterior 62 |
+| Tamaño, tag 80 | `0190` | 400 bytes anunciados |
+| Descriptor, tag 82 | `010000` | EF transparente |
+| Identificador, tag 83 | `4141` | Coincide con el archivo solicitado |
+| Seguridad, tag 86 | `00FFFF` | Tres bytes cuya codificación ChipDoc no está resuelta |
+
+Solo se capturó un intercambio SELECT. El control no es el contenido del EF:
+no hubo READ 4141, autenticación, PIN o firma. Raw y texto decodificado tienen
+permisos 0600; preservar privados junto al informe. El agente no utilizó tarjeta
+ni Idopte. No hubo cambios de driver o permisos del observador.
+
+La **tabla 12 de ISO/IEC 7816-4:2005** distingue 86 (atributo de seguridad en
+formato propietario) de 8C (formato compacto). La norma, en la
+[copia del documento ISO alojada por USPTO](https://ptacts.uspto.gov/ptacts/public-informations/petitions/1528566/download-documents?artifactId=PopQy1plFOQHSsHyHiAXK-0BBsF13u2SVbhITWCr4KbEKUelaC40rHM),
+no define para 86 una regla universal que asigne cada byte a READ/UPDATE/DELETE.
+El cero inicial no demuestra READ público; tampoco el patrón identifica PACE,
+CAN, una clave pública o la causa del VERIFY 6982. No procesarlo con el parser
+8C ni trasladar políticas JCOP3.
+
+La revisión local de `iso7816.c` confirma que guarda 86 sin interpretar. MyEID
+usa tres bytes con reglas de su propio perfil; su coincidencia de longitud no
+acredita las reglas ChipDoc. Las búsquedas por ChipDoc/secuencia/atributos y la
+[especificación CIE 3.0](https://www.cartaidentita.interno.gov.it/downloads/2021/03/cie_3.0_-_specifiche_chip.pdf)
+no obtuvieron una definición aplicable de 4141/86. Eso no demuestra que tal
+documentación no exista. No se copió implementación privativa.
+
+**Siguiente paso:** conseguir la definición del archivo y sus atributos para
+ChipDoc 3.2, además del canal/contexto previo a VERIFY. El
+[informe ANSSI-CC-2025/03, anexo A](https://messervices.cyber.gouv.fr/visas/ANSSI-CC-2025-03-rapport.pdf)
+identifica User Guide Manual ref. 678510, versión 1.0, 22 de abril de 2021,
+y los otros manuales ya referidos arriba. Su contenido sigue sin obtenerse;
+se preguntó al usuario si dispone de ese manual o documentación del perfil BCCR.
+Durante esta revisión apareció en raíz el archivo del usuario
+`anssi-cible-cc-2021_20v2-m01.pdf`, todavía sin seguimiento Git. Su texto es
+**Security Target Lite rev. 1.2, 13 de julio de 2022**. Se revisó localmente:
+cita PACE y el User Guide ref. 678510, pero no aporta la definición de 4141/86.
+Es una cible anterior, no el manual citado. Se preserva sin agregarlo al commit
+ni modificarlo; los hechos observados en tarjeta no cambian por ese documento.
+
+No contactar terceros ni pedir nuevas pruebas autenticadas. READ 4141 permanece
+bloqueado; el valor 00FFFF no justifica ampliar la lista por sí solo.
+
+Revisión documental, sin nuevas pruebas: siguen vigentes las 30 comprobaciones
+del observador/decoder, 40 del lanzador y 54 del helper anteriores. No recompilar
+OpenSC ni repetir hardware por este cambio. Dar comandos de commit al usuario;
+soporte JCOP4 y transporte RSA 3072 pendientes.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño

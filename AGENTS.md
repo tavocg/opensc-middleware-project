@@ -1,6 +1,51 @@
 # libjcop3p11: contexto para continuar
 
-**JCOP4, 13 de octubre de 2026:** último informe revisado
+**JCOP4, última revisión del 13 de octubre de 2026:**
+`local/jcop4-idopte-spy-wYs4iWG8/report.txt`, **17:33:49 UTC**, principal
+`4058fdf`, OpenSC `3dfef6704`; ambos Git limpios al comenzar. Compilación,
+inventario, contexto/conexiones y transporte de las 14 APDU permitidas correctos;
+consulta de capacidades 0. Lector 0 **Bit4id miniLector-s 00 00** en este
+informe, distinto del OMNIKEY anterior; ATR JCOP4 conocido confirmado. No
+asumir que el lector actual es el histórico ni inferir PIN-pad por su nombre.
+**La captura y el decoder funcionaron**:
+spy_decode_status=0, spy_result=select4141_control_data_only,
+observer_result=events_recorded. module_exit_status=1 ocurrió tras bloquear
+READ BINARY 00 B0 00 00 antes de transmitir. No es rechazo de tarjeta a READ,
+ni el VERIFY 6982 anterior. Segunda conexión 0 no rehabilitó el transporte.
+
+Un intercambio SELECT capturado: **00 A4 02 00 02 41 41 00 -> 9000**.
+Respuesta de control BER-TLV exterior **6F (FCI)**, no 62 en esta captura;
+campos directos 80=0190 (400 bytes), 82=010000 (transparente), 83=4141 y
+**86=00FFFF**. Estos campos de control no son el contenido del EF. Solo se
+extrajeron esos campos/SW de la captura privada; no volcar raw/txt completos
+ni inventario con identificadores a Git/chat. Archivos 0600 bajo directorio
+privado. No READ 4141, PIN, autenticación o firma; no hardware por el agente.
+
+ISO/IEC 7816-4:2005, tabla 12, define 86 como seguridad en formato propietario:
+fuente primaria y límites en docs/jcop4.md. **00FFFF no tiene aquí una
+interpretación estándar de READ/UPDATE/DELETE**, ni demuestra archivo público,
+PACE/CAN, clave pública o causa de VERIFY 6982. ISO default almacena el atributo
+sin interpretarlo. El formato de tres bytes de MyEID es de otro perfil, no
+precedente para atribuir reglas ChipDoc. Búsquedas por secuencia/ChipDoc y
+revisión de CIE no obtuvieron la definición aplicable; no prueba inexistencia.
+
+**Próximo paso:** obtener la definición ChipDoc de EF 4141/tag 86 y del canal
+previo a VERIFY, preferentemente User Guide Manual ref. 678510 o documentación
+del perfil BCCR. Pregunta textual enviada al usuario sobre acceso a esos
+manuales; respuesta pendiente. Durante la revisión apareció
+`anssi-cible-cc-2021_20v2-m01.pdf` sin seguimiento en raíz: Security Target Lite
+rev. 1.2 del 13 de julio de 2022. Revisado localmente; cita ref. 678510 y PACE,
+pero no aporta definición 4141/tag 86. Preservar ese archivo del usuario; no
+agregarlo al commit documental automáticamente. No contactar terceros. **No repetir la captura
+ni pedir otro PIN**: ya recuperó los bytes buscados y no resolverá por sí sola
+su significado. READ 4141 sigue bloqueado; no ampliar permisos por 00FFFF.
+No nuevos comandos/variantes/otros CardAccess por inercia. Solo documentación
+en esta revisión; principal/driver sin cambios de protocolo, OpenSC intacto.
+Las 30 pruebas observador/decoder, 40 lanzador y 54 helper previas siguen
+vigentes; no repetir por documentación. Dar comandos de commit del principal;
+el agente no escribe Git. JCOP4/RSA 3072 siguen pendientes.
+
+**Informe anterior de JCOP4, 13 de octubre de 2026:**
 `local/jcop4-file4141-9gvwdH1n/report.txt`, **16:53:35 UTC**, principal
 `e4a227e`, OpenSC `3dfef6704`; ambos Git limpios al comenzar. Inventario,
 compilación, conexión/aplicación correctos. SELECT 4141 -> transporte 0/SW

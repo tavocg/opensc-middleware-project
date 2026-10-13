@@ -70,29 +70,25 @@ sin el resumen ampliado.
 El usuario confirmó que **esta misma JCOP4 ya firmó satisfactoriamente con
 Idopte instalado**, en una prueba previa. No se ejecutó otra firma para
 comprobarlo ni se identificó todavía el protocolo de autenticación.
-La última consulta, `9gvwdH1n` (16:53:35 UTC), terminó correctamente:
-SELECT 4141 `9000`, transparente/400 bytes y **tag de seguridad directo 86**.
-No aparecen A1/9C entre los tags reconocidos. La política sigue sin interpretar;
-no se leyó contenido ni hubo PIN. Ese resumen no identifica el perfil o la
-codificación; el siguiente modo recoge la respuesta de control antes omitida,
-conservando el bloqueo de READ 4141.
-A petición del usuario se prepara una captura **sin PIN**, limitada a la
-respuesta de control del SELECT 4141 ya permitido. El guard la emite en formato
-compatible y `pcsc-spy` real la decodifica. No carga libpcscspy ni captura otras
-llamadas o lecturas, y no cambia permisos de APDU. Con la misma JCOP4 y otros
-clientes cerrados:
+La última captura, `wYs4iWG8` (**17:33:49 UTC**), funcionó y fue decodificada
+por `pcsc-spy`: SELECT 4141 respondió `9000`, con FCI exterior `6F`, archivo
+transparente de 400 bytes y atributo **86 = 00 FF FF**. Idopte salió 1 cuando
+el observador bloqueó el siguiente READ BINARY antes de transmitirlo; eso no
+es un fallo de captura ni una respuesta de rechazo de la tarjeta a READ.
+No hubo lectura de 4141, PIN ni autenticación. El guard emite solo este
+intercambio en formato compatible; no carga libpcscspy ni captura todo el tráfico.
 
-```bash
-nix develop -c make inspect/jcop4-idopte-spy READER=0
-```
+ISO/IEC 7816-4 clasifica 86 como formato propietario. Los bytes no bastan para
+interpretar la política de acceso o identificar el archivo. **No repetir esta
+consulta ni otro intento de PIN**. El siguiente dato necesario es la definición
+ChipDoc de 4141/86 y del contexto requerido antes de VERIFY, mediante el User
+Guide Manual ref. 678510 o documentación del perfil BCCR. READ sigue bloqueado.
+La pregunta sobre acceso a esa documentación está pendiente de respuesta.
 
-Solo compila diagnóstico. Archivos privados en local/jcop4-idopte-spy-*/;
-`select4141-spy.txt` contiene control FCP/atributos 86, no contenido del EF.
-Idopte puede salir con error al bloquearse el READ siguiente: revisar la
-captura y estados por separado antes de repetir. No usar con firmador/PIN.
-Pasaron **30 comprobaciones del observador/decoder y 40 del lanzador** con
-transporte ficticio. OpenSC/driver intactos. Detalles en
-[docs/jcop4.md](docs/jcop4.md).
+Capturas privadas bajo local/jcop4-idopte-spy-*/; no agregarlas a Git.
+Pasaron previamente **30 comprobaciones del observador/decoder y 40 del
+lanzador** con transporte ficticio. Esta revisión solo actualiza documentación;
+OpenSC/driver intactos. Evidencia y fuentes en [docs/jcop4.md](docs/jcop4.md).
 
 El descubrimiento Idopte previo (`make inspect/jcop4-idopte-discovery`) compila
 solo un observador y consulta información de módulo/slots/tokens, sin login
