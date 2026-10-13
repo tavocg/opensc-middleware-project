@@ -263,6 +263,64 @@ componentes privados ni operaciones administrativas. MSE cambia únicamente
 el entorno temporal de la sesión. `9000` no demuestra que la firma funcione
 ni qué autenticación requiere. Esa prueba sigue pendiente.
 
+## Resultado MSE: 13 de octubre, 08:03:22 UTC
+
+Informe `local/jcop4-sign-setup-qob4FMSh/report.txt`, principal `4611409`,
+OpenSC `3dfef6704`. Binding nativo y selección correctos, metadatos sin
+cambios: LlaveDeFirma RSA 2048/0x91 y PIN global 1. La selección
+`00 22 81 B6 04 91 02 28 91` obtuvo transporte 0 y **SW 9000**.
+Transacción liberada y proceso 0; sin PIN ni PSO. No repetir automáticamente.
+
+TokenInfo no anunció algoritmos (`algorithm_metadata_count=0`) y no aparecieron
+referencias de algoritmos en PrKDF. Esta ausencia no prueba falta de soporte;
+la tarjeta sí aceptó configurar el comando propuesto. Sigue pendiente
+comprobar autenticación, operación RSA y verificación criptográfica del
+resultado. Aceptar MSE no confirma aún padding, formato de entrada ni
+requisitos de canal seguro de la operación de firma.
+
+## Consulta vacía del estado del PIN
+
+Con firmador y otros clientes cerrados y la misma JCOP4 insertada, una vez:
+
+```bash
+make inspect/jcop4-pin-status READER=0
+```
+
+Compila solo el helper. Conserva el driver genérico, comprobación del ATR
+conectado/AID anunciado, binding nativo y transacción. Lee metadatos públicos
+sin DER; agrega al informe tipo de autenticación, método, formato y carácter
+de padding declarados en AODF. Estos describen el protocolo, no el valor
+ni la longitud de ningún PIN introducido. Vincula el objeto PIN a la llave
+de firma mediante el auth ID de la llave y el ID de autenticación del PIN;
+no utiliza la credencial administrativa que protege el objeto PIN.
+
+Exige la llave observada y un único PIN vinculado: referencia 1, flags 0x11,
+límites 6–14 y ruta vacía. Un cambio de metadatos detiene antes de la consulta;
+no intenta otras referencias. Reselecciona la aplicación y envía:
+
+```text
+00 20 00 01
+```
+
+Es VERIFY caso 1, sin datos ni Le, como el generado para GET_INFO por
+`iso7816_build_pin_apdu()` en OpenSC. Consulta el estado, sin probar un PIN.
+Las banderas impiden reintentos por 6C y GET RESPONSE automático de esta
+APDU. No envía MSE, PSO, CAN/PACE ni comandos administrativos. Libera la
+transacción incluso ante fallo. Stdin vacío, depuración 0 y cachés apagadas.
+
+| Respuesta | Interpretación del diagnóstico |
+| --- | --- |
+| `63Cx`, x > 0 | PIN no verificado, x intentos disponibles |
+| `9000` | PIN ya verificado en ese contexto; el helper no lo verificó |
+| `63C0` o `6983` | Detener; posible bloqueo, sin intento de desbloqueo |
+| Otro SW / error de transporte | Detener; contexto o protocolo aún sin confirmar |
+
+El informe privado queda en `local/jcop4-pin-status-*/report.txt`.
+El éxito del diagnóstico confirma que se consultó un estado reconocido,
+no que haya login o firma. Se revisará antes de solicitar el PIN por primera
+vez. La autenticación real se preparará con formato/contexto comprobados,
+sin capturas APDU ni reintentos de PIN automáticos.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño
@@ -308,14 +366,15 @@ Se decidirá cómo reutilizar iasecc/eOI cuando se conozca el perfil real.
 
 Se mantienen las restricciones de privacidad y de operaciones sobre tarjetas
 emitidas de [AGENTS.md](../AGENTS.md). NFC, CAN/PACE y algoritmos poscuánticos
-siguen fuera de estas pruebas. Pasaron **15 comprobaciones del lanzador** en
-`tests/jcop4-probe-launcher.sh` y **20 del helper** en `tests/card-public-info.c`.
+siguen fuera de estas pruebas. Pasaron **17 comprobaciones del lanzador** en
+`tests/jcop4-probe-launcher.sh` y **24 del helper** en `tests/card-public-info.c`.
 Esta última se compila contra OpenSC pero simula las API de conexión/lectura
 /selección/transporte, sin PC/SC ni lector. La herramienta real también compiló
 contra `build/opensc-offline`. Log C:
-`build/opensc-offline/card-public-sign-setup-tests.log`. Cubren MSE único,
+`build/opensc-offline/card-public-pin-status-tests.log`. Cubren MSE único,
 bytes exactos, rechazo de otros metadatos/perfiles, SW negativos, fallos de
-transporte/SELECT y limpieza sin autenticación ni reintentos. Las simulaciones
+transporte/SELECT, VERIFY sin datos/Le, estados 63Cx/9000/bloqueo y
+limpieza sin autenticación ni reintentos. Las simulaciones
 de consulta pública incluyen metadatos RSA 3072 con otra referencia; no
 validan RSA ni transporte de una firma de 384 bytes. No se repitió toda la
 suite JCOP3 ni se modificó su driver durante esta investigación.

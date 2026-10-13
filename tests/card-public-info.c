@@ -21,6 +21,7 @@ static int atr_result, dir_result, lock_result, driver_result, mismatch;
 static int bind_calls, object_calls, cert_calls, p15_frees, cert_frees;
 static int bind_result, objects_result, cert_result;
 static int select_calls, mse_calls, select_result, mse_result, mse_sw;
+static int pin_calls, pin_result, pin_sw;
 static char fixture_atr[] = "3b:d5:18:ff:81:91:fe:1f:c3:80:73:c8:21:10:0a";
 static char fixture_aid[] = "E828BD080FA00000036364796E6964";
 
@@ -118,6 +119,18 @@ int sc_transmit_apdu(sc_card_t *card, sc_apdu_t *apdu)
 {
 	const unsigned char expected[] = { 0x91, 0x02, 0x28, 0x91 };
 	assert(card == &fixture_card && lock_calls == 1 && !unlock_calls && select_calls == 1);
+	if (apdu->ins == 0x20) {
+		/* No PIN bytes, authentication attempt, alternate reference, or MSE. */
+		assert(!pin_calls && !mse_calls && apdu->cla == 0 && apdu->p1 == 0 && apdu->p2 == 1 &&
+				apdu->cse == SC_APDU_CASE_1 && !apdu->data && !apdu->datalen && !apdu->lc &&
+				!apdu->le && !apdu->resplen &&
+				(apdu->flags & (SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP)) ==
+				(SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP));
+		pin_calls++;
+		apdu->sw1 = pin_sw >> 8;
+		apdu->sw2 = pin_sw & 0xFF;
+		return pin_result;
+	}
 	/* Any VERIFY, PSO, different key/algorithm, or second MSE aborts the test. */
 	assert(!mse_calls && apdu->cla == 0 && apdu->ins == 0x22 && apdu->p1 == 0x81 && apdu->p2 == 0xB6 &&
 			(apdu->flags & (SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP)) ==
@@ -165,6 +178,8 @@ static void reset_fixture(void)
 	bind_result = objects_result = cert_result = 0;
 	select_calls = mse_calls = select_result = mse_result = 0;
 	mse_sw = 0x9000;
+	pin_calls = pin_result = 0;
+	pin_sw = 0x63C7;
 }
 static void setup_fixture(void)
 {
@@ -178,6 +193,18 @@ static void setup_fixture(void)
 	fixture_tokeninfo.supported_algos[0].reference = 1;
 	fixture_tokeninfo.supported_algos[0].algo_ref = 0x28;
 	fixture_key_info.algo_refs[0] = 1;
+}
+static void pin_fixture(void)
+{
+	setup_fixture();
+	fixture_key_obj.auth_id.len = sizeof("Card PIN") - 1;
+	memcpy(fixture_key_obj.auth_id.value, "Card PIN", fixture_key_obj.auth_id.len);
+	fixture_pin_info.auth_id = fixture_key_obj.auth_id;
+	fixture_pin_info.auth_type = SC_PKCS15_PIN_AUTH_TYPE_PIN;
+	fixture_pin_info.attrs.pin.reference = 1;
+	fixture_pin_info.attrs.pin.flags = 0x11;
+	fixture_pin_info.attrs.pin.min_length = 6;
+	fixture_pin_info.attrs.pin.max_length = 14;
 }
 static int run_fixture(void)
 {
@@ -274,6 +301,41 @@ int main(void)
 		setup_fixture(); args[2] = fixture_atr; args[4] = "A001";
 		assert(card_public_info_main(5, args) == 2 && !connect_calls);
 		puts("PASS sign setup is restricted to the observed connected ATR and application");
+	}
+	{
+		char *args[] = { "card-public-info", "2", fixture_atr, "--pin-status", fixture_aid };
+		pin_fixture();
+		assert(card_public_info_main(5, args) == 0 && pin_calls == 1 && !mse_calls && !cert_calls && unlock_calls == 1);
+		pin_fixture(); pin_sw = 0x9000;
+		assert(card_public_info_main(5, args) == 0 && pin_calls == 1 && !mse_calls && unlock_calls == 1);
+		puts("PASS PIN status sends exactly one data-free VERIFY and accepts retries remaining or already verified");
+		pin_fixture(); pin_sw = 0x63C0;
+		assert(card_public_info_main(5, args) == 1 && pin_calls == 1 && unlock_calls == 1 && p15_frees == 1);
+		pin_fixture(); pin_sw = 0x6983;
+		assert(card_public_info_main(5, args) == 1 && pin_calls == 1 && unlock_calls == 1);
+		pin_fixture(); pin_sw = 0x6A88;
+		assert(card_public_info_main(5, args) == 1 && pin_calls == 1 && !mse_calls);
+		pin_fixture(); pin_result = SC_ERROR_TRANSMIT_FAILED;
+		assert(card_public_info_main(5, args) == 1 && pin_calls == 1 && unlock_calls == 1);
+		puts("PASS PIN status stops on blocked, unexpected or transport failure without secret input or alternate commands");
+		pin_fixture(); fixture_pin_info.attrs.pin.reference = 0x81;
+		assert(card_public_info_main(5, args) == 1 && !pin_calls && !select_calls);
+		pin_fixture(); fixture_pin_info.attrs.pin.flags |= SC_PKCS15_PIN_FLAG_LOCAL;
+		assert(card_public_info_main(5, args) == 1 && !pin_calls);
+		pin_fixture(); fixture_pin_info.auth_id.value[0] ^= 1;
+		assert(card_public_info_main(5, args) == 1 && !pin_calls);
+		pin_fixture(); fixture_pin_info.auth_type = SC_PKCS15_PIN_AUTH_TYPE_AUTH_KEY;
+		assert(card_public_info_main(5, args) == 1 && !pin_calls);
+		pin_fixture(); fixture_key_info.key_reference = 3;
+		assert(card_public_info_main(5, args) == 1 && !pin_calls);
+		puts("PASS PIN status requires the observed global PIN metadata linked to the observed signing key");
+		pin_fixture(); select_result = SC_ERROR_FILE_NOT_FOUND;
+		assert(card_public_info_main(5, args) == 1 && !pin_calls && select_calls == 1 && unlock_calls == 1);
+		pin_fixture(); mismatch = 1;
+		assert(card_public_info_main(5, args) == 1 && !pin_calls && !bind_calls);
+		pin_fixture(); args[4] = "A001";
+		assert(card_public_info_main(5, args) == 2 && !connect_calls);
+		puts("PASS PIN status stops before VERIFY on selection failure or another connected ATR or application");
 	}
 	return 0;
 }

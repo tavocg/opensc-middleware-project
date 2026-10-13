@@ -1,4 +1,4 @@
-/* Public discovery and bounded temporary MSE probe; no authentication. */
+/* Public discovery, temporary MSE and empty VERIFY; no authentication. */
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -9,6 +9,8 @@
 #include <string.h>
 #include "libopensc/opensc.h"
 #include "libopensc/pkcs15.h"
+
+enum inspect_mode { INSPECT_PKCS15, INSPECT_SIGN_SETUP, INSPECT_PIN_STATUS };
 
 static void print_hex(const char *name, const unsigned char *value, size_t len)
 {
@@ -26,21 +28,60 @@ static void print_result(const char *name, int rv)
 		printf("error=%s\n", sc_strerror(rv));
 }
 
-static int probe_sign_setup(sc_card_t *card, const struct sc_aid *aid, unsigned char reference)
+static int select_application(sc_card_t *card, const struct sc_aid *aid)
 {
 	sc_path_t path;
+	int rv;
+	memset(&path, 0, sizeof(path));
+	path.type = SC_PATH_TYPE_DF_NAME;
+	path.len = aid->len;
+	memcpy(path.value, aid->value, aid->len);
+	rv = sc_select_file(card, &path, NULL);
+	print_result("application_select_result", rv);
+	if (rv < 0)
+		return rv;
+	return 0;
+}
+
+static int probe_pin_status(sc_card_t *card, const struct sc_aid *aid, unsigned char reference)
+{
+	sc_apdu_t apdu;
+	int rv = select_application(card, aid);
+	if (rv < 0)
+		return 1;
+	/* Same case-1 VERIFY used by iso7816 SC_PIN_CMD_GET_INFO: no PIN data. */
+	sc_format_apdu(card, &apdu, SC_APDU_CASE_1, 0x20, 0, reference);
+	apdu.cla = 0;
+	apdu.flags |= SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP;
+	rv = sc_transmit_apdu(card, &apdu);
+	print_result("pin_status_transport_result", rv);
+	if (rv < 0)
+		return 1;
+	printf("pin_status_sw=%02X%02X\n", apdu.sw1, apdu.sw2);
+	if (apdu.sw1 == 0x90 && apdu.sw2 == 0) {
+		printf("pin_status_result=already_verified\n");
+		return 0;
+	}
+	if (apdu.sw1 == 0x63 && (apdu.sw2 & 0xF0) == 0xC0) {
+		printf("pin_status_tries_left=%u\n", apdu.sw2 & 0x0F);
+		if (apdu.sw2 & 0x0F) {
+			printf("pin_status_result=not_verified\n");
+			return 0;
+		}
+	}
+	printf("pin_status_result=blocked_or_unexpected_stop\n");
+	return 1;
+}
+
+static int probe_sign_setup(sc_card_t *card, const struct sc_aid *aid, unsigned char reference)
+{
 	sc_apdu_t apdu;
 	unsigned char data[] = { 0x91, 0x02, 0x28, reference };
 	int rv;
 
 	/* CPS V4 guide, section 6.6.1: a hypothesis for this personalization.
 	 * Do not translate the observed reference's high bit or attempt PSO. */
-	memset(&path, 0, sizeof(path));
-	path.type = SC_PATH_TYPE_DF_NAME;
-	path.len = aid->len;
-	memcpy(path.value, aid->value, aid->len);
-	rv = sc_select_file(card, &path, NULL);
-	print_result("sign_setup_select_result", rv);
+	rv = select_application(card, aid);
 	if (rv < 0)
 		return 1;
 	sc_format_apdu(card, &apdu, SC_APDU_CASE_3_SHORT, 0x22, 0x81, 0xB6);
@@ -60,7 +101,7 @@ static int probe_sign_setup(sc_card_t *card, const struct sc_aid *aid, unsigned 
 	return 0;
 }
 
-static int inspect_native_pkcs15(sc_card_t *card, struct sc_aid *aid, int sign_setup)
+static int inspect_native_pkcs15(sc_card_t *card, struct sc_aid *aid, enum inspect_mode mode)
 {
 	sc_pkcs15_card_t *p15;
 	sc_pkcs15_object_t *objects[32];
@@ -68,6 +109,8 @@ static int inspect_native_pkcs15(sc_card_t *card, struct sc_aid *aid, int sign_s
 	const char *names[] = { "certificate_count", "private_key_metadata_count", "pin_metadata_count" };
 	int found = 0, status = 1, rv, count, i, sign_matches = 0, sign_valid = 0, sign_reference = 0;
 	size_t cls;
+	sc_pkcs15_id_t sign_auth = { { 0 }, 0 };
+	int pin_matches = 0, pin_valid = 0, pin_reference = 0;
 
 	for (i = 0; i < card->app_count; i++) {
 		if (card->app[i]->aid.len == aid->len &&
@@ -111,7 +154,7 @@ static int inspect_native_pkcs15(sc_card_t *card, struct sc_aid *aid, int sign_s
 				sc_pkcs15_cert_info_t *info = obj->data;
 				sc_pkcs15_cert_t *cert = NULL;
 				print_hex("certificate_id", info->id.value, info->id.len);
-				if (sign_setup) {
+				if (mode != INSPECT_PKCS15) {
 					printf("certificate_read=skipped_setup_metadata_only\n");
 					continue;
 				}
@@ -141,6 +184,7 @@ static int inspect_native_pkcs15(sc_card_t *card, struct sc_aid *aid, int sign_s
 						!memcmp(info->id.value, "LlaveDeFirma", info->id.len)) {
 					sign_matches++;
 					sign_reference = info->key_reference;
+					sign_auth = obj->auth_id;
 					/* Diagnostic limited to the metadata observed on this card. */
 					sign_valid = obj->type == SC_PKCS15_TYPE_PRKEY_RSA && info->native &&
 							(info->usage & SC_PKCS15_PRKEY_USAGE_SIGN) &&
@@ -152,16 +196,34 @@ static int inspect_native_pkcs15(sc_card_t *card, struct sc_aid *aid, int sign_s
 				printf("pin_reference=%d\npin_flags=%u\npin_min_length=%zu\npin_max_length=%zu\n",
 						info->attrs.pin.reference, info->attrs.pin.flags,
 						info->attrs.pin.min_length, info->attrs.pin.max_length);
+				printf("pin_auth_type=%u\npin_auth_method=%u\npin_format=%u\npin_pad_char=%02X\n",
+						info->auth_type, info->auth_method, info->attrs.pin.type, info->attrs.pin.pad_char);
 				print_hex("pin_path", info->path.value, info->path.len);
+				if (sign_auth.len && info->auth_id.len == sign_auth.len &&
+						!memcmp(info->auth_id.value, sign_auth.value, sign_auth.len)) {
+					pin_matches++;
+					pin_reference = info->attrs.pin.reference;
+					pin_valid = info->auth_type == SC_PKCS15_PIN_AUTH_TYPE_PIN &&
+							info->attrs.pin.reference == 1 && info->attrs.pin.flags == 0x11 &&
+							info->attrs.pin.min_length == 6 && info->attrs.pin.max_length == 14 && !info->path.len;
+				}
 			}
 		}
 	}
-	if (sign_setup) {
+	if (mode != INSPECT_PKCS15) {
 		if (sign_matches != 1 || !sign_valid) {
 			printf("sign_setup_result=metadata_mismatch_no_mse\n");
 			goto out;
 		}
-		status = probe_sign_setup(card, aid, (unsigned char)sign_reference);
+		if (mode == INSPECT_PIN_STATUS) {
+			if (pin_matches != 1 || !pin_valid) {
+				printf("pin_status_result=metadata_mismatch_no_verify\n");
+				goto out;
+			}
+			status = probe_pin_status(card, aid, (unsigned char)pin_reference);
+		} else {
+			status = probe_sign_setup(card, aid, (unsigned char)sign_reference);
+		}
 	} else {
 		status = 0;
 	}
@@ -181,13 +243,14 @@ int main(int argc, char **argv)
 	struct sc_aid app_aid;
 	unsigned long reader_index;
 	char *end;
-	int rv, status = 1, locked = 0, i, sign_setup = 0;
+	int rv, status = 1, locked = 0, i;
+	enum inspect_mode mode = INSPECT_PKCS15;
 
 	if ((argc != 3 && argc != 5) || !argv[1][0] || strspn(argv[1], "0123456789") != strlen(argv[1]))
 		return 2;
 	memset(&app_aid, 0, sizeof(app_aid));
 	app_aid.len = sizeof(app_aid.value);
-	if (argc == 5 && ((strcmp(argv[3], "--pkcs15") && strcmp(argv[3], "--sign-setup")) ||
+	if (argc == 5 && ((strcmp(argv[3], "--pkcs15") && strcmp(argv[3], "--sign-setup") && strcmp(argv[3], "--pin-status")) ||
 			sc_hex_to_bin(argv[4], app_aid.value, &app_aid.len) < 0 || !app_aid.len))
 		return 2;
 
@@ -197,13 +260,13 @@ int main(int argc, char **argv)
 			sc_hex_to_bin(argv[2], expected_atr, &expected_len) < 0 || !expected_len)
 		return 2;
 
-	if (argc == 5 && !strcmp(argv[3], "--sign-setup")) {
+	if (argc == 5 && strcmp(argv[3], "--pkcs15")) {
 		const unsigned char known_atr[] = { 0x3B, 0xD5, 0x18, 0xFF, 0x81, 0x91, 0xFE, 0x1F, 0xC3, 0x80, 0x73, 0xC8, 0x21, 0x10, 0x0A };
 		const unsigned char known_aid[] = { 0xE8, 0x28, 0xBD, 0x08, 0x0F, 0xA0, 0x00, 0x00, 0x03, 0x63, 0x64, 0x79, 0x6E, 0x69, 0x64 };
 		if (expected_len != sizeof(known_atr) || memcmp(expected_atr, known_atr, expected_len) ||
 				app_aid.len != sizeof(known_aid) || memcmp(app_aid.value, known_aid, app_aid.len))
 			return 2;
-		sign_setup = 1;
+		mode = !strcmp(argv[3], "--sign-setup") ? INSPECT_SIGN_SETUP : INSPECT_PIN_STATUS;
 	}
 	memset(&params, 0, sizeof(params));
 	params.app_name = "card-public-info";
@@ -262,7 +325,7 @@ int main(int argc, char **argv)
 			printf("application_label=%s\n", card->app[i]->label ? card->app[i]->label : "");
 		}
 	}
-	status = argc == 5 ? inspect_native_pkcs15(card, &app_aid, sign_setup) : 0;
+	status = argc == 5 ? inspect_native_pkcs15(card, &app_aid, mode) : 0;
 out:
 	if (locked) {
 		rv = sc_unlock(card);

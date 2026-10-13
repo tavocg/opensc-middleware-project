@@ -1,18 +1,25 @@
 # libjcop3p11: contexto para continuar
 
-**JCOP4, 13 de octubre de 2026:** última lectura revisada
-`local/jcop4-pkcs15-msMLoEtW/report.txt`, 07:50:37 UTC, OpenSC `3dfef6704`.
-Principal `8edee31` y submódulo limpios al comenzar esta revisión. Binding
-PKCS#15 nativo devuelve 0; certificados públicos, PrKDF y AODF leídos sin PIN.
-OpenSSL corroboró **RSA 2048**, exponente 65537, en ambos DER. Sus ID coinciden
-con metadatos privados: **LlaveDeFirma referencia 0x91**, autenticación 0x90;
-ambas nativas y declaradas RSA 2048. PIN global referencia 1, flags 0x11,
-límites AODF 6–14; sin consulta física de estado ni autenticación. La lectura
-no demuestra firma, CAN/PACE ni compatibilidad con RSA 3072.
-DER/llaves públicas y `certificate-summary.json` se conservaron privados bajo
-el directorio del informe. No publicar sujetos, seriales ni capturas completas.
+**JCOP4, 13 de octubre de 2026:** última consulta revisada
+`local/jcop4-sign-setup-qob4FMSh/report.txt`, **08:03:22 UTC**, principal
+`4611409`, OpenSC `3dfef6704`; ambos árboles limpios al comenzar.
+Binding nativo 0, metadatos iguales a la captura previa y selección del AID
+correcta. **MSE 00 22 81 B6 / 91 02 28 91 aceptado: transporte 0, SW 9000**;
+reserva liberada y proceso 0. TokenInfo `algorithm_metadata_count=0`, sin
+referencias de algoritmos en PrKDF; ausencia de anuncio no prueba falta de
+soporte. No repetir este MSE como primer paso. Aceptación de configuración
+no demuestra firma, padding/hash efectivos, autenticación ni CAN/PACE.
 
-Evidencia anterior ya revisada; no repetir como primer paso:
+Certificados/PKCS#15 ya revisados:
+`local/jcop4-pkcs15-msMLoEtW/report.txt`, 07:50:37 UTC. Dos certificados
+públicos y metadatos leídos sin PIN. OpenSSL confirma RSA 2048, exponente
+65537; IDs asociados a **LlaveDeFirma 0x91**, autenticación 0x90, ambas
+nativas y RSA 2048. PIN auth ID Card PIN vinculado a LlaveDeFirma: referencia
+1, flags 0x11, global, límites AODF 6–14, ruta vacía. El auth ID administrativo
+del objeto PIN no se usa para verificarlo ni se explora. DER/llaves públicas
+y `certificate-summary.json` privados junto al informe, sin validar cadena.
+
+Evidencia previa ya revisada; no repetir candidatos/inventario:
 - `jcop4-probe-9XynOJDU/report.txt`, 07:19:50 UTC: OMNIKEY 3x21, lector 0,
   ATR `3b:d5:18:ff:81:91:fe:1f:c3:80:73:c8:21:10:0a`; coincide con contacto
   eOI, difiere de JCOP3 y no figura en iasecc. OpenPACE deshabilitado, eOI NULL.
@@ -20,34 +27,34 @@ Evidencia anterior ya revisada; no repetir como primer paso:
 - `jcop4-files-DORk47gE/report.txt`, 07:39:47 UTC: EF.ATR/EF.DIR correctos;
   raíz `A0000000003F00`, pre-issuing `0400ECC2` sin interpretar, máximos APDU
   0/0 desconocidos. Aplicación `E828BD080FA00000036364796E6964`, ChipDoc Generic.
-No activar eOI ni excepciones JCOP3 por ATR/etiqueta; son perfiles distintos.
-La generación JCOP4 la aporta el usuario; RSA 2048 ya se corroboró técnicamente.
+No activar eOI ni excepciones JCOP3 por ATR/etiqueta. JCOP4 es la generación
+indicada por el usuario, RSA 2048 sí se corroboró técnicamente. El precedente
+MSE de otra personalización ChipDoc está enlazado en docs/jcop4.md; no asumir
+que sus políticas/referencias sean idénticas ni reinterpretar el bit alto.
 
-**Siguiente intervención de hardware:** `make inspect/jcop4-sign-setup READER=0`,
-firmador y otros clientes cerrados, misma JCOP4 insertada. Compila únicamente
-el helper contra la biblioteca existente. Default, ATR conectado comprobado,
-AID observado exigido y anunciado en EF.DIR antes del binding nativo; cachés
-apagadas. Lee metadatos de algoritmos TokenInfo y PrKDF/AODF, omite DER en
-este modo. Exige una LlaveDeFirma RSA nativa con ID, uso SIGN, referencia 0x91
-y 2048 bits observados; estos límites son diagnósticos, no diseño del driver.
-Reselecciona la aplicación y envía **un MSE SET 00 22 81 B6 / 91 02 28 91**.
-Hipótesis tomada de la guía pública CPS V4 de ANS, sección 6.6.1; otra
-personalización ChipDoc, no prueba de equivalencia con CR. No reinterpretar
-el bit alto de la referencia sin evidencia. No VERIFY/PIN, PSO, CAN/PACE,
-componentes privados ni cambios persistentes. MSE modifica el entorno temporal.
-Transacción liberada al finalizar; fallo de metadatos/SELECT/transporte/SW
-no 9000 detiene sin reintentos. Aceptación MSE no demuestra firma ni valida
-los requisitos de autenticación. Informe privado `local/jcop4-sign-setup-*/`.
+**Siguiente intervención:** `make inspect/jcop4-pin-status READER=0`, una vez,
+firmador y otros clientes cerrados, misma JCOP4 insertada. Compila solo el
+helper, no OpenSC. Default, ATR conectado comprobado, AID observado exigido
+y anunciado, binding nativo, cachés apagadas, stdin vacío/debug 0. Omite DER,
+lee metadatos y además registra tipo/formato/pad públicos del PIN; no valor
+ni longitud de un secreto. Exige LlaveDeFirma RSA 2048/0x91 nativa/uso SIGN
+y un único PIN vinculado por auth ID, global 1, flags 0x11, límites 6–14 y
+ruta vacía, como se observó. Son límites diagnósticos, no arquitectura final.
+Reselecciona la aplicación y envía **un VERIFY vacío 00 20 00 01**, sin datos
+ni Le: mismo formato que iso7816 SC_PIN_CMD_GET_INFO. No introduce ni prueba
+un PIN, no MSE/PSO/CAN/PACE ni operaciones administrativas. Clasifica 63Cx
+con x>0 como no verificado e intentos disponibles; 9000 como ya verificado.
+63C0/6983 u otro SW o error de transporte detiene sin variantes/reintentos;
+no desbloquear. Reserva liberada. Informe `local/jcop4-pin-status-*/report.txt`.
+Revisar estado/formato antes de preparar una autenticación real.
 
-Pasaron **15 comprobaciones del lanzador y 20 C con API simuladas**; herramienta
-real compilada contra OpenSC offline. Log C:
-`build/opensc-offline/card-public-sign-setup-tests.log`. Sin pruebas hardware
-por el agente, sin cambios de driver/submódulo ni repetición de la suite JCOP3.
-Cambios del principal: helper/lanzador/Make/tests/documentación; dar comandos
-de commit al usuario. Después revisar SW/metadatos antes de habilitar login.
-El diseño requerido separa plataforma/perfil/tamaño RSA y contempla transporte
-de 384 bytes para 3072; todavía no implementado. Ver `docs/jcop4.md`, incluida
-la fuente del protocolo. No anunciar soporte completo ni RSA 3072 probado.
+Pasaron **17 comprobaciones del lanzador y 24 C simuladas**; herramienta real
+compilada contra OpenSC offline. Log C:
+`build/opensc-offline/card-public-pin-status-tests.log`. Sin hardware por el
+agente ni cambios de driver/submódulo, sin repetir suite JCOP3. Cambios del
+principal: helper/lanzador/Make/tests/documentación; dar comandos de commit.
+Todavía no hay firma JCOP4 ni autenticación intentada por estas herramientas.
+Diseño modular y transporte de 384 bytes para RSA 3072 siguen pendientes.
 
 Estado actualizado tras revisar capturas del **13 de octubre de 2026,
 05:13–05:18 UTC** (12 de octubre, 23:13–23:18 de Costa Rica), OpenSC
@@ -93,7 +100,7 @@ previa. No repetir suite por documentación. Dar comandos de commit del
 principal; el agente no escribe Git ni firma/lee pass. Mantener datos privados
 fuera de Git. No modificar el perfil normal por defecto.
 
-**Próximo trabajo:** revisar el MSE y metadatos de algoritmos JCOP4 cuando estén disponibles.
+**Próximo trabajo:** revisar el estado vacío y formato del PIN JCOP4 cuando estén disponibles.
 Para integrar JCOP3, revisar/separar correcciones del perfil frente
 a instrumentación y experimentos antes de integrar. Diferencia local contra
 base original: 21 commits, 20 archivos, +736/-77 líneas; no equivale a revisión

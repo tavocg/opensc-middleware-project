@@ -9,6 +9,7 @@
 .PHONY: inspect/jcop4-files
 .PHONY: inspect/jcop4-pkcs15
 .PHONY: inspect/jcop4-sign-setup
+.PHONY: inspect/jcop4-pin-status
 
 PDF_INPUT ?= doc.pdf
 PDF_OUTPUT ?= local/jcop3-cli.pdf
@@ -32,6 +33,7 @@ help:
 		'make inspect/jcop4-files   Lee metadatos de EF.ATR y enumera EF.DIR, sin PIN ni PACE.' \
 		'make inspect/jcop4-pkcs15  Lee certificados y metadatos PKCS#15 del AID anunciado, sin login.' \
 		'make inspect/jcop4-sign-setup Prueba una selección temporal RSA/SHA-256 por MSE, sin PIN ni firma.' \
+		'make inspect/jcop4-pin-status Consulta el estado de PIN 1 con VERIFY vacío, sin introducir PIN.' \
 		'make inspect/jcop3         Identifica la aplicación y enumera objetos sin PIN.' \
 		'make read-dir/jcop3        Lee EF.DIR por APDU conocidas, sin PIN.' \
 		'make build/opensc          Compila el submódulo con PC/SC en build/opensc/.' \
@@ -72,6 +74,9 @@ inspect/jcop4-pkcs15:
 
 inspect/jcop4-sign-setup:
 	@bash scripts/probe-jcop4.sh "$$READER" --sign-setup
+
+inspect/jcop4-pin-status:
+	@bash scripts/probe-jcop4.sh "$$READER" --pin-status
 
 inspect/jcop3:
 	@bash scripts/probe-jcop3.sh "$$READER" --inspect
