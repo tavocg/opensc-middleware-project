@@ -16,7 +16,7 @@
 .PHONY: inspect/jcop4-odf-map
 .PHONY: inspect/jcop4-file4141
 .PHONY: inspect/jcop4-idopte
-.PHONY: inspect/jcop4-idopte-discovery test/pcsc-public-observer
+.PHONY: inspect/jcop4-idopte-discovery inspect/jcop4-idopte-spy test/pcsc-public-observer
 
 PDF_INPUT ?= doc.pdf
 PDF_OUTPUT ?= local/jcop3-cli.pdf
@@ -47,6 +47,7 @@ help:
 		'make inspect/jcop4-file4141 Consulta SELECT/metadatos del EF 4141, sin leer contenido ni autenticar.' \
 		'make inspect/jcop4-idopte Consulta módulo y estado público de los tokens Idopte, sin login.' \
 		'make inspect/jcop4-idopte-discovery Observa cabeceras de descubrimiento público con bloqueo de comandos ajenos.' \
+		'make inspect/jcop4-idopte-spy Captura solo SELECT 4141 para pcsc-spy, sin PIN ni lectura del EF.' \
 		'make test/pcsc-public-observer Comprueba el observador sin lector ni tarjeta.' \
 		'make sign/jcop4-apdu      Firma experimental RSA SHA-256 por APDU y verifica, un intento de PIN.' \
 		'make inspect/jcop3         Identifica la aplicación y enumera objetos sin PIN.' \
@@ -110,6 +111,9 @@ inspect/jcop4-idopte:
 
 inspect/jcop4-idopte-discovery:
 	@bash scripts/probe-jcop4.sh "$$READER" --idopte-discovery
+
+inspect/jcop4-idopte-spy:
+	@bash scripts/probe-jcop4.sh "$$READER" --idopte-spy
 
 test/pcsc-public-observer:
 	@bash tests/pcsc-public-observer.sh

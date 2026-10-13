@@ -1517,6 +1517,84 @@ intactos; sus 54/25/35 comprobaciones anteriores siguen vigentes, sin repetir
 suites por estos cambios. No hardware, carga de Idopte, PIN ni Git por el agente.
 JCOP4, RSA 3072 y arquitectura final siguen pendientes.
 
+## Captura sin PIN para pcsc-spy: preparación
+
+El usuario propuso observar pruebas sin PIN y aportó la
+[cible NXP/ANSSI-CC-2025/03](https://messervices.cyber.gouv.fr/visas/ANSSI-CC-2025-03-cible.pdf).
+Su sección 1.3.2.1.3 contempla PACE con PIN/CAN/MRZ; ese precedente no demuestra
+la configuración CR ni identifica 4141 o sus atributos 86. Los manuales de
+la bibliografía siguen sin haberse obtenido. No hace falta esperar su obtención
+para examinar una respuesta de control pública ya observada.
+
+El [pcsc-spy estándar](https://pcsclite.apdu.fr/pcsc-spy.1.html) muestra llamadas
+y buffers. Su
+[implementación](https://pcsclite.apdu.fr/api/libpcscspy_8c_source.html) registra
+entrada a SCardTransmit antes de delegar; ubicarlo antes de un guard también
+registraría el payload de un VERIFY bloqueado. Se conserva el bloqueo previo
+al registro. El nuevo **make inspect/jcop4-idopte-spy** usa el guard existente
+para emitir exclusivamente una traza compatible de **SELECT 4141 permitido**
+y su respuesta de control; el programa pcsc-spy real decodifica ese archivo.
+No se carga libpcscspy ni usa un FIFO, LD_PRELOAD o modificación de HOME.
+No es una captura completa del proceso: handles/PCI/prefijo de hilo son
+placeholders normalizados, y tiempos/APDU/respuesta/resultado son observados.
+
+Este modo permite registrar el FCP completo, incluidos los atributos 86 que
+el resumen anterior omitía, para interpretarlos. No lee el contenido de 4141
+ni cambia los permisos del observador. No registra comandos rechazados, otras
+respuestas de SELECT/GET DATA, lecturas bootstrap, serie D003 ni capacidades.
+La coincidencia de captura es solo 00 A4 02 00 / Lc 2 / FID 4141 / total 7 u 8,
+después de que el guard haya confirmado contexto y permitido transmisión.
+Respuesta máxima 258 bytes incluyendo SW; error de transporte, respuesta
+inválida para el buffer o superior al límite omite los datos. No añade comandos
+ni GET RESPONSE para completar una respuesta. Un 61xx puede dar control parcial;
+no afirmar completitud o interpretar política global por esa captura.
+
+La herramienta pública sigue --show-info --list-slots, sin solicitar sesión,
+objetos, login, PIN o firma. Stdin vacío, debug 0 y configuración aislada.
+VERIFY incluso vacío, MSE/PSO/SM/autenticación/escrituras/lecturas desconocidas
+continúan bloqueados antes del transporte; no pueden filtrarse al archivo.
+Tras primer bloqueo, reconectar no habilita otras APDU. READ 4141 sigue prohibido.
+
+Capturas privadas (directorio 0700, archivos 0600):
+
+- report.txt y public-headers.txt: resultados/cabeceras v6, sin respuestas.
+- select4141-spy.raw: solo el intercambio de control en formato compatible.
+- select4141-spy.txt: representación decodificada por pcsc-spy, sin colores.
+
+El FCP puede contener nombres/campos identificables. No volcar la captura
+completa al chat ni Git; al revisar extraer solo estructura, tamaño, FID,
+atributo 86 y SW. No afirmar ausencia de datos sensibles por no haber PIN.
+El modo solicita raw nuevo O_EXCL/NOFOLLOW/0600; si falta/collide no transmite.
+Fallo de escritura detiene consultas posteriores. El nuevo env se elimina
+antes del inventario y en los demás modos; se activa solo dentro de Idopte.
+Falta de pcsc-spy/Python 3, captura vacía o fallo de decodificación detiene
+sin fallback. También se detectan errores de hilo con salida de proceso 0.
+
+Se agregó Python 3 al flake, sin cambiar lock: el script de pcsclite.dev
+trae shebang /usr/bin/python3, que no existe en este NixOS. Se ejecuta con
+el intérprete del entorno, sin editar el paquete. **Estado Idopte y estado del
+decodificador se conservan por separado**. El READ posterior seguirá bloqueado,
+así que Idopte puede salir 1 aun si la captura/decodificación funcionan.
+Revisar spy_result/spy_decode_status y el SELECT antes de repetir por ese error.
+
+Pasaron **30 comprobaciones del observador/constructor/decoder** y **40 del
+lanzador**, sin hardware. Incluyen transporte falso, exclusión READ/PIN, log
+privado/fallos/symlink, pcsc-spy real y redirector real con plugin RTLD_LOCAL
+hacia transporte falso. Biblioteca de diagnóstico real compilada. Helper,
+OpenSC/driver/submódulo sin cambios; las 54 del helper previas siguen vigentes.
+No Idopte, tarjeta, PIN o Git por el agente. Principal 69a4310/OpenSC 3dfef6704
+al comenzar. Soporte JCOP4 y RSA 3072 siguen pendientes.
+
+Siguiente intervención, misma JCOP4 y otros clientes cerrados:
+
+```bash
+nix develop -c make inspect/jcop4-idopte-spy READER=0
+```
+
+Compila solo diagnóstico. No introducir PIN, abrir firmador ni repetir firmas;
+examinar primero la respuesta de control de SELECT. No autoriza nuevos comandos,
+READ de archivos desconocidos ni captura de autenticación por esa propuesta.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño

@@ -29,6 +29,7 @@
               gnumake
               opensc
               pcsc-tools
+              python3 # pcsc-spy decoder from pcsclite.dev
               util-linux # script: terminal fixture for authenticated launcher tests
             ];
             nativeBuildInputs = with pkgs; [

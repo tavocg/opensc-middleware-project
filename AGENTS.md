@@ -14,8 +14,9 @@ No aplicar estructura o política JCOP3, ni identificar 4141 como público,
 CAN, llave, PACE obligatorio o causa de VERIFY 6982. No se registraron valores
 de 86; la política y el propósito del archivo siguen desconocidos.
 
-**No repetir SELECT 4141 ni descubrimiento Idopte como siguiente paso.** La
+**No repetir el resumen SELECT-only ni el descubrimiento sin respuestas.** La
 última consulta ya respondió la duda estructural y no permite decidir READ.
+El nuevo modo de captura descrito abajo sí recoge información antes omitida.
 Se mantiene observador v6 bloqueando READ 4141. El error Idopte mEpNvPwv
 fue ese bloqueo antes de transmitir; no es el VERIFY 6982 de 5Dpadr1N.
 El usuario confirmó una firma previa satisfactoria de esta misma JCOP4 con
@@ -31,18 +32,64 @@ La bibliografía de NXP/ANSSI-CC-2025/03, sección 9.2, identifica exactamente
 CDv3.2_1_03210_ChipDoc3.2_Crypto_Guide y SSCD Personalization Guide ref. 678712;
 referencias en docs/jcop4.md. No se obtuvo el contenido de esos manuales:
 una referencia bibliográfica no es especificación APDU ni evidencia CR.
-Se pidió al usuario indicar si tiene acceso a esos documentos o al perfil
-BCCR, sin solicitar firma/PIN. Respuesta pendiente. Próxima intervención es
-esa información, **no un nuevo Make de tarjeta**. Sin documentos, decidir
-explícitamente otro alcance de observación que proteja credenciales; no
-conceder READ desconocido o captura autenticada automáticamente ni contactar
-terceros sin instrucción. Restricciones existentes siguen vigentes.
+El usuario aportó de nuevo la cible y propuso **pcsc-spy sin PIN**. Es una nueva
+solicitud de observación; no se interpreta como permiso para autenticar o leer
+4141. Preparado **make inspect/jcop4-idopte-spy READER=0**, que reutiliza la
+consulta pública Idopte --show-info --list-slots y el guard v6. No más espera
+por la pregunta anterior sobre documentos como primer paso. El PDF documenta
+PACE con PIN/CAN/MRZ (1.3.2.1.3), pero no identifica por sí solo el protocolo CR.
 
-Cambios actuales solo documentación (AGENTS/README/docs). Helper, observador,
-lanzador, driver y submódulo intactos; las 54/25/35 comprobaciones anteriores
-siguen vigentes y no se repitieron por documentación. Sin hardware/Idopte/PIN/
-Git por el agente. Dar comandos de commit del principal. JCOP4/RSA 3072 aún
-no integrados. Preservar capturas privadas; nunca usar 4FGWOtpI como evidencia.
+Nuevo modo optativo de captura: JCOP4_PUBLIC_SELECT_SPY_TRACE, solo dentro
+del proceso Idopte. **Captura exclusivamente el SELECT 4141 ya permitido y su
+respuesta de control**, no los otros APDU ni el contenido del archivo.
+Coincidencia CLA 00/A4/02/00/Lc 2/FID 4141/total 7 u 8 después de aprobación
+del guard y transmisión. Respuesta <=258 bytes incluyendo SW; error de
+transporte/buffer inválido/superior al límite omite los datos. Incluye atributos
+86 del FCP para investigación; no ampliar por ello READ/PIN ni aplicar política
+JCOP3. Se conserva public-headers.txt v6 sin payloads; permisos de comandos
+idénticos. VERIFY incluso vacío, MSE/PSO/SM/escrituras/lecturas desconocidas
+se bloquean antes de transporte y **no llegan a la captura**. Primer bloqueo
+continúa definitivo. No GET RESPONSE adicional para completar la captura.
+
+**No carga libpcscspy ni usa su FIFO global:** el guard emite una traza limitada
+compatible y el programa pcsc-spy real la decodifica al terminar. Handles,
+PCI y prefijo de hilo son placeholders normalizados, no valores PC/SC reales;
+fechas/command/response/resultado sí observados. No confundirla con captura
+completa del proceso o del tráfico de tarjeta. Python 3 agregado al flake;
+se invoca el script con ese intérprete porque pcsclite.dev trae shebang
+/usr/bin/python3, inexistente en NixOS. Sin cambiar lock, HOME o archivos del
+sistema. No precarga, login/sesiones/objetos solicitados, PIN ni firma.
+
+Archivos privados local/jcop4-idopte-spy-*/: report.txt/public-headers.txt y
+select4141-spy.raw/select4141-spy.txt. No se anexan respuestas a report.txt.
+Raw O_EXCL/NOFOLLOW/0600 obligatorio para este modo; destino existente,
+symlink/no disponible bloquea antes de transmitir. Fallo de escritura detiene
+más transporte. El lanzador elimina env externo del modo de captura antes del
+inventario y en otros modos. Falta de herramienta/intérprete, raw vacío o
+error del decodificador detiene sin fallback; detecta errores de hilo aun
+cuando Python sale 0. Conserva por separado estado del módulo y decodificación.
+**Idopte probablemente terminará 1 al intentar READ 4141**; no prueba fallo
+de captura o rechazo de tarjeta. Revisar spy_result/spy_decode_status y raw
+SELECT, no repetir por el estado del módulo. La respuesta puede contener
+campos identificables: mantenerla privada y no volcarla completa al chat/Git.
+En la revisión extraer solo estructura/tamaño/FID/tag 86/SW; no nombres,
+seriales o valores ajenos por inercia. Condición de VERIFY 6982 sigue pendiente.
+
+Pasaron **30 comprobaciones del observador/constructor/decoder** y **40 del
+lanzador** sin tarjeta, incluido pcsc-spy real, redirector real/plugin local
+con transporte falso, exclusión de READ/PIN y permisos/fallos de log.
+Biblioteca real compilada. Helper y sus 54 pruebas anteriores intactos; no
+repetir suite por documentación. Principal 69a4310 y OpenSC 3dfef6704 al
+comenzar; submódulo/driver sin cambios. Sin hardware/Idopte/PIN/Git por el
+agente. Dar comandos de commit del principal; JCOP4/RSA 3072 siguen pendientes.
+
+**Siguiente intervención:** misma JCOP4 y firmador/otros clientes cerrados:
+`nix develop -c make inspect/jcop4-idopte-spy READER=0`.
+Compila solo la biblioteca de diagnóstico. No introducir PIN ni usar el modo
+con firmador o firmas. Revisar la respuesta de control del único SELECT
+capturado antes de decidir otros comandos. No contactar terceros ni capturar
+una firma autenticada con pcsc-spy estándar. Preservar capturas; nunca usar
+4FGWOtpI como evidencia.
 
 Informe anterior de metadatos, antes de distinguir el tag directo:
 `local/jcop4-file4141-o5gvxntR/report.txt`, **16:38:38 UTC**, principal

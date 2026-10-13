@@ -39,7 +39,17 @@ read -r -a task_pcsc_cflags <<< "$(pkg-config --cflags libpcsclite)"
 "${CC:-cc}" -std=c99 -Wall -Wextra -Werror "${task_pcsc_cflags[@]}" \
     "$task_root/tests/pcsc-public-observer.c" -ldl -pthread \
     -o "$task_root/build/diagnostics/pcsc-public-observer-regression"
-env -u JCOP4_PUBLIC_DISCOVERY_TRACE "$task_root/build/diagnostics/pcsc-public-observer-regression"
+task_spy_tmp=$(mktemp -d)
+trap 'rm -rf -- "$task_spy_tmp"' EXIT
+env -u JCOP4_PUBLIC_DISCOVERY_TRACE -u JCOP4_PUBLIC_SELECT_SPY_TRACE \
+    PCSC_SELECT_SPY_FIXTURE="$task_spy_tmp/select.raw" "$task_root/build/diagnostics/pcsc-public-observer-regression"
+python3 "$(command -v pcsc-spy)" --nocolor "$task_spy_tmp/select.raw" > "$task_spy_tmp/select.txt" 2>&1
+rg -q '00 A4 02 00 02 41 41 00' "$task_spy_tmp/select.txt"
+rg -q '86 04 A1 B2 C3 D4' "$task_spy_tmp/select.txt"
+[[ $(rg -c '^SCardTransmit' "$task_spy_tmp/select.txt") == 1 ]]
+printf 'PASS real pcsc-spy decodes the narrow SELECT stream without a FIFO or hardware\n'
+rm -rf -- "$task_spy_tmp"
+trap - EXIT
 
 # Verify real ELF interposition against a fake transport; never load PC/SC.
 task_tmp=$(mktemp -d)
@@ -293,3 +303,14 @@ env -u LD_PRELOAD -u LIBPCSCLITE_SPY_DELEGATE \
     LIBPCSCLITE_DELEGATE="$task_tmp/delegate.so" JCOP4_PUBLIC_DISCOVERY_TRACE="$task_tmp/global.txt" \
     "$task_tmp/global-client" "$task_tmp/redirect-plugin.so" "$task_tmp/libfakepcsc.so" 0
 printf 'PASS actual PC/SC delegation handles local plugins, records connection failures privately and blocks VERIFY, controls and attributes before fake transport\n'
+env -u LD_PRELOAD -u LIBPCSCLITE_SPY_DELEGATE \
+    LIBPCSCLITE_DELEGATE="$task_tmp/delegate.so" JCOP4_PUBLIC_DISCOVERY_TRACE="$task_tmp/spy-headers.txt" \
+    JCOP4_PUBLIC_SELECT_SPY_TRACE="$task_tmp/spy-select.raw" \
+    "$task_tmp/local-client" "$task_tmp/redirect-plugin.so" "$task_tmp/libfakepcsc.so" 14
+python3 "$(command -v pcsc-spy)" --nocolor "$task_tmp/spy-select.raw" > "$task_tmp/spy-select.txt" 2>&1
+[[ $(stat -c %a "$task_tmp/spy-select.raw") == 600 &&
+   $(rg -c '^SCardTransmit' "$task_tmp/spy-select.txt") == 1 &&
+   $(< "$task_tmp/spy-headers.txt") == *'blocked_header=00B00000'* ]]
+rg -q '00 A4 02 00 02 41 41' "$task_tmp/spy-select.txt"
+! rg -q '00 B0|00 20|PRIVATE_RESPONSE|SECRET_PIN' "$task_tmp/spy-select.raw"
+printf 'PASS actual redirector captures only SELECT for real pcsc-spy while blocked READ never reaches the fake transport\n'

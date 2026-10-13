@@ -1,5 +1,6 @@
-/* Observe bounded public discovery. No response or authentication buffers;
- * record blocked SELECT FIDs and reader control identifiers, never payloads. */
+/* Observe bounded public discovery. Default log contains headers only.
+ * An opt-in pcsc-spy stream captures only permitted SELECT 4141 control
+ * information; never authentication buffers or that EF's contents. */
 #define _GNU_SOURCE
 #include <dlfcn.h>
 #include <fcntl.h>
@@ -8,10 +9,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/time.h>
 #include <winscard.h>
 #include <reader.h>
 
 static int trace_fd = -1, stopped, selected_public_file, selected_mf, selected_app, handle_set, pending_response;
+static int select_spy_fd = -1;
 static unsigned int events;
 static unsigned int lifecycle_events;
 static SCARDHANDLE trace_handle;
@@ -24,6 +27,42 @@ __attribute__((constructor)) static void observer_init(void)
 		trace_fd = open(path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
 	if (trace_fd >= 0)
 		dprintf(trace_fd, "format=public_discovery_headers_v6\n");
+	path = getenv("JCOP4_PUBLIC_SELECT_SPY_TRACE");
+	if (path) {
+		select_spy_fd = open(path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
+		if (select_spy_fd < 0 || trace_fd < 0) stopped = 1;
+	}
+}
+
+/* A narrow, opt-in SCardTransmit stream accepted by pcsc-spy. Only the
+ * already permitted SELECT 4141 is captured, never EF contents or blocked
+ * commands. Handles and PCI fields are normalized placeholders. */
+static int capture_select(const unsigned char *cmd, DWORD len,
+		const unsigned char *response, DWORD response_len, LONG rv,
+		const struct timeval *start)
+{
+	char entry[2048];
+	size_t used = 0;
+	struct timeval end;
+	if (select_spy_fd < 0) return 0;
+	if (!cmd || (len != 7 && len != 8) || memcmp(cmd, "\x00\xA4\x02\x00\x02\x41\x41", 7)) return 0;
+	/* A control response is bounded separately from the caller's capacity. */
+	if (rv != SCARD_S_SUCCESS || !response || response_len > 258) response_len = 0;
+	gettimeofday(&end, NULL);
+	used += snprintf(entry + used, sizeof(entry) - used,
+		"0@>|%ld|%ld|SCardTransmit\n0@0x00000000\n0@0xFFFFFFFF\n0@0xFFFFFFFF\n0@0x%08lX\n0@",
+		(long)start->tv_sec, (long)start->tv_usec, (unsigned long)len);
+	for (DWORD i = 0; i < len; i++)
+		used += snprintf(entry + used, sizeof(entry) - used, "%s%02X", i ? " " : "", cmd[i]);
+	used += snprintf(entry + used, sizeof(entry) - used,
+		"\n0@0xFFFFFFFF\n0@0xFFFFFFFF\n0@0x%08lX\n0@", (unsigned long)response_len);
+	if (!response_len)
+		used += snprintf(entry + used, sizeof(entry) - used, "NULL");
+	for (DWORD i = 0; i < response_len; i++)
+		used += snprintf(entry + used, sizeof(entry) - used, "%s%02X", i ? " " : "", response[i]);
+	used += snprintf(entry + used, sizeof(entry) - used, "\n0@<|%ld|%ld|SCardTransmit|0x%08lX\n",
+		(long)end.tv_sec, (long)end.tv_usec, (unsigned long)rv);
+	return used >= sizeof(entry) || write(select_spy_fd, entry, used) != (ssize_t)used;
 }
 
 /* Dependency lookup works when this library is loaded as a PC/SC delegate.
@@ -168,6 +207,7 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
 	DWORD capacity = response_len ? *response_len : 0;
 	int next_file = -1, next_mf = -1, next_app = -1;
 	unsigned int sw;
+	struct timeval start;
 	pthread_mutex_lock(&trace_mutex);
 	if (trace_fd < 0 || stopped)
 		goto out;
@@ -205,6 +245,7 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
 		selected_public_file = selected_mf = selected_app = 0;
 	transmit = (transmit_fn)dlsym(RTLD_NEXT, "SCardTransmit");
 	if (!transmit) { stopped = 1; goto out; }
+	gettimeofday(&start, NULL);
 	rv = transmit(card, send_pci, cmd, len, recv_pci, response, response_len);
 	dprintf(trace_fd, "transport=%ld\n", (long)rv);
 	if (rv == SCARD_S_SUCCESS && response && response_len && *response_len >= 2 && *response_len <= capacity) {
@@ -220,6 +261,11 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
 		}
 	} else {
 		stopped = 1;
+	}
+	if (capture_select(cmd, len, response,
+			rv == SCARD_S_SUCCESS && response_len && *response_len <= capacity ? *response_len : 0, rv, &start)) {
+		dprintf(trace_fd, "blocked=select_spy_write_failed\n");
+		stopped = 1; rv = SCARD_E_NOT_TRANSACTED;
 	}
 out:
 	if (rv != SCARD_S_SUCCESS && response_len)

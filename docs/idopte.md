@@ -147,6 +147,21 @@ se haya obtenido ni prueba de la personalización CR. Driver/submódulo/helper/
 observador/lanzador sin cambios. Sus 54/25/35 comprobaciones anteriores
 siguen vigentes; esta revisión solo modifica documentación.
 
+El usuario propuso una prueba sin PIN. Se añade
+`make inspect/jcop4-idopte-spy`: consulta pública Idopte con el guard v6 y
+captura compatible **solo de SELECT 4141 y su respuesta de control**. El
+pcsc-spy real la decodifica; no se carga libpcscspy, no se usa su FIFO ni
+captura general del proceso. Headers v6 permanecen sin payloads. READ 4141,
+VERIFY/autenticación y comandos ajenos siguen bloqueados antes de transmitir
+**y antes de la captura**, con los mismos permisos. Archivos privados
+local/jcop4-idopte-spy-*/select4141-spy.raw y select4141-spy.txt; pueden contener
+campos identificables del FCP, no publicarlos completos. Handles/PCI/hilo
+normalizados, no valores originales. Estado Idopte independiente de captura:
+esperar posible error al bloquearse el READ siguiente, sin repetir por inercia.
+Python 3 agregado al flake para ejecutar el decoder en NixOS. Pasaron 30
+comprobaciones del observador/decoder y 40 del lanzador, sin hardware; driver
+intacto. Alcance, referencias PC/SC y preparación en docs/jcop4.md.
+
 `pcsc-spy` estándar registra los buffers transmitidos, que pueden incluir el
 PIN durante autenticación. No usarlo con el PIN real ni considerar un filtro
 de pantalla o una anonimización posterior equivalente a descartarlo antes

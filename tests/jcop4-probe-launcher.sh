@@ -34,6 +34,9 @@ if [[ ${JCOP4_PUBLIC_DISCOVERY_TRACE-unset} != unset ]]; then
     [[ ${LD_PRELOAD-unset} == unset &&
        ${LIBPCSCLITE_DELEGATE-} == "$FIXTURE_PROBE_ROOT/build/diagnostics/pcsc-public-observer.so" &&
        ${LIBPCSCLITE_SPY_DELEGATE-unset} == unset ]] || exit 96
+    if [[ ${JCOP4_PUBLIC_SELECT_SPY_TRACE-unset} != unset && ${FIXTURE_SPY_EMPTY:-0} != 1 ]]; then
+        printf 'SYNTHETIC_SELECT_ONLY\n' > "$JCOP4_PUBLIC_SELECT_SPY_TRACE"
+    fi
     printf 'format=public_discovery_headers_v6\n' > "$JCOP4_PUBLIC_DISCOVERY_TRACE"
     if [[ ${FIXTURE_OBSERVER_CONTROL_ONLY:-0} == 1 ]]; then
         printf 'pcsc_call=SCardConnect\npcsc_result=0\npublic_control_code=42000D48\ncontrol_transport=0\n' >> "$JCOP4_PUBLIC_DISCOVERY_TRACE"
@@ -93,7 +96,7 @@ esac
 [[ ${OPENSC_DEBUG-} == 0 && ${OPENSC_DEBUG_FILE-unset} == unset &&
    ${OPENSC_DEEPBIND-unset} == unset &&
    ${LD_PRELOAD-unset} == unset && ${LIBPCSCLITE_DELEGATE-unset} == unset &&
-   ${LIBPCSCLITE_SPY_DELEGATE-unset} == unset &&
+   ${LIBPCSCLITE_SPY_DELEGATE-unset} == unset && ${JCOP4_PUBLIC_SELECT_SPY_TRACE-unset} == unset &&
    ${OPENSC_API_TRACE_FILE-unset} == unset &&
    ${OPENSC_JCOP3_SESSION_STATE-unset} == unset &&
    ${OPENSC_JCOP3_PIN_STATUS_IN_PLACE-unset} == unset &&
@@ -127,6 +130,19 @@ esac
 TOOL
 chmod +x "$task_tmp/bin/git" "$task_tmp/build/opensc/src/tools/opensc-tool"
 export PATH="$task_tmp/bin:$PATH" FIXTURE_PROBE_ROOT="$task_tmp" READER=2
+cat > "$task_tmp/bin/pcsc-spy" <<'SPY'
+import os, sys, stat
+assert len(sys.argv) == 3 and sys.argv[1] == '--nocolor'
+assert os.path.basename(sys.argv[2]) == 'select4141-spy.raw'
+assert stat.S_IMODE(os.stat(sys.argv[2]).st_mode) == 0o600
+assert open(sys.argv[2]).read() == 'SYNTHETIC_SELECT_ONLY\n'
+assert not sys.stdin.read()
+print('SCardTransmit synthetic decoded SELECT')
+if os.environ.get('FIXTURE_SPY_TRACEBACK') == '1': print('Traceback: synthetic decoder thread error')
+sys.exit(int(os.environ.get('FIXTURE_SPY_DECODE_EXIT', '0')))
+SPY
+chmod +x "$task_tmp/bin/pcsc-spy"
+export JCOP4_PUBLIC_SELECT_SPY_TRACE=/should/not/be/used
 export OPENSC_DEBUG=99 OPENSC_DEBUG_FILE=/should/not/be/used
 export OPENSC_CONF=/should/not/be/used OPENSC_API_TRACE_FILE=/should/not/be/used
 export OPENSC_DEEPBIND=1
@@ -336,6 +352,32 @@ task_control_report=$(sed -n 's/^Informe: //p' "$task_tmp/output.txt")
    $(< "$task_control_report") != *'public_header='* ]]
 printf 'PASS JCOP4 discovery recognizes a public reader-control event without claiming an APDU was observed\n'
 unset FIXTURE_OBSERVER_CONTROL_ONLY
+task_run 0 2 --idopte-spy
+task_spy_report=$(sed -n 's/^Informe: //p' "$task_tmp/output.txt")
+[[ $(< "$task_spy_report") == *'spy_result=select4141_control_data_only'* &&
+   $(stat -c %a "${task_spy_report%/*}/select4141-spy.txt") == 600 &&
+   $(< "${task_spy_report%/*}/select4141-spy.txt") == *'synthetic decoded SELECT'* ]]
+printf 'PASS narrow spy query decodes only its private SELECT stream and scrubs external capture settings from inventory\n'
+export FIXTURE_IDOPTE_EXIT=17
+task_run 17 2 --idopte-spy
+task_spy_report=$(sed -n 's/^Informe: //p' "$task_tmp/output.txt")
+[[ $(< "$task_spy_report") == *'spy_decode_status=0'* && $(< "$task_spy_report") == *'module_exit_status=17'* ]]
+printf 'PASS narrow spy query preserves module failure separately from successful capture decoding\n'
+unset FIXTURE_IDOPTE_EXIT
+export FIXTURE_SPY_EMPTY=1
+task_run 1 2 --idopte-spy
+task_spy_report=$(sed -n 's/^Informe: //p' "$task_tmp/output.txt")
+[[ $(< "$task_spy_report") == *'spy_result=no_select4141_captured'* ]]
+printf 'PASS narrow spy query rejects an absent target capture without fallback or another query\n'
+unset FIXTURE_SPY_EMPTY
+export FIXTURE_SPY_DECODE_EXIT=23
+task_run 23 2 --idopte-spy
+printf 'PASS narrow spy query preserves a decoder failure and keeps the private original capture\n'
+unset FIXTURE_SPY_DECODE_EXIT
+export FIXTURE_SPY_TRACEBACK=1
+task_run 1 2 --idopte-spy
+printf 'PASS narrow spy query treats decoder thread errors as failure even when the program exits zero\n'
+unset FIXTURE_SPY_TRACEBACK
 export FIXTURE_OBSERVER_BUILD_EXIT=19
 task_run 19 2 --idopte-discovery
 [[ ! -e $task_tmp/idopte-called && $(wc -l < "$task_tmp/called") == 3 ]]

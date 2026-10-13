@@ -2,8 +2,9 @@
 #include "../tools/pcsc-public-observer.c"
 #undef dlsym
 #include <assert.h>
+#include <sys/stat.h>
 
-static int calls, control_calls, control_missing;
+static int calls, control_calls, control_missing, control_response_fixture;
 static DWORD control_capacity, control_size = 16;
 static LONG control_result;
 static unsigned int fixture_sw = 0x9000;
@@ -14,6 +15,11 @@ static LONG fixture_transmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
 	(void)card; (void)send_pci; (void)cmd; (void)len; (void)recv_pci;
 	calls++;
 	assert(*response_len >= 18);
+	if (control_response_fixture) {
+		const unsigned char fcp[] = { 0x62, 9, 0x82, 1, 1, 0x86, 4, 0xA1, 0xB2, 0xC3, 0xD4, 0x90, 0 };
+		memcpy(response, fcp, sizeof(fcp)); *response_len = sizeof(fcp);
+		return SCARD_S_SUCCESS;
+	}
 	memcpy(response, "PRIVATE_RESPONSE", 16);
 	response[16] = fixture_sw >> 8; response[17] = fixture_sw & 0xFF;
 	*response_len = 18;
@@ -52,6 +58,7 @@ static FILE *fixture_reset(void)
 	trace_fd = fileno(file);
 	stopped = selected_public_file = selected_mf = selected_app = handle_set = pending_response = calls = events = lifecycle_events = 0;
 	control_calls = control_missing = control_capacity = 0;
+	control_response_fixture = 0; select_spy_fd = -1;
 	control_size = 16; control_result = 0;
 	fixture_sw = 0x9000;
 	return file;
@@ -424,5 +431,82 @@ int main(void)
 	check_private(file);
 	assert(send_command(version, sizeof(version)) != 0);
 	puts("PASS public observer enforces event/handle limits and refuses transport without a private log");
+	{
+		const unsigned char file4141[] = { 0, 0xA4, 2, 0, 2, 0x41, 0x41, 0 };
+		FILE *spy = tmpfile();
+		char capture[2048] = {0};
+		const char *capture_path = getenv("PCSC_SELECT_SPY_FIXTURE");
+		assert(spy);
+		file = fixture_reset(); select_spy_fd = fileno(spy);
+		assert(send_command(app, sizeof(app)) == 0);
+		assert(ftell(spy) == 0); /* Non-target responses never enter this stream. */
+		control_response_fixture = 1;
+		assert(send_command(file4141, sizeof(file4141)) == 0);
+		assert(send_command(read, sizeof(read)) != 0 && calls == 2);
+		assert(send_command(pin, sizeof(pin)) != 0 && calls == 2);
+		fflush(spy); rewind(spy);
+		assert(fread(capture, 1, sizeof(capture) - 1, spy) > 0);
+		assert(strstr(capture, "00 A4 02 00 02 41 41 00\n") &&
+			strstr(capture, "62 09 82 01 01 86 04 A1 B2 C3 D4 90 00\n") &&
+			!strstr(capture, "00 B0") && !strstr(capture, "00 20") &&
+			!strstr(capture, "53 45 43 52 45 54") && !strstr(capture, "PRIVATE_RESPONSE"));
+		if (capture_path) {
+			FILE *export = fopen(capture_path, "wx");
+			assert(export && fputs(capture, export) >= 0 && fclose(export) == 0);
+		}
+		fclose(spy); select_spy_fd = -1; check_private(file);
+	}
+	puts("PASS optional spy stream records only permitted SELECT 4141 control data and excludes blocked READ and PIN");
+	{
+		const unsigned char file4141[] = { 0, 0xA4, 2, 0, 2, 0x41, 0x41 };
+		FILE *spy = tmpfile();
+		struct timeval start;
+		unsigned char oversized[259] = {0};
+		char capture[2048] = {0};
+		assert(spy); select_spy_fd = fileno(spy); gettimeofday(&start, NULL);
+		assert(!capture_select(file4141, sizeof(file4141), oversized, sizeof(oversized), 0, &start));
+		fflush(spy); rewind(spy); assert(fread(capture, 1, sizeof(capture) - 1, spy) > 0);
+		assert(strstr(capture, "0@NULL\n") && !strstr(capture, "00 00 00"));
+		fclose(spy);
+		file = fixture_reset();
+		/* Closed output must stop further commands after a capture failure. */
+		spy = tmpfile(); assert(spy); select_spy_fd = fileno(spy); fclose(spy);
+		assert(send_command(app, sizeof(app)) == 0);
+		assert(send_command(file4141, sizeof(file4141)) != 0 && stopped && calls == 2);
+		assert(send_command(version, sizeof(version)) != 0 && calls == 2);
+		select_spy_fd = -1; check_private(file);
+	}
+	puts("PASS spy capture omits oversized responses and stops transport after a log write failure");
+	{
+		char dir[] = "/tmp/jcop4-select-spy-XXXXXX", headers[256], raw[256], target[256];
+		struct stat info;
+		assert(mkdtemp(dir));
+		snprintf(target, sizeof(target), "%s/untouched", dir);
+		FILE *sentinel = fopen(target, "wx"); assert(sentinel);
+		assert(fputs("DO_NOT_CHANGE", sentinel) >= 0 && fclose(sentinel) == 0);
+		for (int i = 0; i < 4; i++) {
+			snprintf(headers, sizeof(headers), "%s/headers-%d", dir, i);
+			snprintf(raw, sizeof(raw), "%s/raw-%d", dir, i);
+			if (i == 0) { FILE *existing = fopen(raw, "wx"); assert(existing && fclose(existing) == 0); }
+			if (i == 1) assert(!symlink(target, raw));
+			if (i == 2) snprintf(raw, sizeof(raw), "%s/missing/raw", dir);
+			assert(!setenv("JCOP4_PUBLIC_DISCOVERY_TRACE", headers, 1));
+			assert(!setenv("JCOP4_PUBLIC_SELECT_SPY_TRACE", raw, 1));
+			stopped = 0; calls = 0;
+			observer_init();
+			if (i < 3) assert(stopped && send_command(version, sizeof(version)) != 0 && !calls);
+			else assert(!stopped && select_spy_fd >= 0 && !fstat(select_spy_fd, &info) && (info.st_mode & 0777) == 0600);
+			if (trace_fd >= 0) close(trace_fd);
+			if (select_spy_fd >= 0) close(select_spy_fd);
+			trace_fd = select_spy_fd = -1;
+			assert(!unlink(headers));
+			if (i != 2) assert(!unlink(raw));
+		}
+		char value[32] = {0}; sentinel = fopen(target, "r"); assert(sentinel);
+		assert(fread(value, 1, sizeof(value) - 1, sentinel) == strlen("DO_NOT_CHANGE") && !strcmp(value, "DO_NOT_CHANGE"));
+		fclose(sentinel); assert(!unlink(target) && !rmdir(dir));
+		unsetenv("JCOP4_PUBLIC_DISCOVERY_TRACE"); unsetenv("JCOP4_PUBLIC_SELECT_SPY_TRACE");
+	}
+	puts("PASS optional spy requires a new private log and refuses existing, symlinked or unavailable destinations before transport");
 	return 0;
 }

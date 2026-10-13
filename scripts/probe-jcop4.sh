@@ -6,8 +6,8 @@ umask 077
 task_reader=${1:-${READER:-0}}
 task_mode=${2:---probe}
 if (( $# > 2 )) || [[ ! $task_reader =~ ^[0-9]+$ ]] ||
-        [[ $task_mode != --probe && $task_mode != --aids && $task_mode != --files && $task_mode != --pkcs15 && $task_mode != --sign-setup && $task_mode != --pin-status && $task_mode != --security-info && $task_mode != --pin-policy && $task_mode != --odf-map && $task_mode != --file4141 && $task_mode != --idopte && $task_mode != --idopte-discovery ]]; then
-    printf 'Uso: bash scripts/probe-jcop4.sh [índice numérico de lector] [--probe|--aids|--files|--pkcs15|--sign-setup|--pin-status|--security-info|--pin-policy|--odf-map|--file4141|--idopte|--idopte-discovery]\n' >&2
+        [[ $task_mode != --probe && $task_mode != --aids && $task_mode != --files && $task_mode != --pkcs15 && $task_mode != --sign-setup && $task_mode != --pin-status && $task_mode != --security-info && $task_mode != --pin-policy && $task_mode != --odf-map && $task_mode != --file4141 && $task_mode != --idopte && $task_mode != --idopte-discovery && $task_mode != --idopte-spy ]]; then
+    printf 'Uso: bash scripts/probe-jcop4.sh [índice numérico de lector] [--probe|--aids|--files|--pkcs15|--sign-setup|--pin-status|--security-info|--pin-policy|--odf-map|--file4141|--idopte|--idopte-discovery|--idopte-spy]\n' >&2
     exit 2
 fi
 task_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
@@ -36,6 +36,8 @@ elif [[ $task_mode == --file4141 ]]; then
     task_dir=$(mktemp -d "$task_root/local/jcop4-file4141-XXXXXXXX")
 elif [[ $task_mode == --idopte ]]; then
     task_dir=$(mktemp -d "$task_root/local/jcop4-idopte-XXXXXXXX")
+elif [[ $task_mode == --idopte-spy ]]; then
+    task_dir=$(mktemp -d "$task_root/local/jcop4-idopte-spy-XXXXXXXX")
 elif [[ $task_mode == --idopte-discovery ]]; then
     task_dir=$(mktemp -d "$task_root/local/jcop4-idopte-discovery-XXXXXXXX")
 elif [[ $task_mode == --security-info ]]; then
@@ -82,7 +84,7 @@ task_record_tool() {
     printf ' %q' "$@" >> "$task_report"
     printf '\n' >> "$task_report"
     env -u OPENSC_API_TRACE_FILE -u OPENSC_DEBUG_FILE -u OPENSC_DEEPBIND -u LD_PRELOAD -u JCOP4_PUBLIC_DISCOVERY_TRACE \
-        -u LIBPCSCLITE_DELEGATE -u LIBPCSCLITE_SPY_DELEGATE \
+        -u LIBPCSCLITE_DELEGATE -u LIBPCSCLITE_SPY_DELEGATE -u JCOP4_PUBLIC_SELECT_SPY_TRACE \
         -u OPENSC_JCOP3_SESSION_STATE -u OPENSC_JCOP3_PIN_STATUS_IN_PLACE \
         -u OPENSC_JCOP3_POST_LOGIN_STATUS -u OPENSC_JCOP3_POST_LOGIN_SELECT \
         OPENSC_DEBUG=0 OPENSC_CONF="$task_config" "${task_command_env[@]}" \
@@ -121,7 +123,7 @@ if [[ $task_atr_ok != yes ]]; then
     exit 1
 fi
 
-if [[ $task_mode == --idopte || $task_mode == --idopte-discovery ]]; then
+if [[ $task_mode == --idopte || $task_mode == --idopte-discovery || $task_mode == --idopte-spy ]]; then
     task_pkcs11_tool="$task_root/build/opensc/src/tools/pkcs11-tool"
     task_idopte_module=/run/current-system/sw/lib/SCMiddleware/libidop11.so
     if [[ ! -x $task_pkcs11_tool || ! -f $task_idopte_module ]]; then
@@ -129,7 +131,11 @@ if [[ $task_mode == --idopte || $task_mode == --idopte-discovery ]]; then
         printf 'pkcs11_tool=%s\nidopte_module=%s\n' "$task_pkcs11_tool" "$task_idopte_module" >> "$task_report"
         exit 1
     fi
-    if [[ $task_mode == --idopte-discovery ]]; then
+    if [[ $task_mode == --idopte-discovery || $task_mode == --idopte-spy ]]; then
+        if [[ $task_mode == --idopte-spy ]] && { ! command -v pcsc-spy >/dev/null 2>&1 || ! command -v python3 >/dev/null 2>&1; }; then
+            printf 'Falta pcsc-spy o Python 3; ejecutar desde nix develop.\n' >&2
+            exit 1
+        fi
         task_build_status=0
         bash "$task_root/scripts/build-pcsc-public-observer.sh" >> "$task_report" 2>&1 || task_build_status=$?
         printf 'observer_build_status=%s\n' "$task_build_status" >> "$task_report"
@@ -139,6 +145,10 @@ if [[ $task_mode == --idopte || $task_mode == --idopte-discovery ]]; then
         fi
         task_trace="$task_dir/public-headers.txt"
         task_command_env=("LIBPCSCLITE_DELEGATE=$task_root/build/diagnostics/pcsc-public-observer.so" "JCOP4_PUBLIC_DISCOVERY_TRACE=$task_trace")
+        if [[ $task_mode == --idopte-spy ]]; then
+            task_spy_raw="$task_dir/select4141-spy.raw"
+            task_command_env+=("JCOP4_PUBLIC_SELECT_SPY_TRACE=$task_spy_raw")
+        fi
         task_allow_diagnostic_failure=yes
         task_status=0
         task_record_tool "$task_pkcs11_tool" --module "$task_idopte_module" --show-info --list-slots || task_status=$?
@@ -157,6 +167,28 @@ if [[ $task_mode == --idopte || $task_mode == --idopte-discovery ]]; then
             cat "$task_trace" >> "$task_report"
         fi
         printf 'module_exit_status=%s\n' "$task_status" >> "$task_report"
+        if [[ $task_mode == --idopte-spy ]]; then
+            if [[ ! -s $task_spy_raw ]]; then
+                printf 'spy_result=no_select4141_captured\n' >> "$task_report"
+                printf 'No se capturó SELECT 4141; revisar las cabeceras antes de repetir.\n' >&2
+                exit 1
+            fi
+            task_spy_status=0
+            python3 "$(command -v pcsc-spy)" --nocolor "$task_spy_raw" </dev/null > "$task_dir/select4141-spy.txt" 2>&1 || task_spy_status=$?
+            task_spy_decoded=no
+            while IFS= read -r task_line; do
+                [[ $task_line != SCardTransmit* ]] || task_spy_decoded=yes
+                if [[ $task_line == *Traceback* || $task_line == *Exception* ]]; then task_spy_status=1; fi
+            done < "$task_dir/select4141-spy.txt"
+            if [[ $task_spy_decoded != yes && $task_spy_status == 0 ]]; then task_spy_status=1; fi
+            printf 'spy_decode_status=%s\n' "$task_spy_status" >> "$task_report"
+            if (( task_spy_status != 0 )); then
+                printf 'Falló la lectura de la captura con pcsc-spy; revisar los archivos privados.\n' >&2
+                exit "$task_spy_status"
+            fi
+            printf 'spy_result=select4141_control_data_only\n' >> "$task_report"
+            printf 'Captura privada SELECT 4141: %s\n' "$task_dir/select4141-spy.txt"
+        fi
         if [[ $task_events_observed != yes && $task_lifecycle_observed == yes ]]; then
             printf 'observer_result=pcsc_lifecycle_only\n' >> "$task_report"
             printf 'Se observaron conexiones PC/SC, pero no APDU ni controles; revisar sus resultados en el informe.\n' >&2
