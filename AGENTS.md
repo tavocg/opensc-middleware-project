@@ -1,9 +1,21 @@
 # libjcop3p11: contexto para continuar
 
+**Nuevo alcance, 13 de octubre de 2026:** el usuario dispone de una JCOP4 y
+autoriza investigarla en este mismo repositorio. Se agregó `make probe/jcop4`
+con configuración e informes propios en `local/jcop4-probe-*/`, usando el
+OpenSC compilado: solo versión, lectores y ATR, sin inicializar aplicación,
+PIN, APDU de exploración ni banderas heredadas de JCOP3. Falta ejecutar la
+consulta en hardware por el usuario; revisar ese informe antes de preparar
+consultas de aplicación/certificados. No asumir perfil IAS/ECC ChipDoc ni
+tamaño RSA por el nombre JCOP4. Ver `docs/jcop4.md`. Pasaron cuatro comprobaciones
+del nuevo lanzador sin tarjeta y su sintaxis; la suite anterior tenía 288
+y no se repitió completa en esta revisión. No hay cambios
+del driver ni nuevas firmas en esta ampliación. La evidencia JCOP3 permanece.
+
 Estado actualizado tras revisar capturas del **13 de octubre de 2026,
 05:13–05:18 UTC** (12 de octubre, 23:13–23:18 de Costa Rica), OpenSC
 `3dfef6704`. **Reinserción con lock_login validada entre dos firmas en una
-misma GUI; ambos PDF verificados.** Principal `3cbc9e7` y submódulo limpios
+misma GUI; ambos PDF verificados.** Principal `d26d23e` y submódulo limpios
 al comenzar. Revisión documental, sin cambios de driver ni nuevas firmas
 por el agente. No hace falta recompilar ni repetir pruebas como primer paso.
 
@@ -38,13 +50,14 @@ reserva. Cerrar GUI al terminar/ante error. Limita compartición PKCS#11 y no
 prueba concurrencia independiente. Sin reserva, helper tras PIN provocó RSA
 6982 aunque login fue aceptado; intención/regla interna de tarjeta desconocida.
 
-Cambios actuales solo en principal: documentación y estado actual de README.
+Cambios actuales solo en principal: consulta inicial JCOP4 y documentación.
 Suite anterior 288 comprobaciones; seis del helper pasan en la revisión
 previa. No repetir suite por documentación. Dar comandos de commit del
 principal; el agente no escribe Git ni firma/lee pass. Mantener datos privados
 fuera de Git. No modificar el perfil normal por defecto.
 
-**Próximo trabajo autónomo:** revisar/separar correcciones del perfil frente
+**Próximo trabajo:** revisar la consulta inicial de JCOP4 cuando esté disponible.
+Para integrar JCOP3, revisar/separar correcciones del perfil frente
 a instrumentación y experimentos antes de integrar. Diferencia local contra
 base original: 21 commits, 20 archivos, +736/-77 líneas; no equivale a revisión
 contra master actual. Antes de preparar reporte/PR upstream se debe reproducir
@@ -82,8 +95,9 @@ build/opensc/src/pkcs11/.libs/opensc-pkcs11.so
 ```
 
 JCOP3 identifica la plataforma, pero la compatibilidad depende de la aplicación
-interna y de sus comandos. No asumir soporte de todas las JCOP3. JCOP4,
-contactless, CAN/PACE y criptografía poscuántica quedan fuera del primer hito.
+interna y de sus comandos. No asumir soporte de todas las JCOP3. JCOP4 se
+investiga ahora como etapa separada; contactless, CAN/PACE y criptografía
+poscuántica quedan fuera de las pruebas actuales.
 
 ## Cómo colaborar con el usuario
 
@@ -113,12 +127,14 @@ Directorio de trabajo: `/home/tavo/Projects/middleware-project`.
 | `vendor/opensc/` | Submódulo, rama local `cr-jcop3` |
 | `scripts/build-opensc.sh` | Compilación fuera del árbol con PC/SC |
 | `scripts/probe-jcop3.sh` | Consultas e informes sin introducir PIN |
+| `scripts/probe-jcop4.sh` | Primera consulta: versión, lectores y ATR con configuración aislada, sin inicializar aplicación |
 | `scripts/sign-jcop3.sh` | Firma interactiva de texto y verificación OpenSSL |
 | `scripts/sha256-digestinfo.sh` | Prepara DigestInfo SHA-256 DER para `RSA-PKCS`, sin PIN |
 | `scripts/firmador-jcop3.sh` | Abre firmador con módulo local y configuración PKCS#15, sin depuración APDU |
 | `scripts/peer-context-jcop3.sh` | Segundo cliente: solo SELECT raíz IAS, sin PIN/firma y debug 0; comprueba SW 9000 |
 | `scripts/test-iasecc.sh`, `tests/` | Regresiones sin tarjeta |
 | `docs/jcop3.md` | Evidencia técnica y evolución de la investigación |
+| `docs/jcop4.md` | Alcance y pasos de investigación de la nueva tarjeta |
 | `docs/idopte.md` | Localización del módulo privativo instalado |
 | `local/` | Capturas originales y resultados; excluido de Git |
 | `build/opensc/` | Compilación con PC/SC usada por el usuario |
@@ -154,12 +170,12 @@ pero no valida comunicación con la tarjeta.
 
 Los últimos commits guardados son:
 
-- Repositorio principal: **`3cbc9e7`**, `Document login locking results`.
+- Repositorio principal: **`d26d23e`**, `Document locked-session reinsertion`.
 - Submódulo OpenSC: **`3dfef6704`**, `Select ChipDoc before VERIFY`.
 - Base upstream original: `c7a377af971df03f879c1697e91ebac1f7e28c56`.
 
-Ambos árboles estaban limpios al comenzar esta revisión. Principal documenta
-reinserción con lock_login y actualiza el estado visible en README. El
+Ambos árboles estaban limpios al comenzar esta revisión. Principal agrega
+la consulta inicial JCOP4 y documenta su alcance. El
 submódulo queda intacto; no recompilar por este cambio. Dar comandos de commit
 del principal. No hay commits, logins o firmas ejecutados por el agente.
 
@@ -267,7 +283,7 @@ El nuevo objetivo `make firmador/jcop3` proporciona esa configuración local.
 
 ## Verificación y últimas capturas
 
-Hay **288 comprobaciones de regresión** en dieciséis fixtures C: `iasecc-fci.c`,
+La validación previa de JCOP3 tiene **288 comprobaciones de regresión** en dieciséis fixtures C: `iasecc-fci.c`,
 `iasecc-pin-path.c`, `iasecc-key-path.c`, `iasecc-sdo.c`, `iasecc-pin-policy.c`
 y `iasecc-sign-setup.c`, más `iasecc-rsa-pkcs.c`, `pkcs11-api-trace.c`,
 `pkcs11-session-state.c`, `iasecc-context-trace.c`,
@@ -282,6 +298,11 @@ sin PC/SC, registrada en `build/opensc-offline/pin-application-build.log`.
 Las últimas regresiones están en `build/opensc-offline/login-lock-tests.log`.
 El checker de configuración se ejecuta desde los casos del lanzador.
 Esto no sustituye pruebas de firma en hardware.
+Se agregaron cuatro comprobaciones de `tests/jcop4-probe-launcher.sh`, que
+pasaron por separado sin lector: comandos limitados a inventario, aislamiento
+de configuración/stdin, errores sin reintentos, argumentos y compilación local.
+El runner `scripts/test-iasecc.sh` las incluye; no se repitieron las 288
+anteriores al agregar esta consulta pública.
 El lanzador de firmador, en modos normal, diagnóstico y experimento de sesión,
 pasó sintaxis y una ejecución con
 `firmador` simulado: selección del módulo, sustitución de configuración/debug

@@ -17,7 +17,7 @@ con OpenSSL en la tarjeta observada.
 Con OpenSC `3dfef6704` y el perfil optativo `lock_login`, se verificaron
 PDF firmados con `LlaveDeFirma`, firmas consecutivas y una retirada/reinserción
 entre dos firmas en la misma GUI. Las últimas pruebas son del 12 de octubre
-de 2026 a las 23:18 de Costa Rica. La suite contiene 288 comprobaciones sin
+de 2026 a las 23:18 de Costa Rica. La validación de JCOP3 incluye 288 comprobaciones sin
 tarjeta; estas no sustituyen las pruebas reales descritas en
 [docs/jcop3.md](docs/jcop3.md).
 
@@ -43,6 +43,19 @@ siguen pendientes. No hay soporte completo ni cambios publicados upstream.
 
 Consultar [AGENTS.md](AGENTS.md) para continuar desde las capturas recientes.
 No repetir pruebas de firma/reinserción ya verificadas como primer paso.
+
+Hay una JCOP4 disponible para una investigación separada en este repositorio.
+Su primera consulta usa el OpenSC ya compilado y guarda informes propios;
+todavía no se afirma soporte de su aplicación ni de sus llaves:
+
+```bash
+make probe/jcop4 READER=0
+```
+
+Cerrar firmador antes de cambiar de tarjeta. Esta consulta obtiene lector y
+ATR, sin PIN ni inicialización de aplicaciones. Pasaron cuatro comprobaciones
+nuevas del lanzador con una herramienta simulada. Los pasos siguientes están
+en [docs/jcop4.md](docs/jcop4.md).
 
 ## Historial de desarrollo y comandos de diagnóstico
 

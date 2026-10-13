@@ -4,6 +4,7 @@
 .PHONY: firmador/jcop3-cli
 .PHONY: firmador/jcop3-lock-login
 .PHONY: inspect/jcop3-peer-context
+.PHONY: probe/jcop4
 
 PDF_INPUT ?= doc.pdf
 PDF_OUTPUT ?= local/jcop3-cli.pdf
@@ -22,6 +23,7 @@ help:
 	@printf '%s\n' \
 		'make probe/jcop3           Consulta lector y ATR; guarda el informe en local/.' \
 		'make probe/jcop3 READER=1  Selecciona otro índice de lector.' \
+		'make probe/jcop4           Consulta lector y ATR con la compilación local, sin PIN ni identificar aplicación.' \
 		'make inspect/jcop3         Identifica la aplicación y enumera objetos sin PIN.' \
 		'make read-dir/jcop3        Lee EF.DIR por APDU conocidas, sin PIN.' \
 		'make build/opensc          Compila el submódulo con PC/SC en build/opensc/.' \
@@ -47,6 +49,9 @@ help:
 
 probe/jcop3:
 	@bash scripts/probe-jcop3.sh "$$READER"
+
+probe/jcop4:
+	@bash scripts/probe-jcop4.sh "$$READER"
 
 inspect/jcop3:
 	@bash scripts/probe-jcop3.sh "$$READER" --inspect
