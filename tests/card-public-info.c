@@ -11,10 +11,10 @@ static struct sc_ef_atr fixture_ef_atr;
 static sc_app_info_t fixture_app;
 static sc_pkcs15_card_t fixture_p15;
 static sc_pkcs15_tokeninfo_t fixture_tokeninfo;
-static sc_pkcs15_object_t fixture_cert_obj, fixture_key_obj, fixture_pin_obj;
+static sc_pkcs15_object_t fixture_cert_obj, fixture_key_obj, fixture_pin_obj, fixture_authkey_obj;
 static sc_pkcs15_cert_info_t fixture_cert_info;
 static sc_pkcs15_prkey_info_t fixture_key_info;
-static sc_pkcs15_auth_info_t fixture_pin_info;
+static sc_pkcs15_auth_info_t fixture_pin_info, fixture_authkey_info;
 static sc_pkcs15_cert_t fixture_cert;
 static int atr_calls, dir_calls, lock_calls, unlock_calls, connect_calls, release_calls;
 static int atr_result, dir_result, lock_result, driver_result, mismatch;
@@ -22,6 +22,8 @@ static int bind_calls, object_calls, cert_calls, p15_frees, cert_frees;
 static int bind_result, objects_result, cert_result;
 static int select_calls, mse_calls, select_result, mse_result, mse_sw;
 static int pin_calls, pin_result, pin_sw;
+static int version_calls, version_result, version_sw, version_len;
+static int cardaccess_calls, cardaccess_result, cardaccess_sw, cardaccess_len, mf_select_result;
 static char fixture_atr[] = "3b:d5:18:ff:81:91:fe:1f:c3:80:73:c8:21:10:0a";
 static char fixture_aid[] = "E828BD080FA00000036364796E6964";
 
@@ -93,6 +95,9 @@ int sc_pkcs15_get_objects(sc_pkcs15_card_t *p15, unsigned int type, sc_pkcs15_ob
 	case SC_PKCS15_TYPE_CERT_X509: ret[0] = &fixture_cert_obj; break;
 	case SC_PKCS15_TYPE_PRKEY: ret[0] = &fixture_key_obj; break;
 	case SC_PKCS15_TYPE_AUTH_PIN: ret[0] = &fixture_pin_obj; break;
+	case SC_PKCS15_TYPE_AUTH:
+		ret[0] = &fixture_pin_obj; ret[1] = &fixture_authkey_obj;
+		return 2;
 	default: assert(0);
 	}
 	return 1;
@@ -110,7 +115,13 @@ void sc_pkcs15_free_certificate(sc_pkcs15_cert_t *cert) { assert(cert == &fixtur
 int sc_select_file(sc_card_t *card, const sc_path_t *path, sc_file_t **file)
 {
 	assert(card == &fixture_card && lock_calls == 1 && !unlock_calls && !file);
-	assert(path->type == SC_PATH_TYPE_DF_NAME && path->len == fixture_app.aid.len &&
+	if (path->type == SC_PATH_TYPE_PATH) {
+		assert(select_calls == 1 && version_calls == 1 && !cardaccess_calls &&
+				path->len == 2 && path->value[0] == 0x3F && path->value[1] == 0);
+		select_calls++;
+		return mf_select_result;
+	}
+	assert(!select_calls && path->type == SC_PATH_TYPE_DF_NAME && path->len == fixture_app.aid.len &&
 			!memcmp(path->value, fixture_app.aid.value, path->len));
 	select_calls++;
 	return select_result;
@@ -118,7 +129,31 @@ int sc_select_file(sc_card_t *card, const sc_path_t *path, sc_file_t **file)
 int sc_transmit_apdu(sc_card_t *card, sc_apdu_t *apdu)
 {
 	const unsigned char expected[] = { 0x91, 0x02, 0x28, 0x91 };
-	assert(card == &fixture_card && lock_calls == 1 && !unlock_calls && select_calls == 1);
+	assert(card == &fixture_card && lock_calls == 1 && !unlock_calls);
+	if (apdu->ins == 0xCA || apdu->ins == 0xB0) {
+		assert(!pin_calls && !mse_calls && apdu->cla == 0 && !apdu->data && !apdu->datalen && !apdu->lc &&
+				apdu->cse == SC_APDU_CASE_2_SHORT &&
+				(apdu->flags & (SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP)) ==
+				(SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP));
+		if (apdu->ins == 0xCA) {
+			assert(select_calls == 1 && !version_calls && !cardaccess_calls &&
+					apdu->p1 == 1 && apdu->p2 == 0x16 && apdu->le == 6 && apdu->resplen == 6);
+			version_calls++;
+			memset(apdu->resp, 0x01, 6);
+			apdu->resplen = version_len;
+			apdu->sw1 = version_sw >> 8; apdu->sw2 = version_sw & 0xFF;
+			return version_result;
+		}
+		assert(select_calls == 2 && version_calls == 1 && !cardaccess_calls &&
+				apdu->p1 == 0x9C && apdu->p2 == 0 && apdu->le == 256 && apdu->resplen == 256);
+		cardaccess_calls++;
+		memset(apdu->resp, 0, 256);
+		apdu->resp[0] = 0x31; /* Synthetic DER SET, no real card data. */
+		apdu->resplen = cardaccess_len;
+		apdu->sw1 = cardaccess_sw >> 8; apdu->sw2 = cardaccess_sw & 0xFF;
+		return cardaccess_result;
+	}
+	assert(select_calls == 1);
 	if (apdu->ins == 0x20) {
 		/* No PIN bytes, authentication attempt, alternate reference, or MSE. */
 		assert(!pin_calls && !mse_calls && apdu->cla == 0 && apdu->p1 == 0 && apdu->p2 == 1 &&
@@ -158,9 +193,11 @@ static void reset_fixture(void)
 	memset(&fixture_cert_obj, 0, sizeof(fixture_cert_obj));
 	memset(&fixture_key_obj, 0, sizeof(fixture_key_obj));
 	memset(&fixture_pin_obj, 0, sizeof(fixture_pin_obj));
+	memset(&fixture_authkey_obj, 0, sizeof(fixture_authkey_obj));
 	memset(&fixture_cert_info, 0, sizeof(fixture_cert_info));
 	memset(&fixture_key_info, 0, sizeof(fixture_key_info));
 	memset(&fixture_pin_info, 0, sizeof(fixture_pin_info));
+	memset(&fixture_authkey_info, 0, sizeof(fixture_authkey_info));
 	memset(&fixture_cert, 0, sizeof(fixture_cert));
 	fixture_cert_obj.type = SC_PKCS15_TYPE_CERT_X509;
 	fixture_cert_obj.data = &fixture_cert_info;
@@ -170,6 +207,14 @@ static void reset_fixture(void)
 	fixture_key_info.key_reference = 7;
 	fixture_pin_obj.type = SC_PKCS15_TYPE_AUTH_PIN;
 	fixture_pin_obj.data = &fixture_pin_info;
+	fixture_authkey_obj.type = SC_PKCS15_TYPE_AUTH_AUTHKEY;
+	fixture_authkey_obj.data = &fixture_authkey_info;
+	fixture_authkey_info.auth_type = SC_PKCS15_PIN_AUTH_TYPE_AUTH_KEY;
+	fixture_authkey_info.path.type = SC_PATH_TYPE_PATH;
+	fixture_authkey_info.path.len = 4;
+	memcpy(fixture_authkey_info.path.value, "\x3F\x00\xE0\x00", 4);
+	fixture_authkey_info.attrs.authkey.skey_id.len = 1;
+	fixture_authkey_info.attrs.authkey.skey_id.value[0] = 4;
 	fixture_cert.data.value = (unsigned char *)"fixture DER";
 	fixture_cert.data.len = 11;
 	atr_calls = dir_calls = lock_calls = unlock_calls = connect_calls = release_calls = 0;
@@ -180,6 +225,9 @@ static void reset_fixture(void)
 	mse_sw = 0x9000;
 	pin_calls = pin_result = 0;
 	pin_sw = 0x63C7;
+	version_calls = version_result = cardaccess_calls = cardaccess_result = mf_select_result = 0;
+	version_sw = 0x9000; version_len = 6;
+	cardaccess_sw = 0x6282; cardaccess_len = 2;
 }
 static void setup_fixture(void)
 {
@@ -336,6 +384,50 @@ int main(void)
 		pin_fixture(); args[4] = "A001";
 		assert(card_public_info_main(5, args) == 2 && !connect_calls);
 		puts("PASS PIN status stops before VERIFY on selection failure or another connected ATR or application");
+	}
+	{
+		char *args[] = { "card-public-info", "2", fixture_atr, "--security-info", fixture_aid };
+		/* Different RSA metadata is allowed: this operation only reads public information. */
+		reset_fixture();
+		assert(card_public_info_main(5, args) == 0 && object_calls == 3 && !cert_calls &&
+				version_calls == 1 && cardaccess_calls == 1 && !pin_calls && !mse_calls && unlock_calls == 1);
+		reset_fixture(); cardaccess_sw = 0x9000; cardaccess_len = 256;
+		assert(card_public_info_main(5, args) == 0 && cardaccess_calls == 1 && unlock_calls == 1);
+		puts("PASS security discovery enumerates all authentication metadata and reads one public block without credentials or follow-up APDUs");
+		reset_fixture(); version_sw = 0x6D00; cardaccess_sw = 0x6A82;
+		assert(card_public_info_main(5, args) == 0 && version_calls == 1 && cardaccess_calls == 1 && unlock_calls == 1);
+		reset_fixture(); cardaccess_sw = 0x6B00;
+		assert(card_public_info_main(5, args) == 0 && cardaccess_calls == 1);
+		puts("PASS security discovery tolerates unavailable optional public data without alternate queries");
+		reset_fixture(); version_sw = 0x6982;
+		assert(card_public_info_main(5, args) == 1 && version_calls == 1 && !cardaccess_calls && select_calls == 1 && unlock_calls == 1);
+		reset_fixture(); version_sw = 0x6C06;
+		assert(card_public_info_main(5, args) == 1 && version_calls == 1 && !cardaccess_calls);
+		reset_fixture(); version_result = SC_ERROR_TRANSMIT_FAILED;
+		assert(card_public_info_main(5, args) == 1 && version_calls == 1 && !cardaccess_calls && unlock_calls == 1);
+		reset_fixture(); version_len = 5;
+		assert(card_public_info_main(5, args) == 1 && version_calls == 1 && !cardaccess_calls);
+		reset_fixture(); version_len = 7;
+		assert(card_public_info_main(5, args) == 1 && !cardaccess_calls);
+		puts("PASS security discovery stops on version security, transport, length or retry status errors");
+		reset_fixture(); mf_select_result = SC_ERROR_FILE_NOT_FOUND;
+		assert(card_public_info_main(5, args) == 1 && version_calls == 1 && !cardaccess_calls && unlock_calls == 1);
+		reset_fixture(); cardaccess_sw = 0x6982;
+		assert(card_public_info_main(5, args) == 1 && cardaccess_calls == 1 && unlock_calls == 1);
+		reset_fixture(); cardaccess_result = SC_ERROR_TRANSMIT_FAILED;
+		assert(card_public_info_main(5, args) == 1 && cardaccess_calls == 1 && unlock_calls == 1);
+		reset_fixture(); cardaccess_len = 257;
+		assert(card_public_info_main(5, args) == 1 && cardaccess_calls == 1 && unlock_calls == 1);
+		puts("PASS security discovery releases the transaction on MF selection and CardAccess failures");
+		reset_fixture(); objects_result = SC_ERROR_SECURITY_STATUS_NOT_SATISFIED;
+		assert(card_public_info_main(5, args) == 1 && !select_calls && !version_calls && !cardaccess_calls && unlock_calls == 1);
+		reset_fixture(); select_result = SC_ERROR_FILE_NOT_FOUND;
+		assert(card_public_info_main(5, args) == 1 && select_calls == 1 && !version_calls && unlock_calls == 1);
+		reset_fixture(); mismatch = 1;
+		assert(card_public_info_main(5, args) == 1 && !bind_calls && !version_calls);
+		reset_fixture(); args[4] = "A001";
+		assert(card_public_info_main(5, args) == 2 && !connect_calls);
+		puts("PASS security discovery checks metadata, application selection and connected ATR before public queries");
 	}
 	return 0;
 }

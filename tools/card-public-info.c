@@ -10,7 +10,7 @@
 #include "libopensc/opensc.h"
 #include "libopensc/pkcs15.h"
 
-enum inspect_mode { INSPECT_PKCS15, INSPECT_SIGN_SETUP, INSPECT_PIN_STATUS };
+enum inspect_mode { INSPECT_PKCS15, INSPECT_SIGN_SETUP, INSPECT_PIN_STATUS, INSPECT_SECURITY_INFO };
 
 static void print_hex(const char *name, const unsigned char *value, size_t len)
 {
@@ -70,6 +70,73 @@ static int probe_pin_status(sc_card_t *card, const struct sc_aid *aid, unsigned 
 		}
 	}
 	printf("pin_status_result=blocked_or_unexpected_stop\n");
+	return 1;
+}
+
+static int optional_public_status(unsigned int sw1, unsigned int sw2)
+{
+	return (sw1 == 0x6A && (sw2 == 0x81 || sw2 == 0x82 || sw2 == 0x88)) ||
+		(sw1 == 0x6D && sw2 == 0);
+}
+
+static int probe_security_info(sc_card_t *card, const struct sc_aid *aid)
+{
+	sc_apdu_t apdu;
+	sc_path_t mf;
+	unsigned char version[6], block[256];
+	int rv = select_application(card, aid);
+	if (rv < 0)
+		return 1;
+	/* Public version query used by eoi_init; no interpretation assumed for CR. */
+	sc_format_apdu(card, &apdu, SC_APDU_CASE_2_SHORT, 0xCA, 0x01, 0x16);
+	apdu.cla = 0;
+	apdu.flags |= SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP;
+	apdu.resp = version;
+	apdu.resplen = apdu.le = sizeof(version);
+	rv = sc_transmit_apdu(card, &apdu);
+	print_result("version_transport_result", rv);
+	if (rv < 0)
+		return 1;
+	printf("version_sw=%02X%02X\n", apdu.sw1, apdu.sw2);
+	if (apdu.sw1 == 0x90 && apdu.sw2 == 0) {
+		if (apdu.resplen != sizeof(version))
+			return 1;
+		print_hex("version_bytes", version, apdu.resplen);
+	} else if (optional_public_status(apdu.sw1, apdu.sw2)) {
+		printf("version_result=unavailable_in_this_query\n");
+	} else {
+		return 1;
+	}
+	memset(&mf, 0, sizeof(mf));
+	mf.type = SC_PATH_TYPE_PATH;
+	mf.value[0] = 0x3F; mf.value[1] = 0;
+	mf.len = 2;
+	rv = sc_select_file(card, &mf, NULL);
+	print_result("cardaccess_mf_select_result", rv);
+	if (rv < 0)
+		return 1;
+	/* sm-eac.c uses SFI 1C for EF.CardAccess. Read one bounded block only. */
+	sc_format_apdu(card, &apdu, SC_APDU_CASE_2_SHORT, 0xB0, 0x9C, 0);
+	apdu.cla = 0;
+	apdu.flags |= SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP;
+	apdu.resp = block;
+	apdu.resplen = apdu.le = sizeof(block);
+	rv = sc_transmit_apdu(card, &apdu);
+	print_result("cardaccess_transport_result", rv);
+	if (rv < 0)
+		return 1;
+	printf("cardaccess_sw=%02X%02X\n", apdu.sw1, apdu.sw2);
+	if ((apdu.sw1 == 0x90 && apdu.sw2 == 0) || (apdu.sw1 == 0x62 && apdu.sw2 == 0x82)) {
+		if (apdu.resplen > sizeof(block))
+			return 1;
+		print_hex("cardaccess_first_block", block, apdu.resplen);
+		printf("cardaccess_result=block_read_completeness_unverified\n");
+		return 0;
+	}
+	if (optional_public_status(apdu.sw1, apdu.sw2) || (apdu.sw1 == 0x6B && apdu.sw2 == 0)) {
+		printf("cardaccess_result=unavailable_in_this_query\n");
+		return 0;
+	}
 	return 1;
 }
 
@@ -142,8 +209,9 @@ static int inspect_native_pkcs15(sc_card_t *card, struct sc_aid *aid, enum inspe
 		printf("algorithm_metadata_count=%d\n", i);
 	}
 	for (cls = 0; cls < sizeof(types) / sizeof(types[0]); cls++) {
-		count = sc_pkcs15_get_objects(p15, types[cls], objects, 32);
-		print_result(names[cls], count);
+		unsigned int type = mode == INSPECT_SECURITY_INFO && cls == 2 ? SC_PKCS15_TYPE_AUTH : types[cls];
+		count = sc_pkcs15_get_objects(p15, type, objects, 32);
+		print_result(mode == INSPECT_SECURITY_INFO && cls == 2 ? "authentication_metadata_count" : names[cls], count);
 		if (count < 0 || count >= 32)
 			goto out;
 		for (i = 0; i < count; i++) {
@@ -192,6 +260,16 @@ static int inspect_native_pkcs15(sc_card_t *card, struct sc_aid *aid, enum inspe
 				}
 			} else {
 				sc_pkcs15_auth_info_t *info = obj->data;
+				if (obj->type != SC_PKCS15_TYPE_AUTH_PIN) {
+					print_hex("authentication_id", info->auth_id.value, info->auth_id.len);
+					printf("authentication_type=%u\nauthentication_method=%u\n", info->auth_type, info->auth_method);
+					print_hex("authentication_path", info->path.value, info->path.len);
+					if (info->auth_type == SC_PKCS15_PIN_AUTH_TYPE_AUTH_KEY) {
+						print_hex("authentication_key_id", info->attrs.authkey.skey_id.value, info->attrs.authkey.skey_id.len);
+						printf("authentication_key_derived=%d\n", info->attrs.authkey.derived);
+					}
+					continue; /* Metadata only; never read the referenced credential. */
+				}
 				print_hex("pin_auth_id", info->auth_id.value, info->auth_id.len);
 				printf("pin_reference=%d\npin_flags=%u\npin_min_length=%zu\npin_max_length=%zu\n",
 						info->attrs.pin.reference, info->attrs.pin.flags,
@@ -210,7 +288,9 @@ static int inspect_native_pkcs15(sc_card_t *card, struct sc_aid *aid, enum inspe
 			}
 		}
 	}
-	if (mode != INSPECT_PKCS15) {
+	if (mode == INSPECT_SECURITY_INFO) {
+		status = probe_security_info(card, aid);
+	} else if (mode != INSPECT_PKCS15) {
 		if (sign_matches != 1 || !sign_valid) {
 			printf("sign_setup_result=metadata_mismatch_no_mse\n");
 			goto out;
@@ -250,7 +330,8 @@ int main(int argc, char **argv)
 		return 2;
 	memset(&app_aid, 0, sizeof(app_aid));
 	app_aid.len = sizeof(app_aid.value);
-	if (argc == 5 && ((strcmp(argv[3], "--pkcs15") && strcmp(argv[3], "--sign-setup") && strcmp(argv[3], "--pin-status")) ||
+	if (argc == 5 && ((strcmp(argv[3], "--pkcs15") && strcmp(argv[3], "--sign-setup") &&
+			strcmp(argv[3], "--pin-status") && strcmp(argv[3], "--security-info")) ||
 			sc_hex_to_bin(argv[4], app_aid.value, &app_aid.len) < 0 || !app_aid.len))
 		return 2;
 
@@ -266,7 +347,8 @@ int main(int argc, char **argv)
 		if (expected_len != sizeof(known_atr) || memcmp(expected_atr, known_atr, expected_len) ||
 				app_aid.len != sizeof(known_aid) || memcmp(app_aid.value, known_aid, app_aid.len))
 			return 2;
-		mode = !strcmp(argv[3], "--sign-setup") ? INSPECT_SIGN_SETUP : INSPECT_PIN_STATUS;
+		mode = !strcmp(argv[3], "--sign-setup") ? INSPECT_SIGN_SETUP :
+			!strcmp(argv[3], "--pin-status") ? INSPECT_PIN_STATUS : INSPECT_SECURITY_INFO;
 	}
 	memset(&params, 0, sizeof(params));
 	params.app_name = "card-public-info";

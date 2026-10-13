@@ -50,20 +50,21 @@ OpenSSL. Se leyeron PKCS#15 y certificados sin PIN: LlaveDeFirma referencia
 `E828BD080FA00000036364796E6964` y referencias difieren de JCOP3.
 La selección temporal RSA/SHA-256 obtuvo `9000`; VERIFY vacío devolvió
 `63C7`, con siete intentos disponibles, PIN global 1 y formato UTF-8.
-El siguiente paso es **un intento de firma experimental de texto por APDU**:
+El primer intento autenticado devolvió **6982 en VERIFY**, sin llegar a
+firmar. El siguiente paso es consultar datos públicos de seguridad, sin PIN:
 
 ```bash
 nix develop
-make sign/jcop4-apdu READER=0
+make inspect/jcop4-security-info READER=0
 ```
 
-Cerrar firmador y otros clientes, mantener esta JCOP4 insertada e introducir
-su PIN solo en terminal, sin eco. Compila una herramienta pequeña contra
-OpenSC existente; mantiene una transacción, no reintenta PIN/firma y verifica
-con OpenSSL usando el certificado de esa tarjeta. Es la validación del
-protocolo previa a integrar JCOP4 en el módulo PKCS#11. Informes privados
-en `local/jcop4-signature-*/`. Pasaron siete comprobaciones de operación y
-cuatro del lanzador con transporte/helper simulados; hardware aún pendiente.
+Cerrar firmador y otros clientes y mantener esta JCOP4 insertada. Compila
+solo una herramienta pequeña contra OpenSC existente y consulta metadatos
+de autenticación, versión y el primer bloque de CardAccess. No autentica
+ni firma. Informes privados en `local/jcop4-security-info-*/`. Pasaron
+29 comprobaciones del helper y 19 del lanzador, con transporte simulado;
+la consulta nueva en hardware está pendiente. No repetir el intento de PIN
+hasta identificar el requisito que falta. JCOP4 aún no está integrada en PKCS#11.
 RSA 3072 y modularidad para futuras generaciones siguen pendientes.
 La evidencia y el protocolo están en [docs/jcop4.md](docs/jcop4.md).
 

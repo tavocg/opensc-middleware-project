@@ -337,8 +337,9 @@ parámetros permiten delimitar una primera autenticación experimental.
 
 ## Primera firma experimental por APDU
 
-Con firmador y otros clientes cerrados, misma JCOP4 insertada y su PIN
-conocido, ejecutar **una sola vez**:
+Protocolo preparado y ya ejecutado; **no repetir ahora**. El resultado
+de VERIFY y la siguiente consulta sin PIN están documentados abajo.
+El comando utilizado, con firmador y otros clientes cerrados, fue:
 
 ```bash
 nix develop
@@ -403,7 +404,87 @@ comprueban terminal/configuración/permisos y detención sin reintentos; no
 producen una firma criptográfica real. Ambos conjuntos se agregaron a
 `make test/iasecc`; util-linux en el flake proporciona `script` para la PTY.
 No se repitió la suite JCOP3 ni cambió el driver durante esta preparación.
-La firma en hardware, login y verificación real siguen pendientes.
+La firma en hardware, login exitoso y verificación real siguen pendientes.
+
+## VERIFY rechazado: 13 de octubre, 13:44:00 UTC
+
+Informe válido `local/jcop4-signature-5Dpadr1N/report.txt`, principal
+`b9c5696`, OpenSC `3dfef6704`. El usuario pidió excluir
+`jcop4-signature-4FGWOtpI` por error humano; se preserva el original sin
+utilizarlo para interpretar el protocolo, comparar intentos o inferir contadores.
+
+| Etapa | Resultado |
+| --- | --- |
+| Perfil/certificado público | Validados; RSA 2048 |
+| VERIFY vacío | Transporte 0, 63C7 |
+| MSE RSA/SHA-256 | Transporte 0, 9000 |
+| VERIFY con PIN, una transmisión | Transporte 0, **6982** |
+| PSO/firma | No ejecutados |
+| Reset/unlock | Ambos 0 |
+| Helper/proceso | Ambos 1, detención ante el rechazo |
+
+6982 indica condición de seguridad no satisfecha. El fallo ocurre antes
+de la firma, durante la autenticación. No equivale a la respuesta típica
+de PIN incorrecto 63Cx, pero tampoco acredita el PIN ni prueba que no se
+consumió un intento: el informe contiene el contador solo **antes** de VERIFY.
+No solicitar otro intento de PIN hasta investigar la condición que falta.
+
+La revisión de `eoi_pin_cmd()` en `card-eoi.c` muestra que abre el canal
+PACE mediante `eoi_sm_open()` antes de VERIFY si aún no está abierto, sin
+condicionar ese paso a contactless. `card-chipdocit.c` también precede VERIFY
+con PACE/CAN. Son precedentes de perfiles diferentes, **no evidencia de que
+la tarjeta costarricense exija PACE, CAN o el mismo protocolo**. La
+[documentación eOI de OpenSC](https://github.com/OpenSC/OpenSC/wiki/Slovenian-EID)
+describe CAN para NFC; no permite deducir el comportamiento de contacto de CR.
+También sigue abierta la influencia del orden MSE antes de VERIFY.
+
+La consulta PKCS#15 anterior solo enumeró AUTH_PIN: encontrar un PIN no
+excluye otros objetos de autenticación, como AuthKey. Por eso la siguiente
+consulta enumera la clase AUTH completa y obtiene información pública
+acotada, antes de considerar cambios al protocolo autenticado.
+
+## Consulta pública de seguridad pendiente
+
+Con la misma JCOP4 insertada, firmador y otros clientes cerrados:
+
+```bash
+nix develop
+make inspect/jcop4-security-info READER=0
+```
+
+Compila únicamente el helper público contra la biblioteca existente. Usa
+driver default, ATR/AID observados, binding nativo sin cachés y una transacción.
+No introduce PIN, abre PACE ni lee CAN, secretos o componentes privados.
+Se detiene ante un rechazo de seguridad/transporte y libera la transacción.
+El informe privado está en `local/jcop4-security-info-*/report.txt`.
+
+Operaciones después de leer EF.ATR/EF.DIR y metadatos PKCS#15:
+
+1. Enumera metadatos de toda la clase AUTH: identificadores, tipo, método,
+   ruta y referencia a llave cuando aplica. Nunca lee el archivo de credencial
+   al que pudiera apuntar esa ruta.
+2. Selecciona el AID anunciado y consulta seis bytes con `00 CA 01 16 06`,
+   el GET DATA utilizado por `eoi_init()`. Registra bytes sin asignarles aún
+   significado o versión comercial en esta tarjeta.
+3. Selecciona MF `3F00` y lee **un solo bloque**, hasta 256 bytes, mediante
+   `00 B0 9C 00 00`. SFI `1C` es el usado por `get_ef_card_access()` en
+   `vendor/opensc/src/sm/sm-eac.c`. No hace lecturas posteriores, GET RESPONSE
+   ni reenvío por 6C, ni interpreta un bloque parcial como archivo completo.
+
+Los estados de función/objeto no disponible se registran como
+`unavailable_in_this_query`; un rechazo 6982 es un error y detiene el flujo.
+La ausencia en esta consulta no prueba que no haya PACE u otro canal seguro.
+Encontrar algoritmos PACE en CardAccess tampoco demostraría por sí solo
+que sean obligatorios para verificar el PIN por contacto.
+
+El helper real compiló contra `build/opensc-offline`. Pasaron **29
+comprobaciones C** (24 previas y cinco grupos nuevos) y **19 del lanzador**
+(17 previas y dos nuevas). Verifican clase AUTH con AuthKey sintético sin
+lectura de credencial, bytes y orden de las consultas, una sola lectura,
+estados opcionales, fallos de transporte/seguridad/longitud y limpieza;
+el lanzador verifica configuración aislada, stdin vacío y propagación de error.
+Log C: `build/opensc-offline/card-public-security-info-tests.log`.
+Sin pruebas nuevas en tarjeta por el agente ni cambios en el driver OpenSC.
 
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
