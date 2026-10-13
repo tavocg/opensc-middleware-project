@@ -6,7 +6,41 @@ la tarjeta. El usuario ejecuta las operaciones que requieran PIN o GUI. Esto
 sustituye las restricciones anteriores de no ejecutar Git/hardware/Idopte por
 el agente; conservar límites de cada diagnóstico y privacidad de los registros.
 
-**Último resultado: READ7002 -> SELECT7004 bloqueado, 20:33:01 UTC.**
+**Último resultado: PuKDF7004 contiene dos RSA2048, 20:48:52 UTC.**
+Usuario registró `76c99c9`, OpenSC `3dfef6704`, ambos limpios al comenzar.
+Agente ejecutó --file7004 SELECT-only sin PIN/GUI, informe privado
+`local/jcop4-file7004-JRw8iNNl/report.txt`, **20:48:34 UTC**: SELECT0/9000,
+transparente/**4096 bytes**, tag86/profile_uninterpreted/read_uninterpreted;
+inventario/compilación/contexto/EF.ATR/EF.DIR/unlock/proceso correctos. Sin READ.
+Después `nix develop --offline -c make inspect/jcop4-public-keys READER=0`:
+`local/jcop4-public-keys-Qfl75Od0/report.txt`, **20:48:52 UTC**. Nativebind0,
+PuKDFparse0, count2, RSA2048/ref144(0x90)/native1/usage208 y
+RSA2048/ref145(0x91)/native1/usage192. Ningún objeto EC en ese PuKDF analizado.
+Referencias coinciden con privadas previas; no comparación matemática de claves
+con certificados ni lectura de material de llaves. No descartar claves CA/ECC
+fuera de PuKDF ni trasladar punto P521 del ZIP a esta tarjeta. VERIFY6982 sigue
+pendiente; no otra prueba de PIN. Todos los pasos terminaron0, sin autenticación.
+
+Nuevo SELECT-only --file7004/target inspect/jcop4-file7004 reutiliza parser con
+FID83 validado. --public-keys/target inspect/jcop4-public-keys usa nativebinding
+sin cachés/emuladores, exige ADF/ATR conocidos/EF.DIR, un PuKDF anunciado7004
+o3F00/7004 con AID compatible, no arbitrario/duplicado. Llama sc_pkcs15_parse_df
+explícitamente y propaga errores: get_objects puede omitir error de DF y reportar
+count0, no usar ese0 como prueba de vacío. No visita PuKDFTrusted ni otros DF.
+Filtra objetos por DF, valida clase/data, menos32objetos y128nodos; resume
+familias/referencias/native/usage/tamaños. ECbits0 sería desconocido, no curva0.
+No IDs/etiquetas/rutas/raw/SPKI ni lectura de llaves referenciadas/certificados.
+No PIN/VERIFY/MSE/GA/PSO/escrituras. Informes privados0700/0600 bajo local/.
+Pasaron **65 helper y59 lanzador**, fake APIs; helper real compilado. RSA3072/
+EC521 en fixtures no son observaciones de hardware. Observador64/lanzadorfirma6/
+operación12 previos vigentes sin cambios; no repetir suites sin cambios.
+Driver/submódulo intactos. El guard Idopte aún bloquea SELECT/READ7004; no se
+repitió captura Idopte. Siguiente paso: si se sigue enumeración, lectura acotada
+PuKDF7004 del mismo AID/tamaño4096 sin registrar contenido para observar próximo
+comando; no suponer que inventario explique C_Login/canal. JCOP4/RSA3072 pendientes.
+Git autorizado, pero montaje.git readonly sigue impidiendo commits si persiste.
+
+**Resultado anterior: READ7002 -> SELECT7004 bloqueado, 20:33:01 UTC.**
 Usuario hizo commit `c61fdd7`, OpenSC `3dfef6704`, limpios al comenzar.
 Agente ejecutó SELECT-only7002, `local/jcop4-file7002-832gXk0r/report.txt`,
 **20:30:16 UTC**: SELECT0/9000, transparente/**2048 bytes**, tag86/

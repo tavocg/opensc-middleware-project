@@ -180,6 +180,15 @@ públicas; sus algoritmos todavía no se contrastaron con esta observación.
 Pasaron 60 comprobaciones del helper, 64 del observador, 55 del lanzador y 6
 del lanzador de firma. El driver libre todavía no firma con esta JCOP4.
 
+`make inspect/jcop4-file7004` confirmó un PuKDF transparente de 4096 bytes,
+SELECT9000 y seguridad86 sin interpretar. `make inspect/jcop4-public-keys`
+analiza únicamente ese directorio anunciado y resume algoritmos/referencias,
+sin seguir rutas de llaves ni imprimir IDs, etiquetas o material de llaves.
+Resultado: **dos objetos RSA2048 nativos, referencias0x90/0x91; ningún objeto
+EC en ese directorio**. No identifica la clave P521 del prototipo ZIP ni
+descarta otra clave de canal fuera de PuKDF7004. Pasaron 65 comprobaciones
+del helper y 59 del lanzador; observador y driver intactos.
+
 Capturas privadas bajo local/jcop4-idopte-spy-*/; no agregarlas a Git.
 Pasaron previamente **30 comprobaciones del observador/decoder y 40 del
 lanzador** con transporte ficticio. El diagnóstico de firma pasó además

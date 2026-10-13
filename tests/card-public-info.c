@@ -17,6 +17,10 @@ static sc_pkcs15_cert_info_t fixture_cert_info;
 static sc_pkcs15_prkey_info_t fixture_key_info;
 static sc_pkcs15_auth_info_t fixture_pin_info, fixture_authkey_info;
 static sc_pkcs15_cert_t fixture_cert;
+static sc_pkcs15_df_t fixture_pub_df;
+static sc_pkcs15_object_t fixture_pub_rsa_obj, fixture_pub_ec_obj;
+static sc_pkcs15_pubkey_info_t fixture_pub_rsa_info, fixture_pub_ec_info;
+static int pub_parse_calls, pub_parse_result, pub_empty;
 static int atr_calls, dir_calls, lock_calls, unlock_calls, connect_calls, release_calls;
 static int atr_result, dir_result, lock_result, driver_result, mismatch;
 static int bind_calls, object_calls, cert_calls, p15_frees, cert_frees;
@@ -94,6 +98,21 @@ int sc_pkcs15_bind_internal(sc_pkcs15_card_t *p15, struct sc_aid *aid)
 	bind_calls++;
 	return bind_result;
 }
+int sc_pkcs15_parse_df(sc_pkcs15_card_t *p15, sc_pkcs15_df_t *df)
+{
+	assert(p15 == &fixture_p15 && df == &fixture_pub_df && df->type == SC_PKCS15_PUKDF &&
+			df->path.len == 2 && df->path.value[0] == 0x70 && df->path.value[1] == 4);
+	assert(!object_calls && !cert_calls && !mse_calls && !pin_calls && !pub_parse_calls);
+	pub_parse_calls++;
+	if (pub_parse_result < 0) return pub_parse_result;
+	p15->obj_list = pub_empty ? NULL : &fixture_pub_rsa_obj;
+	return 0;
+}
+int sc_pkcs15_read_pubkey(sc_pkcs15_card_t *p15, const sc_pkcs15_object_t *obj, sc_pkcs15_pubkey_t **key)
+{
+	(void)p15; (void)obj; (void)key;
+	assert(0); return SC_ERROR_INTERNAL; /* No referenced key reads in this mode. */
+}
 int sc_pkcs15_get_objects(sc_pkcs15_card_t *p15, unsigned int type, sc_pkcs15_object_t **ret, size_t count)
 {
 	assert(p15 == &fixture_p15 && count == 32);
@@ -143,14 +162,14 @@ int sc_transmit_apdu(sc_card_t *card, sc_apdu_t *apdu)
 				!odf_read_calls && apdu->cla == 0 && apdu->ins == 0xA4 && apdu->p1 == 2 && apdu->p2 == 0 &&
 				apdu->cse == SC_APDU_CASE_4_SHORT && apdu->lc == 2 && apdu->datalen == 2 &&
 				apdu->data[0] == (file4141_mode >= 3 ? 0x70 : 0x41) &&
-				apdu->data[1] == (file4141_mode == 4 ? 2 : file4141_mode == 3 ? 1 : file4141_mode == 2 ? 0x09 : 0x41) && apdu->le == 256 && apdu->resplen == 256 &&
+				apdu->data[1] == (file4141_mode == 5 ? 4 : file4141_mode == 4 ? 2 : file4141_mode == 3 ? 1 : file4141_mode == 2 ? 0x09 : 0x41) && apdu->le == 256 && apdu->resplen == 256 &&
 				(apdu->flags & (SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP)) ==
 				(SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP));
 		file4141_calls++;
 		memcpy(apdu->resp, fixture_fcp, sizeof(fixture_fcp));
 		if (!file4141_wrongfid && file4141_mode > 1) {
 			apdu->resp[7] = file4141_mode >= 3 ? 0x70 : 0x41;
-			apdu->resp[8] = file4141_mode == 4 ? 2 : file4141_mode == 3 ? 1 : 0x09;
+			apdu->resp[8] = file4141_mode == 5 ? 4 : file4141_mode == 4 ? 2 : file4141_mode == 3 ? 1 : 0x09;
 		}
 		apdu->resplen = file4141_size;
 		apdu->sw1 = file4141_sw >> 8; apdu->sw2 = file4141_sw & 0xFF;
@@ -252,6 +271,27 @@ static void reset_fixture(void)
 	assert(sc_hex_to_bin(fixture_aid, fixture_app.aid.value, &fixture_app.aid.len) == 0);
 	fixture_app.label = "fixture";
 	memset(&fixture_p15, 0, sizeof(fixture_p15));
+	memset(&fixture_pub_df, 0, sizeof(fixture_pub_df));
+	fixture_pub_df.type = SC_PKCS15_PUKDF;
+	fixture_pub_df.path.len = 2; fixture_pub_df.path.type = SC_PATH_TYPE_PATH;
+	fixture_pub_df.path.value[0] = 0x70; fixture_pub_df.path.value[1] = 4;
+	fixture_p15.df_list = &fixture_pub_df;
+	memset(&fixture_pub_rsa_obj, 0, sizeof(fixture_pub_rsa_obj));
+	memset(&fixture_pub_ec_obj, 0, sizeof(fixture_pub_ec_obj));
+	memset(&fixture_pub_rsa_info, 0, sizeof(fixture_pub_rsa_info));
+	memset(&fixture_pub_ec_info, 0, sizeof(fixture_pub_ec_info));
+	fixture_pub_rsa_obj.type = SC_PKCS15_TYPE_PUBKEY_RSA;
+	fixture_pub_ec_obj.type = SC_PKCS15_TYPE_PUBKEY_EC;
+	fixture_pub_rsa_obj.data = &fixture_pub_rsa_info;
+	fixture_pub_ec_obj.data = &fixture_pub_ec_info;
+	fixture_pub_rsa_obj.df = fixture_pub_ec_obj.df = &fixture_pub_df;
+	fixture_pub_rsa_obj.next = &fixture_pub_ec_obj;
+	strcpy(fixture_pub_rsa_obj.label, "SECRET_LABEL");
+	fixture_pub_rsa_info.id.len = 4; memcpy(fixture_pub_rsa_info.id.value, "SECR", 4);
+	fixture_pub_rsa_info.modulus_length = 3072; fixture_pub_rsa_info.key_reference = 145;
+	fixture_pub_rsa_info.native = 1;
+	fixture_pub_ec_info.field_length = 521; fixture_pub_ec_info.key_reference = 7;
+	pub_parse_calls = pub_parse_result = pub_empty = 0;
 	memset(&fixture_tokeninfo, 0, sizeof(fixture_tokeninfo));
 	fixture_p15.tokeninfo = &fixture_tokeninfo;
 	memset(&fixture_cert_obj, 0, sizeof(fixture_cert_obj));
@@ -620,6 +660,44 @@ int main(void)
 		puts("PASS ODF parser accepts only bounded directory paths and uniform padding, rejecting inline objects and truncation");
 	}
 	{
+		char *args[] = { "card-public-info", "2", fixture_atr, "--public-keys", fixture_aid };
+		char output[4096] = {0};
+		FILE *capture = tmpfile(); int saved = dup(STDOUT_FILENO);
+		assert(capture && saved >= 0);
+		reset_fixture(); fflush(stdout); assert(dup2(fileno(capture), STDOUT_FILENO) >= 0);
+		assert(card_public_info_main(5, args) == 0 && pub_parse_calls == 1 && bind_calls == 1 &&
+				p15_frees == 1 && unlock_calls == 1 && !object_calls && !cert_calls && !pin_calls && !mse_calls);
+		fflush(stdout); rewind(capture); assert(fread(output, 1, sizeof(output)-1, capture) > 0);
+		assert(dup2(saved, STDOUT_FILENO) >= 0); close(saved); fclose(capture);
+		assert(strstr(output, "public_key_metadata_count=2") && strstr(output, "public_key_algorithm=RSA") &&
+				strstr(output, "public_key_rsa_bits=3072") && strstr(output, "public_key_ec_bits=521"));
+		assert(!strstr(output, "SECRET") && !strstr(output, "public_key_path") && !strstr(output, "public_key_id"));
+		puts("PASS public-key inventory parses only PuKDF7004 and reports RSA/EC metadata without following key paths or exposing labels/IDs");
+		reset_fixture(); pub_empty = 1;
+		assert(card_public_info_main(5, args) == 0 && pub_parse_calls == 1 && !object_calls);
+		reset_fixture(); pub_parse_result = SC_ERROR_READER;
+		assert(card_public_info_main(5, args) == 1 && pub_parse_calls == 1 && p15_frees == 1 && unlock_calls == 1);
+		puts("PASS public-key inventory accepts parsed empty directory but propagates directory errors rather than claiming empty success");
+		for (int i = 0; i < 6; i++) {
+			reset_fixture();
+			if (i == 0) fixture_p15.df_list = NULL;
+			if (i == 1) fixture_pub_df.path.value[1] = 5;
+			if (i == 2) fixture_pub_df.path.len = 0;
+			if (i == 3) fixture_pub_df.next = &fixture_pub_df;
+			if (i == 4) fixture_pub_df.path.aid.len = 1;
+			if (i == 5) mismatch = 1;
+			assert(card_public_info_main(5, args) == 1 && !pub_parse_calls);
+		}
+		puts("PASS public-key inventory rejects absent, different, duplicate or external-AID directories and connected ATR mismatch before parsing");
+		reset_fixture(); fixture_pub_ec_obj.data = NULL;
+		assert(card_public_info_main(5, args) == 1 && pub_parse_calls == 1);
+		reset_fixture(); fixture_pub_ec_obj.next = &fixture_pub_rsa_obj;
+		assert(card_public_info_main(5, args) == 1 && pub_parse_calls == 1);
+		reset_fixture(); bind_result = SC_ERROR_READER;
+		assert(card_public_info_main(5, args) == 1 && !pub_parse_calls && p15_frees == 1 && unlock_calls == 1);
+		puts("PASS public-key inventory bounds objects and cleans up on malformed metadata or binding error without crypto operations");
+	}
+	{
 		char *args[] = { "card-public-info", "2", fixture_atr, "--file7001", fixture_aid };
 		reset_fixture(); file4141_mode = 3;
 		assert(card_public_info_main(5, args) == 0 && file4141_calls == 1 && unlock_calls == 1 &&
@@ -640,6 +718,17 @@ int main(void)
 		reset_fixture(); file4141_mode = 4; mismatch = 1;
 		assert(card_public_info_main(5, args) == 1 && !file4141_calls);
 		puts("PASS PrKDF7002 SELECT-only requires connected ATR, sends exact FID and rejects other returned FID without READ or binding");
+	}
+	{
+		char *args[] = { "card-public-info", "2", fixture_atr, "--file7004", fixture_aid };
+		reset_fixture(); file4141_mode = 5;
+		assert(card_public_info_main(5, args) == 0 && file4141_calls == 1 && unlock_calls == 1 &&
+				!bind_calls && !object_calls && !cert_calls && !pin_calls && !mse_calls && !odf_read_calls);
+		reset_fixture(); file4141_mode = 5; file4141_wrongfid = 1;
+		assert(card_public_info_main(5, args) == 1 && file4141_calls == 1 && unlock_calls == 1);
+		reset_fixture(); file4141_mode = 5; mismatch = 1;
+		assert(card_public_info_main(5, args) == 1 && !file4141_calls);
+		puts("PASS PuKDF7004 SELECT-only requires connected ATR, sends exact FID and rejects other returned FID without READ or binding");
 	}
 	{
 		char *args[] = { "card-public-info", "2", fixture_atr, "--file4109", fixture_aid };

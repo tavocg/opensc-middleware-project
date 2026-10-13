@@ -2453,6 +2453,83 @@ Informes privados0700/0600; no volcar inventarios completos/IDs o respuestas a
 Git/chat. Próximo paso concreto: examinar metadatos PuKDF7004 con el precedente
 ODF actual. No repetir esta consulta idéntica. JCOP4/RSA3072 siguen pendientes.
 
+## PuKDF7004: dos objetos RSA2048, 13 de octubre, 20:48:52 UTC
+
+Principal `76c99c9`, OpenSC `3dfef6704`, ambos limpios al comenzar; usuario
+registró el commit anterior. Dos consultas nuevas del agente, sin PIN/GUI.
+
+Primero SELECT-only7004:
+`nix develop --offline -c make inspect/jcop4-file7004 READER=0`, informe privado
+`local/jcop4-file7004-JRw8iNNl/report.txt`, **20:48:34 UTC**. SELECT transporte0/
+SW9000, estructura transparente, **4096 bytes**, security_direct_tags=86,
+security_format=profile_uninterpreted, standard_compact_read=uninterpreted.
+Inventario, compilación, conexión, lock, EF.ATR/EF.DIR, unlock y proceso correctos.
+Sin READ7004 en esa consulta. No interpretar tamaño/tag86 como política de
+acceso o longitud de llave.
+
+Después inventario de metadatos público:
+`nix develop --offline -c make inspect/jcop4-public-keys READER=0`, informe
+`local/jcop4-public-keys-Qfl75Od0/report.txt`, **20:48:52 UTC**. Native binding,
+análisis de PuKDF, conexión/contexto/lock, EF.ATR/EF.DIR y unlock/proceso0.
+
+| Objeto en PuKDF7004 | Algoritmo | Tamaño declarado | Referencia | Native | Usage numérico |
+| --- | --- | --- | --- | --- | --- |
+| 0 | RSA | 2048 bits | 144 / 0x90 | 1 | 208 |
+| 1 | RSA | 2048 bits | 145 / 0x91 | 1 | 192 |
+
+```text
+native_pkcs15_bind_result=0
+public_keys_parse_result=0
+public_key_metadata_count=2
+public_keys_result=metadata_only_no_referenced_key_reads
+```
+
+Las referencias coinciden con las referencias privadas inventariadas antes.
+No se leyeron valores de llaves ni se compararon módulos RSA con certificados:
+la coincidencia es de metadatos, no una verificación matemática de identidad.
+**No hay objeto EC entre las dos entradas analizadas de este PuKDF**. Por tanto
+no respalda encontrar allí el punto P521 supuesto por el prototipo ZIP. No
+prueba ausencia global de claves ECC/CA ni que PACE/CA sea obligatorio o esté
+desactivado: una clave de canal puede no estar expuesta en este directorio.
+El requisito previo al VERIFY6982 sigue sin identificarse.
+
+### Alcance y resultado fiable de la consulta
+
+--public-keys requiere ATR conectado conocido y AID conocido anunciado en EF.DIR.
+Usa binding PKCS#15 nativo sin emuladores ni cachés; verifica un único PuKDF
+anunciado con ruta7004 (o3F00/7004), y AID compatible si está presente. Rechaza
+otro FID, ruta, duplicados, lista de más de32directorios o ausencia. Analiza ese
+DF explícitamente con `sc_pkcs15_parse_df` y propaga errores antes de resumir.
+
+Esto evita un límite de `sc_pkcs15_get_objects`: en la versión local,
+`__sc_pkcs15_search_objects` omite errores al enumerar DFs y continúa la búsqueda;
+un count0 por esa ruta no distingue directorio vacío de análisis fallido.
+El diagnóstico no usa esa búsqueda global, ni visita PuKDFTrusted. Filtra los
+objetos por pertenencia al DF analizado, valida clase/datos y limita la lista a
+menos de32objetos y128nodos antes de emitir un inventario parcial.
+
+Imprime exclusivamente índices, familia RSA/EC/other_uninterpreted, referencia,
+atributo native, usage y tamaño declarado de RSA/EC. Un tamaño EC0 significaría
+no determinado por estos metadatos, no una curva de cero bits. Nunca sigue las
+rutas de objetos, llama read_pubkey, lee certificados u opera con una llave;
+no IDs, nombres, rutas, bytes directos/raw/SPKI, parámetros propietarios ni
+material de clave en la salida. No PIN/VERIFY/MSE/GA/PSO o escritura. Los datos
+iniciales del binding/inventario quedan en el informe privado, no en Git/chat.
+
+Pasaron **65 comprobaciones del helper y59 del lanzador**, sin tarjeta; helper
+real compilado. Cubren SELECT7004 exacto/FID devuelto, RSA3072+EC521 sintéticos,
+privacidad, error frente a vacío válido, ruta/ADF/ATR/duplicados, listas y objetos
+malformados y limpieza. Los datos RSA3072/EC521 de pruebas **no son observaciones
+de esta tarjeta**. Observador/permisos, helper de firma y driver intactos;
+sus suites64/6/12 previas siguen vigentes, sin repetir por este cambio.
+
+El modo Idopte PrKDF continúa bloqueando SELECT/READ7004: estos resultados
+provienen del helper, no de una nueva traza del proveedor. No repetir el modo
+anterior por inercia. Próximo contraste empírico, si se sigue su enumeración:
+lectura PuKDF7004 acotada al tamaño confirmado y al mismo AID, sin registrar
+contenido, para identificar el siguiente comando de Idopte. La enumeración
+pública por sí sola no revela los pasos de C_Login. JCOP4/RSA3072 pendientes.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño

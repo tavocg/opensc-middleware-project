@@ -11,7 +11,7 @@
 #include "libopensc/pkcs15.h"
 #include "libopensc/asn1.h"
 
-enum inspect_mode { INSPECT_PKCS15, INSPECT_SIGN_SETUP, INSPECT_PIN_STATUS, INSPECT_SECURITY_INFO, INSPECT_PIN_POLICY, INSPECT_ODF_MAP, INSPECT_FILE4141, INSPECT_FILE4109, INSPECT_FILE7001, INSPECT_FILE7002 };
+enum inspect_mode { INSPECT_PKCS15, INSPECT_SIGN_SETUP, INSPECT_PIN_STATUS, INSPECT_SECURITY_INFO, INSPECT_PIN_POLICY, INSPECT_ODF_MAP, INSPECT_FILE4141, INSPECT_FILE4109, INSPECT_FILE7001, INSPECT_FILE7002, INSPECT_FILE7004, INSPECT_PUBLIC_KEYS };
 
 static void print_hex(const char *name, const unsigned char *value, size_t len)
 {
@@ -240,7 +240,7 @@ static int print_file_metadata(const unsigned char *buf, size_t size, unsigned i
 	int compact_count = 0, a1_count = 0;
 	struct a1_metadata a1 = {0};
 	enum compact_read compact = COMPACT_ABSENT;
-	if (fid != 0x4141 && fid != 0x4109 && fid != 0x7001 && fid != 0x7002) return 1;
+	if (fid != 0x4141 && fid != 0x4109 && fid != 0x7001 && fid != 0x7002 && fid != 0x7004) return 1;
 	snprintf(direct_name, sizeof(direct_name), "file%04X_security_direct_tags", fid);
 	snprintf(a1_name, sizeof(a1_name), "file%04X_a1_security_tags", fid);
 	if (!size) {
@@ -327,7 +327,7 @@ static int inspect_file_metadata(sc_card_t *card, const struct sc_aid *aid, unsi
 	unsigned char response[256];
 	sc_apdu_t apdu;
 	int i, found = 0, rv;
-	if (fid_number != 0x4141 && fid_number != 0x4109 && fid_number != 0x7001 && fid_number != 0x7002) return 1;
+	if (fid_number != 0x4141 && fid_number != 0x4109 && fid_number != 0x7001 && fid_number != 0x7002 && fid_number != 0x7004) return 1;
 	for (i = 0; i < card->app_count; i++)
 		if (card->app[i]->aid.len == aid->len && !memcmp(card->app[i]->aid.value, aid->value, aid->len)) found = 1;
 	if (!found) {
@@ -533,6 +533,61 @@ static int probe_sign_setup(sc_card_t *card, const struct sc_aid *aid, unsigned 
 	return 0;
 }
 
+/* Parse only the PuKDF7004 named in this application's ODF. The generic
+ * get_objects API can swallow parse errors and search trusted directories;
+ * propagate this directory's result and never follow any key value/path. */
+static int inspect_public_key_metadata(sc_pkcs15_card_t *p15, const struct sc_aid *aid)
+{
+	sc_pkcs15_df_t *df, *target = NULL;
+	sc_pkcs15_object_t *obj;
+	unsigned int dirs = 0, seen = 0, count = 0;
+	int rv;
+	for (df = p15->df_list; df; df = df->next) {
+		if (++dirs > 32) return 1;
+		if (df->type != SC_PKCS15_PUKDF) continue;
+		if (target || (df->path.len != 2 && df->path.len != 4) ||
+				(df->path.len == 4 && (df->path.value[0] != 0x3F || df->path.value[1] != 0)) ||
+				df->path.value[df->path.len - 2] != 0x70 || df->path.value[df->path.len - 1] != 4 ||
+				(df->path.aid.len && (df->path.aid.len != aid->len ||
+				memcmp(df->path.aid.value, aid->value, aid->len)))) {
+			printf("public_keys_result=directory_mismatch_no_parse\n");
+			return 1;
+		}
+		target = df;
+	}
+	if (!target) {
+		printf("public_keys_result=directory_not_advertised_no_parse\n");
+		return 1;
+	}
+	rv = sc_pkcs15_parse_df(p15, target);
+	print_result("public_keys_parse_result", rv);
+	if (rv < 0) return 1;
+	/* Validate all returned objects before emitting any partial inventory. */
+	for (obj = p15->obj_list; obj; obj = obj->next) {
+		if (++seen > 128) return 1;
+		if (obj->df != target) continue;
+		if ((obj->type & SC_PKCS15_TYPE_CLASS_MASK) != SC_PKCS15_TYPE_PUBKEY ||
+				!obj->data || ++count >= 32) return 1;
+	}
+	printf("public_key_metadata_count=%u\n", count);
+	count = 0;
+	for (obj = p15->obj_list; obj; obj = obj->next) {
+		const sc_pkcs15_pubkey_info_t *info;
+		if (obj->df != target) continue;
+		info = obj->data;
+		printf("public_key_index=%u\npublic_key_algorithm=%s\npublic_key_reference=%d\n",
+				count++, obj->type == SC_PKCS15_TYPE_PUBKEY_RSA ? "RSA" :
+				obj->type == SC_PKCS15_TYPE_PUBKEY_EC ? "EC" : "other_uninterpreted", info->key_reference);
+		printf("public_key_native=%d\npublic_key_usage=%u\n", info->native, info->usage);
+		if (obj->type == SC_PKCS15_TYPE_PUBKEY_RSA)
+			printf("public_key_rsa_bits=%zu\n", info->modulus_length);
+		if (obj->type == SC_PKCS15_TYPE_PUBKEY_EC)
+			printf("public_key_ec_bits=%zu\n", info->field_length);
+	}
+	printf("public_keys_result=metadata_only_no_referenced_key_reads\n");
+	return 0;
+}
+
 static int inspect_native_pkcs15(sc_card_t *card, struct sc_aid *aid, enum inspect_mode mode)
 {
 	sc_pkcs15_card_t *p15;
@@ -565,6 +620,10 @@ static int inspect_native_pkcs15(sc_card_t *card, struct sc_aid *aid, enum inspe
 	print_result("native_pkcs15_bind_result", rv);
 	if (rv < 0)
 		goto out;
+	if (mode == INSPECT_PUBLIC_KEYS) {
+		status = inspect_public_key_metadata(p15, aid);
+		goto out;
+	}
 	if (p15->tokeninfo) {
 		for (i = 0; i < SC_MAX_SUPPORTED_ALGORITHMS && p15->tokeninfo->supported_algos[i].reference; i++) {
 			const struct sc_supported_algo_info *algo = &p15->tokeninfo->supported_algos[i];
@@ -698,7 +757,7 @@ int main(int argc, char **argv)
 	memset(&app_aid, 0, sizeof(app_aid));
 	app_aid.len = sizeof(app_aid.value);
 	if (argc == 5 && ((strcmp(argv[3], "--pkcs15") && strcmp(argv[3], "--sign-setup") &&
-			strcmp(argv[3], "--pin-status") && strcmp(argv[3], "--security-info") && strcmp(argv[3], "--pin-policy") && strcmp(argv[3], "--odf-map") && strcmp(argv[3], "--file4141") && strcmp(argv[3], "--file4109") && strcmp(argv[3], "--file7001") && strcmp(argv[3], "--file7002")) ||
+			strcmp(argv[3], "--pin-status") && strcmp(argv[3], "--security-info") && strcmp(argv[3], "--pin-policy") && strcmp(argv[3], "--odf-map") && strcmp(argv[3], "--file4141") && strcmp(argv[3], "--file4109") && strcmp(argv[3], "--file7001") && strcmp(argv[3], "--file7002") && strcmp(argv[3], "--file7004") && strcmp(argv[3], "--public-keys")) ||
 			sc_hex_to_bin(argv[4], app_aid.value, &app_aid.len) < 0 || !app_aid.len))
 		return 2;
 
@@ -721,6 +780,8 @@ int main(int argc, char **argv)
 			!strcmp(argv[3], "--file4109") ? INSPECT_FILE4109 :
 			!strcmp(argv[3], "--file7001") ? INSPECT_FILE7001 :
 			!strcmp(argv[3], "--file7002") ? INSPECT_FILE7002 :
+			!strcmp(argv[3], "--file7004") ? INSPECT_FILE7004 :
+			!strcmp(argv[3], "--public-keys") ? INSPECT_PUBLIC_KEYS :
 			!strcmp(argv[3], "--pin-policy") ? INSPECT_PIN_POLICY : INSPECT_SECURITY_INFO;
 	}
 	memset(&params, 0, sizeof(params));
@@ -780,8 +841,8 @@ int main(int argc, char **argv)
 			printf("application_label=%s\n", card->app[i]->label ? card->app[i]->label : "");
 		}
 	}
-	status = argc == 5 ? ((mode == INSPECT_FILE4141 || mode == INSPECT_FILE4109 || mode == INSPECT_FILE7001 || mode == INSPECT_FILE7002) ?
-		inspect_file_metadata(card, &app_aid, mode == INSPECT_FILE4141 ? 0x4141 : mode == INSPECT_FILE4109 ? 0x4109 : mode == INSPECT_FILE7001 ? 0x7001 : 0x7002) :
+	status = argc == 5 ? ((mode == INSPECT_FILE4141 || mode == INSPECT_FILE4109 || mode == INSPECT_FILE7001 || mode == INSPECT_FILE7002 || mode == INSPECT_FILE7004) ?
+		inspect_file_metadata(card, &app_aid, mode == INSPECT_FILE4141 ? 0x4141 : mode == INSPECT_FILE4109 ? 0x4109 : mode == INSPECT_FILE7001 ? 0x7001 : mode == INSPECT_FILE7002 ? 0x7002 : 0x7004) :
 		mode == INSPECT_ODF_MAP ? inspect_odf_map(card, &app_aid) :
 		inspect_native_pkcs15(card, &app_aid, mode)) : 0;
 out:
