@@ -6,8 +6,8 @@ umask 077
 task_reader=${1:-${READER:-0}}
 task_mode=${2:---probe}
 if (( $# > 2 )) || [[ ! $task_reader =~ ^[0-9]+$ ]] ||
-        [[ $task_mode != --probe && $task_mode != --aids && $task_mode != --files && $task_mode != --pkcs15 && $task_mode != --sign-setup && $task_mode != --pin-status && $task_mode != --security-info && $task_mode != --pin-policy && $task_mode != --odf-map && $task_mode != --file4141 && $task_mode != --file4109 && $task_mode != --file7001 && $task_mode != --file7002 && $task_mode != --file7004 && $task_mode != --file7005 && $task_mode != --filedf0f && $task_mode != --fileb001 && $task_mode != --public-keys && $task_mode != --certificate-paths && $task_mode != --idopte && $task_mode != --idopte-discovery && $task_mode != --idopte-spy && $task_mode != --idopte-compare && $task_mode != --idopte-read4109 && $task_mode != --idopte-aodf && $task_mode != --idopte-prkdf && $task_mode != --idopte-pukdf && $task_mode != --idopte-cdf && $task_mode != --idopte-pin-status && $task_mode != --idopte-df0f && $task_mode != --idopte-read-df0f && $task_mode != --idopte-b001 ]]; then
-    printf 'Uso: bash scripts/probe-jcop4.sh [índice numérico de lector] [--probe|--aids|--files|--pkcs15|--sign-setup|--pin-status|--security-info|--pin-policy|--odf-map|--file4141|--file4109|--file7001|--file7002|--file7004|--file7005|--filedf0f|--fileb001|--public-keys|--certificate-paths|--idopte|--idopte-discovery|--idopte-spy|--idopte-compare|--idopte-read4109|--idopte-aodf|--idopte-prkdf|--idopte-pukdf|--idopte-cdf|--idopte-pin-status|--idopte-df0f|--idopte-read-df0f|--idopte-b001]\n' >&2
+        [[ $task_mode != --probe && $task_mode != --aids && $task_mode != --files && $task_mode != --pkcs15 && $task_mode != --sign-setup && $task_mode != --pin-status && $task_mode != --security-info && $task_mode != --pin-policy && $task_mode != --odf-map && $task_mode != --file4141 && $task_mode != --file4109 && $task_mode != --file7001 && $task_mode != --file7002 && $task_mode != --file7004 && $task_mode != --file7005 && $task_mode != --filedf0f && $task_mode != --fileb001 && $task_mode != --fileb002 && $task_mode != --public-keys && $task_mode != --certificate-paths && $task_mode != --idopte && $task_mode != --idopte-discovery && $task_mode != --idopte-spy && $task_mode != --idopte-compare && $task_mode != --idopte-read4109 && $task_mode != --idopte-aodf && $task_mode != --idopte-prkdf && $task_mode != --idopte-pukdf && $task_mode != --idopte-cdf && $task_mode != --idopte-pin-status && $task_mode != --idopte-df0f && $task_mode != --idopte-read-df0f && $task_mode != --idopte-b001 ]]; then
+    printf 'Uso: bash scripts/probe-jcop4.sh [índice numérico de lector] [--probe|--aids|--files|--pkcs15|--sign-setup|--pin-status|--security-info|--pin-policy|--odf-map|--file4141|--file4109|--file7001|--file7002|--file7004|--file7005|--filedf0f|--fileb001|--fileb002|--public-keys|--certificate-paths|--idopte|--idopte-discovery|--idopte-spy|--idopte-compare|--idopte-read4109|--idopte-aodf|--idopte-prkdf|--idopte-pukdf|--idopte-cdf|--idopte-pin-status|--idopte-df0f|--idopte-read-df0f|--idopte-b001]\n' >&2
     exit 2
 fi
 task_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
@@ -34,7 +34,7 @@ elif [[ $task_mode == --pin-policy ]]; then
     task_dir=$(mktemp -d "$task_root/local/jcop4-pin-policy-XXXXXXXX")
 elif [[ $task_mode == --odf-map ]]; then
     task_dir=$(mktemp -d "$task_root/local/jcop4-odf-map-XXXXXXXX")
-elif [[ $task_mode == --file4141 || $task_mode == --file4109 || $task_mode == --file7001 || $task_mode == --file7002 || $task_mode == --file7004 || $task_mode == --file7005 || $task_mode == --filedf0f || $task_mode == --fileb001 ]]; then
+elif [[ $task_mode == --file4141 || $task_mode == --file4109 || $task_mode == --file7001 || $task_mode == --file7002 || $task_mode == --file7004 || $task_mode == --file7005 || $task_mode == --filedf0f || $task_mode == --fileb001 || $task_mode == --fileb002 ]]; then
     task_dir=$(mktemp -d "$task_root/local/jcop4-file${task_mode#--file}-XXXXXXXX")
 elif [[ $task_mode == --idopte ]]; then
     task_dir=$(mktemp -d "$task_root/local/jcop4-idopte-XXXXXXXX")
@@ -281,7 +281,7 @@ if [[ $task_mode == --idopte || $task_mode == --idopte-discovery || $task_mode =
     exit 0
 fi
 
-if [[ $task_mode == --files || $task_mode == --public-keys || $task_mode == --certificate-paths || $task_mode == --pkcs15 || $task_mode == --sign-setup || $task_mode == --pin-status || $task_mode == --security-info || $task_mode == --pin-policy || $task_mode == --odf-map || $task_mode == --file4141 || $task_mode == --file4109 || $task_mode == --file7001 || $task_mode == --file7002 || $task_mode == --file7004 || $task_mode == --file7005 || $task_mode == --filedf0f || $task_mode == --fileb001 ]]; then
+if [[ $task_mode == --files || $task_mode == --public-keys || $task_mode == --certificate-paths || $task_mode == --pkcs15 || $task_mode == --sign-setup || $task_mode == --pin-status || $task_mode == --security-info || $task_mode == --pin-policy || $task_mode == --odf-map || $task_mode == --file4141 || $task_mode == --file4109 || $task_mode == --file7001 || $task_mode == --file7002 || $task_mode == --file7004 || $task_mode == --file7005 || $task_mode == --filedf0f || $task_mode == --fileb001 || $task_mode == --fileb002 ]]; then
     # Compile only this discovery helper against the existing OpenSC library.
     task_build_status=0
     bash "$task_root/scripts/build-card-public-info.sh" >> "$task_report" 2>&1 || task_build_status=$?
@@ -290,12 +290,12 @@ if [[ $task_mode == --files || $task_mode == --public-keys || $task_mode == --ce
         printf 'Falló la compilación de la herramienta pública; revisar el informe.\n' >&2
         exit "$task_build_status"
     fi
-    if [[ $task_mode == --public-keys || $task_mode == --certificate-paths || $task_mode == --pkcs15 || $task_mode == --sign-setup || $task_mode == --pin-status || $task_mode == --security-info || $task_mode == --pin-policy || $task_mode == --odf-map || $task_mode == --file4141 || $task_mode == --file4109 || $task_mode == --file7001 || $task_mode == --file7002 || $task_mode == --file7004 || $task_mode == --file7005 || $task_mode == --filedf0f || $task_mode == --fileb001 ]]; then
+    if [[ $task_mode == --public-keys || $task_mode == --certificate-paths || $task_mode == --pkcs15 || $task_mode == --sign-setup || $task_mode == --pin-status || $task_mode == --security-info || $task_mode == --pin-policy || $task_mode == --odf-map || $task_mode == --file4141 || $task_mode == --file4109 || $task_mode == --file7001 || $task_mode == --file7002 || $task_mode == --file7004 || $task_mode == --file7005 || $task_mode == --filedf0f || $task_mode == --fileb001 || $task_mode == --fileb002 ]]; then
         # Advertised in EF.DIR in jcop4-files-DORk47gE, not inferred from ATR.
         task_aid=E828BD080FA00000036364796E6964
         printf 'pkcs15_aid=%s\n' "$task_aid" >> "$task_report"
         task_record_tool "$task_root/build/opensc/card-public-info" "$task_reader" "$task_expected_atr" "$task_mode" "$task_aid"
-        if [[ $task_mode == --file4141 || $task_mode == --file4109 || $task_mode == --file7001 || $task_mode == --file7002 || $task_mode == --file7004 || $task_mode == --file7005 || $task_mode == --filedf0f || $task_mode == --fileb001 ]]; then
+        if [[ $task_mode == --file4141 || $task_mode == --file4109 || $task_mode == --file7001 || $task_mode == --file7002 || $task_mode == --file7004 || $task_mode == --file7005 || $task_mode == --filedf0f || $task_mode == --fileb001 || $task_mode == --fileb002 ]]; then
             printf 'Consulta SELECT/metadatos de %s terminada, sin lectura de contenido ni PIN. Revisar el informe.\n' "${task_mode#--file}"
         elif [[ $task_mode == --certificate-paths ]]; then
             printf 'Consulta de rutas de certificados CDF7005 terminada, sin leer certificados ni PIN. Revisar el informe.\n'

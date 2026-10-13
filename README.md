@@ -254,6 +254,12 @@ sigue con CKR_TOKEN_NOT_PRESENT por el guard. Pasaron **197 comprobaciones**
 de los componentes modificados. Próximo contraste: SELECT-only B002 para
 conocer sus metadatos; no asumir el tamaño de B001. Driver libre JCOP4 pendiente.
 
+`make inspect/jcop4-fileb002 READER=0` consulta únicamente el control de B002.
+Resultado real: **9000, transparente, 3000 bytes**, seguridad86 sin interpretar.
+No leyó el certificado ni pidió PIN. Pasaron **162 comprobaciones** del helper/
+lanzador modificados. Próximo contraste: observación separada y acotada de la
+lectura B002 solicitada por Idopte; el guard actual todavía la bloquea.
+
 Capturas privadas bajo local/jcop4-idopte-spy-*/; no agregarlas a Git.
 Pasaron previamente **30 comprobaciones del observador/decoder y 40 del
 lanzador** con transporte ficticio. El diagnóstico de firma pasó además

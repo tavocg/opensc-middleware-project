@@ -6,7 +6,40 @@ la tarjeta. El usuario ejecuta las operaciones que requieran PIN o GUI. Esto
 sustituye las restricciones anteriores de no ejecutar Git/hardware/Idopte por
 el agente; conservar límites de cada diagnóstico y privacidad de los registros.
 
-**Último resultado: Idopte READ B001 aceptado; SELECT B002 bloqueado.**
+**Último resultado: SELECT-only B002 aceptado, transparente/3000 bytes.**
+Usuario registró `e48d508`; principal y OpenSC `3dfef6704` limpios al comenzar.
+Nuevo `make inspect/jcop4-fileb002 READER=0` / --fileb002: reutiliza helper
+SELECT-only con default driver, ATR/AID conocidos y anunciados en EF.DIR.
+Tras seleccionar el ADF conocido, envía únicamente 00 A4 02 00 02 B0 02 00,
+respuesta de control de hasta 256 bytes. Sin READ, binding, PIN, VERIFY, MSE,
+PSO, escritura o Idopte. Valida FID si está presente; resume estructura/tamaño/
+formas de seguridad, omite valores propietarios/raw/nombres/ACL. Errores/61xx/
+respuesta inválida detienen sin GET RESPONSE/reintentos; 6A82 solo contextual.
+
+Pasaron **79 comprobaciones del helper y 83 del lanzador (162)**, APIs falsas;
+helper real compilado offline. Observador110/lanzador firma6/operación12 previos
+intactos, no repetir sin cambios. Agente ejecutó una vez sin PIN/GUI:
+`nix develop --offline -c make inspect/jcop4-fileb002 READER=0`.
+Informe privado `local/jcop4-fileb002-0bSnKT0a/report.txt`, **22:59:33 UTC**:
+inventario/build/conexión/aplicación/unlock/proceso 0. **SELECT B002 ->0/9000,
+transparente/3000 bytes**, security_direct_tags=86,
+security_format=profile_uninterpreted, standard_compact_read=uninterpreted.
+No READ ni autenticación; CDF previo declara B002 como X.509/private=0,
+pero no prueba DER real/completo, longitud DER, identidad, uso de firma o ACL.
+Coincide el tamaño de EF con B001; no inferir igualdad de contenido/política.
+
+**Próximo contraste:** modo Idopte separado para SELECT B002 observado y READ
+acotada a los 3000 bytes medidos, después de lectura B001 aceptada/ADF/ATR y
+padres comprobados. Conservar APDU, presupuestos/rangos limitados y contenido
+solo al cliente, sin logs. PIN con datos/MSE/PSO/SM/escrituras/otros archivos
+siguen bloqueados. No interpretar tag86/private=0 como ACL ni reutilizar
+presupuesto B001. Guard actual todavía bloquea SELECT/READ B002. No repetir
+SELECT/helper o inventario Idopte idénticos sin nueva información. Driver/
+submódulo intactos; firma JCOP4/VERIFY6982/RSA3072 pendientes. Informes privados
+local/0700/0600 fuera de Git/chat. Git autorizado, .git de solo lectura todavía
+impide commits si persiste; no eludirlo.
+
+**Resultado anterior: Idopte READ B001 aceptado; SELECT B002 bloqueado.**
 Usuario registró `afda47f`, principal y OpenSC `3dfef6704` limpios al comenzar.
 Nuevo modo separado `inspect/jcop4-idopte-b001` / --idopte-b001, opt-in
 `JCOP4_DIAGNOSTIC_CERT_B001=1` depende de READ_DF0F y todos sus padres, solo

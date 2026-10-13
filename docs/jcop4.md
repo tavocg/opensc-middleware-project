@@ -3123,6 +3123,63 @@ igual a B001 ni ACL por private=0/86/9000. B002 sigue bloqueado en el guard.
 No repetir el mismo inventario o PIN por inercia. Capturas privadas0700/0600
 bajo local/, fuera de Git; firma JCOP4/VERIFY6982/RSA3072 pendientes.
 
+## SELECT-only B002 aceptado: 13 de octubre, 22:59:33 UTC
+
+El usuario registró `e48d508`, principal y OpenSC `3dfef6704` limpios antes de
+esta revisión. El último inventario Idopte había bloqueado SELECT B002 después
+de leer B001. CDF7005 ya referencia B002 como X.509/private=0; se agregó
+`make inspect/jcop4-fileb002 READER=0` para consultar su control antes de decidir
+una excepción de lectura.
+
+Este modo reutiliza el helper SELECT-only con default driver. Exige ATR/AID
+conocidos y AID anunciado en EF.DIR; selecciona el ADF conocido y envía
+**00 A4 02 00 02 B0 02 00**, con respuesta de control de hasta 256 bytes.
+Valida FID83 si está presente y resume estructura/tamaño/formas de seguridad;
+omite valores propietarios, ACL, nombres y respuesta bruta. No READ, binding,
+PIN, VERIFY, MSE, PSO, escritura o Idopte. Transporte/SW/tamaño/metadatos
+inválidos detienen sin GET RESPONSE/reintentos; 6A82 es ausencia en ese contexto.
+
+Pasaron **79 comprobaciones del helper y 83 del lanzador (162)**, APIs falsas;
+helper real compilado offline. Incluyen FID enviado/devuelto, ATR, selección
+exacta sin READ/binding, respuesta6A82, fallos de transporte, SW/61xx y datos
+truncados sin follow-up. Observador110/lanzador de firma6/operación12 anteriores
+intactos; no se repitieron sus suites. Driver/submódulo sin cambios.
+
+Después, el agente ejecutó una vez, sin PIN ni GUI:
+
+```sh
+nix develop --offline -c make inspect/jcop4-fileb002 READER=0
+```
+
+Informe privado `local/jcop4-fileb002-0bSnKT0a/report.txt`,
+**2026-10-13T22:59:33Z**. Inventario, compilación, conexión y aplicación correctos;
+unlock y proceso 0. Resumen permitido:
+
+```text
+fileB002_select_transport=0
+fileB002_select_sw=9000
+fileB002_structure=transparent
+fileB002_size=3000
+fileB002_security_format=profile_uninterpreted
+fileB002_security_direct_tags=86
+fileB002_standard_compact_read=uninterpreted
+fileB002_result=selected_metadata_only_no_read
+```
+
+El control de B002 anuncia un EF transparente de 3000 bytes. Coincide con el
+tamaño de B001, pero no acredita la misma política, contenido o longitud DER.
+La referencia X.509 en CDF y private=0 no demuestran ACL de lectura ni qué
+certificado corresponde a firma/autenticación. Tag86 permanece sin interpretar.
+No se leyó el certificado ni se produjo una nueva firma JCOP4.
+
+El próximo contraste es un modo Idopte separado para el SELECT B002 observado
+y lectura limitada a su tamaño medido, después de la lectura B001 y con ATR/
+ADF/padres comprobados. Presupuestos y rangos propios, APDU sin modificar y
+respuesta solo al cliente; sin contenido en logs ni permisos de PIN/MSE/PSO/SM/
+escrituras/otros archivos. El guard actual todavía bloquea SELECT/READ B002.
+No repetir SELECT/helper o inventario idénticos por inercia. Informes privados
+0700/0600 bajo local/, fuera de Git; firma JCOP4/VERIFY6982/RSA3072 pendientes.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño
