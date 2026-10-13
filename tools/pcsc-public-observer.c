@@ -19,7 +19,9 @@
 
 static int trace_fd = -1, stopped, selected_public_file, selected_mf, selected_app, handle_set, pending_response;
 static int select_spy_fd = -1;
-static int compare_read4141, compare_read4109, compare_aodf, compare_prkdf, compare_pukdf, compare_cdf, compare_pin_status;
+static int compare_read4141, compare_read4109, compare_aodf, compare_prkdf, compare_pukdf, compare_cdf, compare_pin_status, compare_select_df0f;
+static unsigned int select_df0f_calls;
+static int pin_status_result_valid;
 static unsigned int pin_status_calls;
 static int comparison_atr_ok;
 static unsigned int read4141_budget, read4141_offset, read4141_calls, read4109_calls;
@@ -95,6 +97,14 @@ __attribute__((constructor)) static void observer_init(void)
 			if (dprintf(trace_fd, "comparison_pin_status=mf_pin1_case1_once_no_data\n") < 0) stopped = 1;
 		}
 	}
+	path = getenv("JCOP4_DIAGNOSTIC_SELECT_DF0F");
+	if (path) {
+		if (strcmp(path, "1") || !compare_pin_status || trace_fd < 0) stopped = 1;
+		else {
+			compare_select_df0f = 1;
+			if (dprintf(trace_fd, "comparison_df0f=select_only_no_read\n") < 0) stopped = 1;
+		}
+	}
 	path = getenv("JCOP4_PUBLIC_SELECT_SPY_TRACE");
 	if (path) {
 		select_spy_fd = open(path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
@@ -147,7 +157,7 @@ static void drop_card_context(void)
 {
 	pthread_mutex_lock(&trace_mutex);
 	selected_public_file = selected_mf = selected_app = pending_response = 0;
-	comparison_atr_ok = 0;
+	comparison_atr_ok = pin_status_result_valid = 0;
 	/* Do not continue an unknown-file read across a connection/reset boundary. */
 	if (read4141_calls) {
 		if (!stopped && trace_fd >= 0) dprintf(trace_fd, "blocked=read4141_connection_boundary\n");
@@ -316,6 +326,18 @@ static int allowed_command(const unsigned char *cmd, DWORD len, int *next_file, 
 				*next_app = 1;
 				return 1;
 			}
+			if (fid == 0xDF0F) {
+				/* Observed after the successful MF no-data PIN status and
+				 * reselecting this ADF. Never grant content READ permission. */
+				if (!compare_select_df0f || !comparison_atr_ok || !selected_app ||
+						!pin_status_result_valid || select_df0f_calls ||
+						cmd[0] != 0 || cmd[2] != 2 || cmd[3] != 0 || lc != 2)
+					return 0;
+				*next_file = 0;
+				*next_mf = 0;
+				*next_app = 1;
+				return 1;
+			}
 			if (fid == 0xD003) {
 				/* EF.SN precedent: ANS CPS4 section 3.1.2. Only the observed
 				 * SELECT EF form under a confirmed MF; never record its data. */
@@ -413,7 +435,7 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
 	unsigned char bounded[402];
 	DWORD bounded_size = sizeof(bounded);
 	unsigned int read_size = 0, read_fid = 0;
-	int diagnostic_read = 0, diagnostic_pin_status = 0;
+	int diagnostic_read = 0, diagnostic_pin_status = 0, diagnostic_select_df0f = 0;
 	int next_file = -1, next_mf = -1, next_app = -1;
 	unsigned int sw;
 	struct timeval start;
@@ -492,6 +514,14 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
 			goto out;
 		}
 	}
+	diagnostic_select_df0f = cmd[1] == 0xA4 && cmd[2] == 2 && cmd[4] == 2 &&
+			cmd[5] == 0xDF && cmd[6] == 0x0F;
+	if (diagnostic_select_df0f) {
+		select_df0f_calls++;
+		if (dprintf(trace_fd, "public_select=known_df0f_metadata_only\n") < 0) {
+			stopped = 1; goto out;
+		}
+	}
 	diagnostic_pin_status = cmd[1] == 0x20;
 	if (diagnostic_pin_status) {
 		if (!response || !response_len || capacity < 2) {
@@ -560,6 +590,8 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
 		/* A status-only response has exactly SW1/SW2, never card payload. */
 		if (rv == SCARD_S_SUCCESS && bounded_size == 2) {
 			memcpy(response, bounded, 2); *response_len = 2;
+			pin_status_result_valid = (bounded[0] == 0x63 && (bounded[1] & 0xF0) == 0xC0) ||
+					(bounded[0] == 0x90 && bounded[1] == 0);
 		} else {
 			stopped = 1;
 			if (rv == SCARD_S_SUCCESS) rv = SCARD_E_INSUFFICIENT_BUFFER;
@@ -570,6 +602,7 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
 		sw = ((unsigned int)response[*response_len - 2] << 8) | response[*response_len - 1];
 		dprintf(trace_fd, "sw=%04X\n", sw);
 		pending_response = (sw >> 8) == 0x61;
+		if (diagnostic_select_df0f && sw != 0x9000) stopped = 1; /* No follow-up or GET RESPONSE. */
 		if ((sw >> 8) == 0x69)
 			stopped = 1;
 		if (next_file >= 0 && (sw == 0x9000 || (sw >> 8) == 0x61)) {

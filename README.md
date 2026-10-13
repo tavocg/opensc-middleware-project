@@ -213,6 +213,14 @@ sin interpretar. Sin READ, binding o PIN; esto no identifica contenido ni permis
 de lectura. Pasaron68 comprobaciones del helper y71 del lanzador. El guard
 Idopte sigue bloqueando SELECT/READ DF0F; driver y protocolo de firma intactos.
 
+Nuevo modo `make inspect/jcop4-idopte-df0f READER=0`: permite solo un SELECT
+DF0F tras estado vacío satisfactorio en MF y selección del AID conocido.
+La ejecución real obtuvo9000 y después intentó READ BINARY offset0, bloqueado
+antes de transmitir. No contenido DF0F ni PIN; C_GetTokenInfo continúa con
+CKR_TOKEN_NOT_PRESENT por el bloqueo del diagnóstico. Pasaron90 comprobaciones
+del observador,73 del lanzador y6 del lanzador de firma. Modos anteriores
+mantienen DF0F bloqueado; el driver libre aún no firma con esta JCOP4.
+
 Capturas privadas bajo local/jcop4-idopte-spy-*/; no agregarlas a Git.
 Pasaron previamente **30 comprobaciones del observador/decoder y 40 del
 lanzador** con transporte ficticio. El diagnóstico de firma pasó además

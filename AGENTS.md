@@ -6,7 +6,39 @@ la tarjeta. El usuario ejecuta las operaciones que requieran PIN o GUI. Esto
 sustituye las restricciones anteriores de no ejecutar Git/hardware/Idopte por
 el agente; conservar límites de cada diagnóstico y privacidad de los registros.
 
-**Último resultado: SELECT-only DF0F, 21:43:59 UTC.**
+**Último resultado: Idopte SELECT DF0F -> READ bloqueado, 22:03:13 UTC.**
+Usuario registró `3fbd854`, OpenSC `3dfef6704`, ambos limpios antes de preparar
+cambios. Turno interrumpido tras editar cuatro archivos; retomado con pruebas,
+no había hardware de esta versión antes de verificarlas. Agente ejecutó una vez
+`nix develop --offline -c make inspect/jcop4-idopte-df0f READER=0`, sin PIN/GUI.
+Informe `local/jcop4-idopte-df0f-OCE6tqH3/report.txt`,**22:03:13 UTC**: build/
+inventario correctos, ATR conectado conocido;70APDU,69SW9000 y estado vacío63C7.
+Después MF/status/ADF conocidos, **SELECT DF0F0/9000**, luego **READ BINARY
+00B00000 bloqueado antes de transmitir**. Sin SW/contenido de ese READ.
+Módulo0/C_GetTokenInfo CKR_TOKEN_NOT_PRESENT/diagnóstico1/token_info_unavailable,
+events_recorded: guard interrumpió acceso, no rechazo de tarjeta ni VERIFY6982.
+Ningún PIN/login/MSE/GA/SM/PSO/escritura/firma. DF0F150bytes/proprietary86 sigue
+sin propósito/política conocidos; no asumir licencia/CA/PACE por FID/tamaño.
+
+Nuevo --idopte-df0f/target inspect/jcop4-idopte-df0f, opt-in
+JCOP4_DIAGNOSTIC_SELECT_DF0F=1 requiere modo padre PIN_STATUS y todos los
+anteriores solo dentro de Idopte inventario/slots/empty stdin. Modos anteriores
+siguen bloqueando DF0F; inventario/firma limpian variable. Exige ATR/ADF y
+resultado real válido de estado vacío enMF (2bytes/SW9000o63Cx), no contador
+antes de transmitir; estado descarta en cambio de conexión. Un SELECT DF0F
+básico exacto A4/02/00/Lc2/7u8bytes por proceso, marker privado obligatorio
+antes de transmitir. No READ de DF0F ni permiso heredado; cualquier SW!=9000
+paraSELECT detiene después, sin GET RESPONSE/reintento. PIN con datos bloqueado.
+Pasaron **90 observador/constructor/decoder,73 lanzador y6 lanzadorfirma**,
+fake transporte/redirector real; biblioteca compilada. Helper68/operación12
+previos vigentes, driver/submódulo intactos, no repetir sin cambios.
+Próximo contraste posible: excepción READ DF0F separada/acotada a150bytes y a
+su forma solicitada, sin registrar contenido/cambiar APDU; o definición primaria
+del perfil. No ampliar por 9000/tag86 ni repetir captura idéntica/PIN porinercia.
+Informes privados0700/0600local/, no agregar aGit. JCOP4/RSA3072 pendientes.
+Git autorizado, montaje.gitreadonly aún impide commits si persiste.
+
+**Resultado anterior: SELECT-only DF0F, 21:43:59 UTC.**
 Usuario registró `d07b7c2`, principal limpio al comenzar; OpenSC `3dfef6704`
 intacto. Agente ejecutó `nix develop --offline -c make inspect/jcop4-filedf0f
 READER=0`, sin PIN/GUI. Informe `local/jcop4-filedf0f-6FBH76f8/report.txt`:

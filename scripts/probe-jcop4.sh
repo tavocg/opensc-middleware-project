@@ -6,8 +6,8 @@ umask 077
 task_reader=${1:-${READER:-0}}
 task_mode=${2:---probe}
 if (( $# > 2 )) || [[ ! $task_reader =~ ^[0-9]+$ ]] ||
-        [[ $task_mode != --probe && $task_mode != --aids && $task_mode != --files && $task_mode != --pkcs15 && $task_mode != --sign-setup && $task_mode != --pin-status && $task_mode != --security-info && $task_mode != --pin-policy && $task_mode != --odf-map && $task_mode != --file4141 && $task_mode != --file4109 && $task_mode != --file7001 && $task_mode != --file7002 && $task_mode != --file7004 && $task_mode != --file7005 && $task_mode != --filedf0f && $task_mode != --public-keys && $task_mode != --idopte && $task_mode != --idopte-discovery && $task_mode != --idopte-spy && $task_mode != --idopte-compare && $task_mode != --idopte-read4109 && $task_mode != --idopte-aodf && $task_mode != --idopte-prkdf && $task_mode != --idopte-pukdf && $task_mode != --idopte-cdf && $task_mode != --idopte-pin-status ]]; then
-    printf 'Uso: bash scripts/probe-jcop4.sh [índice numérico de lector] [--probe|--aids|--files|--pkcs15|--sign-setup|--pin-status|--security-info|--pin-policy|--odf-map|--file4141|--file4109|--file7001|--file7002|--file7004|--file7005|--filedf0f|--public-keys|--idopte|--idopte-discovery|--idopte-spy|--idopte-compare|--idopte-read4109|--idopte-aodf|--idopte-prkdf|--idopte-pukdf|--idopte-cdf|--idopte-pin-status]\n' >&2
+        [[ $task_mode != --probe && $task_mode != --aids && $task_mode != --files && $task_mode != --pkcs15 && $task_mode != --sign-setup && $task_mode != --pin-status && $task_mode != --security-info && $task_mode != --pin-policy && $task_mode != --odf-map && $task_mode != --file4141 && $task_mode != --file4109 && $task_mode != --file7001 && $task_mode != --file7002 && $task_mode != --file7004 && $task_mode != --file7005 && $task_mode != --filedf0f && $task_mode != --public-keys && $task_mode != --idopte && $task_mode != --idopte-discovery && $task_mode != --idopte-spy && $task_mode != --idopte-compare && $task_mode != --idopte-read4109 && $task_mode != --idopte-aodf && $task_mode != --idopte-prkdf && $task_mode != --idopte-pukdf && $task_mode != --idopte-cdf && $task_mode != --idopte-pin-status && $task_mode != --idopte-df0f ]]; then
+    printf 'Uso: bash scripts/probe-jcop4.sh [índice numérico de lector] [--probe|--aids|--files|--pkcs15|--sign-setup|--pin-status|--security-info|--pin-policy|--odf-map|--file4141|--file4109|--file7001|--file7002|--file7004|--file7005|--filedf0f|--public-keys|--idopte|--idopte-discovery|--idopte-spy|--idopte-compare|--idopte-read4109|--idopte-aodf|--idopte-prkdf|--idopte-pukdf|--idopte-cdf|--idopte-pin-status|--idopte-df0f]\n' >&2
     exit 2
 fi
 task_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
@@ -40,7 +40,7 @@ elif [[ $task_mode == --idopte ]]; then
     task_dir=$(mktemp -d "$task_root/local/jcop4-idopte-XXXXXXXX")
 elif [[ $task_mode == --idopte-spy ]]; then
     task_dir=$(mktemp -d "$task_root/local/jcop4-idopte-spy-XXXXXXXX")
-elif [[ $task_mode == --idopte-compare || $task_mode == --idopte-read4109 || $task_mode == --idopte-aodf || $task_mode == --idopte-prkdf || $task_mode == --idopte-pukdf || $task_mode == --idopte-cdf || $task_mode == --idopte-pin-status ]]; then
+elif [[ $task_mode == --idopte-compare || $task_mode == --idopte-read4109 || $task_mode == --idopte-aodf || $task_mode == --idopte-prkdf || $task_mode == --idopte-pukdf || $task_mode == --idopte-cdf || $task_mode == --idopte-pin-status || $task_mode == --idopte-df0f ]]; then
     task_dir=$(mktemp -d "$task_root/local/jcop4-${task_mode#--}-XXXXXXXX")
 elif [[ $task_mode == --idopte-discovery ]]; then
     task_dir=$(mktemp -d "$task_root/local/jcop4-idopte-discovery-XXXXXXXX")
@@ -88,7 +88,7 @@ task_record_tool() {
     printf ' %q' "$@" >> "$task_report"
     printf '\n' >> "$task_report"
     env -u OPENSC_API_TRACE_FILE -u OPENSC_DEBUG_FILE -u OPENSC_DEEPBIND -u LD_PRELOAD -u JCOP4_PUBLIC_DISCOVERY_TRACE \
-        -u LIBPCSCLITE_DELEGATE -u LIBPCSCLITE_SPY_DELEGATE -u JCOP4_PUBLIC_SELECT_SPY_TRACE -u JCOP4_DIAGNOSTIC_READ4141 -u JCOP4_DIAGNOSTIC_READ4109 -u JCOP4_DIAGNOSTIC_AODF -u JCOP4_DIAGNOSTIC_PRKDF -u JCOP4_DIAGNOSTIC_PUKDF -u JCOP4_DIAGNOSTIC_CDF -u JCOP4_DIAGNOSTIC_PIN_STATUS \
+        -u LIBPCSCLITE_DELEGATE -u LIBPCSCLITE_SPY_DELEGATE -u JCOP4_PUBLIC_SELECT_SPY_TRACE -u JCOP4_DIAGNOSTIC_READ4141 -u JCOP4_DIAGNOSTIC_READ4109 -u JCOP4_DIAGNOSTIC_AODF -u JCOP4_DIAGNOSTIC_PRKDF -u JCOP4_DIAGNOSTIC_PUKDF -u JCOP4_DIAGNOSTIC_CDF -u JCOP4_DIAGNOSTIC_PIN_STATUS -u JCOP4_DIAGNOSTIC_SELECT_DF0F \
         -u OPENSC_JCOP3_SESSION_STATE -u OPENSC_JCOP3_PIN_STATUS_IN_PLACE \
         -u OPENSC_JCOP3_POST_LOGIN_STATUS -u OPENSC_JCOP3_POST_LOGIN_SELECT \
         OPENSC_DEBUG=0 OPENSC_CONF="$task_config" "${task_command_env[@]}" \
@@ -127,7 +127,7 @@ if [[ $task_atr_ok != yes ]]; then
     exit 1
 fi
 
-if [[ $task_mode == --idopte || $task_mode == --idopte-discovery || $task_mode == --idopte-spy || $task_mode == --idopte-compare || $task_mode == --idopte-read4109 || $task_mode == --idopte-aodf || $task_mode == --idopte-prkdf || $task_mode == --idopte-pukdf || $task_mode == --idopte-cdf || $task_mode == --idopte-pin-status ]]; then
+if [[ $task_mode == --idopte || $task_mode == --idopte-discovery || $task_mode == --idopte-spy || $task_mode == --idopte-compare || $task_mode == --idopte-read4109 || $task_mode == --idopte-aodf || $task_mode == --idopte-prkdf || $task_mode == --idopte-pukdf || $task_mode == --idopte-cdf || $task_mode == --idopte-pin-status || $task_mode == --idopte-df0f ]]; then
     task_pkcs11_tool="$task_root/build/opensc/src/tools/pkcs11-tool"
     task_idopte_module=/run/current-system/sw/lib/SCMiddleware/libidop11.so
     if [[ ! -x $task_pkcs11_tool || ! -f $task_idopte_module ]]; then
@@ -135,7 +135,7 @@ if [[ $task_mode == --idopte || $task_mode == --idopte-discovery || $task_mode =
         printf 'pkcs11_tool=%s\nidopte_module=%s\n' "$task_pkcs11_tool" "$task_idopte_module" >> "$task_report"
         exit 1
     fi
-    if [[ $task_mode == --idopte-discovery || $task_mode == --idopte-spy || $task_mode == --idopte-compare || $task_mode == --idopte-read4109 || $task_mode == --idopte-aodf || $task_mode == --idopte-prkdf || $task_mode == --idopte-pukdf || $task_mode == --idopte-cdf || $task_mode == --idopte-pin-status ]]; then
+    if [[ $task_mode == --idopte-discovery || $task_mode == --idopte-spy || $task_mode == --idopte-compare || $task_mode == --idopte-read4109 || $task_mode == --idopte-aodf || $task_mode == --idopte-prkdf || $task_mode == --idopte-pukdf || $task_mode == --idopte-cdf || $task_mode == --idopte-pin-status || $task_mode == --idopte-df0f ]]; then
         if [[ $task_mode == --idopte-spy ]] && { ! command -v pcsc-spy >/dev/null 2>&1 || ! command -v python3 >/dev/null 2>&1; }; then
             printf 'Falta pcsc-spy o Python 3; ejecutar desde nix develop.\n' >&2
             exit 1
@@ -149,20 +149,24 @@ if [[ $task_mode == --idopte || $task_mode == --idopte-discovery || $task_mode =
         fi
         task_trace="$task_dir/public-headers.txt"
         task_command_env=("LIBPCSCLITE_DELEGATE=$task_root/build/diagnostics/pcsc-public-observer.so" "JCOP4_PUBLIC_DISCOVERY_TRACE=$task_trace")
-        if [[ $task_mode == --idopte-compare || $task_mode == --idopte-read4109 || $task_mode == --idopte-aodf || $task_mode == --idopte-prkdf || $task_mode == --idopte-pukdf || $task_mode == --idopte-cdf || $task_mode == --idopte-pin-status ]]; then
+        if [[ $task_mode == --idopte-compare || $task_mode == --idopte-read4109 || $task_mode == --idopte-aodf || $task_mode == --idopte-prkdf || $task_mode == --idopte-pukdf || $task_mode == --idopte-cdf || $task_mode == --idopte-pin-status || $task_mode == --idopte-df0f ]]; then
             task_command_env+=("JCOP4_DIAGNOSTIC_READ4141=1")
-            if [[ $task_mode == --idopte-read4109 || $task_mode == --idopte-aodf || $task_mode == --idopte-prkdf || $task_mode == --idopte-pukdf || $task_mode == --idopte-cdf || $task_mode == --idopte-pin-status ]]; then
+            if [[ $task_mode == --idopte-read4109 || $task_mode == --idopte-aodf || $task_mode == --idopte-prkdf || $task_mode == --idopte-pukdf || $task_mode == --idopte-cdf || $task_mode == --idopte-pin-status || $task_mode == --idopte-df0f ]]; then
                 task_command_env+=("JCOP4_DIAGNOSTIC_READ4109=1")
-                if [[ $task_mode == --idopte-aodf || $task_mode == --idopte-prkdf || $task_mode == --idopte-pukdf || $task_mode == --idopte-cdf || $task_mode == --idopte-pin-status ]]; then
+                if [[ $task_mode == --idopte-aodf || $task_mode == --idopte-prkdf || $task_mode == --idopte-pukdf || $task_mode == --idopte-cdf || $task_mode == --idopte-pin-status || $task_mode == --idopte-df0f ]]; then
                     task_command_env+=("JCOP4_DIAGNOSTIC_AODF=1")
-                    if [[ $task_mode == --idopte-prkdf || $task_mode == --idopte-pukdf || $task_mode == --idopte-cdf || $task_mode == --idopte-pin-status ]]; then
+                    if [[ $task_mode == --idopte-prkdf || $task_mode == --idopte-pukdf || $task_mode == --idopte-cdf || $task_mode == --idopte-pin-status || $task_mode == --idopte-df0f ]]; then
                         task_command_env+=("JCOP4_DIAGNOSTIC_PRKDF=1")
-                        if [[ $task_mode == --idopte-pukdf || $task_mode == --idopte-cdf || $task_mode == --idopte-pin-status ]]; then
+                        if [[ $task_mode == --idopte-pukdf || $task_mode == --idopte-cdf || $task_mode == --idopte-pin-status || $task_mode == --idopte-df0f ]]; then
                             task_command_env+=("JCOP4_DIAGNOSTIC_PUKDF=1")
-                            if [[ $task_mode == --idopte-cdf || $task_mode == --idopte-pin-status ]]; then
+                            if [[ $task_mode == --idopte-cdf || $task_mode == --idopte-pin-status || $task_mode == --idopte-df0f ]]; then
                                 task_command_env+=("JCOP4_DIAGNOSTIC_CDF=1")
-                                if [[ $task_mode == --idopte-pin-status ]]; then
+                                if [[ $task_mode == --idopte-pin-status || $task_mode == --idopte-df0f ]]; then
                                     task_command_env+=("JCOP4_DIAGNOSTIC_PIN_STATUS=1")
+                                    if [[ $task_mode == --idopte-df0f ]]; then
+                                        task_command_env+=("JCOP4_DIAGNOSTIC_SELECT_DF0F=1")
+                                        printf 'df0f_scope=select_once_after_mf_status_and_known_adf_no_read\n' >> "$task_report"
+                                    fi
                                     printf 'pin_status_scope=mf_pin1_case1_once_no_data_no_authentication\n' >> "$task_report"
                                 fi
                                 printf 'comparison_scope=read4141_max400_read4109_once17_aodf7001_max300_prkdf7002_max2048_pukdf7004_max4096_cdf7005_max2368_no_recording_no_authentication\n' >> "$task_report"

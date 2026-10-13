@@ -2762,6 +2762,87 @@ para leer archivos arbitrarios. No repetir SELECT-only ni estado vacío idéntic
 por inercia, ni pedir PIN mientras se investiga esta fase de inventario.
 JCOP4/RSA3072 y la ruta de autenticación/firma siguen pendientes.
 
+## Idopte SELECT DF0F aceptado, READ bloqueado: 13 de octubre, 22:03:13 UTC
+
+Principal `3fbd854`, OpenSC `3dfef6704`, ambos limpios al comenzar antes de
+preparar este cambio. La preparación fue interrumpida tras escribir cuatro
+archivos y retomada sin duplicar trabajo; no había ejecución hardware de esta
+versión antes de las pruebas. El usuario autorizó continuar y ejecutar los
+comandos sin PIN/GUI. Se mantiene la exclusión de PIN/GUI del agente.
+
+Nuevo modo **inspect/jcop4-idopte-df0f**, opt-in
+`JCOP4_DIAGNOSTIC_SELECT_DF0F=1` solo junto al modo de estado vacío y los
+anteriores dentro del proceso Idopte inventario/slots/empty stdin. Los demás
+modos y el lanzador de firma eliminan la variable heredada; configuración
+inválida/sin padre/raw spy bloquea transporte.
+
+Permite **un solo SELECT básico** 00/A4/02/00/Lc2/FIDDF0F, total7 u8bytes,
+ATR conectado validado, ADF conocido seleccionado/9000 y respuesta previa
+válida al estado vacío en MF (9000 o63Cx). El indicador del estado se establece
+solo tras transporte0 y respuesta SW-only de2bytes, y se descarta al cambiar
+conexión/contexto; no equivale a autenticación. Ese estado bajo MF obliga a
+volver a seleccionar ADF antes de permitir DF0F. Se requiere escribir el
+marcador privado antes del transporte. SELECT revoca READ del archivo anterior
+y **nunca habilita READ BINARY/RECORD de DF0F**. Presupuesto un SELECT por
+proceso, sin reposición; cualquier SW distinto de9000 detiene todo transporte
+posterior, incluido GET RESPONSE. Los permisos anteriores de lecturas/estado
+vacío no se amplían; VERIFY con datos, MSE/GA/SM/PSO/escrituras siguen bloqueados.
+
+Ejecución única por el agente:
+`nix develop --offline -c make inspect/jcop4-idopte-df0f READER=0`, informe
+privado `local/jcop4-idopte-df0f-OCE6tqH3/report.txt`, **22:03:13 UTC**:
+
+```text
+comparison_atr=known_jcop4
+public_select=known_master_file
+transport=0
+sw=9000
+diagnostic_pin_status=mf_pin1_case1_no_data
+public_header=00200001
+transport=0
+sw=63C7
+public_select=known_chipdoc_application
+transport=0
+sw=9000
+public_select=known_df0f_metadata_only
+public_header=00A40200
+transport=0
+sw=9000
+blocked_header=00B00000
+token_info_result=CKR_TOKEN_NOT_PRESENT
+module_exit_status=0
+observer_result=events_recorded
+diagnostic_result=token_info_unavailable
+```
+
+Inventario/compilación correctos. **70 APDU transmitidas**, 69SW9000 y una63C7.
+El SELECT DF0F recibió0/9000. El siguiente READ BINARY offset0 **no se
+transmitió**, por lo que no hay contenido ni SW de tarjeta para esa lectura.
+C_GetTokenInfo sigue indisponible; el módulo sale0 y el lanzador correctamente
+termina1. Es una interrupción del guard al acceso solicitado por Idopte,
+no rechazo de READ por la tarjeta ni el VERIFY6982 anterior. No se proporcionó
+PIN, no hubo login, firma o escritura.
+
+La captura del proveedor acredita selección y petición de lectura durante
+C_GetTokenInfo; no identifica por sí sola el propósito del archivo de150bytes,
+la seguridad86, una licencia, PACE/CA o causa de VERIFY6982. La consulta SELECT-only
+anterior aporta control/tamaño, pero no una política de lectura. Se mantiene
+READ DF0F bloqueado; no ejecutar consultas idénticas ni repetir PIN por inercia.
+Una futura excepción de lectura necesitaría modo separado y forma/tamaño
+acotados al archivo observado, sin registrar el contenido o cambiar la solicitud
+del proveedor. Si se busca una definición de propósito, usar fuente primaria
+aplicable al perfil, no atribuirla por una coincidencia de tamaño/FID.
+
+Pasaron **90 comprobaciones del observador/constructor/decoder,73 del lanzador
+y6 del lanzador de firma**, sin tarjeta. Incluyen secuencia/estado/ATR/ADF,
+selección corta con/sinLe, READ BINARY/RECORD y PIN bloqueados, reselección,
+SW61xx/6A82/69xx sin follow-up y log fallido antes de transporte. Delegación
+PC/SC real con transporte simulado, selección DF0F aceptada y READ bloqueado;
+constructor inválido/sin padre bloquea todo. Biblioteca real compilada. Helper
+público68/operación de firma12 previos intactos, no repetir suites sin cambios.
+Driver/submódulo intactos. Informes privados0700/0600 bajo local/, no publicar
+inventarios completos ni agregar capturas a Git. JCOP4/RSA3072 siguen pendientes.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño

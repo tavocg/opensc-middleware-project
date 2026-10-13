@@ -64,7 +64,7 @@ static FILE *fixture_reset(void)
 	control_size = 16; control_result = 0;
 	fixture_sw = 0x9000;
 	fixture_payload = 16; fixture_overrun = 0;
-	compare_pin_status = pin_status_calls = compare_cdf = read7005_budget = read7005_offset = read7005_calls = compare_pukdf = read7004_budget = read7004_offset = read7004_calls = compare_prkdf = read7002_budget = read7002_offset = read7002_calls = compare_aodf = read7001_budget = read7001_offset = read7001_calls = compare_read4109 = read4109_calls = compare_read4141 = read4141_budget = read4141_offset = read4141_calls = 0;
+	compare_select_df0f = select_df0f_calls = pin_status_result_valid = compare_pin_status = pin_status_calls = compare_cdf = read7005_budget = read7005_offset = read7005_calls = compare_pukdf = read7004_budget = read7004_offset = read7004_calls = compare_prkdf = read7002_budget = read7002_offset = read7002_calls = compare_aodf = read7001_budget = read7001_offset = read7001_calls = compare_read4109 = read4109_calls = compare_read4141 = read4141_budget = read4141_offset = read4141_calls = 0;
 	comparison_atr_ok = 1; /* Unit fixture simulates a validated connection. */
 	return file;
 }
@@ -128,6 +128,20 @@ static FILE *fixture_cdf(void)
 	assert(send_command(target, sizeof(target)) == 0 && selected_public_file == 8);
 	return file;
 }
+static FILE *fixture_df0f(void)
+{
+	const unsigned char read[] = { 0, 0xB0, 0, 0, 0 };
+	const unsigned char mf[] = { 0, 0xA4, 0, 0, 2, 0x3F, 0 };
+	const unsigned char status[] = { 0, 0x20, 0, 1 };
+	const unsigned char app[] = { 0, 0xA4, 4, 0x0C, 15, 0xE8, 0x28, 0xBD, 8, 0x0F, 0xA0, 0, 0, 3, 0x63, 0x64, 0x79, 0x6E, 0x69, 0x64 };
+	FILE *file = fixture_cdf(); compare_pin_status = compare_select_df0f = 1;
+	assert(send_large(read, sizeof(read)) == 0 && send_command(mf, sizeof(mf)) == 0);
+	fixture_payload = 0; fixture_sw = 0x63C7;
+	assert(send_command(status, sizeof(status)) == 0 && pin_status_result_valid);
+	fixture_payload = 16; fixture_sw = 0x9000;
+	assert(send_command(app, sizeof(app)) == 0 && selected_app);
+	return file;
+}
 int main(void)
 {
 	const unsigned char select[] = { 0, 0xA4, 0, 0x0C, 2, 0x2F, 0 };
@@ -155,6 +169,47 @@ int main(void)
 			send_command(version, sizeof(version)) == 0 && calls == 5);
 	check_private(file);
 	puts("PASS public observer forwards only allowed discovery and logs no payloads or lengths");
+	{
+		const unsigned char target[] = { 0, 0xA4, 2, 0, 2, 0xDF, 0x0F, 0 };
+		const unsigned char record[] = { 0, 0xB2, 1, 4, 0 };
+		for (int i = 0; i < 4; i++) {
+			file = fixture_df0f(); int before = calls;
+			assert(send_command(target, sizeof(target) - (i == 1)) == 0 && calls == before + 1 &&
+					selected_app && !selected_mf && !selected_public_file && select_df0f_calls == 1);
+			const unsigned char *next = i == 0 ? read : i == 1 ? record : i == 2 ? pin : target;
+			size_t size = i == 0 ? sizeof(read) : i == 1 ? sizeof(record) : i == 2 ? sizeof(pin) : sizeof(target);
+			assert(send_command(next, size) != 0 && calls == before + 1);
+			check_private(file);
+		}
+		puts("PASS DF0F SELECT-only opt-in forwards one exact selection and blocks binary/record READ, credentials and reselection");
+		for (int i = 0; i < 8; i++) {
+			unsigned char bad[sizeof(target)]; memcpy(bad, target, sizeof(bad));
+			file = fixture_df0f(); int before = calls;
+			if (i == 0) compare_select_df0f = 0;
+			if (i == 1) pin_status_result_valid = 0;
+			if (i == 2) comparison_atr_ok = 0;
+			if (i == 3) selected_app = 0;
+			if (i == 4) bad[0] = 1;
+			if (i == 5) bad[2] = 0;
+			if (i == 6) bad[3] = 0x0C;
+			if (i == 7) bad[6] = 0x0E;
+			assert(send_command(bad, sizeof(bad)) != 0 && calls == before);
+			check_private(file);
+		}
+		puts("PASS DF0F selection requires explicit opt-in, successful MF status, connected ATR and reselected known ADF with exact form");
+		for (int i = 0; i < 3; i++) {
+			file = fixture_df0f(); fixture_sw = i == 0 ? 0x6101 : i == 1 ? 0x6A82 : 0x6982;
+			int before = calls;
+			assert(send_command(target, sizeof(target)) == 0 && stopped && calls == before + 1);
+			assert(send_command(get_response, sizeof(get_response)) != 0 && send_command(read, sizeof(read)) != 0 && calls == before + 1);
+			check_private(file);
+		}
+		puts("PASS non-9000 SELECT DF0F response stops all later transport including GET RESPONSE without discarding its observed SW");
+		file = fixture_df0f(); int saved = trace_fd; trace_fd = open("/dev/full", O_WRONLY); assert(trace_fd >= 0);
+		int before = calls; assert(send_command(target, sizeof(target)) != 0 && calls == before);
+		close(trace_fd); trace_fd = saved; check_private(file);
+		puts("PASS DF0F SELECT stops before transport when its private marker cannot be recorded");
+	}
 	{
 		const unsigned char empty[] = { 0, 0x20, 0, 1 };
 		for (int i = 0; i < 9; i++) {

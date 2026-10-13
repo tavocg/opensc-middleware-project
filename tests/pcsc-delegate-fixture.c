@@ -84,7 +84,8 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *pci,
 					(size == 8 && cmd[7] == 0 && cmd[2] == 2 && fid == 0x7001 && selected_file == 0x4109) ||
 					(size == 8 && cmd[7] == 0 && cmd[2] == 2 && fid == 0x7002 && selected_file == 0x7001) ||
 					(size == 8 && cmd[7] == 0 && cmd[2] == 2 && fid == 0x7004 && selected_file == 0x7002) ||
-					(size == 8 && cmd[7] == 0 && cmd[2] == 2 && fid == 0x7005 && selected_file == 0x7004));
+					(size == 8 && cmd[7] == 0 && cmd[2] == 2 && fid == 0x7005 && selected_file == 0x7004) ||
+					(size == 8 && cmd[7] == 0 && cmd[2] == 2 && fid == 0xDF0F && selected_file == 0xFFFF));
 			selected_file = fid;
 		}
 	} else if (cmd[1] == 0xB0 && selected_file == 0x7005) {
