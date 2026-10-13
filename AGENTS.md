@@ -1,8 +1,24 @@
 # libjcop3p11: contexto para continuar
 
 **JCOP4, 13 de octubre de 2026:** último informe revisado
-`local/jcop4-signature-5Dpadr1N/report.txt`, **13:44:00 UTC**, principal
-`b9c5696`, OpenSC `3dfef6704`; ambos Git limpios al comenzar. Metadatos y
+`local/jcop4-security-info-9FQ37Lk3/report.txt`, **14:00:01 UTC**, principal
+`b41f16b`, OpenSC `3dfef6704`; ambos Git limpios al comenzar. Binding y
+metadatos correctos: clase AUTH tiene Card PIN y Card Admin Key (AuthKey,
+derived=1); no objeto Card CAN en esta enumeración. No usar la llave
+administrativa ni interpretar su ausencia de ruta como permiso para leerla.
+GET DATA de versión obtuvo transporte 0/SW 9000, pero el helper exigía seis
+bytes exactos y retornó 1. El informe antiguo no registra la longitud real:
+solo se puede deducir que era distinta de seis. **No se consultó CardAccess**.
+No hubo PIN, autenticación ni rechazo de seguridad en esta consulta.
+
+Corrección local: registrar longitud/bytes y aceptar respuestas de 0–6 bytes
+sin interpretar versión; solo una longitud superior al buffer detiene el
+flujo. Continuar con CardAccess tras 9000 aunque no use el formato eOI.
+Helper real compilado offline y 30 comprobaciones C pasadas. Repetir la
+consulta pública con la corrección; no repetir el intento autenticado.
+
+Informe autenticado anterior `local/jcop4-signature-5Dpadr1N/report.txt`,
+**13:44:00 UTC**, principal `b9c5696`: metadatos y
 certificado RSA 2048 validados; VERIFY vacío 63C7 y MSE 9000. **El único
 VERIFY con PIN transmitido devolvió 6982**, condición de seguridad no
 satisfecha. No hubo PSO ni firma. Reset y unlock dieron 0. No es la respuesta
@@ -43,7 +59,7 @@ GET DATA 00 CA 01 16 / Le 6, SELECT MF y una lectura B0 9C 00 / Le 256 de
 SFI 1C (CardAccess según OpenSC). No leer archivos de credenciales, CAN ni
 componentes privados; no VERIFY, MSE, PSO ni GENERAL AUTHENTICATE en este
 modo. Sin reintentos 6C/GET RESPONSE ni lecturas posteriores de CardAccess.
-Se registran disponibilidad y primer bloque, sin afirmar integridad del archivo
+Se registran longitud/bytes de versión, disponibilidad y primer bloque, sin afirmar integridad del archivo
 ni ausencia de PACE si falta. Informe privado local/jcop4-security-info-*/.
 
 El código local eoi_pin_cmd y el driver ChipDoc italiano abren PACE/CAN
@@ -52,9 +68,10 @@ Es una hipótesis para 6982, **no prueba del requisito en Costa Rica**. No
 activar eOI por ATR: AID/perfil/RSA difieren. También sigue sin resolverse
 si el orden MSE antes de VERIFY influye. La consulta nueva obtiene evidencia
 pública sin cambiar el protocolo autenticado ni el submódulo.
-Compiló el helper real offline; pasaron **29 comprobaciones del helper**
-y **19 del lanzador** con transporte simulado. Log C:
-build/opensc-offline/card-public-security-info-tests.log. Hardware pendiente.
+Compiló el helper real offline; pasaron **30 comprobaciones del helper**.
+Las **19 del lanzador** pasaron en la preparación anterior (sin cambios ahora).
+Log C: build/opensc-offline/card-public-security-info-tests.log.
+La consulta inicial fue ejecutada; CardAccess y longitud real siguen pendientes.
 
 Herramienta autenticada anterior, conservada para investigación futura:
 

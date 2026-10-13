@@ -394,6 +394,16 @@ int main(void)
 		reset_fixture(); cardaccess_sw = 0x9000; cardaccess_len = 256;
 		assert(card_public_info_main(5, args) == 0 && cardaccess_calls == 1 && unlock_calls == 1);
 		puts("PASS security discovery enumerates all authentication metadata and reads one public block without credentials or follow-up APDUs");
+		{
+			const int short_lengths[] = { 0, 1, 5 };
+			size_t i;
+			for (i = 0; i < sizeof(short_lengths) / sizeof(short_lengths[0]); i++) {
+				reset_fixture(); version_len = short_lengths[i];
+				assert(card_public_info_main(5, args) == 0 && version_calls == 1 &&
+						cardaccess_calls == 1 && !pin_calls && !mse_calls && unlock_calls == 1);
+			}
+			puts("PASS security discovery accepts bounded shorter version replies without assuming the eOI format or skipping CardAccess");
+		}
 		reset_fixture(); version_sw = 0x6D00; cardaccess_sw = 0x6A82;
 		assert(card_public_info_main(5, args) == 0 && version_calls == 1 && cardaccess_calls == 1 && unlock_calls == 1);
 		reset_fixture(); cardaccess_sw = 0x6B00;
@@ -405,8 +415,6 @@ int main(void)
 		assert(card_public_info_main(5, args) == 1 && version_calls == 1 && !cardaccess_calls);
 		reset_fixture(); version_result = SC_ERROR_TRANSMIT_FAILED;
 		assert(card_public_info_main(5, args) == 1 && version_calls == 1 && !cardaccess_calls && unlock_calls == 1);
-		reset_fixture(); version_len = 5;
-		assert(card_public_info_main(5, args) == 1 && version_calls == 1 && !cardaccess_calls);
 		reset_fixture(); version_len = 7;
 		assert(card_public_info_main(5, args) == 1 && !cardaccess_calls);
 		puts("PASS security discovery stops on version security, transport, length or retry status errors");

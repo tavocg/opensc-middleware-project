@@ -62,8 +62,10 @@ Cerrar firmador y otros clientes y mantener esta JCOP4 insertada. Compila
 solo una herramienta pequeña contra OpenSC existente y consulta metadatos
 de autenticación, versión y el primer bloque de CardAccess. No autentica
 ni firma. Informes privados en `local/jcop4-security-info-*/`. Pasaron
-29 comprobaciones del helper y 19 del lanzador, con transporte simulado;
-la consulta nueva en hardware está pendiente. No repetir el intento de PIN
+30 comprobaciones del helper y 19 del lanzador, con transporte simulado.
+La consulta inicial obtuvo `9000` para versión, pero el helper se detuvo
+por una suposición de longitud ya corregida; CardAccess sigue pendiente.
+No repetir el intento de PIN
 hasta identificar el requisito que falta. JCOP4 aún no está integrada en PKCS#11.
 RSA 3072 y modularidad para futuras generaciones siguen pendientes.
 La evidencia y el protocolo están en [docs/jcop4.md](docs/jcop4.md).

@@ -464,8 +464,10 @@ Operaciones después de leer EF.ATR/EF.DIR y metadatos PKCS#15:
    ruta y referencia a llave cuando aplica. Nunca lee el archivo de credencial
    al que pudiera apuntar esa ruta.
 2. Selecciona el AID anunciado y consulta seis bytes con `00 CA 01 16 06`,
-   el GET DATA utilizado por `eoi_init()`. Registra bytes sin asignarles aún
-   significado o versión comercial en esta tarjeta.
+   el GET DATA utilizado por `eoi_init()`. Registra longitud y bytes sin
+   asignarles significado o versión comercial en esta tarjeta. Acepta
+   respuestas de 0–6 bytes con 9000; la longitud exacta de eOI no es un
+   requisito demostrado del perfil CR. Una longitud mayor al buffer detiene.
 3. Selecciona MF `3F00` y lee **un solo bloque**, hasta 256 bytes, mediante
    `00 B0 9C 00 00`. SFI `1C` es el usado por `get_ef_card_access()` en
    `vendor/opensc/src/sm/sm-eac.c`. No hace lecturas posteriores, GET RESPONSE
@@ -477,14 +479,44 @@ La ausencia en esta consulta no prueba que no haya PACE u otro canal seguro.
 Encontrar algoritmos PACE en CardAccess tampoco demostraría por sí solo
 que sean obligatorios para verificar el PIN por contacto.
 
-El helper real compiló contra `build/opensc-offline`. Pasaron **29
-comprobaciones C** (24 previas y cinco grupos nuevos) y **19 del lanzador**
+El helper real compiló contra `build/opensc-offline`. Pasaron **30
+comprobaciones C** (24 previas y seis grupos nuevos) y **19 del lanzador**
 (17 previas y dos nuevas). Verifican clase AUTH con AuthKey sintético sin
 lectura de credencial, bytes y orden de las consultas, una sola lectura,
 estados opcionales, fallos de transporte/seguridad/longitud y limpieza;
 el lanzador verifica configuración aislada, stdin vacío y propagación de error.
 Log C: `build/opensc-offline/card-public-security-info-tests.log`.
 Sin pruebas nuevas en tarjeta por el agente ni cambios en el driver OpenSC.
+
+## Consulta de seguridad: 13 de octubre, 14:00:01 UTC
+
+Informe `local/jcop4-security-info-9FQ37Lk3/report.txt`, principal
+`b41f16b`, OpenSC `3dfef6704`. Binding y metadatos leídos correctamente.
+La enumeración de toda la clase AUTH devuelve **dos objetos**: Card PIN
+y Card Admin Key (AuthKey derivada, método 8, sin ruta ni ID de llave
+simétrica declarado). No se enumeró Card CAN; esto no descarta PACE ni
+otros mecanismos y no autoriza operaciones con la llave administrativa.
+
+SELECT de aplicación y transporte GET DATA terminaron bien, **SW 9000**.
+El helper falló por exigir exactamente seis bytes, una suposición tomada
+del perfil eOI que no está demostrada aquí. El informe no registraba la
+longitud recibida: se sabe que difiere de seis, pero no cuál fue. **No llegó
+a SELECT MF ni READ de CardAccess**; unlock 0 y proceso 1. No hubo VERIFY,
+PIN ni autenticación en esta consulta, y no se obtuvo 6982.
+
+Se corrigió el helper para registrar longitud/bytes, aceptar 0–6 bytes
+sin interpretar su formato y continuar la consulta pública de CardAccess
+tras 9000. Se mantiene el límite del buffer y la detención ante errores
+de seguridad/transporte. No se cambian APDU, reintentos ni el protocolo de
+firma. La regresión nueva cubre respuestas de 0, 1 y 5 bytes y comprueba
+que se llega a la única lectura pública, sin VERIFY/MSE ni credenciales;
+7 bytes sigue siendo un error. Pasaron las 30 comprobaciones del helper
+y su compilación real offline. El lanzador no cambió ni se repitió su suite.
+
+Siguiente intervención: ejecutar **una vez** la misma consulta pública
+`make inspect/jcop4-security-info READER=0`, con esta corrección y los otros
+clientes cerrados. La repetición responde al fallo del helper; no solicita
+un nuevo intento de PIN. VERIFY 6982 del informe autenticado sigue sin resolver.
 
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 

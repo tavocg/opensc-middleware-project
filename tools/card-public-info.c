@@ -98,10 +98,15 @@ static int probe_security_info(sc_card_t *card, const struct sc_aid *aid)
 	if (rv < 0)
 		return 1;
 	printf("version_sw=%02X%02X\n", apdu.sw1, apdu.sw2);
+	printf("version_response_length=%zu\n", apdu.resplen);
 	if (apdu.sw1 == 0x90 && apdu.sw2 == 0) {
-		if (apdu.resplen != sizeof(version))
+		if (apdu.resplen > sizeof(version)) {
+			printf("version_result=response_exceeds_buffer_stop\n");
 			return 1;
+		}
 		print_hex("version_bytes", version, apdu.resplen);
+		printf("version_result=%s\n", apdu.resplen == sizeof(version) ?
+				"six_bytes_uninterpreted" : "different_length_uninterpreted");
 	} else if (optional_public_status(apdu.sw1, apdu.sw2)) {
 		printf("version_result=unavailable_in_this_query\n");
 	} else {
