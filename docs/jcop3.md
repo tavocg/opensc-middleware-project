@@ -2834,3 +2834,89 @@ Cerrar GUI tras terminar; detenerse al primer fallo, sin reintentar PIN.
 Revisar sustitución de token/sesiones, nueva autenticación, reserva y ambos
 PDF. Sin recompilar por cambios del helper/documentación. No repetir las
 pruebas peer ya realizadas ni cambiar por defecto el perfil normal.
+
+## Reinserción con lock_login: dos PDF verificados, error inicial separado
+
+Revisión sobre principal 3cbc9e7 y OpenSC 3dfef6704, limpios al iniciar.
+Capturas del 13 de octubre, 05:13–05:18 UTC (12 de octubre, 23:13–23:18 de
+Costa Rica). El usuario informa un error inicial posiblemente humano y
+éxito en las últimas dos firmas con retirada/reinserción. Los registros
+permiten distinguir un rechazo local de PIN de la prueba final exitosa.
+No atribuir la causa del rechazo a la persona sin evidencia adicional.
+
+| GUI | Inicio UTC | Eventos revisados | Resultado |
+| --- | --- | ---: | --- |
+| M6TUGgHo | 05:13:20 | 382 | Primera firma OK, cambio de tarjeta detectado; dos logins posteriores fallan localmente al construir VERIFY, -1300/CKR_ARGUMENTS_BAD |
+| RjjRHcGv | 05:14:57 | 207 | Un VERIFY/login y una firma RSA OK; sin cambio de tarjeta registrado |
+| jVrFj373 | 05:15:49 | 343 | Dos VERIFY/logins y firmas RSA OK, logout software intermedio; sin cambio de tarjeta registrado |
+| 4CWjxEB0 | 05:17:07 | 207 | Un VERIFY/login y una firma RSA OK; sin cambio de tarjeta registrado |
+| lqSwrf8P | 05:17:57 | 404 | Dos VERIFY/logins y firmas RSA OK; cambio de tarjeta y limpieza de sesiones entre ambas |
+
+Todas usan lock_login=yes, candidata PIN_STATUS_IN_PLACE y el mismo módulo.
+Copias privadas api-reviewed.log y analysis.json preservan los eventos.
+No interpretar ausencia de CARD_CHANGED en una captura como prueba de que
+el usuario nunca retiró tarjeta; solo indica qué sustitución observó el
+módulo. Son instancias de GUI distintas. La última sí registra reinserción
+entre dos firmas dentro de una misma captura.
+
+### Error inicial antes de transmitir PIN
+
+M6TUGgHo: firma válida en RSA 224/SignFinal 226; presencia PRESENT|CHANGED
+en 227 y 232, limpieza de token/sesiones. Después PRE_VERIFY_SELECT pasa
+en 350 y 379, pero PIN_APDU_BUILD falla -1300 en 351 y 380, VERIFY devuelve
+ese error y C_Login da 0x7 en 353 y 382. No hay PIN_TRANSMIT en esos dos
+intentos; iso7816_pin_cmd retorna tras el fallo de construcción y antes
+del transporte. No son respuestas de PIN incorrecto de la tarjeta, ni
+RSA 6982, ni demuestran decremento de intentos por un VERIFY con secreto.
+El usuario cree que hubo error humano, pero no se conoce el motivo exacto
+de la entrada rechazada. No cambiar validación o registrar contenido,
+longitud, hash o APDU del PIN para explicarlo. La causa queda pendiente;
+no afirmar que ese camino está corregido porque las firmas posteriores pasen.
+
+### Última reinserción y nueva autenticación
+
+lqSwrf8P: primer PRE_VERIFY_SELECT 115, PIN_TRANSMIT 117 = 9000,
+VERIFY 118 y C_Login 119 OK; RSA 205 = 9000, SignFinal 207 OK.
+Presencia 208 = 7 (PRESENT|CHANGED|INUSE), 213 = 3 (PRESENT|CHANGED).
+SLOT_TOKEN_REMOVED 209–212 y 214–217 son dos rondas de cuatro slots, una
+con objeto de tarjeta existente; no ocho retiradas físicas. No hay muestra
+de ausencia intermedia. El cambio basta para invalidar estado anterior.
+
+Después se reconstruye el token, se consulta política pública antes del
+login y se adquiere una nueva transacción física (CARD_LOCK 307).
+PRE_VERIFY_SELECT 312, PIN_TRANSMIT 314 = 9000,
+VERIFY 315/C_Login 316 OK; RSA 402 = 9000 y SignFinal 404 OK.
+No atajo de autenticación previo, revalidación automática de PIN, fallo
+de lock ni CKR_USER_NOT_LOGGED_IN en estas dos firmas. Esto respalda
+reinserción con la reserva de este perfil para este lector/tarjeta.
+La fecha individual de cada APDU no está registrada; no asignar archivos
+al evento solo por nombre o tiempo de lanzamiento.
+
+Ambos PDF disponibles quedaron copiados y verificados:
+
+| PDF | Tamaño | Informe privado bajo local/jcop3-pdf-verification- |
+| --- | ---: | --- |
+| jcop3-lock-hotplug-before.pdf | 80482 | sdz525u1/report.json |
+| jcop3-lock-hotplug-after.pdf | 80462 | pnc0zlig/report.json |
+
+En ambos: CAdES válido con certificado exacto de LlaveDeFirma, revisión
+de 38402 bytes; sello CMS RFC3161 e imprint SHA-512 válidos para revisión
+final. Original/texto/render preservados. Sin validación de confianza,
+revocación/LTV. Los tamaños distintos no implican fallo de integridad.
+No publicar originales ni copias/certificados/informes privados.
+
+No hubo cambio de código ni necesidad de recompilar/repetir la suite por
+esta revisión documental; siguen las 288 regresiones anteriores. Primer
+hito RSA, PDF, consecutivas, reserva frente a otro cliente y reinserción
+están respaldados para este perfil optativo, lector y tarjeta. Esto no
+equivale a soporte completo: siguen perfil por defecto/binding, PuKDF,
+rechazo local intermitente, concurrencia independiente, otras tarjetas,
+mecanismos/plataformas y limpieza de experimentos. No activar lock_login
+por defecto para todas las tarjetas ni cachear PIN como recuperación.
+
+Próximo trabajo autónomo: revisar el conjunto de cambios contra la base
+upstream y separar las correcciones del perfil de la instrumentación y
+opciones experimentales. Mantener capturas y rama local. Antes de preparar
+reporte/PR upstream, reproducir contra master actual conforme a AGENTS.md
+del submódulo; no asumir que esa comparación ya se hizo. No pedir otra
+firma/reinserción como primer paso ni volver a probar PIN sin motivo nuevo.

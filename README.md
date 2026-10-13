@@ -14,6 +14,38 @@ con OpenSSL en la tarjeta observada.
 
 ## Punto actual para continuar
 
+Con OpenSC `3dfef6704` y el perfil optativo `lock_login`, se verificaron
+PDF firmados con `LlaveDeFirma`, firmas consecutivas y una retirada/reinserción
+entre dos firmas en la misma GUI. Las últimas pruebas son del 12 de octubre
+de 2026 a las 23:18 de Costa Rica. La suite contiene 288 comprobaciones sin
+tarjeta; estas no sustituyen las pruebas reales descritas en
+[docs/jcop3.md](docs/jcop3.md).
+
+Para usar ese perfil con la compilación existente:
+
+```bash
+nix develop
+make firmador/jcop3-lock-login
+```
+
+El perfil mantiene consultas físicas sin reseleccionar la aplicación después
+del login, verifica el PIN en cada login y reserva la tarjeta hasta cerrar
+la GUI en las pruebas realizadas. Otros clientes pueden esperar durante
+esa reserva. Mantiene cachés de PIN/archivos desactivadas y depuración 0.
+Es optativo y limita el uso simultáneo por otros programas. El objetivo
+normal `firmador/jcop3` conserva su configuración anterior.
+
+Un rechazo local intermitente `CKR_ARGUMENTS_BAD` al preparar VERIFY sigue
+sin causa confirmada; los últimos dos rechazos no transmitieron el PIN.
+Ante error, detenerse y revisar registros, sin reintentos automáticos.
+PuKDF, integración por defecto, otras tarjetas, plataformas y mecanismos
+siguen pendientes. No hay soporte completo ni cambios publicados upstream.
+
+Consultar [AGENTS.md](AGENTS.md) para continuar desde las capturas recientes.
+No repetir pruebas de firma/reinserción ya verificadas como primer paso.
+
+## Historial de desarrollo y comandos de diagnóstico
+
 Consultar [AGENTS.md](AGENTS.md) y las últimas secciones de
 [docs/jcop3.md](docs/jcop3.md). Ya se leen certificados RSA y la política
 del PIN (7 intentos restantes en la última consulta pública). Se corrigieron
