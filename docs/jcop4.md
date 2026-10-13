@@ -1976,6 +1976,151 @@ Las 12+6 comprobaciones de firma anteriores siguen vigentes, sin repetir
 suites. No hardware ni autenticación por el agente, ni nueva firma válida
 JCOP4; integración PKCS#11/PDF y RSA3072 pendientes.
 
+## Comparación empírica de APDU: siguiente observación sin PIN
+
+El usuario propone comparar el tráfico real de libidop11.so con el prototipo
+y experimentar con pasos/valores, aunque no haya definición completa de cada
+byte. Es una vía válida de ingeniería inversa. La falta de manual no impide
+observar comandos públicos o ensayar hipótesis concretas; sí requiere distinguir
+hechos, dependencias del middleware y requisitos criptográficos de la tarjeta.
+
+Comparación disponible al comenzar en principal `3e24829`, OpenSC `3dfef6704`:
+
+| Etapa | Idopte observado en esta JCOP4 | ZIP revisado | Helper experimental actual |
+| --- | --- | --- | --- |
+| Nombre/versión | CA0100 y CA0116, transporte 0/SW9000 | No son parte de do_sign; comentarios suponen ChipDoc | Versión consultada por diagnóstico anterior; firma valida ATR/AID/metadatos |
+| SELECT de aplicación | 00 A4 04 0C al AID conocido, SW9000 | AID candidato coincide en constantes; do_sign prueba varios | Selecciona solo el AID conocido anunciado en EF.DIR |
+| Archivo previo al canal | SELECT 4141: 6F/400 bytes/86=00FFFF; READ bloqueado antes de transporte | Prototipo SM selecciona D004 y pretende leer 137 bytes; no evidencia actual de ese archivo | No lee 4141 ni D004 |
+| MSE para CA/ECDH | No observado después del bloqueo READ | 00 22 41 A4 0C 80 0A 04 00 7F 00 07 02 02 03 02 02 02; OID CA/AES128 y Le02 | No establece canal CA/SM |
+| GENERAL AUTHENTICATE | No observado en esta consulta | Prototipo construye 10 86 00 00 / 7C / 80 / punto P521, sin cierre mostrado | No envía GA |
+| VERIFY real | Sin captura autenticada de Idopte | CLI directa antes de MSE; SM incompleto en otra ruta | 6982 tanto antes como después de MSE de firma |
+| Firma RSA | Usuario confirma uso exitoso de Idopte instalado, sin traza autenticada aquí | CLI directa usa MSE SET AT/OID y DigestInfo, sin verificación de certificado | MSE SET DST/91022891 aceptado; PSO con digest32 preparado pero no alcanzado |
+
+Solo SELECT 4141 tiene aquí comando/respuesta completos capturados por el modo
+spy. Los demás APDU permitidos se registraron por cabecera y SW; no inventar
+los FID/Lc/Le omitidos. La consulta Idopte es inventario de slots, no una firma:
+que no muestre MSE/GA todavía no demuestra que no se usen al autenticar.
+
+### Modo optativo de lectura para comparación
+
+Se prepara **inspect/jcop4-idopte-compare**, distinto de discovery y spy, por la
+solicitud de comparación posterior. La ampliación permite observar el progreso
+tras la operación concreta que nuestro propio guard interrumpió. **No está
+basada en interpretar 86=00FFFF como acceso público ni cambia la política de
+los modos anteriores**. Idopte recibe el contenido de 4141 en su proceso; el
+observador no lo registra ni interpreta su propósito. No autenticación ni PIN.
+
+Con misma JCOP4 y firmador/otros clientes cerrados, ejecutar una vez:
+
+```sh
+nix develop -c make inspect/jcop4-idopte-compare READER=0
+```
+
+El lanzador conserva inventario de lector/ATR, módulo instalado fijo,
+--show-info --list-slots, stdin vacío, entorno aislado e informes privados.
+Opt-in JCOP4_DIAGNOSTIC_READ4141=1 solo para ese proceso; se elimina antes del
+inventario y en los demás modos, incluida firma. No ejecutar con firmador.
+
+El guard exige aplicación conocida seleccionada/9000 y el mismo SELECT 4141
+ya observado. En SCardConnect/Reconnect comprueba el **ATR de la conexión real**
+mediante SCardGetAttrib(ATR_STRING), sin guardar sus bytes. ATR ausente/distinto
+detiene antes de APDU. Esto evita atribuir la conexión al índice del inventario:
+Idopte --list-slots enumera todos los lectores; READER solo selecciona la consulta
+previa. La comprobación del ATR no envía APDU. Permite exclusivamente READ BINARY básico de ese archivo, sin
+SFI, payload ni SM; acepta caso-2 corto o extendido con Le explícito no nulo.
+El Le00 corto significa 256 y sí se permite. Offset inicial cero y el siguiente
+debe continuar los bytes realmente devueltos. **Máximo dos lecturas y 400 bytes
+solicitados en todo el proceso**: SELECT no repone presupuesto/offset ni permite
+releer; una reconexión después de READ detiene definitivamente. Un fallo de
+escritura del registro también detiene antes de transmitir la lectura.
+No archivo nuevo, READ RECORD, otra referencia, escritura o control de PIN.
+
+Se transmite con buffer temporal de Le+2, nunca superior a 402 bytes, y se
+exige capacidad suficiente del cliente. Solo transporte correcto, respuesta
+entre 2 y Le+2 y SW9000/6282 permiten devolver los datos a Idopte. Otro SW,
+61xx/GET RESPONSE, transporte o tamaño detiene; sin fallback. read4141_sw y
+read4141_transport distinguen un SW rechazado de un bloqueo propio del guard.
+La respuesta nunca se copia a las trazas. El modo READ y la captura SELECT
+spy son incompatibles; configuración opt-in inválida detiene antes de APDU.
+
+Se mantienen bloqueados **VERIFY incluso vacío, MSE, GA, SM, PSO** y operaciones
+administrativas. Si Idopte intenta exactamente el MSE CA conocido, se registra
+solo blocked_mse_profile=ca_ecdh_aes128/ca_ecdh_3des y blocked_mse_case=
+short_case3/short_case4. Son etiquetas de constantes públicas ya identificadas,
+no buffers arbitrarios ni permiso de transporte. Otros MSE solo muestran
+cabecera. No longitudes/credenciales o respuestas de archivo en el log.
+
+Archivos local/jcop4-idopte-compare-*/report.txt y public-headers.txt, permisos
+privados. El inventario Idopte puede imprimir identificadores derivados del
+token: no publicar los informes completos. No raw/txt de READ ni pcsc-spy
+global. Module exit distinto de cero por el siguiente bloqueo es esperable;
+revisar SW de lectura y primer comando bloqueado antes de repetir o ampliar.
+
+### Cómo elegir variantes que respondan una duda
+
+1. Obtener secuencia base del proveedor hasta el próximo bloqueo y comparar
+   la **misma tarjeta/aplicación**, sin trasladar éxito de otra personalización.
+2. Identificar qué dato se necesita para reproducir el paso. Si el comando
+   siguiente es MSE CA, contrastar su identificador/caso con el literal del ZIP;
+   si es otro SELECT, estudiar ese archivo antes de autorizar una lectura.
+3. Cambiar una sola variable comprobable en un diagnóstico acotado y separado,
+   con reset/limpieza y resultado de transporte/SW. No barridos ni credenciales.
+   La prueba de orden VERIFY/MSE ya respondió negativamente esa hipótesis.
+4. Distinguir dependencia del proceso Idopte de condición de la tarjeta: que
+   Idopte avance tras READ puede demostrar que necesitaba esos datos para
+   preparar el siguiente comando, sin demostrar que leerlos cambie autenticación.
+5. En protocolos criptográficos, identificar nonce, clave efímera, contador,
+   MAC y OID. Bytes aleatorios distintos entre sesiones no implican variantes
+   arbitrarias. Cambiar datos autenticados exige regenerar su MAC/contexto;
+   omitir comprobaciones de MAC o aceptar 6982 no produce una firma válida.
+
+Pasaron **41 comprobaciones del observador/decoder, 43 del lanzador y 6 del
+lanzador de firma**, sin hardware. Incluyen lectura corta/extendida acotada,
+presupuesto no renovable, continuidad, restricciones de forma/buffer, rechazo
+69xx/61xx/respuesta excesiva, VERIFY antes del backend, clasificación MSE sin
+transporte, incompatibilidad spy/READ y aislamiento del entorno. Delegación
+PC/SC real con plugin/transporte ficticios y biblioteca de diagnóstico real
+compilada. Primer fallo de integración fue fixture limitado a D003, corregido;
+no error de tarjeta. Helper de firma/público y driver intactos. No ejecutar
+Idopte o hardware por el agente durante esa preparación. La autorización
+posterior del usuario permite ejecutar comandos sin PIN ni GUI, incluidos estos
+diagnósticos y Git; resultado de la primera ejecución a continuación.
+JCOP4, firma PKCS#11/PDF y RSA3072 siguen pendientes.
+
+### READ 4141 aceptado; siguiente SELECT bloqueado: 19:55:02 UTC
+
+El agente ejecutó `nix develop --offline -c make inspect/jcop4-idopte-compare
+READER=0` tras la autorización del usuario para comandos sin PIN ni GUI.
+Informe privado `local/jcop4-idopte-compare-ReO2RheL/report.txt`, principal
+`3e24829` con cambios pendientes, OpenSC `3dfef6704` intacto. Inventario y
+compilación correctos; `comparison_atr=known_jcop4` verifica la conexión real.
+
+| Paso observado | Transporte / SW | Alcance de la evidencia |
+| --- | --- | --- |
+| SELECT 4141 en aplicación conocida | 0 / 9000 | Selección aceptada |
+| READ BINARY, cabecera 00 B0 00 00 | 0 / 9000 | Lectura sin autenticación aceptada; contenido omitido |
+| READ BINARY, cabecera 00 B0 00 DF | 0 / 9000 | Segunda lectura aceptada; offset DF, contenido omitido |
+| SELECT EF 4109 | Bloqueado antes de transporte | Intento del proveedor; no respuesta de tarjeta |
+
+El registro no conserva Le ni longitudes devueltas: no afirmar lectura completa
+de los 400 bytes. Hay dos lecturas diagnósticas; sus contenidos solo se devolvieron
+al proceso Idopte. Directorio 0700, informe/cabeceras 0600. Ningún PIN, VERIFY,
+MSE, GA, PSO o escritura llegó a la tarjeta. `module_exit_status=1` y el error de
+Make son consecuencia compatible con el bloqueo de SELECT 4109; el observador
+sí registró los eventos. No es el VERIFY 6982 anterior ni un rechazo de READ.
+
+Esto identifica otro paso de inventario que el helper/ZIP no reproduce; no
+demuestra que leer 4141 establezca autenticación, ni que 4109 contenga una clave
+CA, CAN, CardAccess o datos públicos. No se encontró referencia a 4109 en el
+código local/ZIP revisado; las búsquedas públicas no dieron una definición
+aplicable. El siguiente diagnóstico propuesto es SELECT-only de 4109 bajo la
+aplicación observada, para revisar metadatos antes de decidir una lectura.
+No repetir esta consulta ni ampliar READ por el solo orden de los archivos.
+
+El commit intentado por el agente falló al crear `.git/index.lock`:
+`Read-only file system`. La autorización existe; el montaje de `.git` en este
+entorno impide escribirlo. No se creó un commit ni se alteró OpenSC.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño

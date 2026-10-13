@@ -1,6 +1,90 @@
 # libjcop3p11: contexto para continuar
 
+**Autorización vigente del usuario:** el agente ejecuta los comandos de Git y
+los comandos que no requieran PIN ni GUI, incluidos diagnósticos acotados con
+la tarjeta. El usuario ejecuta las operaciones que requieran PIN o GUI. Esto
+sustituye las restricciones anteriores de no ejecutar Git/hardware/Idopte por
+el agente; conservar límites de cada diagnóstico y privacidad de los registros.
+
+**Comparación ejecutada por el agente: 13 de octubre, 19:55:02 UTC.**
+Informe `local/jcop4-idopte-compare-ReO2RheL/report.txt`, principal `3e24829`
+con cambios del diagnóstico pendientes de commit; OpenSC `3dfef6704`, intacto.
+Compilación/inventario correctos, comparison_atr=known_jcop4. SELECT 4141 y
+dos READ BINARY básicos (`00B00000`, luego `00B000DF`) -> transporte 0/SW
+9000. Contenidos omitidos; no afirmar que se leyeron los 400 bytes completos
+porque la traza no registra longitudes. Después Idopte intentó SELECT EF
+**4109**, bloqueado antes de transmitir: sin respuesta de tarjeta ni metadatos.
+module_exit_status=1/observer_result=events_recorded corresponde a ese bloqueo,
+no a rechazo de READ 4141. No VERIFY, MSE, GA, PSO ni PIN. No atribuir 4141/4109
+a CA/PACE/llave pública por su orden; la consulta solo enumera slots.
+No referencias de 4109 en fuentes locales revisadas/ZIP; búsqueda pública sin
+definición aplicable. No repetir la consulta sin cambiar una hipótesis concreta.
+Siguiente paso técnico: preparar SELECT-only 4109 bajo el contexto observado
+para obtener metadatos antes de decidir READ, sin habilitar lecturas generales.
+
+El agente intentó Git tras autorización: creación de `.git/index.lock` falló
+con **Read-only file system**. El sandbox permite leer `.git`, no escribirlo;
+no hay mecanismo de aprobación de sandbox disponible. No se creó commit.
+Documentación y código sí escritos; `git diff --check` correcto. Si continúa
+este montaje, el usuario debe ejecutar el commit preparado o habilitar escritura
+de `.git` en el entorno. No confundir este límite técnico con falta de permiso.
+
+**Comparación experimental Idopte/APDU preparada, posterior a 6982.**
+Principal `3e24829` / OpenSC `3dfef6704` al comenzar. El usuario pidió comparar
+APDU reales de libidop11.so con el ZIP y estudiar necesidad de pasos/variantes
+aunque los bytes no estén completamente documentados. Esta instrucción permite
+preparar una nueva observación acotada; **la falta de manual no debe bloquear
+toda investigación empírica**. El agente puede ejecutar el diagnóstico sin PIN
+y crear sus commits, conforme a la autorización vigente. No firma JCOP4 nueva.
+
+Comparación en docs/jcop4.md: Idopte seleccionó 4141 y su READ fue bloqueado
+por nuestro guard, ZIP SM busca D004 (137 bytes supuestos), helper firma omite
+ambos. No tenemos aún una traza de preparación autenticada de Idopte ni
+evidencia para asignar 4141 a CA. El orden VERIFY/MSE ya falló en ambas variantes.
+No repetir PIN por esa hipótesis ni usar 4FGWOtpI.
+
+Nuevo **make inspect/jcop4-idopte-compare READER=0**, --idopte-compare: usa
+exclusivamente Idopte --show-info --list-slots, stdin vacío y guard con opt-in
+**JCOP4_DIAGNOSTIC_READ4141=1**, dentro de ese proceso. Default y modo spy
+conservan bloqueo READ 4141. **Excepción nueva de lectura para comparación,
+no deducción de permiso público por 86=00FFFF**: Idopte recibe el contenido,
+observador no lo registra. Solo después de SELECT básico exacto 4141 en ADF
+conocido/9000. En SCardConnect/Reconnect verifica **ATR de la conexión real**
+con SCardGetAttrib(ATR_STRING), sin registrar bytes; ausente/distinto detiene
+antes de APDU. --list-slots enumera todos los lectores, READER solo selecciona
+inventario previo; no atribuir por índice. READ BINARY básico, sin SFI ni datos de entrada, corto o extendido;
+offset inicial 0 y siguiente contiguo a bytes devueltos, **máximo dos lecturas
+y 400 bytes solicitados en todo el proceso**. SELECT no repone offset/budget ni
+permite releer; reconexión después de READ detiene definitivamente, otro handle
+también. Fallo de escritura del registro bloquea antes de READ. Respuesta temporal <= Le+2, capacidad cliente adecuada,
+9000/6282 exclusivamente; otro SW/continuación/transporte/tamaño detiene, sin
+GET RESPONSE de esa lectura. Ningún READ RECORD, otro archivo nuevo, escritura,
+VERIFY incluso vacío, MSE/GA/SM/PSO ni control de PIN llega al backend.
+
+Raw spy y modo de lectura son incompatibles; opt-in inválido bloquea. No raw
+ni captura estándar pcsc-spy/FIFO. Si se bloquea MSE exactamente reconocible,
+registra solo blocked_mse_profile=ca_ecdh_aes128/ca_ecdh_3des y caso corto 3/4,
+sin volcar buffers ni transmitirlo. No reconoce otros valores por analogía.
+Lanzadores de inventario y firma limpian la nueva variable externa. Registros
+local/jcop4-idopte-compare-*/ privados: report.txt y public-headers.txt, con
+cabeceras/SW y etiquetas fijas, **sin respuestas de READ**. Inventario Idopte
+puede incluir identificadores; no publicar informes completos ni agregarlos a Git.
+Error de módulo por siguiente bloqueo sigue esperable: distinguir SW real de
+read4141_sw y rechazo del guard. No ampliar siguientes permisos automáticamente.
+
+Pasaron **41 comprobaciones del observador/decoder, 43 del lanzador y 6 del
+lanzador de firma**, fake transport/redirector real, ninguna tarjeta/Idopte real.
+Biblioteca de diagnóstico compilada. Helper público (54 previas), operación de
+firma (12 previas) y driver intactos; no repetir esas suites sin cambios. Primera
+ejecución de integración falló por fixture que solo permitía D003; actualizado
+para esta excepción y luego suites completas correctas, no error de hardware.
+Siguiente ejecución por el agente: misma JCOP4 y otros clientes cerrados,
+**nix develop -c make inspect/jcop4-idopte-compare READER=0**. No introducir
+PIN, no usar guard con firmador. Revisar READ/SW/siguiente bloqueo y comparar
+antes de elegir una sola variante de protocolo. Ver plan en docs/jcop4.md.
+
 **Resultado VERIFY antes de MSE: 13 de octubre de 2026, 19:00:58 UTC.**
+Registro anterior; próxima investigación experimental actual descrita arriba.
 Informe **local/jcop4-signature-6m61lek4/report.txt**, principal `3acd6b9`,
 OpenSC `3dfef6704`; Git principal/driver limpios al comenzar salvo PDF del usuario
 sin seguimiento. mode=experimental_apdu_sha256_rsa_verify_first, lector índice

@@ -44,6 +44,7 @@ fi
     ${LIBPCSCLITE_DELEGATE-unset} == unset && ${LIBPCSCLITE_SPY_DELEGATE-unset} == unset &&
     ${LD_PRELOAD-unset} == unset && ${OPENSC_DEEPBIND-unset} == unset &&
     ${JCOP4_PUBLIC_DISCOVERY_TRACE-unset} == unset && ${JCOP4_PUBLIC_SELECT_SPY_TRACE-unset} == unset &&
+    ${JCOP4_DIAGNOSTIC_READ4141-unset} == unset &&
     ${OPENSC_DEBUG-} == 0 && $(stat -c %a "$2") == 700 && $(stat -c %a "$OPENSC_CONF") == 600 ]] || exit 94
 printf 'helper\n' >> "$FIXTURE_SIGN_ROOT/called"
 if [[ ${FIXTURE_HELPER_FAILURE:-0} != 0 ]]; then exit "$FIXTURE_HELPER_FAILURE"; fi
@@ -57,6 +58,7 @@ export OPENSC_JCOP3_SESSION_STATE=yes OPENSC_JCOP3_PIN_STATUS_IN_PLACE=yes
 export OPENSC_JCOP3_POST_LOGIN_STATUS=yes OPENSC_JCOP3_POST_LOGIN_SELECT=yes
 export LIBPCSCLITE_DELEGATE=/should/not/be/used LIBPCSCLITE_SPY_DELEGATE=/should/not/be/used
 export LD_PRELOAD= OPENSC_DEEPBIND=1 JCOP4_PUBLIC_DISCOVERY_TRACE=/should/not/be/used JCOP4_PUBLIC_SELECT_SPY_TRACE=/should/not/be/used
+export JCOP4_DIAGNOSTIC_READ4141=1
 printf -v task_command 'bash %q' "$task_tmp/scripts/sign-jcop4.sh"
 task_run() {
     local task_expected=$1 task_rc=0

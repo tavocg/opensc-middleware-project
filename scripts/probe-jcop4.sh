@@ -6,8 +6,8 @@ umask 077
 task_reader=${1:-${READER:-0}}
 task_mode=${2:---probe}
 if (( $# > 2 )) || [[ ! $task_reader =~ ^[0-9]+$ ]] ||
-        [[ $task_mode != --probe && $task_mode != --aids && $task_mode != --files && $task_mode != --pkcs15 && $task_mode != --sign-setup && $task_mode != --pin-status && $task_mode != --security-info && $task_mode != --pin-policy && $task_mode != --odf-map && $task_mode != --file4141 && $task_mode != --idopte && $task_mode != --idopte-discovery && $task_mode != --idopte-spy ]]; then
-    printf 'Uso: bash scripts/probe-jcop4.sh [índice numérico de lector] [--probe|--aids|--files|--pkcs15|--sign-setup|--pin-status|--security-info|--pin-policy|--odf-map|--file4141|--idopte|--idopte-discovery|--idopte-spy]\n' >&2
+        [[ $task_mode != --probe && $task_mode != --aids && $task_mode != --files && $task_mode != --pkcs15 && $task_mode != --sign-setup && $task_mode != --pin-status && $task_mode != --security-info && $task_mode != --pin-policy && $task_mode != --odf-map && $task_mode != --file4141 && $task_mode != --idopte && $task_mode != --idopte-discovery && $task_mode != --idopte-spy && $task_mode != --idopte-compare ]]; then
+    printf 'Uso: bash scripts/probe-jcop4.sh [índice numérico de lector] [--probe|--aids|--files|--pkcs15|--sign-setup|--pin-status|--security-info|--pin-policy|--odf-map|--file4141|--idopte|--idopte-discovery|--idopte-spy|--idopte-compare]\n' >&2
     exit 2
 fi
 task_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
@@ -38,6 +38,8 @@ elif [[ $task_mode == --idopte ]]; then
     task_dir=$(mktemp -d "$task_root/local/jcop4-idopte-XXXXXXXX")
 elif [[ $task_mode == --idopte-spy ]]; then
     task_dir=$(mktemp -d "$task_root/local/jcop4-idopte-spy-XXXXXXXX")
+elif [[ $task_mode == --idopte-compare ]]; then
+    task_dir=$(mktemp -d "$task_root/local/jcop4-idopte-compare-XXXXXXXX")
 elif [[ $task_mode == --idopte-discovery ]]; then
     task_dir=$(mktemp -d "$task_root/local/jcop4-idopte-discovery-XXXXXXXX")
 elif [[ $task_mode == --security-info ]]; then
@@ -84,7 +86,7 @@ task_record_tool() {
     printf ' %q' "$@" >> "$task_report"
     printf '\n' >> "$task_report"
     env -u OPENSC_API_TRACE_FILE -u OPENSC_DEBUG_FILE -u OPENSC_DEEPBIND -u LD_PRELOAD -u JCOP4_PUBLIC_DISCOVERY_TRACE \
-        -u LIBPCSCLITE_DELEGATE -u LIBPCSCLITE_SPY_DELEGATE -u JCOP4_PUBLIC_SELECT_SPY_TRACE \
+        -u LIBPCSCLITE_DELEGATE -u LIBPCSCLITE_SPY_DELEGATE -u JCOP4_PUBLIC_SELECT_SPY_TRACE -u JCOP4_DIAGNOSTIC_READ4141 \
         -u OPENSC_JCOP3_SESSION_STATE -u OPENSC_JCOP3_PIN_STATUS_IN_PLACE \
         -u OPENSC_JCOP3_POST_LOGIN_STATUS -u OPENSC_JCOP3_POST_LOGIN_SELECT \
         OPENSC_DEBUG=0 OPENSC_CONF="$task_config" "${task_command_env[@]}" \
@@ -123,7 +125,7 @@ if [[ $task_atr_ok != yes ]]; then
     exit 1
 fi
 
-if [[ $task_mode == --idopte || $task_mode == --idopte-discovery || $task_mode == --idopte-spy ]]; then
+if [[ $task_mode == --idopte || $task_mode == --idopte-discovery || $task_mode == --idopte-spy || $task_mode == --idopte-compare ]]; then
     task_pkcs11_tool="$task_root/build/opensc/src/tools/pkcs11-tool"
     task_idopte_module=/run/current-system/sw/lib/SCMiddleware/libidop11.so
     if [[ ! -x $task_pkcs11_tool || ! -f $task_idopte_module ]]; then
@@ -131,7 +133,7 @@ if [[ $task_mode == --idopte || $task_mode == --idopte-discovery || $task_mode =
         printf 'pkcs11_tool=%s\nidopte_module=%s\n' "$task_pkcs11_tool" "$task_idopte_module" >> "$task_report"
         exit 1
     fi
-    if [[ $task_mode == --idopte-discovery || $task_mode == --idopte-spy ]]; then
+    if [[ $task_mode == --idopte-discovery || $task_mode == --idopte-spy || $task_mode == --idopte-compare ]]; then
         if [[ $task_mode == --idopte-spy ]] && { ! command -v pcsc-spy >/dev/null 2>&1 || ! command -v python3 >/dev/null 2>&1; }; then
             printf 'Falta pcsc-spy o Python 3; ejecutar desde nix develop.\n' >&2
             exit 1
@@ -145,6 +147,10 @@ if [[ $task_mode == --idopte || $task_mode == --idopte-discovery || $task_mode =
         fi
         task_trace="$task_dir/public-headers.txt"
         task_command_env=("LIBPCSCLITE_DELEGATE=$task_root/build/diagnostics/pcsc-public-observer.so" "JCOP4_PUBLIC_DISCOVERY_TRACE=$task_trace")
+        if [[ $task_mode == --idopte-compare ]]; then
+            task_command_env+=("JCOP4_DIAGNOSTIC_READ4141=1")
+            printf 'comparison_scope=read4141_max400_no_recording_no_authentication\n' >> "$task_report"
+        fi
         if [[ $task_mode == --idopte-spy ]]; then
             task_spy_raw="$task_dir/select4141-spy.raw"
             task_command_env+=("JCOP4_PUBLIC_SELECT_SPY_TRACE=$task_spy_raw")

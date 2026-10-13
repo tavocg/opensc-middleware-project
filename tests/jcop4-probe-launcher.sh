@@ -30,6 +30,11 @@ set -euo pipefail
    ${OPENSC_DEBUG_FILE-unset} == unset && ${OPENSC_DEEPBIND-unset} == unset &&
    $(stat -c %a "$OPENSC_CONF") == 600 ]] || exit 98
 if IFS= read -r task_input; then exit 99; fi
+if [[ ${FIXTURE_COMPARE_MODE:-0} == 1 ]]; then
+    [[ ${JCOP4_DIAGNOSTIC_READ4141-} == 1 && ${JCOP4_PUBLIC_SELECT_SPY_TRACE-unset} == unset ]] || exit 96
+else
+    [[ ${JCOP4_DIAGNOSTIC_READ4141-unset} == unset ]] || exit 96
+fi
 if [[ ${JCOP4_PUBLIC_DISCOVERY_TRACE-unset} != unset ]]; then
     [[ ${LD_PRELOAD-unset} == unset &&
        ${LIBPCSCLITE_DELEGATE-} == "$FIXTURE_PROBE_ROOT/build/diagnostics/pcsc-public-observer.so" &&
@@ -97,6 +102,7 @@ esac
    ${OPENSC_DEEPBIND-unset} == unset &&
    ${LD_PRELOAD-unset} == unset && ${LIBPCSCLITE_DELEGATE-unset} == unset &&
    ${LIBPCSCLITE_SPY_DELEGATE-unset} == unset && ${JCOP4_PUBLIC_SELECT_SPY_TRACE-unset} == unset &&
+   ${JCOP4_DIAGNOSTIC_READ4141-unset} == unset &&
    ${OPENSC_API_TRACE_FILE-unset} == unset &&
    ${OPENSC_JCOP3_SESSION_STATE-unset} == unset &&
    ${OPENSC_JCOP3_PIN_STATUS_IN_PLACE-unset} == unset &&
@@ -143,6 +149,7 @@ sys.exit(int(os.environ.get('FIXTURE_SPY_DECODE_EXIT', '0')))
 SPY
 chmod +x "$task_tmp/bin/pcsc-spy"
 export JCOP4_PUBLIC_SELECT_SPY_TRACE=/should/not/be/used
+export JCOP4_DIAGNOSTIC_READ4141=1
 export OPENSC_DEBUG=99 OPENSC_DEBUG_FILE=/should/not/be/used
 export OPENSC_CONF=/should/not/be/used OPENSC_API_TRACE_FILE=/should/not/be/used
 export OPENSC_DEEPBIND=1
@@ -352,6 +359,27 @@ task_control_report=$(sed -n 's/^Informe: //p' "$task_tmp/output.txt")
    $(< "$task_control_report") != *'public_header='* ]]
 printf 'PASS JCOP4 discovery recognizes a public reader-control event without claiming an APDU was observed\n'
 unset FIXTURE_OBSERVER_CONTROL_ONLY
+export FIXTURE_COMPARE_MODE=1
+task_run 0 2 --idopte-compare
+task_compare_report=$(sed -n 's/^Informe: //p' "$task_tmp/output.txt")
+[[ $task_compare_report == */jcop4-idopte-compare-*/report.txt &&
+   $(< "$task_compare_report") == *'comparison_scope=read4141_max400_no_recording_no_authentication'* &&
+   $(< "$task_compare_report") == *'observer_result=events_recorded'* &&
+   ! -e ${task_compare_report%/*}/select4141-spy.raw &&
+   $(stat -c %a "$task_compare_report") == 600 ]]
+printf 'PASS comparison opts into bounded READ only inside Idopte inventory, keeps stdin empty and emits no raw response capture\n'
+export FIXTURE_IDOPTE_EXIT=17
+task_run 17 2 --idopte-compare
+task_compare_report=$(sed -n 's/^Informe: //p' "$task_tmp/output.txt")
+[[ $(< "$task_compare_report") == *'module_exit_status=17'* &&
+   $(< "$task_compare_report") == *'observer_result=events_recorded'* ]]
+printf 'PASS comparison preserves a blocked-command module failure without retrying or asking for a PIN\n'
+unset FIXTURE_IDOPTE_EXIT
+export FIXTURE_OBSERVER_BUILD_EXIT=19
+task_run 19 2 --idopte-compare
+[[ ! -e $task_tmp/idopte-called ]]
+printf 'PASS comparison stops before Idopte when its guard cannot be built\n'
+unset FIXTURE_OBSERVER_BUILD_EXIT FIXTURE_COMPARE_MODE
 task_run 0 2 --idopte-spy
 task_spy_report=$(sed -n 's/^Informe: //p' "$task_tmp/output.txt")
 [[ $(< "$task_spy_report") == *'spy_result=select4141_control_data_only'* &&

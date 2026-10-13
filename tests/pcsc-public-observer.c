@@ -8,21 +8,23 @@ static int calls, control_calls, control_missing, control_response_fixture;
 static DWORD control_capacity, control_size = 16;
 static LONG control_result;
 static unsigned int fixture_sw = 0x9000;
+static unsigned int fixture_payload = 16, fixture_overrun;
 static LONG fixture_transmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
 		const unsigned char *cmd, DWORD len, SCARD_IO_REQUEST *recv_pci,
 		unsigned char *response, DWORD *response_len)
 {
 	(void)card; (void)send_pci; (void)cmd; (void)len; (void)recv_pci;
 	calls++;
-	assert(*response_len >= 18);
+	assert(*response_len >= fixture_payload + 2);
 	if (control_response_fixture) {
 		const unsigned char fcp[] = { 0x62, 9, 0x82, 1, 1, 0x86, 4, 0xA1, 0xB2, 0xC3, 0xD4, 0x90, 0 };
 		memcpy(response, fcp, sizeof(fcp)); *response_len = sizeof(fcp);
 		return SCARD_S_SUCCESS;
 	}
-	memcpy(response, "PRIVATE_RESPONSE", 16);
-	response[16] = fixture_sw >> 8; response[17] = fixture_sw & 0xFF;
-	*response_len = 18;
+	memset(response, 'X', fixture_payload);
+	if (fixture_payload >= 16) memcpy(response, "PRIVATE_RESPONSE", 16);
+	response[fixture_payload] = fixture_sw >> 8; response[fixture_payload + 1] = fixture_sw & 0xFF;
+	*response_len = fixture_overrun ? *response_len + 1 : fixture_payload + 2;
 	return SCARD_S_SUCCESS;
 }
 static LONG fixture_reconnect(SCARDHANDLE card, DWORD share, DWORD protocols,
@@ -61,6 +63,9 @@ static FILE *fixture_reset(void)
 	control_response_fixture = 0; select_spy_fd = -1;
 	control_size = 16; control_result = 0;
 	fixture_sw = 0x9000;
+	fixture_payload = 16; fixture_overrun = 0;
+	compare_read4141 = read4141_budget = read4141_offset = read4141_calls = 0;
+	comparison_atr_ok = 1; /* Unit fixture simulates a validated connection. */
 	return file;
 }
 static LONG send_command(const unsigned char *cmd, size_t size)
@@ -68,6 +73,14 @@ static LONG send_command(const unsigned char *cmd, size_t size)
 	unsigned char response[64];
 	DWORD len = sizeof(response);
 	return SCardTransmit(7, NULL, cmd, size, NULL, response, &len);
+}
+static LONG send_large(const unsigned char *cmd, size_t size)
+{
+	unsigned char response[402];
+	DWORD len = sizeof(response);
+	LONG rv = SCardTransmit(7, NULL, cmd, size, NULL, response, &len);
+	if (rv != SCARD_S_SUCCESS) assert(!len);
+	return rv;
 }
 static void check_private(FILE *file)
 {
@@ -105,6 +118,97 @@ int main(void)
 			send_command(version, sizeof(version)) == 0 && calls == 5);
 	check_private(file);
 	puts("PASS public observer forwards only allowed discovery and logs no payloads or lengths");
+	{
+		const unsigned char target[] = { 0, 0xA4, 2, 0, 2, 0x41, 0x41, 0 };
+		const unsigned char rest[] = { 0, 0xB0, 1, 0, 144 };
+		const unsigned char full[] = { 0, 0xB0, 0, 0, 0, 1, 0x90 };
+		const unsigned char mse[] = { 0, 0x22, 0x41, 0xA4, 12, 0x80, 10, 4, 0, 0x7F, 0, 7, 2, 2, 3, 2, 2, 2 };
+		file = fixture_reset(); compare_read4141 = 1;
+		assert(send_command(app, sizeof(app)) == 0 && send_command(target, sizeof(target)) == 0);
+		fixture_payload = 256;
+		assert(send_large(read, sizeof(read)) == 0 && read4141_offset == 256);
+		fixture_payload = 144;
+		assert(send_large(rest, sizeof(rest)) == 0 && read4141_offset == 400 && read4141_budget == 400);
+		assert(send_large(read, sizeof(read)) != 0 && calls == 4 && stopped);
+		check_private(file);
+		puts("PASS opt-in comparison forwards at most 400 contiguous bytes in two short reads and never logs contents");
+		file = fixture_reset(); compare_read4141 = 1;
+		assert(send_command(app, sizeof(app)) == 0 && send_command(target, sizeof(target)) == 0);
+		fixture_payload = 400;
+		assert(send_large(full, sizeof(full)) == 0 && read4141_budget == 400);
+		fixture_payload = 16;
+		assert(send_command(mse, sizeof(mse)) != 0 && calls == 3);
+		{
+			char log[1024] = {0};
+			fflush(file); rewind(file); assert(fread(log, 1, sizeof(log)-1, file) < sizeof(log)-1);
+			assert(strstr(log, "blocked_mse_profile=ca_ecdh_aes128") && strstr(log, "blocked_mse_case=short_case4"));
+		}
+		check_private(file);
+		puts("PASS comparison accepts a bounded extended read then classifies the ZIP CA MSE without transmitting it");
+		for (int i = 0; i < 6; i++) {
+			const unsigned char bad[][7] = {
+				{ 1, 0xB0, 0, 0, 0 }, { 0x0C, 0xB0, 0, 0, 0 },
+				{ 0, 0xB0, 0x80, 0, 0 }, { 0, 0xB0, 0, 1, 0 },
+				{ 0, 0xB0, 0, 0, 0, 1, 0x91 }, { 0, 0xB2, 1, 4, 0 }
+			};
+			file = fixture_reset(); compare_read4141 = 1;
+			assert(send_command(app, sizeof(app)) == 0 && send_command(target, sizeof(target)) == 0);
+			assert(send_large(bad[i], i == 4 ? 7 : 5) != 0 && calls == 2);
+			check_private(file);
+		}
+		puts("PASS comparison rejects other channels, SM, SFI, noncontiguous or oversized reads and READ RECORD");
+		file = fixture_reset(); compare_read4141 = 1;
+		assert(send_command(app, sizeof(app)) == 0 && send_command(target, sizeof(target)) == 0);
+		assert(send_command(read, sizeof(read)) != 0 && calls == 2);
+		check_private(file);
+		for (int i = 0; i < 3; i++) {
+			file = fixture_reset(); compare_read4141 = 1;
+			assert(send_command(app, sizeof(app)) == 0 && send_command(target, sizeof(target)) == 0);
+			fixture_sw = i == 0 ? 0x6982 : i == 1 ? 0x6104 : 0x9000;
+			fixture_overrun = i == 2;
+			assert(send_large(read, sizeof(read)) != 0 && stopped && calls == 3);
+			assert(send_large(get_response, sizeof(get_response)) != 0 && calls == 3);
+			check_private(file);
+		}
+		puts("PASS comparison requires adequate output and stops on security, continuation or oversized transport response");
+		file = fixture_reset(); compare_read4141 = 1;
+		assert(send_command(app, sizeof(app)) == 0 && send_command(target, sizeof(target)) == 0);
+		fixture_payload = 256;
+		assert(send_large(read, sizeof(read)) == 0);
+		fixture_payload = 16;
+		assert(send_command(app, sizeof(app)) == 0 && send_command(target, sizeof(target)) == 0);
+		{
+			const unsigned char repeated[] = { 0, 0xB0, 0, 0, 144 };
+			assert(send_large(repeated, sizeof(repeated)) != 0 && calls == 5 && read4141_budget == 256);
+		}
+		check_private(file);
+		file = fixture_reset(); compare_read4141 = 1;
+		assert(send_command(app, sizeof(app)) == 0 && send_command(target, sizeof(target)) == 0);
+		assert(send_large(read, sizeof(read)) == 0);
+		drop_card_context();
+		assert(stopped && read4141_budget == 256 && send_command(app, sizeof(app)) != 0 && calls == 3);
+		check_private(file);
+		puts("PASS reselection cannot replay a read or replenish budget and reconnection after READ stops transport");
+		file = fixture_reset(); compare_read4141 = 1;
+		assert(send_command(app, sizeof(app)) == 0 && send_command(target, sizeof(target)) == 0);
+		{
+			int saved_fd = trace_fd;
+			trace_fd = open("/dev/full", O_WRONLY);
+			assert(trace_fd >= 0);
+			assert(send_large(read, sizeof(read)) != 0 && calls == 2 && stopped);
+			close(trace_fd); trace_fd = saved_fd;
+		}
+		check_private(file);
+		puts("PASS mandatory comparison-log write failure stops before READ transport");
+		for (int i = 0; i < 2; i++) {
+			const unsigned char empty_verify[] = { 0, 0x20, 0, 1 };
+			file = fixture_reset(); compare_read4141 = 1;
+			assert(send_command(app, sizeof(app)) == 0 && send_command(target, sizeof(target)) == 0);
+			assert(send_command(i ? pin : empty_verify, i ? sizeof(pin) : sizeof(empty_verify)) != 0 && calls == 2);
+			check_private(file);
+		}
+		puts("PASS comparison blocks VERIFY even empty before transport and never logs a credential");
+	}
 	{
 		const unsigned char target[] = { 0, 0xA4, 2, 0, 2, 0x41, 0x41, 0 };
 		const unsigned char record[] = { 0, 0xB2, 1, 4, 0 };

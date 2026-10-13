@@ -119,6 +119,23 @@ su preparación mediante documentación del perfil. El usuario confirmó que
 solo conserva el ZIP, sin registros originales. No pedir repetir el PIN ni
 usar mensajes del prototipo como confirmación de canal.
 
+Por solicitud posterior del usuario, se preparó una comparación empírica
+con Idopte. Con la misma JCOP4 y firmador/otros clientes cerrados:
+
+```sh
+nix develop -c make inspect/jcop4-idopte-compare READER=0
+```
+
+**Este modo amplía la observación:** permite a Idopte leer hasta 400 bytes
+de 4141, sin guardar su contenido, para ver qué comando intenta después.
+No deduce que sea público por 00FFFF. Mantiene bloqueados PIN, autenticación,
+firma y escrituras; no introducir PIN ni usarlo con firmador. Los modos
+anteriores conservan el bloqueo de esa lectura. Informes privados bajo
+local/jcop4-idopte-compare-*/; un error de Idopte por el siguiente comando
+bloqueado puede ser esperable. Detalles y comparación en docs/jcop4.md.
+Pasaron 41 comprobaciones de observador, 43 del lanzador y 6 de aislamiento
+del lanzador de firma, sin tarjeta. Driver y helper de firma intactos.
+
 Capturas privadas bajo local/jcop4-idopte-spy-*/; no agregarlas a Git.
 Pasaron previamente **30 comprobaciones del observador/decoder y 40 del
 lanzador** con transporte ficticio. El diagnóstico de firma pasó además

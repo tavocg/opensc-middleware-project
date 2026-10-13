@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 umask 077
+unset JCOP4_DIAGNOSTIC_READ4141
 task_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 # Dependency failures must stop before compilation, including failed flag lookup.
 (
@@ -115,14 +116,25 @@ int run_fixture(int mode)
     const unsigned char app[] = { 0, 0xA4, 4, 0x0C, 15, 0xE8, 0x28, 0xBD, 8, 0x0F, 0xA0, 0, 0, 3, 0x63, 0x64, 0x79, 0x6E, 0x69, 0x64 };
     const unsigned char target[] = { 0, 0xA4, 2, 0, 2, 0x41, 0x41, 0 };
     const unsigned char pin[] = { 0, 0x20, 0, 1, 10, 'S','E','C','R','E','T','_','P','I','N' };
-    unsigned char response[64]; DWORD len = sizeof(response), protocol;
+    unsigned char response[402]; DWORD len = sizeof(response), protocol;
     SCARDCONTEXT context; SCARDHANDLE card;
     assert(SCardEstablishContext(SCARD_SCOPE_USER, 0, 0, &context) == 0);
     LONG rv = SCardConnect(context, mode == 1 ? "PRIVATE_READER_CONNECT_FAILURE" : "PRIVATE_READER",
             SCARD_SHARE_SHARED, SCARD_PROTOCOL_T1, &card, &protocol);
     if (mode == 1) { assert(rv == SCARD_E_SHARING_VIOLATION); return 0; }
+    if (mode == 18) { assert(rv != 0); return 0; }
     assert(rv == 0 && protocol == SCARD_PROTOCOL_T1);
     assert(SCardReconnect(card, SCARD_SHARE_SHARED, SCARD_PROTOCOL_T1, SCARD_LEAVE_CARD, &protocol) == 0);
+    if (mode == 17) {
+        assert(SCardTransmit(card, 0, app, sizeof(app), 0, response, &len) == 0);
+        len = sizeof(response);
+        assert(SCardTransmit(card, 0, target, sizeof(target), 0, response, &len) == 0);
+        len = sizeof(response);
+        assert(SCardTransmit(card, 0, read, sizeof(read), 0, response, &len) == 0);
+        len = sizeof(response);
+        assert(SCardTransmit(card, 0, pin, sizeof(pin), 0, response, &len) != 0 && !len);
+        return 0;
+    }
     if (mode == 14 || mode == 15 || mode == 16) {
         if (mode != 15) {
             assert(SCardTransmit(card, 0, mode == 14 ? app : mf,
@@ -214,7 +226,7 @@ int main(int argc, char **argv)
     void *core = dlopen(argv[2], RTLD_NOW | RTLD_LOCAL);
     assert(core);
     int (*count)(void) = (int (*)(void))dlsym(core, "fixture_count");
-    assert(count && count() == (mode == 9 ? 3 : mode == 7 || mode == 14 ? 2 : mode == 0 || mode == 10 || mode == 16 ? 1 : 0));
+    assert(count && count() == (mode == 9 || mode == 17 ? 3 : mode == 7 || mode == 14 ? 2 : mode == 0 || mode == 10 || mode == 16 ? 1 : 0));
     int (*controls)(void) = (int (*)(void))dlsym(core, "fixture_control_count");
     if (controls) assert(controls() == (mode == 10 || mode == 12 || mode == 13 ? 1 : 0));
     return 0;
@@ -292,6 +304,34 @@ done
    $(< "$task_tmp/delegate-16.txt") == *'blocked_select_ef=4141'* &&
    $(< "$task_tmp/delegate-16.txt") != *'public_select='* ]]
 printf 'PASS actual PC/SC delegation permits only known-ADF SELECT 4141 and blocks its READ before fake transport\n'
+env -u LD_PRELOAD -u LIBPCSCLITE_SPY_DELEGATE -u JCOP4_PUBLIC_SELECT_SPY_TRACE \
+    LIBPCSCLITE_DELEGATE="$task_tmp/delegate.so" JCOP4_PUBLIC_DISCOVERY_TRACE="$task_tmp/compare.txt" \
+    JCOP4_DIAGNOSTIC_READ4141=1 \
+    "$task_tmp/local-client" "$task_tmp/redirect-plugin.so" "$task_tmp/libfakepcsc.so" 17
+task_headers=$(< "$task_tmp/compare.txt")
+[[ $task_headers == *'comparison=bounded_read4141_contents_omitted'* &&
+   $task_headers == *'diagnostic_read=known_4141_contents_omitted'* &&
+   $task_headers == *'blocked_header=00200001'* && $task_headers != *'PRIVATE_'* && $task_headers != *'SECRET_PIN'* ]]
+printf 'PASS opt-in comparison uses real PC/SC delegation for bounded READ while VERIFY and payload logging remain blocked\n'
+env -u LD_PRELOAD -u LIBPCSCLITE_SPY_DELEGATE -u JCOP4_PUBLIC_SELECT_SPY_TRACE \
+    LIBPCSCLITE_DELEGATE="$task_tmp/delegate.so" JCOP4_PUBLIC_DISCOVERY_TRACE="$task_tmp/bad-atr.txt" \
+    JCOP4_DIAGNOSTIC_READ4141=1 FIXTURE_COMPARISON_BAD_ATR=1 \
+    "$task_tmp/local-client" "$task_tmp/redirect-plugin.so" "$task_tmp/libfakepcsc.so" 18
+[[ $(< "$task_tmp/bad-atr.txt") == *'comparison_atr=unavailable_or_mismatch'* &&
+   $(< "$task_tmp/bad-atr.txt") != *'public_header='* ]]
+printf 'PASS comparison checks the connected ATR privately and stops a different card before any APDU\n'
+for task_invalid in invalid mixed; do
+    task_guard_env=("JCOP4_DIAGNOSTIC_READ4141=invalid")
+    if [[ $task_invalid == mixed ]]; then
+        task_guard_env=("JCOP4_DIAGNOSTIC_READ4141=1" "JCOP4_PUBLIC_SELECT_SPY_TRACE=$task_tmp/mixed.raw")
+    fi
+    env -u LD_PRELOAD -u LIBPCSCLITE_SPY_DELEGATE \
+        LIBPCSCLITE_DELEGATE="$task_tmp/delegate.so" JCOP4_PUBLIC_DISCOVERY_TRACE="$task_tmp/$task_invalid.txt" \
+        "${task_guard_env[@]}" \
+        "$task_tmp/local-client" "$task_tmp/redirect-plugin.so" "$task_tmp/libfakepcsc.so" 6
+    [[ $(< "$task_tmp/$task_invalid.txt") != *'public_header='* ]]
+    printf 'PASS comparison rejects %s opt-in before any fake transport\n' "$task_invalid"
+done
 env -u LD_PRELOAD -u JCOP4_PUBLIC_DISCOVERY_TRACE -u LIBPCSCLITE_SPY_DELEGATE \
     LIBPCSCLITE_DELEGATE="$task_tmp/delegate.so" \
     "$task_tmp/local-client" "$task_tmp/redirect-plugin.so" "$task_tmp/libfakepcsc.so" 6

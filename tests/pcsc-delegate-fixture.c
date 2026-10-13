@@ -10,6 +10,16 @@ static unsigned int selected_file;
 int fixture_count(void) { return calls; }
 int fixture_control_count(void) { return control_calls; }
 
+LONG SCardGetAttrib(SCARDHANDLE card, DWORD attribute, unsigned char *data, DWORD *size)
+{
+	const unsigned char atr[] = { 0x3B, 0xD5, 0x18, 0xFF, 0x81, 0x91, 0xFE, 0x1F, 0xC3, 0x80, 0x73, 0xC8, 0x21, 0x10, 0x0A };
+	assert(card == 7 && attribute == SCARD_ATTR_ATR_STRING && data && size && *size >= sizeof(atr));
+	assert(getenv("JCOP4_DIAGNOSTIC_READ4141") && !strcmp(getenv("JCOP4_DIAGNOSTIC_READ4141"), "1"));
+	memcpy(data, atr, sizeof(atr)); *size = sizeof(atr);
+	if (getenv("FIXTURE_COMPARISON_BAD_ATR")) data[0] ^= 1;
+	return SCARD_S_SUCCESS;
+}
+
 LONG SCardEstablishContext(DWORD scope, const void *r1, const void *r2, SCARDCONTEXT *context)
 {
 	assert(scope == SCARD_SCOPE_USER && !r1 && !r2);
@@ -67,7 +77,9 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *pci,
 			selected_file = fid;
 		}
 	} else {
-		assert(size == 5 && cmd[1] == 0xB0 && cmd[2] == 0 && cmd[3] == 0 && selected_file == 0xD003);
+		assert(size == 5 && cmd[1] == 0xB0 && cmd[2] == 0 && cmd[3] == 0 &&
+				(selected_file == 0xD003 || (selected_file == 0x4141 && getenv("JCOP4_DIAGNOSTIC_READ4141") &&
+				!strcmp(getenv("JCOP4_DIAGNOSTIC_READ4141"), "1"))));
 	}
 	assert(*len >= 18);
 	calls++;
@@ -92,5 +104,4 @@ UNEXPECTED(SCardListReaderGroups, (SCARDCONTEXT context U, char *groups U, DWORD
 UNEXPECTED(SCardListReaders, (SCARDCONTEXT context U, const char *groups U, char *readers U, DWORD *size U))
 UNEXPECTED(SCardFreeMemory, (SCARDCONTEXT context U, const void *data U))
 UNEXPECTED(SCardCancel, (SCARDCONTEXT context U))
-UNEXPECTED(SCardGetAttrib, (SCARDHANDLE card U, DWORD attribute U, unsigned char *data U, DWORD *size U))
 UNEXPECTED(SCardSetAttrib, (SCARDHANDLE card U, DWORD attribute U, const unsigned char *data U, DWORD size U))
