@@ -66,6 +66,9 @@ int run_fixture(int mode)
     const unsigned char version[] = { 0, 0xCA, 1, 0x16, 6 };
     const unsigned char name[] = { 0, 0xCA, 1, 0, 0 };
     const unsigned char blocked_ef[] = { 0, 0xA4, 2, 0, 2, 0xE0, 0 };
+    const unsigned char mf[] = { 0, 0xA4, 0, 0, 2, 0x3F, 0 };
+    const unsigned char serial[] = { 0, 0xA4, 2, 0, 2, 0xD0, 3 };
+    const unsigned char read[] = { 0, 0xB0, 0, 0, 0 };
     const unsigned char pin[] = { 0, 0x20, 0, 1, 10, 'S','E','C','R','E','T','_','P','I','N' };
     unsigned char response[64]; DWORD len = sizeof(response), protocol;
     SCARDCONTEXT context; SCARDHANDLE card;
@@ -87,6 +90,16 @@ int run_fixture(int mode)
         assert(SCardTransmit(card, 0, blocked_ef, sizeof(blocked_ef), 0, response, &len) != 0);
         len = sizeof(response);
         assert(SCardTransmit(card, 0, version, sizeof(version), 0, response, &len) != 0);
+        return 0;
+    }
+    if (mode == 9) {
+        assert(SCardTransmit(card, 0, mf, sizeof(mf), 0, response, &len) == 0);
+        len = sizeof(response);
+        assert(SCardTransmit(card, 0, serial, sizeof(serial), 0, response, &len) == 0);
+        len = sizeof(response);
+        assert(SCardTransmit(card, 0, read, sizeof(read), 0, response, &len) == 0);
+        len = sizeof(response);
+        assert(SCardTransmit(card, 0, pin, sizeof(pin), 0, response, &len) != 0);
         return 0;
     }
     if (mode == 7) {
@@ -118,7 +131,7 @@ int main(int argc, char **argv)
     void *core = dlopen(argv[2], RTLD_NOW | RTLD_LOCAL);
     assert(core);
     int (*count)(void) = (int (*)(void))dlsym(core, "fixture_count");
-    assert(count && count() == (mode == 7 ? 2 : mode == 0 ? 1 : 0));
+    assert(count && count() == (mode == 9 ? 3 : mode == 7 ? 2 : mode == 0 ? 1 : 0));
     return 0;
 }
 LOCAL
@@ -148,7 +161,7 @@ task_pcsc_libdir=$(pkg-config --variable=libdir libpcsclite)
 "${CC:-cc}" -std=c99 -Wall -Wextra -Werror -fPIC -shared "${task_pcsc_cflags[@]}" \
     "$task_tmp/plugin.c" -L"$task_pcsc_libdir" -Wl,-rpath,"$task_pcsc_libdir" \
     -lpcsclite -o "$task_tmp/redirect-plugin.so"
-for task_mode in 0 1 3 4 7 8; do
+for task_mode in 0 1 3 4 7 8 9; do
     env -u LD_PRELOAD -u LIBPCSCLITE_SPY_DELEGATE \
         LIBPCSCLITE_DELEGATE="$task_tmp/delegate.so" JCOP4_PUBLIC_DISCOVERY_TRACE="$task_tmp/delegate-$task_mode.txt" \
         "$task_tmp/local-client" "$task_tmp/redirect-plugin.so" "$task_tmp/libfakepcsc.so" "$task_mode"
@@ -170,6 +183,10 @@ done
 [[ $(< "$task_tmp/delegate-8.txt") == *'blocked_header=00A40200'* &&
    $(< "$task_tmp/delegate-8.txt") == *'blocked_select_ef=E000'* &&
    $(< "$task_tmp/delegate-8.txt") != *'public_header='* ]]
+[[ $(< "$task_tmp/delegate-9.txt") == *'public_header=00A40000'* &&
+   $(< "$task_tmp/delegate-9.txt") == *'public_header=00A40200'* &&
+   $(< "$task_tmp/delegate-9.txt") == *'public_header=00B00000'* &&
+   $(< "$task_tmp/delegate-9.txt") == *'blocked_header=00200001'* ]]
 env -u LD_PRELOAD -u JCOP4_PUBLIC_DISCOVERY_TRACE -u LIBPCSCLITE_SPY_DELEGATE \
     LIBPCSCLITE_DELEGATE="$task_tmp/delegate.so" \
     "$task_tmp/local-client" "$task_tmp/redirect-plugin.so" "$task_tmp/libfakepcsc.so" 6

@@ -5,6 +5,7 @@
 #include <winscard.h>
 
 static int calls;
+static unsigned int selected_file;
 int fixture_count(void) { return calls; }
 
 LONG SCardEstablishContext(DWORD scope, const void *r1, const void *r2, SCARDCONTEXT *context)
@@ -35,11 +36,21 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *pci,
 {
 	(void)pci; (void)rpci;
 	/* Any leaked authentication or other command fails the fixture immediately. */
-	assert(card == 7 && size == 5 && cmd[0] == 0 && cmd[1] == 0xCA && cmd[2] == 1 &&
-			(cmd[3] == 0x16 || cmd[3] == 0));
+	assert(card == 7 && cmd[0] == 0);
+	if (cmd[1] == 0xCA) {
+		assert(size == 5 && cmd[2] == 1 && (cmd[3] == 0x16 || cmd[3] == 0));
+	} else if (cmd[1] == 0xA4) {
+		assert(size == 7 && cmd[3] == 0 && cmd[4] == 2);
+		unsigned int fid = ((unsigned int)cmd[5] << 8) | cmd[6];
+		assert((cmd[2] == 0 && fid == 0x3F00) ||
+				(cmd[2] == 2 && fid == 0xD003 && selected_file == 0x3F00));
+		selected_file = fid;
+	} else {
+		assert(size == 5 && cmd[1] == 0xB0 && cmd[2] == 0 && cmd[3] == 0 && selected_file == 0xD003);
+	}
 	assert(*len >= 18);
 	calls++;
-	memcpy(response, "PRIVATE_RESPONSE", 16);
+	memcpy(response, cmd[1] == 0xB0 ? "PRIVATE_SERIALNR" : "PRIVATE_RESPONSE", 16);
 	response[16] = 0x90; response[17] = 0; *len = 18;
 	return SCARD_S_SUCCESS;
 }

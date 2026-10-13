@@ -851,6 +851,65 @@ make inspect/jcop4-idopte-discovery READER=0
 No solicita PIN. Revisar el FID/forma del SELECT bloqueado antes de permitir
 otra consulta; conservar el fallo como evidencia de los límites del observador.
 
+## EF D003 identificado: 13 de octubre, 15:07:25 UTC
+
+Informe `local/jcop4-idopte-discovery-FIyDDxFN/report.txt`, principal
+`3423abc`, OpenSC `3dfef6704`. Inventario/compilación correctos; contexto y
+conexión 0. GET DATA 00 CA 01 00, 00 CA 01 16 y SELECT 00 A4 00 00 ->
+transporte 0/SW 9000. El SELECT 00 A4 02 00 quedó bloqueado con
+**blocked_select_ef=D003**. No llegó a la tarjeta, no hay SW ni contenido
+de ese archivo. Segunda conexión 0, pero guard detenido; Idopte 1, slot vacío,
+events_recorded. Sin PIN ni autenticación.
+
+La investigación encontró precedentes primarios:
+
+- [ANS CPS4, sección 3.1.2, página 14](https://industriels.esante.gouv.fr/sites/default/files/media/document/ANS_CPSV4_0011_Guide_De_R%C3%A9f%C3%A9rence_v1_03.pdf)
+  describe `3F00/D003` como EF SN transparente de identificación/serie,
+  con lectura en contacto sin autenticación.
+- [Especificación CIE 3.0, anexo A, página 24](https://www.cartaidentita.interno.gov.it/downloads/2021/03/cie_3.0_-_specifiche_chip.pdf)
+  también sitúa EF SN ICC en D003 con lectura pública.
+
+Son personalizaciones distintas. Respaldan investigar una lectura acotada,
+**no prueban el contenido ni las ACL de D003 en esta JCOP4 de Costa Rica**.
+El código local `pkcs15-esteid2018.c` lee ese FID como número de documento;
+su significado debe resolverse por perfil, no por FID o generación JCOP.
+No se usó documentación de procedencia incierta ni código privativo.
+
+El observador conserva formato v3 y permite solo el SELECT EF observado:
+CLA 00, INS A4, P1 02, P2 00, dos bytes D003, en una transacción que haya
+confirmado MF. Ese contexto procede de un SELECT básico válido de 3F00/
+AID raíz conocido, o una selección absoluta de bootstrap desde 3F00;
+solo se acredita tras 9000 o 61xx. Selecciones fallidas descartan el contexto
+anterior; SELECT de aplicación/otro canal y reconexión también lo retiran.
+No se extiende el permiso a otras formas de SELECT de D003.
+
+Tras seleccionar D003 correctamente se permite solo READ BINARY corto en
+canal básico, sin SFI ni datos de entrada; las lecturas mantienen los límites
+existentes de 256 bytes por APDU y 128 comandos por proceso. READ RECORD y
+lecturas de otros canales no se habilitan para ese archivo. GET RESPONSE
+solo tras 61xx de operación permitida, también básico para D003. El contenido,
+serial y respuesta FCP no se registran. Una respuesta 69xx detiene el guard.
+No se solicitan autenticación, PIN, componentes privados, escrituras ni
+comandos administrativos.
+
+Pasaron **14 comprobaciones del observador**; el lanzador conserva sus **30
+comprobaciones previas** y no cambió. Las nuevas regresiones confirman MF
+requerido, SELECT/READ permitidos, serial sintético omitido, formas/canales
+no admitidos y retiro de permisos por fallos, cambio de aplicación y
+reconexión. La integración con el redirector PC/SC real y transporte ficticio
+ejecuta MF/D003/READ y bloquea VERIFY antes de llegar al transporte.
+Se compiló solo el observador; driver/submódulo OpenSC intactos.
+
+Siguiente intervención, misma JCOP4, otros clientes cerrados, dentro de nix develop:
+
+```bash
+make inspect/jcop4-idopte-discovery READER=0
+```
+
+Sin PIN. Puede volver a terminar con error del guard: revisar los SW de
+selección/lectura y el siguiente comando bloqueado antes de otra consulta.
+El fallo autenticado VERIFY 6982 sigue sin resolverse.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño

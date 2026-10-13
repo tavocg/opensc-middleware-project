@@ -10,7 +10,7 @@
 #include <unistd.h>
 #include <winscard.h>
 
-static int trace_fd = -1, stopped, selected_public_file, handle_set, pending_response;
+static int trace_fd = -1, stopped, selected_public_file, selected_mf, handle_set, pending_response;
 static unsigned int events;
 static unsigned int lifecycle_events;
 static SCARDHANDLE trace_handle;
@@ -38,7 +38,7 @@ static void log_lifecycle(const char *name, LONG rv)
 static void drop_card_context(void)
 {
 	pthread_mutex_lock(&trace_mutex);
-	selected_public_file = pending_response = 0;
+	selected_public_file = selected_mf = pending_response = 0;
 	pthread_mutex_unlock(&trace_mutex);
 }
 
@@ -76,14 +76,15 @@ LONG SCardReconnect(SCARDHANDLE card, DWORD share, DWORD protocols, DWORD action
 
 static int public_file(unsigned int fid)
 {
-	/* Public bootstrap files only; no certificates, credentials or key files. */
+	/* Bootstrap files. D003 is handled separately with confirmed MF context. */
 	return fid == 0x2F00 || fid == 0x2F01 || fid == 0x5031 || fid == 0x5032;
 }
 
-static int allowed_command(const unsigned char *cmd, DWORD len, int *next_file)
+static int allowed_command(const unsigned char *cmd, DWORD len, int *next_file, int *next_mf)
 {
 	size_t lc;
 	*next_file = -1;
+	*next_mf = -1;
 	if (!cmd || len < 4 || cmd[0] > 3)
 		return 0; /* No secure messaging or proprietary CLA. */
 	if (cmd[1] == 0xA4 && len >= 5) {
@@ -97,17 +98,28 @@ static int allowed_command(const unsigned char *cmd, DWORD len, int *next_file)
 					(lc == sizeof(app_aid) && !memcmp(cmd + 5, app_aid, lc))))
 				return 0;
 			*next_file = 0; /* ISO DF-name selection; the AID is not logged. */
+			*next_mf = cmd[0] == 0 && lc == sizeof(root_aid) && !memcmp(cmd + 5, root_aid, lc);
 			return 1;
 		}
 		if ((cmd[2] == 0 || cmd[2] == 1 || cmd[2] == 2 || cmd[2] == 8 || cmd[2] == 9) && !(lc % 2)) {
 			unsigned int fid = ((unsigned int)cmd[5 + lc - 2] << 8) | cmd[5 + lc - 1];
 			if (!((lc == 2) || (lc == 4 && (cmd[2] == 8 || cmd[2] == 9) && cmd[5] == 0x3F && cmd[6] == 0)))
 				return 0;
+			if (fid == 0xD003) {
+				/* EF.SN precedent: ANS CPS4 section 3.1.2. Only the observed
+				 * SELECT EF form under a confirmed MF; never record its data. */
+				if (!selected_mf || cmd[0] != 0 || cmd[2] != 2 || cmd[3] != 0 || lc != 2)
+					return 0;
+				*next_file = 2; /* Transparent identification file: basic-channel B0 only. */
+				*next_mf = 1;
+				return 1;
+			}
 			if (fid != 0x3F00 && !public_file(fid))
 				return 0;
 			if ((cmd[2] == 1 && fid != 0x3F00) || (cmd[2] == 2 && fid == 0x3F00))
 				return 0;
 			*next_file = public_file(fid);
+			*next_mf = cmd[0] == 0 && (fid == 0x3F00 || (lc == 4 && cmd[2] == 8) || selected_mf);
 			return 1;
 		}
 		return 0;
@@ -119,11 +131,13 @@ static int allowed_command(const unsigned char *cmd, DWORD len, int *next_file)
 		return len == 5 && cmd[2] == 1 &&
 				(cmd[3] == 0x16 || (cmd[0] == 0 && cmd[3] == 0));
 	if (cmd[1] == 0xB0)
-		return selected_public_file && len == 5 && !(cmd[2] & 0x80);
+		return selected_public_file && len == 5 && !(cmd[2] & 0x80) &&
+				(selected_public_file != 2 || cmd[0] == 0);
 	if (cmd[1] == 0xB2)
-		return selected_public_file && len == 5 && !(cmd[3] & 0xF8);
+		return selected_public_file == 1 && len == 5 && !(cmd[3] & 0xF8);
 	if (cmd[1] == 0xC0)
-		return pending_response && len == 5 && cmd[2] == 0 && cmd[3] == 0;
+		return pending_response && len == 5 && cmd[2] == 0 && cmd[3] == 0 &&
+				(selected_public_file != 2 || cmd[0] == 0);
 	return 0; /* Includes VERIFY, MSE, PSO, GENERAL AUTHENTICATE and writes. */
 }
 
@@ -136,7 +150,7 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
 	transmit_fn transmit;
 	LONG rv = SCARD_E_NOT_TRANSACTED;
 	DWORD capacity = response_len ? *response_len : 0;
-	int next_file = -1;
+	int next_file = -1, next_mf = -1;
 	unsigned int sw;
 	pthread_mutex_lock(&trace_mutex);
 	if (trace_fd < 0 || stopped)
@@ -147,7 +161,7 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
 		stopped = 1;
 		goto out;
 	}
-	if (!allowed_command(cmd, len, &next_file)) {
+	if (!allowed_command(cmd, len, &next_file, &next_mf)) {
 		/* Header only except a validated, blocked ISO SELECT EF identifier.
 		 * Never authentication values, Lc/Le/lengths, hashes or responses. */
 		if (cmd && len >= 4)
@@ -166,7 +180,7 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
 	dprintf(trace_fd, "public_header=%02X%02X%02X%02X\n", cmd[0], cmd[1], cmd[2], cmd[3]);
 	/* A failed/warning SELECT may still change card context: drop old permission. */
 	if (next_file >= 0)
-		selected_public_file = 0;
+		selected_public_file = selected_mf = 0;
 	transmit = (transmit_fn)dlsym(RTLD_NEXT, "SCardTransmit");
 	if (!transmit) { stopped = 1; goto out; }
 	rv = transmit(card, send_pci, cmd, len, recv_pci, response, response_len);
@@ -177,8 +191,10 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
 		pending_response = (sw >> 8) == 0x61;
 		if ((sw >> 8) == 0x69)
 			stopped = 1;
-		if (next_file >= 0 && (sw == 0x9000 || (sw >> 8) == 0x61))
+		if (next_file >= 0 && (sw == 0x9000 || (sw >> 8) == 0x61)) {
 			selected_public_file = next_file;
+			selected_mf = next_mf;
+		}
 	} else {
 		stopped = 1;
 	}

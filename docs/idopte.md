@@ -69,6 +69,11 @@ El informe fZcrQuOX, 14:57:38 UTC, confirmó nombre/versión y SELECT inicial
 9000, antes de bloquear SELECT EF 00 A4 02 00. El formato v3 añade solo
 el identificador de dos bytes de ese SELECT bloqueado si su forma es válida,
 manteniendo el bloqueo y sin capturar contenido de archivos.
+El informe FIyDDxFN, 15:07:25 UTC, identificó ese EF como D003. La consulta
+actual permite exclusivamente su SELECT EF básico desde MF confirmado y
+READ BINARY básico, con respuestas omitidas. El precedente de serie pública
+en otros perfiles no demuestra todavía el contenido en Costa Rica. Mantener
+etiqueta/serial/URI del inventario Idopte fuera de Git y de mensajes públicos.
 
 `pcsc-spy` estándar registra los buffers transmitidos, que pueden incluir el
 PIN durante autenticación. No usarlo con el PIN real ni considerar un filtro

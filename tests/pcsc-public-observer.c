@@ -37,7 +37,7 @@ static FILE *fixture_reset(void)
 	FILE *file = tmpfile();
 	assert(file);
 	trace_fd = fileno(file);
-	stopped = selected_public_file = handle_set = pending_response = calls = events = lifecycle_events = 0;
+	stopped = selected_public_file = selected_mf = handle_set = pending_response = calls = events = lifecycle_events = 0;
 	fixture_sw = 0x9000;
 	return file;
 }
@@ -59,6 +59,8 @@ static void check_private(FILE *file)
 int main(void)
 {
 	const unsigned char select[] = { 0, 0xA4, 0, 0x0C, 2, 0x2F, 0 };
+	const unsigned char mf[] = { 0, 0xA4, 0, 0, 2, 0x3F, 0 };
+	const unsigned char serial[] = { 0, 0xA4, 2, 0, 2, 0xD0, 3 };
 	const unsigned char root[] = { 0, 0xA4, 4, 0x0C, 7, 0xA0, 0, 0, 0, 0, 0x3F, 0 };
 	const unsigned char app[] = { 0, 0xA4, 4, 0x0C, 15, 0xE8, 0x28, 0xBD, 8, 0x0F, 0xA0, 0, 0, 3, 0x63, 0x64, 0x79, 0x6E, 0x69, 0x64 };
 	const unsigned char read[] = { 0, 0xB0, 0, 0, 0 };
@@ -81,6 +83,77 @@ int main(void)
 			send_command(version, sizeof(version)) == 0 && calls == 5);
 	check_private(file);
 	puts("PASS public observer forwards only allowed discovery and logs no payloads or lengths");
+	file = fixture_reset();
+	assert(send_command(serial, sizeof(serial)) != 0 && !calls);
+	check_private(file);
+	file = fixture_reset();
+	assert(send_command(mf, sizeof(mf)) == 0 && selected_mf);
+	assert(send_command(serial, sizeof(serial)) == 0 && selected_mf && selected_public_file == 2);
+	assert(send_command(read, sizeof(read)) == 0 && calls == 3);
+	check_private(file);
+	file = fixture_reset();
+	assert(send_command(root, sizeof(root)) == 0 && selected_mf);
+	assert(send_command(serial, sizeof(serial)) == 0 && calls == 2);
+	check_private(file);
+	{
+		const unsigned char variants[][9] = {
+			{ 1, 0xA4, 2, 0, 2, 0xD0, 3 },
+			{ 0x0C, 0xA4, 2, 0, 2, 0xD0, 3 },
+			{ 0, 0xA4, 0, 0, 2, 0xD0, 3 },
+			{ 0, 0xA4, 2, 0x0C, 2, 0xD0, 3 },
+			{ 0, 0xA4, 8, 0, 4, 0x3F, 0, 0xD0, 3 }
+		};
+		for (size_t i = 0; i < sizeof(variants) / sizeof(variants[0]); i++) {
+			file = fixture_reset();
+			assert(send_command(mf, sizeof(mf)) == 0);
+			assert(send_command(variants[i], i == 4 ? 9 : 7) != 0 && calls == 1);
+			check_private(file);
+		}
+	}
+	puts("PASS D003 selection and binary reads require confirmed basic-channel MF and never log serial data");
+	file = fixture_reset(); fixture_sw = 0x6A82;
+	assert(send_command(mf, sizeof(mf)) == 0 && !selected_mf);
+	assert(send_command(serial, sizeof(serial)) != 0 && calls == 1);
+	check_private(file);
+	file = fixture_reset();
+	assert(send_command(mf, sizeof(mf)) == 0);
+	fixture_sw = 0x6A82;
+	assert(send_command(serial, sizeof(serial)) == 0 && !selected_public_file && !selected_mf);
+	assert(send_command(read, sizeof(read)) != 0 && calls == 2);
+	check_private(file);
+	file = fixture_reset();
+	assert(send_command(mf, sizeof(mf)) == 0);
+	assert(send_command(app, sizeof(app)) == 0 && !selected_mf);
+	assert(send_command(serial, sizeof(serial)) != 0 && calls == 2);
+	check_private(file);
+	file = fixture_reset();
+	assert(send_command(mf, sizeof(mf)) == 0);
+	{
+		const unsigned char other_channel_mf[] = { 1, 0xA4, 0, 0, 2, 0x3F, 0 };
+		assert(send_command(other_channel_mf, sizeof(other_channel_mf)) == 0 && !selected_mf);
+	}
+	assert(send_command(serial, sizeof(serial)) != 0 && calls == 2);
+	check_private(file);
+	file = fixture_reset();
+	assert(send_command(mf, sizeof(mf)) == 0);
+	{
+		DWORD protocol;
+		assert(SCardReconnect(7, SCARD_SHARE_SHARED, SCARD_PROTOCOL_T1, SCARD_RESET_CARD, &protocol) == 0 && !selected_mf);
+	}
+	assert(send_command(serial, sizeof(serial)) != 0 && calls == 1);
+	check_private(file);
+	{
+		const unsigned char record[] = { 0, 0xB2, 1, 4, 0 };
+		const unsigned char channel_read[] = { 1, 0xB0, 0, 0, 0 };
+		const unsigned char *variants[] = { record, channel_read };
+		for (size_t i = 0; i < sizeof(variants) / sizeof(variants[0]); i++) {
+			file = fixture_reset();
+			assert(send_command(mf, sizeof(mf)) == 0 && send_command(serial, sizeof(serial)) == 0);
+			assert(send_command(variants[i], 5) != 0 && calls == 2);
+			check_private(file);
+		}
+	}
+	puts("PASS D003 permission is lost on failures, application/channel changes and reconnect; record/channel reads stay blocked");
 	file = fixture_reset();
 	assert(send_command(name, sizeof(name)) == 0 && calls == 1);
 	check_private(file);

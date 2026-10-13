@@ -1,6 +1,30 @@
 # libjcop3p11: contexto para continuar
 
 **JCOP4, 13 de octubre de 2026:** último informe revisado
+`local/jcop4-idopte-discovery-FIyDDxFN/report.txt`, **15:07:25 UTC**, principal
+`3423abc`, OpenSC `3dfef6704`, ambos Git limpios al comenzar. Mismo contexto/
+conexión 0, GET DATA nombre/versión y SELECT inicial 9000. **SELECT EF bloqueado
+identificado como D003**, no transmitido, sin SW de tarjeta. Módulo 1, slot
+vacío, events_recorded. No hubo PIN ni autenticación ni lectura de D003.
+ANS CPS4 sección 3.1.2 y CIE 3.0 documentan D003 bajo MF como identificación/
+serie legible sin autenticación; son perfiles distintos, no prueba del contenido
+en CR. No universalizar el FID: OpenSC esteid2018 lo usa para número de documento.
+Observador preparado para permitir **solo SELECT EF 00 A4 02 00 / D003 tras
+confirmar MF**, y READ BINARY de ese archivo en canal básico, sin SFI ni datos
+de entrada. Sus respuestas/seriales no se registran. MF se confirma únicamente
+por selección básica de 3F00 o AID raíz conocido aceptada 9000/61xx. Una
+selección absoluta de archivo bootstrap desde 3F00 también conserva contexto
+MF; cambios de aplicación/canal, selecciones fallidas y reconexión lo retiran.
+Forma de SELECT distinta, READ RECORD, otros canales y otros archivos siguen
+bloqueados. No nuevos GET DATA/operaciones administrativas ni cambios en OpenSC.
+Pasaron **14 comprobaciones del observador**; las **30 del lanzador** anteriores
+siguen vigentes (lanzador sin cambios). Integración con redirector real y
+transporte ficticio confirma MF/D003/READ seguidos de VERIFY bloqueado y omisión
+del serial sintético. Pendiente una consulta pública con mismo Make, sin PIN.
+Revisar los SW de D003 y siguiente bloqueo antes de ampliar; VERIFY 6982
+sigue pendiente, no solicitar otra firma autenticada todavía.
+
+Informe anterior antes de identificar el EF:
 `local/jcop4-idopte-discovery-fZcrQuOX/report.txt`, **14:57:38 UTC**, principal
 `7c046dc`, OpenSC `3dfef6704`, ambos Git limpios al comenzar. Contexto y
 conexión PC/SC 0. GET DATA **00 CA 01 00** y **00 CA 01 16** -> transporte
@@ -16,8 +40,8 @@ formas distintas se marcan unsupported sin registrar payload/longitud. Es
 un identificador de archivo, no contenido ni credencial. Se mantienen todos
 los permisos de v2. Pasaron **12 comprobaciones del observador y 30 del
 lanzador**, con transporte ficticio; OpenSC sin cambios. Siguiente intervención:
-misma consulta pública Make, sin PIN, para identificar ese EF antes de decidir
-si pertenece a archivos públicos ya conocidos. No repetir firmas todavía.
+consulta pública realizada en FIyDDxFN: D003 identificado y estudiado.
+No repetir ese paso como primer trabajo. No repetir firmas todavía.
 
 Informe anterior con el primer GET DATA bloqueado:
 `local/jcop4-idopte-discovery-aPCZL12P/report.txt`, **14:53:29 UTC**, principal
@@ -148,7 +172,11 @@ lo ajeno a la lista de descubrimiento: SELECT ISO limitado al MF/AID raíz/
 aplicación observados y archivos bootstrap públicos, CA 01 16 de versión,
 CA 01 00 de nombre de aplicación solo en canal básico y caso-2 corto,
 READ BINARY/RECORD solo tras SELECT de 2F00/2F01/5031/5032 y GET RESPONSE
-solo tras 61xx de una operación permitida. Otros archivos, GET DATA, CLA
+solo tras 61xx de una operación permitida. Se agrega D003 solo con SELECT
+EF básico exacto desde MF confirmado; admite únicamente READ BINARY básico
+sin SFI, no READ RECORD. MF/permiso se invalidan antes de cada selección y
+se restablecen únicamente tras 9000/61xx con el contexto esperado.
+Otros archivos, GET DATA, CLA
 protegida/propietaria, VERIFY (incluso vacío), MSE, PSO, autenticación,
 escrituras, SCardSetAttrib y todos los controles del lector se bloquean. Tras primer bloqueo,
 error de transporte/69xx, otro handle o más de 128 APDU, no transmite más.
@@ -187,14 +215,15 @@ La documentación pública NXP de ChipDoc 3.2 contempla PACE con PIN/CAN/MRZ
 y canales de confianza, sin resolver aún el requisito de la personalización CR.
 No copiar implementación privativa ni intentar autenticación administrativa.
 Las **35 comprobaciones del helper** pasaron en la preparación previa.
-Ahora pasaron **30 del lanzador** y **12 del observador**, incluyendo
+Ahora pasaron **30 del lanzador** y **14 del observador**, incluyendo
 bloqueo anterior a transporte, privacidad, reproducción de RTLD_NEXT local y
 delegación PC/SC real contra transporte falso. make test/pcsc-public-observer
 y test/iasecc incluyen este último conjunto.
 Biblioteca real compilada; no se cargó Idopte ni usó tarjeta por el agente.
 Sin cambios ni recompilación del driver OpenSC; delegación y primer bloqueo
 observados en hardware. CA 01 00/01 16 y SELECT A4 00 00 ya dieron 9000;
-identificar el siguiente SELECT A4 02 00 sigue pendiente.
+el siguiente SELECT A4 02 00 es D003 y quedó bloqueado. Su lectura pública
+acotada está preparada, pendiente comprobar los SW en hardware.
 Reconocimiento normal Idopte ya comprobado.
 
 Herramienta autenticada anterior, conservada para investigación futura:

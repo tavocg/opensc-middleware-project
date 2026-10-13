@@ -69,10 +69,11 @@ descubrimiento permitido; **Idopte puede fallar por ese bloqueo**. No usar
 el observador para firmar. Usa `LIBPCSCLITE_DELEGATE`, sin precarga ni cambios
 al sistema, y registra resultados de conexión además de cabeceras APDU.
 Nombre/versión y selección inicial dieron `9000`; el siguiente SELECT EF
-quedó bloqueado. El observador ahora registra únicamente el identificador
-de dos bytes de ese SELECT para decidir cómo continuar, sin permitirlo ni
-registrar su contenido. Informes privados en `local/jcop4-idopte-discovery-*/`.
-Pasaron 30 comprobaciones del lanzador y doce del observador sin tarjeta.
+identificó `D003`, usado para identificación/serie en perfiles documentados.
+Ahora se permite su selección y lectura binaria únicamente tras confirmar
+el MF, sin guardar su respuesta ni serial. Informes privados en
+`local/jcop4-idopte-discovery-*/`. Pasaron 30 comprobaciones del lanzador y
+catorce del observador sin tarjeta. La lectura de D003 en hardware está pendiente.
 No repetir el intento de PIN hasta identificar el requisito que falta.
 JCOP4 aún no está integrada en PKCS#11.
 RSA 3072 y modularidad para futuras generaciones siguen pendientes.
