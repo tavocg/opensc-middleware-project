@@ -45,16 +45,19 @@ Consultar [AGENTS.md](AGENTS.md) para continuar desde las capturas recientes.
 No repetir pruebas de firma/reinserción ya verificadas como primer paso.
 
 Hay una JCOP4 disponible para una investigación separada en este repositorio.
-Su primera consulta usa el OpenSC ya compilado y guarda informes propios;
-todavía no se afirma soporte de su aplicación ni de sus llaves:
+Su primera consulta confirmó lector, tarjeta y un ATR idéntico al registrado
+para eOI, diferente del de la JCOP3. Todavía no se conoce su aplicación ni
+el tamaño RSA. La siguiente consulta usa OpenSC ya compilado y solo selecciona
+cuatro AID conocidos:
 
 ```bash
-make probe/jcop4 READER=0
+make inspect/jcop4-aids READER=0
 ```
 
-Cerrar firmador antes de cambiar de tarjeta. Esta consulta obtiene lector y
-ATR, sin PIN ni inicialización de aplicaciones. Pasaron cuatro comprobaciones
-nuevas del lanzador con una herramienta simulada. Los pasos siguientes están
+Cerrar firmador antes de consultar y mantener la misma JCOP4 insertada.
+No pide PIN ni ejecuta PACE. Pasaron ocho comprobaciones del lanzador con
+una herramienta simulada. Los informes quedan aparte en `local/jcop4-aids-*/`.
+La consulta inicial sigue disponible como `make probe/jcop4`. Los pasos siguientes están
 en [docs/jcop4.md](docs/jcop4.md).
 
 ## Historial de desarrollo y comandos de diagnóstico

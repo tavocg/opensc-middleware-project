@@ -20,6 +20,10 @@ cat > "$task_tmp/build/opensc/src/tools/opensc-tool" <<'TOOL'
 set -euo pipefail
 case "$*" in
     --info|--list-readers|'--reader 2 --atr') ;;
+    '--reader 2 --card-driver default --send-apdu 00A404040BF0496173456363526F6F7400'|\
+    '--reader 2 --card-driver default --send-apdu 00A404040EE828BD080FD25047656E6572696300'|\
+    '--reader 2 --card-driver default --send-apdu 00A404040AE828BD080F014E58503100'|\
+    '--reader 2 --card-driver default --send-apdu 00A404040AE828BD080F014E58503000') ;;
     *) exit 92 ;;
 esac
 [[ ${OPENSC_DEBUG-} == 0 && ${OPENSC_DEBUG_FILE-unset} == unset &&
@@ -38,7 +42,20 @@ if [[ $* == "${FIXTURE_PROBE_FAIL-}" ]]; then exit 17; fi
 case "$*" in
     --info) printf 'OpenSC fixture\n' ;;
     --list-readers) printf '0 No; 2 Yes fixture reader\n' ;;
-    *) printf '3b:00\n' ;;
+    '--reader 2 --atr') printf '%s\n' "${FIXTURE_PROBE_ATR:-3b:00}" ;;
+    *)
+        case ${FIXTURE_PROBE_SW-mixed} in
+            mixed)
+                if [[ $6 == *E828BD080FD25047656E6572696300 ]]; then
+                    printf 'Received (SW1=0x90, SW2=0x00):\n'
+                else
+                    printf 'Received (SW1=0x6A, SW2=0x82)\n'
+                fi ;;
+            denied) printf 'Received (SW1=0x69, SW2=0x82)\n' ;;
+            missing) printf 'No response.\n' ;;
+            duplicate) printf 'Received (SW1=0x90, SW2=0x00)\nReceived (SW1=0x90, SW2=0x00)\n' ;;
+            *) exit 96 ;;
+        esac ;;
 esac
 TOOL
 chmod +x "$task_tmp/bin/git" "$task_tmp/build/opensc/src/tools/opensc-tool"
@@ -74,6 +91,30 @@ READER=invalid task_run 2
 task_run 2 2 unexpected
 [[ ! -e $task_tmp/called ]]
 printf 'PASS JCOP4 probe rejects invalid reader and additional commands\n'
+unset FIXTURE_PROBE_FAIL
+task_run 1 2 --aids
+[[ $(wc -l < "$task_tmp/called") == 3 &&
+   $(< "$task_tmp/output.txt") == *'ATR distinto o ausente'* ]]
+printf 'PASS JCOP4 AID query checks the observed ATR before sending SELECT\n'
+export FIXTURE_PROBE_ATR=3b:d5:18:ff:81:91:fe:1f:c3:80:73:c8:21:10:0a
+task_run 0 2 --aids
+[[ $(wc -l < "$task_tmp/called") == 7 &&
+   $(< "$task_tmp/output.txt") == *'1 de 4 AID seleccionados'* ]]
+[[ $(sed -n '4,7p' "$task_tmp/called") == $'--reader 2 --card-driver default --send-apdu 00A404040BF0496173456363526F6F7400\n--reader 2 --card-driver default --send-apdu 00A404040EE828BD080FD25047656E6572696300\n--reader 2 --card-driver default --send-apdu 00A404040AE828BD080F014E58503100\n--reader 2 --card-driver default --send-apdu 00A404040AE828BD080F014E58503000' ]]
+for task_dir in "$task_tmp"/local/jcop4-aids-*; do
+    [[ $(stat -c %a "$task_dir") == 700 && $(stat -c %a "$task_dir/report.txt") == 600 ]]
+done
+printf 'PASS JCOP4 AID query sends only four known SELECT and distinguishes 9000 from 6A82\n'
+export FIXTURE_PROBE_SW=denied
+task_run 1 2 --aids
+[[ $(wc -l < "$task_tmp/called") == 4 && $(< "$task_tmp/output.txt") == *'SELECT devolvió 6982'* ]]
+printf 'PASS JCOP4 AID query stops on security rejection despite zero tool exit status\n'
+for task_sw_mode in missing duplicate; do
+    export FIXTURE_PROBE_SW="$task_sw_mode"
+    task_run 1 2 --aids
+    [[ $(wc -l < "$task_tmp/called") == 4 ]]
+done
+printf 'PASS JCOP4 AID query rejects missing or duplicate responses without subsequent SELECT\n'
 mv "$task_tmp/build/opensc/src/tools/opensc-tool" "$task_tmp/saved-tool"
 task_run 1
 [[ ! -e $task_tmp/called && $(< "$task_tmp/output.txt") == *'make build/opensc'* ]]
