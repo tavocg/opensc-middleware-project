@@ -1841,14 +1841,14 @@ objetos administrativos tampoco impiden ensayar el mecanismo RSA ya delimitado.
 
 ### Variante preparada: VERIFY antes de MSE
 
-Con la misma JCOP4 y GUI/otros clientes cerrados:
+Comando histórico ejecutado con la misma JCOP4 y GUI/otros clientes cerrados;
+**ya falló, no repetir como próximo paso**:
 
 ```sh
 nix develop -c make sign/jcop4-verify-first READER=0
 ```
 
-Ejecutar **una vez** y revisar el informe si falla antes de otro PIN. El modo
-solo modifica el orden de la operación experimental existente:
+El modo solo modifica el orden de la operación experimental existente:
 
 1. Validar ATR/AID conocido, metadatos nativos PKCS#15, clave 91 RSA2048,
    referencia PIN 1/UTF-8/sin relleno y certificado público asociado.
@@ -1885,6 +1885,96 @@ intactos; no repetir sus suites sin cambios. No hay nueva firma medida: JCOP4,
 integración PKCS#11/PDF y RSA3072 siguen pendientes. Si reaparece VERIFY 6982,
 se detiene esta ruta y se revisan los requisitos de canal/personalización;
 no se ignora el estado ni se pide otro intento por inercia.
+
+### Resultado VERIFY antes de MSE: 13 de octubre, 19:00:58 UTC
+
+Informe **local/jcop4-signature-6m61lek4/report.txt**, principal `3acd6b9`,
+OpenSC `3dfef6704`. Principal/submódulo limpios al comenzar la revisión salvo
+el PDF del usuario sin seguimiento, que se preserva. Lector índice 0; el
+índice no identifica el modelo del lector. Metadatos validados y certificado
+RSA2048; modo experimental_apdu_sha256_rsa_verify_first, orden explícito
+verify_before_mse.
+
+| Etapa | Resultado observado |
+| --- | --- |
+| Consulta de estado sin credencial | Transporte 0, SW 63C7 |
+| Único VERIFY real | Transporte 0, SW **6982** |
+| MSE / PSO | **No enviados** |
+| Reset / unlock | 0 / 0 |
+| Helper / proceso | 1 / 1 |
+
+Cambiar el orden no resolvió la autenticación. MSE y formato de entrada PSO
+no participaron después de VERIFY en este intento; no ajustar hash/padding
+para explicar este rechazo. El resultado tampoco demuestra si el PIN era
+correcto o incorrecto, ni cuál de los canales posibles requiere esta
+personalización. 63C7 corresponde al estado **anterior** al intento: no hay
+consulta posterior del contador en este informe. No repetir el diagnóstico
+ni probar relleno, otras referencias, PIN administrativo o ignorar 6982.
+
+### Auditoría adicional del canal propuesto en el ZIP
+
+El usuario confirmó que **solo conserva el ZIP**, sin registros originales
+de la firma exitosa en la otra JCOP4. Se respeta ese antecedente, pero no es
+posible identificar su preparación exacta por una salida histórica conservada.
+Revisión estática adicional sin extracción, importación, ejecución o hardware:
+
+| Hallazgo en las fuentes | Consecuencia para la investigación |
+| --- | --- |
+| chipdoc/sm.py, build_sm_apdu calcula `mac` pero no lo añade al comando | La implementación transmite el indicador 01 y ciphertext, sin envolver DO87 ni enviar DO8E; no implementa el formato ISO SM que se pretende reproducir |
+| parse_sm_response devuelve 9000 fijo y no decodifica DO99 | Su valor de éxito no acredita el estado protegido real de la respuesta |
+| driverfd/signer.py, establish_secure_channel solo inicializa claves locales | El mensaje de canal establecido no prueba confirmación criptográfica con la tarjeta |
+| SELECT bajo SM es constante 0C A4 00 00 00 00 21 | No incluye MAC ni usa las claves calculadas; además son siete bytes de caso-2 extendido, no un envío ordinario con Lc cero |
+| GENERAL AUTHENTICATE usa CLA10 sin fragmento final en estas funciones | En el encadenamiento ISO indica un comando intermedio; un posible 9000 no equivale por sí solo a autenticar y cerrar la secuencia |
+| kdf_bsi concatena contadores de un byte, produce claves 3DES de 24 bytes y deriva SSC | No coincide con la derivación CA/AES indicada por su OID; la variante counter_be corrige el ancho del contador, sin resolver algoritmo, contexto o confirmación |
+
+El contraste se hizo contra fuentes primarias. En
+[OpenSC sm-iso.c](https://github.com/OpenSC/OpenSC/blob/master/src/sm/sm-iso.c)
+el formato contiene objetos de datos protegidos y estado de respuesta; el
+MAC calculado se incorpora al APDU. El
+[encadenamiento APDU de OpenSC](https://github.com/OpenSC/OpenSC/blob/master/src/libopensc/apdu.c)
+añade CLA10 a fragmentos intermedios; el
+[CA de sm-eac.c](https://github.com/OpenSC/OpenSC/blob/master/src/sm/sm-eac.c)
+envía GENERAL AUTHENTICATE con CLA00 y procesa nonce/token. No cambiar bytes
+del prototipo y probarlos por analogía: debe determinarse la variante del perfil.
+
+[OpenPACE eac_kdf.c](https://raw.githubusercontent.com/frankmorgner/openpace/master/src/eac_kdf.c)
+deriva con secreto, nonce opcional y contador de cuatro bytes en orden de red;
+el tamaño depende del cifrador seleccionado. Su
+[CA versión 2](https://raw.githubusercontent.com/frankmorgner/openpace/master/src/eac_ca.c)
+deriva y verifica el token antes de aceptar claves. En
+[eac.c](https://raw.githubusercontent.com/frankmorgner/openpace/master/src/eac.c),
+la autenticación incorpora SSC y la comprobación compara el MAC; inicializar
+el contexto por sí solo no demuestra acuerdo con una tarjeta. Estas fuentes
+definen implementaciones de referencia, no el perfil BCCR.
+
+También se inspeccionó estáticamente el módulo instalado libidop11.so, **sin
+cargarlo ni ejecutarlo**. Contiene nombres CA/ECDH con 3DES y AES128/192/256,
+PACE y PK-ECDH. La búsqueda limitada no encontró literales exactos de los OID
+CA/AES128 y CA/3DES, MSE del ZIP o SELECT D004/4141. No es prueba de ausencia:
+pueden construirse en ejecución. Sus nombres y mensajes genéricos no indican
+qué rama usa esta JCOP4 ni autorizan reproducirla. No se copió implementación
+propietaria. La búsqueda pública adicional recuperó referencias a manuales,
+sin obtener una especificación aplicable del canal.
+
+Los metadatos disponibles tampoco resuelven esa elección: los certificados
+observados son RSA de firma/autenticación; la enumeración AUTH no anunció CAN
+y el ODF solo identificó un directorio de llaves públicas 7004, sin enumerar
+su contenido. Eso no identifica una clave CA/ECDH ni acredita ausencia de ella.
+No sustituir la clave pública del canal por la del certificado RSA o por una
+clave de sesión anterior; no seguir rutas desconocidas por esa coincidencia.
+
+El dato faltante sigue siendo la **preparación real del canal en este perfil**:
+algoritmo/variante, origen y formato de la clave pública o secreto de acceso,
+MSE/GA y confirmación/SM. Sin registro original, la vía documental es el User
+Guide 678510/Crypto Guide y la personalización BCCR; una cible que enumera
+protocolos no determina esos parámetros. El estado 6982 y el ZIP justifican
+investigar esa preparación, sin demostrar que sea CA, PACE u otra condición.
+No nuevo READ 4141/D004, GA/SM o PIN por los mensajes del prototipo.
+
+Esta revisión solo cambió documentación; guard, helper y driver intactos.
+Las 12+6 comprobaciones de firma anteriores siguen vigentes, sin repetir
+suites. No hardware ni autenticación por el agente, ni nueva firma válida
+JCOP4; integración PKCS#11/PDF y RSA3072 pendientes.
 
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 

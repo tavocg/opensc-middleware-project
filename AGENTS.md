@@ -1,6 +1,53 @@
 # libjcop3p11: contexto para continuar
 
+**Resultado VERIFY antes de MSE: 13 de octubre de 2026, 19:00:58 UTC.**
+Informe **local/jcop4-signature-6m61lek4/report.txt**, principal `3acd6b9`,
+OpenSC `3dfef6704`; Git principal/driver limpios al comenzar salvo PDF del usuario
+sin seguimiento. mode=experimental_apdu_sha256_rsa_verify_first, lector índice
+0 (no inferir modelo del lector de ese índice). profile_metadata=validated,
+certificate_rsa_bits=2048, authentication_order=verify_before_mse.
+Estado sin credencial -> transporte 0/**63C7**; único VERIFY real -> transporte
+0/**6982**. **No MSE ni PSO**, reset/unlock 0, helper/exit 1. El cambio de orden
+no resolvió el rechazo; no atribuirlo al MSE anterior ni al formato PSO.
+63C7 es anterior al intento, no medición posterior del contador. No demuestra
+PIN incorrecto/correcto ni que una condición de canal específica sea obligatoria.
+No repetir este diagnóstico ni solicitar otra variante de PIN por inercia.
+
+Revisión estática adicional del ZIP sin importar/ejecutar/extractar: en
+chipdoc/sm.py build_sm_apdu calcula mac y **no lo incorpora** al APDU; transmite
+01+ciphertext sin DO87/DO8E. parse_sm_response retorna 9000 fijo sin decodificar
+DO99. establish_secure_channel en driverfd/signer.py devuelve True después de
+inicializar claves locales, sin intercambio de confirmación. SELECT bajo SM
+es constante 0C A4 00 00 00 00 21, sin MAC ni claves de sesión; no prueba canal.
+GENERAL AUTHENTICATE lleva CLA10 (fragmento encadenado ISO) sin comando final
+en esas funciones; no equiparar un posible 9000 con ejecución completa.
+kdf_bsi usa contadores de un byte y claves 3DES24/SSC derivado; hay alternativa
+de contador de cuatro bytes, pero no corrige el resto ni contradicción OID AES.
+Contraste primario OpenPACE eac_kdf.c/eac.c/eac_ca.c y OpenSC src/sm/sm-iso.c,
+src/libopensc/apdu.c. **No trasladar ni reparar a ciegas para enviar PIN**.
+
+Inspección estática limitada del módulo instalado libidop11.so (sin cargarlo):
+no literales exactos OID CA/AES128, CA/3DES, MSE del ZIP o SELECT D004/4141;
+sí nombres PACE/ECDH. No identifica ruta usada ni demuestra ausencia de soporte:
+puede construir bytes en tiempo de ejecución. No copiar código propietario.
+Búsqueda pública adicional solo recuperó referencias a manuales, no definición
+de protocolo aplicable. Falta corroborar preparación del canal/perfil con guía
+o registro histórico saneado (sin PIN/claves/datos personales). El usuario
+confirmó que **solo conserva el ZIP**, sin registro externo. No volver a
+preguntar por ese registro/comando: candidato identificado por AST, ejecución
+histórica y preparación no pueden corroborarse mediante lo conservado.
+Nombres estáticos del módulo instalado incluyen CA/ECDH AES128/192/256 y 3DES,
+PACE y PK-ECDH; es soporte genérico, no selección de protocolo de esta tarjeta.
+
+Solo documentación en esta revisión, driver/helper/guard sin cambios; las
+12+6 comprobaciones de firma anteriores siguen vigentes, no repetirlas.
+JCOP4 sin firma válida medida, PDF/PKCS#11/RSA3072 pendientes. Próximo paso
+depende de evidencia de preparación; **no nuevos READ 4141/D004, GA/SM o PIN**
+por los mensajes del prototipo. Mantener privado local/, nunca usar 4FGWOtpI,
+no hardware ni Git por el agente. Dar comandos de commit documental principal.
+
 **Revisión APDU del ZIP y diagnóstico VERIFY antes de MSE preparado.**
+Registro anterior; diagnóstico ya ejecutado, no repetir como próximo paso.
 Principal `1f4d9ae` / OpenSC `3dfef6704` al comenzar. El usuario aclaró que
 la firma exitosa de la otra JCOP4 fue **solo APDU, sin Idopte**, y pidió
 identificar el comando mediante el ZIP y evaluar rutas aunque se omitan

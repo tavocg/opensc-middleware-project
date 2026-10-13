@@ -95,9 +95,9 @@ exitosa en **otra JCOP4** fue solo APDU. El candidato encontrado es
 `python3 sign_llavefirma.py --sign`: verifica el PIN antes de MSE, a diferencia
 de nuestra prueba fallida. No se ejecutó el ZIP ni cambió el driver.
 
-Preparado un diagnóstico que cambia solo ese orden, conservando el formato
-de PIN y los comandos MSE/PSO ya usados con la tarjeta actual. Con GUI y otros
-clientes cerrados, ejecutar una vez:
+Se preparó un diagnóstico que cambia solo ese orden, conservando el formato
+de PIN y los comandos MSE/PSO ya usados con la tarjeta actual. Comando histórico,
+**ya ejecutado; no repetir ahora**:
 
 ```sh
 nix develop -c make sign/jcop4-verify-first READER=0
@@ -107,7 +107,17 @@ Firma un texto técnico y exige verificación local con OpenSSL; no firma PDF.
 Un rechazo VERIFY detiene antes de MSE/PSO, sin reintentos. No copia el
 truncamiento/relleno del PIN ni las referencias alternativas del ZIP, ni lee
 4141/D004. El helper ya prescinde de 4141/86 y PuKDF; omitirlos no elimina un
-rechazo de autenticación. Revisar el informe si falla antes de otra ejecución.
+rechazo de autenticación.
+
+Resultado en `local/jcop4-signature-6m61lek4/report.txt`, 19:00:58 UTC:
+metadatos/certificado correctos, estado 63C7, **VERIFY 6982 antes de MSE**;
+no MSE/PSO, reset/unlock correctos. Cambiar el orden no resolvió el fallo.
+La revisión adicional del ZIP encontró un MAC calculado pero omitido del
+APDU protegido y mensajes de canal establecido sin confirmación con tarjeta.
+No usar esas ramas como prueba de canal funcional. Hace falta corroborar
+su preparación mediante documentación del perfil. El usuario confirmó que
+solo conserva el ZIP, sin registros originales. No pedir repetir el PIN ni
+usar mensajes del prototipo como confirmación de canal.
 
 Capturas privadas bajo local/jcop4-idopte-spy-*/; no agregarlas a Git.
 Pasaron previamente **30 comprobaciones del observador/decoder y 40 del
