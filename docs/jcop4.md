@@ -1736,7 +1736,9 @@ No extrapolar ATR/AID/versión/algoritmo o personalización del ejemplar anterio
 solo por compartir generación. Se preservan las discrepancias estáticas del
 prototipo: confirmar una firma no identifica por sí solo qué código la produjo.
 
-El ZIP contiene varias rutas de firma, por lo que se preguntó cuál se utilizó:
+El ZIP contiene varias rutas de firma. El usuario aclaró posteriormente que
+el éxito fue **solo APDU, sin Idopte**, y pidió identificar el comando mediante
+revisión estática. La ruta PKCS#11 queda descartada como explicación de ese dato:
 
 | Ruta encontrada | Módulo/protocolo que usa |
 | --- | --- |
@@ -1744,10 +1746,9 @@ El ZIP contiene varias rutas de firma, por lo que se preguntó cuál se utilizó
 | sign_llavefirma.py | APDU directos; VERIFY sin SM en esa función |
 | driverfd/signer.py | Prototipo propio de preparación ECDH y firma bajo SM |
 
-No se ejecutó ninguna ruta. Un resultado con Idopte confirma funcionamiento del
-proveedor, pero no valida el CA/SM reproducido. Si se usó la ruta APDU directa,
-es necesario identificar su secuencia concreta antes de comparar contextos.
-No pedir repetir la firma; primero recuperar el comando/script histórico.
+No se ejecutó ninguna ruta. La revisión de las CLI identifica un candidato
+concreto, descrito abajo; no demuestra el comando histórico exacto ni valida
+por sí sola el CA/SM reproducido.
 
 El prototipo propone SELECT de la aplicación, SELECT/READ D004, MSE SET AT,
 GENERAL AUTHENTICATE con ECDH P-521 y posteriormente VERIFY bajo SM. El nombre
@@ -1787,13 +1788,103 @@ No es integración automática: deben coincidir formato de clave, respuesta,
 KDF, tokens/MAC y variante CA. El prototipo comenta 7C00 vacío, mientras el helper
 existente deriva las claves con nonce/token; compatibilidad pendiente.
 
-Próximo paso: identificar el comando/script de la firma exitosa en la otra
-JCOP4 y revisar evidencia original saneada de su preparación, sin PIN, llaves
-de sesión ni respuesta identificable, antes de adaptar protocolo o proponer
-hardware. La consulta actual no observó
-esos comandos porque se detiene antes en READ 4141. **No habilitar READ 4141 o
-D004, ni MSE/GA/VERIFY/SM por el ZIP**. No nueva prueba de PIN. La investigación
-estática/documental no requiere recompilar driver ni repetir regresiones.
+La consulta pública actual no observó esos comandos porque se detiene antes
+en READ 4141. **No habilitar READ 4141/D004 o GA/SM por el ZIP**. La instrucción
+posterior del usuario permite investigar además una variante aislada del orden
+VERIFY/MSE; el observador público conserva todos sus bloqueos.
+
+### Comando APDU candidato y diferencias verificables
+
+Revisión adicional al comenzar en principal `1f4d9ae`, OpenSC `3dfef6704`.
+El candidato es, desde el directorio del script:
+
+```sh
+python3 sign_llavefirma.py --sign
+```
+
+Es la CLI APDU encontrada que despacha una secuencia completa de firma.
+`driverfd/signer.py` declara `--sign`, pero su bloque CLI solo despacha probe,
+detect o ayuda; sus métodos de firma podrían haberse invocado desde otro código
+no incluido. `sign_chipdoc_lite.py` solo despacha probes. El ZIP no contiene
+salidas originales ni un registro que pruebe el comando histórico exacto.
+
+`sign_llavefirma.py` selecciona un AID, verifica PIN, configura MSE SET AT
+con OID de SHA-256/RSA y manda DigestInfo SHA-256 a PSO. Da éxito por SW1=90,
+sin verificación con certificado. Su helper limita a ocho bytes el PIN,
+rellena FF y prueba referencias 01/81 tras ciertos errores. Además, `--reader`
+no se pasa a la conexión de `do_sign`. No recomendar ejecutar ese script tal
+cual ni trasladar sus reintentos, truncamiento o supuestos a la tarjeta actual.
+
+La diferencia más cercana al punto donde falla nuestra tarjeta es el orden:
+el candidato autentica **antes de MSE**, mientras 5Dpadr1N hizo MSE antes y
+obtuvo 6982 en el único VERIFY real. Esto es una hipótesis comprobable, no una
+explicación demostrada. También difieren MSE y la entrada PSO; separarlas permite
+saber si el cambio de orden resuelve primero la autenticación.
+
+### Rutas evaluadas para obtener una firma válida
+
+| Ruta | Evidencia y decisión actual |
+| --- | --- |
+| VERIFY antes de MSE | Antecedente estático de la CLI APDU candidata; preparar una variante que cambie solo el orden |
+| Otro MSE o DigestInfo en PSO | Diferencias del ZIP relevantes para firmar después de un VERIFY aceptado; no arreglan por sí solas un rechazo anterior ni justifican barridos |
+| Chip Authentication ECDH + SM | Hipótesis del prototipo; requiere corroborar clave pública, formato, KDF, variante y MAC antes de integrar OpenPACE |
+| PACE/CAN de eOI | Precedente de otro perfil, sin objeto CAN observado aquí; no copiar por ATR ni concluir que sea obligatorio en CR |
+| Omitir campos ajenos a la firma | 4141/86, etiquetas, serial y PuKDF no son requisitos de la ruta mínima actual; su omisión ya permite llegar a VERIFY |
+
+No se puede omitir un rechazo VERIFY, inventar autenticación, alterar silenciosamente
+el PIN o declarar éxito solo por recibir bytes. Referencia de clave, asociación
+con el certificado, hash/padding y verificación criptográfica determinan si la
+firma es válida. Los metadatos conocidos de PIN también evitan enviar una
+credencial transformada. La ruta mínima conserva esos datos; no requiere
+interpretar 86=00FFFF ni leer 4141. El inventario incompleto de algoritmos y los
+objetos administrativos tampoco impiden ensayar el mecanismo RSA ya delimitado.
+
+### Variante preparada: VERIFY antes de MSE
+
+Con la misma JCOP4 y GUI/otros clientes cerrados:
+
+```sh
+nix develop -c make sign/jcop4-verify-first READER=0
+```
+
+Ejecutar **una vez** y revisar el informe si falla antes de otro PIN. El modo
+solo modifica el orden de la operación experimental existente:
+
+1. Validar ATR/AID conocido, metadatos nativos PKCS#15, clave 91 RSA2048,
+   referencia PIN 1/UTF-8/sin relleno y certificado público asociado.
+2. Seleccionar aplicación y consultar disponibilidad con VERIFY vacío,
+   conservando el chequeo anterior; solo 9000 o 63Cx con intentos disponibles
+   permite preguntar PIN.
+3. Hacer un único VERIFY real sin eco; borrar la credencial inmediatamente.
+   Cualquier resultado distinto de 9000 detiene antes de MSE y PSO.
+4. Hacer el mismo MSE 00 22 81 B6, datos 91 02 28 91, y solo si acepta 9000
+   el mismo PSO 00 2A 9E 9A con digest SHA-256 de 32 bytes y Le 256.
+5. Resetear tras el intento autenticado, también ante error, y liberar la
+   transacción. Solo una respuesta de 256 bytes y limpieza correcta permite
+   guardar firma y verificarla localmente con OpenSSL y el certificado.
+
+No es reproducción completa del ZIP. No cambia MSE, hash/padding, formato
+de PIN, referencias o aplicación; no selecciona archivos después de PIN,
+introduce canal SM, lee 4141/D004 ni hace reintentos autenticados. Conserva
+GET RESPONSE ordinario del PSO previo, pero no recupera errores probando otra
+longitud. Firma texto técnico local, no PDF ni PKCS#11 aún.
+
+`sign/jcop4-apdu` conserva su orden anterior. Ambos lanzamientos limpian trazas,
+LD_PRELOAD, delegados PC/SC y variables del observador público para que no
+interfieran en la operación autenticada. Informes/artefactos privados bajo
+local/jcop4-signature-*/; el nuevo modo registra authentication_order=
+verify_before_mse y mode=experimental_apdu_sha256_rsa_verify_first, nunca PIN,
+longitud real o hash de la credencial. No abrir capturas autenticadas externas.
+
+Pasaron **12 comprobaciones de operación y 6 del lanzador**, con transporte
+ficticio: orden, borrado antes de MSE, VERIFY 6982/63Cx/transporte sin MSE/PSO,
+fallo MSE posterior sin PSO, firma/reset fallidos sin éxito, modo explícito,
+aislamiento de entorno y ausencia de reintentos. Helper real compilado offline;
+sin hardware, Idopte o PIN real por el agente. Driver/submódulo y guard v6
+intactos; no repetir sus suites sin cambios. No hay nueva firma medida: JCOP4,
+integración PKCS#11/PDF y RSA3072 siguen pendientes. Si reaparece VERIFY 6982,
+se detiene esta ruta y se revisan los requisitos de canal/personalización;
+no se ignora el estado ni se pide otro intento por inercia.
 
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 

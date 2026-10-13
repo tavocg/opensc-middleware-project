@@ -32,10 +32,18 @@ OPENSSL
 cat > "$task_tmp/build/opensc/card-sign-test" <<'HELPER'
 #!/usr/bin/env bash
 set -euo pipefail
-[[ $# == 2 && $1 == 2 && -t 0 && -t 1 &&
+if [[ ${FIXTURE_VERIFY_FIRST:-0} == 1 ]]; then
+    [[ $# == 3 && $3 == --verify-first ]] || exit 95
+else
+    [[ $# == 2 ]] || exit 95
+fi
+[[ $1 == 2 && -t 0 && -t 1 &&
     ${OPENSC_API_TRACE_FILE-unset} == unset && ${OPENSC_DEBUG_FILE-unset} == unset &&
     ${OPENSC_JCOP3_SESSION_STATE-unset} == unset && ${OPENSC_JCOP3_PIN_STATUS_IN_PLACE-unset} == unset &&
     ${OPENSC_JCOP3_POST_LOGIN_STATUS-unset} == unset && ${OPENSC_JCOP3_POST_LOGIN_SELECT-unset} == unset &&
+    ${LIBPCSCLITE_DELEGATE-unset} == unset && ${LIBPCSCLITE_SPY_DELEGATE-unset} == unset &&
+    ${LD_PRELOAD-unset} == unset && ${OPENSC_DEEPBIND-unset} == unset &&
+    ${JCOP4_PUBLIC_DISCOVERY_TRACE-unset} == unset && ${JCOP4_PUBLIC_SELECT_SPY_TRACE-unset} == unset &&
     ${OPENSC_DEBUG-} == 0 && $(stat -c %a "$2") == 700 && $(stat -c %a "$OPENSC_CONF") == 600 ]] || exit 94
 printf 'helper\n' >> "$FIXTURE_SIGN_ROOT/called"
 if [[ ${FIXTURE_HELPER_FAILURE:-0} != 0 ]]; then exit "$FIXTURE_HELPER_FAILURE"; fi
@@ -47,6 +55,8 @@ export FIXTURE_SIGN_ROOT="$task_tmp" PATH="$task_tmp/bin:$PATH" READER=2
 export OPENSC_API_TRACE_FILE=/should/not/be/used OPENSC_DEBUG_FILE=/should/not/be/used OPENSC_DEBUG=99
 export OPENSC_JCOP3_SESSION_STATE=yes OPENSC_JCOP3_PIN_STATUS_IN_PLACE=yes
 export OPENSC_JCOP3_POST_LOGIN_STATUS=yes OPENSC_JCOP3_POST_LOGIN_SELECT=yes
+export LIBPCSCLITE_DELEGATE=/should/not/be/used LIBPCSCLITE_SPY_DELEGATE=/should/not/be/used
+export LD_PRELOAD= OPENSC_DEEPBIND=1 JCOP4_PUBLIC_DISCOVERY_TRACE=/should/not/be/used JCOP4_PUBLIC_SELECT_SPY_TRACE=/should/not/be/used
 printf -v task_command 'bash %q' "$task_tmp/scripts/sign-jcop4.sh"
 task_run() {
     local task_expected=$1 task_rc=0
@@ -65,6 +75,20 @@ for task_report in "$task_tmp"/local/jcop4-signature-*/report.txt; do
     [[ $(stat -c %a "$task_report") == 600 && $(< "$task_report") == *'Verified OK'* ]]
 done
 printf 'PASS JCOP4 signing launcher keeps the helper on a terminal, isolates debug and verifies once afterward\n'
+export FIXTURE_VERIFY_FIRST=1
+printf -v task_command 'bash %q --verify-first' "$task_tmp/scripts/sign-jcop4.sh"
+task_run 0
+[[ $(< "$task_tmp/called") == $'build\nopenssl dgst -sha256\nhelper\nopenssl x509 -inform\nopenssl dgst -sha256' &&
+    $(< "$task_tmp/output.txt") == *'Firma verificada.'* ]]
+task_found=0
+for task_report in "$task_tmp"/local/jcop4-signature-*/report.txt; do
+    if [[ $(< "$task_report") == *'mode=experimental_apdu_sha256_rsa_verify_first'* ]]; then
+        [[ $(< "$task_report") == *'Verified OK'* && $(stat -c %a "$task_report") == 600 ]]
+        task_found=1
+    fi
+done
+[[ $task_found == 1 ]]
+printf 'PASS opt-in VERIFY-first is explicit, isolates capture/delegation and independently verifies its output\n'
 export FIXTURE_HELPER_FAILURE=17
 task_run 17
 [[ $(< "$task_tmp/called") == $'build\nopenssl dgst -sha256\nhelper' &&
@@ -74,3 +98,7 @@ export FIXTURE_BUILD_FAILURE=19
 task_run 19
 [[ $(< "$task_tmp/called") == build ]]
 printf 'PASS JCOP4 signing launcher stops before helper execution if compilation fails\n'
+printf -v task_command 'bash %q --unexpected-mode' "$task_tmp/scripts/sign-jcop4.sh"
+task_run 2
+[[ ! -e $task_tmp/called ]]
+printf 'PASS unknown signing variants are rejected before build or helper execution\n'

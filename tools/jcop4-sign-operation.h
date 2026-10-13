@@ -1,15 +1,30 @@
 /* Experimental contact-only operation, after validating the observed profile. */
 #include "tools/util.h"
 
-static int jcop4_sign_once(sc_card_t *card, const unsigned char digest[32],
-		unsigned char signature[256], FILE *report)
+static int jcop4_set_signature_env(sc_card_t *card, FILE *report)
 {
 	sc_apdu_t apdu;
-	unsigned char mse[] = { 0x91, 0x02, 0x28, 0x91 };
+	const unsigned char mse[] = { 0x91, 0x02, 0x28, 0x91 };
+	int rv;
+	sc_format_apdu(card, &apdu, SC_APDU_CASE_3_SHORT, 0x22, 0x81, 0xB6);
+	apdu.cla = 0;
+	apdu.flags |= SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP;
+	apdu.data = mse;
+	apdu.lc = apdu.datalen = sizeof(mse);
+	rv = sc_transmit_apdu(card, &apdu);
+	fprintf(report, "mse_transport=%d\nmse_sw=%02X%02X\n", rv, apdu.sw1, apdu.sw2);
+	return rv < 0 || apdu.sw1 != 0x90 || apdu.sw2;
+}
+
+static int jcop4_sign_once_order(sc_card_t *card, const unsigned char digest[32],
+		unsigned char signature[256], FILE *report, int verify_first)
+{
+	sc_apdu_t apdu;
 	char *credential = NULL;
 	size_t capacity = 0;
 	int length, rv, result = 1, attempted = 0;
 	unsigned int sw1, sw2;
+	fprintf(report, "authentication_order=%s\n", verify_first ? "verify_before_mse" : "mse_before_verify");
 
 	/* Query current availability without a credential before prompting. */
 	sc_format_apdu(card, &apdu, SC_APDU_CASE_1, 0x20, 0, 1);
@@ -20,14 +35,7 @@ static int jcop4_sign_once(sc_card_t *card, const unsigned char digest[32],
 	if (rv < 0 || !((apdu.sw1 == 0x90 && !apdu.sw2) ||
 			(apdu.sw1 == 0x63 && (apdu.sw2 & 0xF0) == 0xC0 && (apdu.sw2 & 0x0F))))
 		goto out;
-	sc_format_apdu(card, &apdu, SC_APDU_CASE_3_SHORT, 0x22, 0x81, 0xB6);
-	apdu.cla = 0;
-	apdu.flags |= SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP;
-	apdu.data = mse;
-	apdu.lc = apdu.datalen = sizeof(mse);
-	rv = sc_transmit_apdu(card, &apdu);
-	fprintf(report, "mse_transport=%d\nmse_sw=%02X%02X\n", rv, apdu.sw1, apdu.sw2);
-	if (rv < 0 || apdu.sw1 != 0x90 || apdu.sw2)
+	if (!verify_first && jcop4_set_signature_env(card, report))
 		goto out;
 	fflush(report);
 	printf("PIN de la JCOP4 (sin eco; un único intento): ");
@@ -55,6 +63,8 @@ static int jcop4_sign_once(sc_card_t *card, const unsigned char digest[32],
 	fprintf(report, "verify_transport=%d\nverify_sw=%02X%02X\n", rv, sw1, sw2);
 	if (rv < 0 || sw1 != 0x90 || sw2)
 		goto out;
+	if (verify_first && jcop4_set_signature_env(card, report))
+		goto out;
 	/* No file selection or metadata reads after successful VERIFY. */
 	sc_format_apdu(card, &apdu, SC_APDU_CASE_4_SHORT, 0x2A, 0x9E, 0x9A);
 	apdu.cla = 0;
@@ -81,4 +91,10 @@ out:
 	}
 	fflush(report);
 	return result;
+}
+
+static int jcop4_sign_once(sc_card_t *card, const unsigned char digest[32],
+		unsigned char signature[256], FILE *report)
+{
+	return jcop4_sign_once_order(card, digest, signature, report, 0);
 }

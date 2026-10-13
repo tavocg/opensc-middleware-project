@@ -83,9 +83,10 @@ int main(int argc, char **argv)
 	char *end;
 	FILE *report = NULL, *file = NULL, *output = NULL;
 	int rv = -1, result = 1, locked = 0, i, announced = 0, created_signature = 0;
+	int verify_first = argc == 4 && !strcmp(argv[3], "--verify-first");
 	const char *stage = "input";
 
-	if (argc != 3 || !argv[1][0] || strspn(argv[1], "0123456789") != strlen(argv[1]))
+	if ((argc != 3 && !verify_first) || !argv[1][0] || strspn(argv[1], "0123456789") != strlen(argv[1]))
 		return 2;
 	errno = 0;
 	index = strtoul(argv[1], &end, 10);
@@ -159,7 +160,8 @@ int main(int argc, char **argv)
 		goto out;
 	fprintf(report, "profile_metadata=validated\ncertificate_rsa_bits=2048\n");
 	stage = "sign_operation";
-	if (jcop4_sign_once(card, digest, signature, report))
+	if ((verify_first ? jcop4_sign_once_order(card, digest, signature, report, 1) :
+			jcop4_sign_once(card, digest, signature, report)))
 		goto out;
 	stage = "signature_output";
 	if (fwrite(signature, 1, sizeof(signature), output) != sizeof(signature))

@@ -14,6 +14,7 @@
 
 static int status_sw, mse_sw, verify_sw, pso_sw, fail_ins, reset_rv, short_signature;
 static int step, prompts, verifies, psos, resets, wipes, rejected_input;
+static int verify_first_fixture;
 static void *credential_buffer;
 static sc_pkcs15_object_t key_obj, pin_obj, cert_obj;
 static sc_pkcs15_prkey_info_t key_info;
@@ -31,7 +32,7 @@ int sc_pkcs15_get_objects(sc_pkcs15_card_t *p15, unsigned int type, sc_pkcs15_ob
 }
 int util_getpass(char **value, size_t *capacity, FILE *stream)
 {
-	assert(stream == stdin && step == 2 && !prompts);
+	assert(stream == stdin && step == (verify_first_fixture ? 1 : 2) && !prompts);
 	prompts++;
 	*capacity = 128;
 	*value = calloc(1, *capacity);
@@ -62,11 +63,12 @@ int sc_transmit_apdu(sc_card_t *card, sc_apdu_t *apdu)
 		assert(apdu->ins == 0x20 && apdu->p1 == 0 && apdu->p2 == 1 && apdu->cse == SC_APDU_CASE_1 &&
 				!apdu->data && !apdu->lc && !apdu->datalen && !apdu->le);
 		apdu->sw1 = status_sw >> 8; apdu->sw2 = status_sw & 255;
-	} else if (step == 1) {
+	} else if (step == (verify_first_fixture ? 2 : 1)) {
 		assert(apdu->ins == 0x22 && apdu->p1 == 0x81 && apdu->p2 == 0xB6 && apdu->lc == 4 &&
-				apdu->datalen == 4 && !memcmp(apdu->data, mse, 4) && !prompts);
+				apdu->datalen == 4 && !memcmp(apdu->data, mse, 4));
+		assert(verify_first_fixture ? (prompts == 1 && verifies == 1 && wipes == 1) : !prompts);
 		apdu->sw1 = mse_sw >> 8; apdu->sw2 = mse_sw & 255;
-	} else if (step == 2) {
+	} else if (step == (verify_first_fixture ? 1 : 2)) {
 		assert(apdu->ins == 0x20 && apdu->p1 == 0 && apdu->p2 == 1 && apdu->lc == 7 &&
 				apdu->datalen == 7 && !memcmp(apdu->data, "fixture", 7) && prompts == 1 && !verifies);
 		verifies++;
@@ -89,6 +91,7 @@ static void reset_fixture(void)
 	status_sw = 0x63C7; mse_sw = verify_sw = pso_sw = 0x9000;
 	fail_ins = reset_rv = short_signature = 0;
 	step = prompts = verifies = psos = resets = wipes = rejected_input = duplicate = 0;
+	verify_first_fixture = 0;
 	credential_buffer = NULL;
 	memset(&key_obj, 0, sizeof(key_obj)); memset(&pin_obj, 0, sizeof(pin_obj)); memset(&cert_obj, 0, sizeof(cert_obj));
 	memset(&key_info, 0, sizeof(key_info)); memset(&pin_info, 0, sizeof(pin_info)); memset(&cert_info, 0, sizeof(cert_info));
@@ -113,10 +116,12 @@ static int run_operation(void)
 	int result;
 	size_t size;
 	assert(report);
-	result = jcop4_sign_once(&card, digest, signature, report);
+	result = verify_first_fixture ? jcop4_sign_once_order(&card, digest, signature, report, 1) :
+		jcop4_sign_once(&card, digest, signature, report);
 	rewind(report);
 	size = fread(text, 1, sizeof(text) - 1, report); text[size] = 0;
 	assert(!strstr(text, "fixture") && !strstr(text, "pin_length") && !strstr(text, "credential") && !strstr(text, "hash"));
+	assert(strstr(text, verify_first_fixture ? "authentication_order=verify_before_mse" : "authentication_order=mse_before_verify"));
 	fclose(report);
 	return result;
 }
@@ -148,5 +153,34 @@ int main(void)
 	puts("PASS signing rejection, short response or transport failure does not retry or claim success");
 	reset_fixture(); reset_rv = SC_ERROR_READER; assert(run_operation() && verifies == 1 && psos == 1 && resets == 1);
 	puts("PASS reset failure propagates even after successful PSO");
+	reset_fixture(); verify_first_fixture = 1;
+	assert(!run_operation() && step == 4 && prompts == 1 && verifies == 1 && psos == 1 && resets == 1 && wipes == 1);
+	puts("PASS opt-in VERIFY-first keeps the observed PIN/key/digest, clears credential before MSE and signs once");
+	reset_fixture(); verify_first_fixture = 1; verify_sw = 0x6982;
+	assert(run_operation() && step == 2 && verifies == 1 && !psos && resets == 1 && wipes == 1);
+	reset_fixture(); verify_first_fixture = 1; verify_sw = 0x63C6;
+	assert(run_operation() && step == 2 && verifies == 1 && !psos && resets == 1);
+	reset_fixture(); verify_first_fixture = 1; fail_ins = 2;
+	assert(run_operation() && step == 2 && verifies == 1 && !psos && resets == 1);
+	reset_fixture(); verify_first_fixture = 1; verify_sw = 0x9001;
+	assert(run_operation() && step == 2 && verifies == 1 && !psos && resets == 1);
+	puts("PASS VERIFY-first rejects security/PIN/transport/non-9000 results without MSE, PSO or another credential");
+	reset_fixture(); verify_first_fixture = 1; mse_sw = 0x6982;
+	assert(run_operation() && step == 3 && verifies == 1 && !psos && resets == 1 && wipes == 1);
+	reset_fixture(); verify_first_fixture = 1; fail_ins = 3;
+	assert(run_operation() && step == 3 && verifies == 1 && !psos && resets == 1);
+	puts("PASS MSE rejection after VERIFY resets authentication without PSO or retries");
+	reset_fixture(); verify_first_fixture = 1; status_sw = 0x63C0;
+	assert(run_operation() && step == 1 && !prompts && !verifies && !resets);
+	reset_fixture(); verify_first_fixture = 1; rejected_input = 1;
+	assert(run_operation() && step == 1 && prompts == 1 && !verifies && !resets && wipes == 1);
+	puts("PASS VERIFY-first does not bypass availability or local input checks");
+	reset_fixture(); verify_first_fixture = 1; pso_sw = 0x6982;
+	assert(run_operation() && step == 4 && psos == 1 && resets == 1);
+	reset_fixture(); verify_first_fixture = 1; short_signature = 1;
+	assert(run_operation() && psos == 1 && resets == 1);
+	reset_fixture(); verify_first_fixture = 1; reset_rv = SC_ERROR_READER;
+	assert(run_operation() && psos == 1 && resets == 1);
+	puts("PASS VERIFY-first requires complete successful PSO and cleanup before reporting success");
 	return 0;
 }

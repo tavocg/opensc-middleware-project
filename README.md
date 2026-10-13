@@ -80,7 +80,7 @@ intercambio en formato compatible; no carga libpcscspy ni captura todo el tráfi
 
 ISO/IEC 7816-4 clasifica 86 como formato propietario. Los bytes no bastan para
 interpretar la política de acceso o identificar el archivo. **No repetir esta
-consulta ni otro intento de PIN**. El siguiente dato necesario es la definición
+consulta por esos bytes**. Sigue pendiente la definición
 ChipDoc de 4141/86 y del contexto requerido antes de VERIFY, mediante el User
 Guide Manual ref. 678510 o documentación del perfil BCCR. READ sigue bloqueado.
 La pregunta sobre acceso a esa documentación está pendiente de respuesta.
@@ -90,15 +90,31 @@ usuario añade una hipótesis de **Chip Authentication/ECDH antes de VERIFY**.
 Su MSE contiene un OID CA/AES-128 aunque el prototipo lo llama 3DES; no incluye
 las capturas originales que permitan corroborarlo. eOI usa PACE/CAN antes de
 VERIFY incluso por contacto, pero su etiqueta ChipDocLite es una constante del
-driver y no identifica por sí sola el perfil CR. El usuario confirmó una firma
-exitosa en **otra JCOP4**; falta identificar si se hizo por Idopte o por el
-prototipo APDU y revisar esa ruta antes de adaptar el canal de la tarjeta actual.
-No se ejecutó el ZIP ni cambió el driver; detalles en docs/jcop4.md.
+driver y no identifica por sí sola el perfil CR. El usuario aclaró que la firma
+exitosa en **otra JCOP4** fue solo APDU. El candidato encontrado es
+`python3 sign_llavefirma.py --sign`: verifica el PIN antes de MSE, a diferencia
+de nuestra prueba fallida. No se ejecutó el ZIP ni cambió el driver.
+
+Preparado un diagnóstico que cambia solo ese orden, conservando el formato
+de PIN y los comandos MSE/PSO ya usados con la tarjeta actual. Con GUI y otros
+clientes cerrados, ejecutar una vez:
+
+```sh
+nix develop -c make sign/jcop4-verify-first READER=0
+```
+
+Firma un texto técnico y exige verificación local con OpenSSL; no firma PDF.
+Un rechazo VERIFY detiene antes de MSE/PSO, sin reintentos. No copia el
+truncamiento/relleno del PIN ni las referencias alternativas del ZIP, ni lee
+4141/D004. El helper ya prescinde de 4141/86 y PuKDF; omitirlos no elimina un
+rechazo de autenticación. Revisar el informe si falla antes de otra ejecución.
 
 Capturas privadas bajo local/jcop4-idopte-spy-*/; no agregarlas a Git.
 Pasaron previamente **30 comprobaciones del observador/decoder y 40 del
-lanzador** con transporte ficticio. Esta revisión solo actualiza documentación;
-OpenSC/driver intactos. Evidencia y fuentes en [docs/jcop4.md](docs/jcop4.md).
+lanzador** con transporte ficticio. El diagnóstico de firma pasó además
+**12 comprobaciones de operación y 6 de lanzador**, y su helper compiló offline.
+Sin hardware por el agente; OpenSC/driver intactos. Evidencia y fuentes en
+[docs/jcop4.md](docs/jcop4.md).
 
 El descubrimiento Idopte previo (`make inspect/jcop4-idopte-discovery`) compila
 solo un observador y consulta información de módulo/slots/tokens, sin login

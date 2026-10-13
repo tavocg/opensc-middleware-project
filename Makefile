@@ -10,7 +10,7 @@
 .PHONY: inspect/jcop4-pkcs15
 .PHONY: inspect/jcop4-sign-setup
 .PHONY: inspect/jcop4-pin-status
-.PHONY: sign/jcop4-apdu
+.PHONY: sign/jcop4-apdu sign/jcop4-verify-first
 .PHONY: inspect/jcop4-security-info
 .PHONY: inspect/jcop4-pin-policy
 .PHONY: inspect/jcop4-odf-map
@@ -50,6 +50,7 @@ help:
 		'make inspect/jcop4-idopte-spy Captura solo SELECT 4141 para pcsc-spy, sin PIN ni lectura del EF.' \
 		'make test/pcsc-public-observer Comprueba el observador sin lector ni tarjeta.' \
 		'make sign/jcop4-apdu      Firma experimental RSA SHA-256 por APDU y verifica, un intento de PIN.' \
+		'make sign/jcop4-verify-first Mismo diagnóstico, verifica PIN antes de MSE; un intento y verificación OpenSSL.' \
 		'make inspect/jcop3         Identifica la aplicación y enumera objetos sin PIN.' \
 		'make read-dir/jcop3        Lee EF.DIR por APDU conocidas, sin PIN.' \
 		'make build/opensc          Compila el submódulo con PC/SC en build/opensc/.' \
@@ -120,6 +121,9 @@ test/pcsc-public-observer:
 
 sign/jcop4-apdu:
 	@bash scripts/sign-jcop4.sh
+
+sign/jcop4-verify-first:
+	@bash scripts/sign-jcop4.sh --verify-first
 
 inspect/jcop3:
 	@bash scripts/probe-jcop3.sh "$$READER" --inspect

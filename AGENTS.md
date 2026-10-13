@@ -1,6 +1,56 @@
 # libjcop3p11: contexto para continuar
 
+**Revisión APDU del ZIP y diagnóstico VERIFY antes de MSE preparado.**
+Principal `1f4d9ae` / OpenSC `3dfef6704` al comenzar. El usuario aclaró que
+la firma exitosa de la otra JCOP4 fue **solo APDU, sin Idopte**, y pidió
+identificar el comando mediante el ZIP y evaluar rutas aunque se omitan
+campos ajenos a la firma. Esta instrucción sustituye la pregunta pendiente
+sobre Idopte y permite preparar el diagnóstico descrito aquí; no ejecutar
+hardware por el agente ni ampliar el guard público.
+
+Revisión de las CLI/AST: candidato concreto **python3 sign_llavefirma.py --sign**,
+única CLI APDU encontrada que llama una secuencia completa de firma. No demuestra
+que fuera el comando histórico exacto. driverfd/signer.py declara --sign pero
+no lo despacha; sign_chipdoc_lite.py solo hace probes. La ruta CLI PKCS#11 queda
+descartada por la aclaración del usuario. El candidato hace VERIFY antes de MSE,
+MSE SET AT con OID RSA/SHA-256 y PSO con DigestInfo; no verifica la firma con
+certificado. Su helper trunca PIN a 8 bytes y rellena FF, y prueba referencias
+01/81: **no reproducir truncamiento/relleno, barridos ni aceptar solo SW1=90**.
+
+Nuevo **make sign/jcop4-verify-first READER=0**: misma validación de ATR/AID,
+PKCS#15 nativo, clave 91/RSA2048, PIN 1 UTF-8 6..14 sin relleno y certificado;
+solo cambia el orden autenticado a VERIFY -> MSE -> PSO. Conserva consulta de
+estado sin PIN, MSE 00 22 81 B6/91022891 y PSO con digest SHA-256 de 32 bytes.
+No afirmar réplica completa del ZIP: su MSE y DigestInfo son distintos.
+Un único intento real; cualquier VERIFY distinto de 9000 detiene antes de
+MSE/PSO, sin variantes/reintentos. Borra PIN antes de MSE y resetea tras intento,
+incluso fallo. No nuevos READ 4141/D004, canal SM, PIN admin o selección posterior
+al PIN. Lanzador limpia trazas, LD_PRELOAD y delegados PC/SC externos en ambos
+modos. Firma técnica local, no PDF; éxito exige OpenSSL con certificado asociado.
+Informes/artefactos privados local/jcop4-signature-*/. Modo anterior conserva
+orden MSE -> VERIFY. Driver y observador v6 intactos.
+
+Pasaron **12 comprobaciones de operación y 6 de lanzador**, sin hardware,
+incluidas parada antes de MSE tras VERIFY 6982, fallo MSE posterior, borrado PIN,
+reset, aislamiento de entorno y modo explícito. Helper real compilado offline.
+No repetir suites de observador/helper público sin cambios. Siguiente intervención:
+misma JCOP4, GUI/otros clientes cerrados, **nix develop -c make
+sign/jcop4-verify-first READER=0**, una ejecución; revisar informe si falla antes
+de otro PIN. Última evidencia autenticada sigue siendo 5Dpadr1N (VERIFY 6982),
+no hay firma JCOP4 nueva. Nunca usar 4FGWOtpI. Dar comandos de commit del
+principal; agente no escribe Git; preservar PDF no seguido en raíz.
+
+4141/86, etiquetas de presentación y PuKDF pueden omitirse en la ruta mínima;
+el helper ya evita depender de ellos. No omitir resultado VERIFY, asociación
+clave/certificado, algoritmo/padding o validación criptográfica. Si el nuevo
+VERIFY da 6982, la siguiente hipótesis sigue siendo preparación de canal CA/SM
+o diferencias de personalización, no ignorar ese estado ni otra prueba de PIN.
+PACE/CAN de eOI y CA/ECDH del ZIP siguen sin corroboración para esta tarjeta;
+la variante SM del ZIP contradice OID AES con helpers 3DES. Soporte JCOP4,
+PKCS#11, PDF y RSA3072 pendientes. Detalles y rutas en docs/jcop4.md.
+
 **Investigación estática posterior: eOI y ZIP aportado por el usuario.**
+Registro anterior; la aclaración y el próximo paso actuales están arriba.
 Principal `4f5040f` / OpenSC `3dfef6704` al comenzar; driver/submódulo sin cambios.
 `ChipDocLite` es constante eoi_model (card-eoi.c:48), devuelta por GET_MODEL;
 no lectura del nombre real del applet. eoi_match_card solo compara ATR;

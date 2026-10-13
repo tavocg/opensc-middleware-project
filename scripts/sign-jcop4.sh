@@ -4,8 +4,17 @@ set -euo pipefail
 umask 077
 task_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 task_reader=${READER:-0}
-if (( $# )) || [[ ! $task_reader =~ ^[0-9]+$ ]]; then
-    printf 'Uso: make sign/jcop4-apdu [READER=0]\n' >&2
+task_helper_args=()
+task_mode=experimental_apdu_sha256_rsa
+if (( $# == 1 )) && [[ $1 == --verify-first ]]; then
+    task_helper_args=(--verify-first)
+    task_mode=experimental_apdu_sha256_rsa_verify_first
+elif (( $# )); then
+    printf 'Uso: bash scripts/sign-jcop4.sh [--verify-first]\n' >&2
+    exit 2
+fi
+if [[ ! $task_reader =~ ^[0-9]+$ ]]; then
+    printf 'Uso: make sign/jcop4-apdu o sign/jcop4-verify-first [READER=0]\n' >&2
     exit 2
 fi
 if [[ ! -t 0 || ! -t 1 ]]; then
@@ -31,7 +40,7 @@ app default {
 }
 CONFIG
 {
-    printf 'date_utc=%s\nmode=experimental_apdu_sha256_rsa\nreader_index=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$task_reader"
+    printf 'date_utc=%s\nmode=%s\nreader_index=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$task_mode" "$task_reader"
     git -C "$task_root" rev-parse HEAD
     git -C "$task_root/vendor/opensc" rev-parse HEAD
 } > "$task_report"
@@ -52,10 +61,12 @@ cat -- "$task_dir/message.txt"
 # Keep both input and output on the terminal: util_getpass disables echo via stdout.
 # Only fixed result metadata is written by the helper into report.txt.
 env -u OPENSC_API_TRACE_FILE -u OPENSC_DEBUG_FILE \
+    -u LD_PRELOAD -u LIBPCSCLITE_DELEGATE -u LIBPCSCLITE_SPY_DELEGATE -u OPENSC_DEEPBIND \
+    -u JCOP4_PUBLIC_DISCOVERY_TRACE -u JCOP4_PUBLIC_SELECT_SPY_TRACE \
     -u OPENSC_JCOP3_SESSION_STATE -u OPENSC_JCOP3_PIN_STATUS_IN_PLACE \
     -u OPENSC_JCOP3_POST_LOGIN_STATUS -u OPENSC_JCOP3_POST_LOGIN_SELECT \
     OPENSC_DEBUG=0 OPENSC_CONF="$task_conf" \
-    "$task_root/build/opensc/card-sign-test" "$task_reader" "$task_dir"
+    "$task_root/build/opensc/card-sign-test" "$task_reader" "$task_dir" "${task_helper_args[@]}"
 openssl x509 -inform DER -in "$task_dir/certificate.der" -pubkey -noout \
     > "$task_dir/public-key.pem" 2>> "$task_report"
 # This pipeline contains only offline verification output, after PIN collection ended.
