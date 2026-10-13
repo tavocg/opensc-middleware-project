@@ -2168,6 +2168,60 @@ no habilitar selección/lecturas generales ni repetir PIN. La consulta de
 metadatos actual no establece la ruta de autenticación. JCOP4/RSA3072 y firma
 PKCS#11/PDF con el módulo libre siguen pendientes.
 
+## Idopte selecciona 4109 e intenta leerlo: 13 de octubre, 20:04:49 UTC
+
+El usuario registró el SELECT-only anterior en `40decb2`, principal limpio al
+comenzar; OpenSC `3dfef6704` intacto. Se amplió exclusivamente el modo optativo
+`inspect/jcop4-idopte-compare` para transmitir el SELECT 4109 observado:
+CLA00/A4/P1=02/P2=00/Lc=2/FID4109, total 7 u 8 bytes. Requiere ATR de conexión
+validado, aplicación conocida seleccionada con éxito, archivo 4141 seleccionado
+y al menos una lectura acotada previa de ese archivo. No concede READ de 4109.
+
+La selección elimina el permiso READ anterior y conserva el contexto de ADF
+únicamente con SW9000. Falla, continuación, cambio de aplicación/canal o forma
+distinta no habilitan lecturas. Los modos discovery/spy siguen bloqueando
+SELECT 4109; presupuesto de READ 4141, bloqueo de autenticación y privacidad
+intactos. Se añade únicamente la etiqueta fija `known_4109_metadata_only`.
+El nuevo alcance queda registrado como
+`read4141_max400_select4109_only_no_recording_no_authentication`.
+
+El agente ejecutó una vez el modo actualizado, sin PIN ni GUI. Informe privado
+`local/jcop4-idopte-compare-BCIdSIvC/report.txt`, 20:04:49 UTC:
+
+```text
+comparison_atr=known_jcop4
+public_header=00A40200
+public_select=known_4109_metadata_only
+transport=0
+sw=9000
+blocked_header=00B00000
+module_exit_status=1
+observer_result=events_recorded
+```
+
+Inventario y compilación correctos; las 17 APDU transmitidas terminaron con
+transporte0/SW9000, incluidas las dos lecturas acotadas de 4141. El intento READ
+BINARY de 4109 **no llegó a la tarjeta**: no existe respuesta de tarjeta a esa
+lectura ni contenido de 4109 en la traza. El error final del módulo/Make sigue
+siendo compatible con el bloqueo del guard. No se observó MSE, GA o VERIFY
+antes de ese bloqueo; tampoco demuestra que no se usen en autenticación.
+
+Esta consulta confirma el siguiente acceso que necesita la enumeración de
+Idopte, no el propósito de los 17 bytes ni su efecto sobre autenticación. El
+ZIP revisado no contiene referencia a 4109. Para avanzar empíricamente, la
+hipótesis concreta es que Idopte necesita ese pequeño archivo para completar
+inventario o preparar otro paso: una futura excepción de lectura tendría que
+ser independiente, ajustada a su forma realmente solicitada y al tamaño de
+17 bytes, sin guardar contenido ni desbloquear PIN/canal/firma. No deducir
+su permiso de lectura por SELECT9000 o por el atributo 86. No repetir esta
+consulta idéntica ni pedir otra prueba de PIN mientras ese paso esté bloqueado.
+
+Pasaron **44 comprobaciones del observador/decoder y 45 del lanzador**, transporte
+ficticio y redirector real; biblioteca compilada. Nuevas regresiones verifican
+secuencia/contexto/ATR y formas exactas, revocación de READ anterior, bloqueo
+de READ BINARY/RECORD y PIN, y manejo de SELECT pendiente/fallido. Helper público,
+operación de firma y driver intactos; sus pruebas previas siguen vigentes.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño

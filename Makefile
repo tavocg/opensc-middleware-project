@@ -50,7 +50,7 @@ help:
 		'make inspect/jcop4-idopte Consulta módulo y estado público de los tokens Idopte, sin login.' \
 		'make inspect/jcop4-idopte-discovery Observa cabeceras de descubrimiento público con bloqueo de comandos ajenos.' \
 		'make inspect/jcop4-idopte-spy Captura solo SELECT 4141 para pcsc-spy, sin PIN ni lectura del EF.' \
-		'make inspect/jcop4-idopte-compare Compara preparación Idopte: READ 4141 hasta 400 bytes, sin guardar contenido ni autenticar.' \
+		'make inspect/jcop4-idopte-compare READ 4141 hasta 400 bytes y SELECT 4109, sin leer 4109, guardar contenido ni autenticar.' \
 		'make test/pcsc-public-observer Comprueba el observador sin lector ni tarjeta.' \
 		'make sign/jcop4-apdu      Firma experimental RSA SHA-256 por APDU y verifica, un intento de PIN.' \
 		'make sign/jcop4-verify-first Mismo diagnóstico, verifica PIN antes de MSE; un intento y verificación OpenSSL.' \

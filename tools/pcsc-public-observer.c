@@ -205,6 +205,18 @@ static int allowed_command(const unsigned char *cmd, DWORD len, int *next_file, 
 				*next_app = 1;
 				return 1;
 			}
+			if (fid == 0x4109) {
+				/* Observed next SELECT after bounded READ 4141. Metadata
+				 * independently confirmed; no content-read permission. */
+				if (!compare_read4141 || !comparison_atr_ok || !selected_app ||
+						selected_public_file != 3 || !read4141_calls ||
+						cmd[0] != 0 || cmd[2] != 2 || cmd[3] != 0 || lc != 2)
+					return 0;
+				*next_file = 0;
+				*next_mf = 0;
+				*next_app = 1;
+				return 1;
+			}
 			if (fid == 0xD003) {
 				/* EF.SN precedent: ANS CPS4 section 3.1.2. Only the observed
 				 * SELECT EF form under a confirmed MF; never record its data. */
@@ -323,6 +335,8 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
 	if (cmd[1] == 0xA4 && cmd[2] == 2 && cmd[4] == 2 && cmd[5] == 0x41 && cmd[6] == 0x41)
 		dprintf(trace_fd, "public_select=%s\n", compare_read4141 ?
 				"known_4141_bounded_read_comparison" : "known_4141_metadata_only");
+	if (cmd[1] == 0xA4 && cmd[2] == 2 && cmd[4] == 2 && cmd[5] == 0x41 && cmd[6] == 0x09)
+		dprintf(trace_fd, "public_select=known_4109_metadata_only\n");
 	if (cmd[0] != 0) selected_app = 0;
 	/* A failed/warning SELECT may still change card context: drop old permission. */
 	if (next_file >= 0)

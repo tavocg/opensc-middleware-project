@@ -376,7 +376,7 @@ export FIXTURE_COMPARE_MODE=1
 task_run 0 2 --idopte-compare
 task_compare_report=$(sed -n 's/^Informe: //p' "$task_tmp/output.txt")
 [[ $task_compare_report == */jcop4-idopte-compare-*/report.txt &&
-   $(< "$task_compare_report") == *'comparison_scope=read4141_max400_no_recording_no_authentication'* &&
+   $(< "$task_compare_report") == *'comparison_scope=read4141_max400_select4109_only_no_recording_no_authentication'* &&
    $(< "$task_compare_report") == *'observer_result=events_recorded'* &&
    ! -e ${task_compare_report%/*}/select4141-spy.raw &&
    $(stat -c %a "$task_compare_report") == 600 ]]

@@ -6,7 +6,36 @@ la tarjeta. El usuario ejecuta las operaciones que requieran PIN o GUI. Esto
 sustituye las restricciones anteriores de no ejecutar Git/hardware/Idopte por
 el agente; conservar límites de cada diagnóstico y privacidad de los registros.
 
-**Último resultado: SELECT 4109, 13 de octubre de 2026, 20:00:55 UTC.**
+**Último resultado: Idopte SELECT 4109 -> READ bloqueado, 20:04:49 UTC.**
+Principal `40decb2`, OpenSC `3dfef6704`, ambos limpios al comenzar. Usuario hizo
+commit anterior. Agente ejecutó el modo compare actualizado sin PIN/GUI:
+`local/jcop4-idopte-compare-BCIdSIvC/report.txt`. Compilación/inventario correctos,
+comparison_atr=known_jcop4; 17 APDU transmitidas 0/9000, incluidas dos READ
+acotadas de 4141. **SELECT 4109 known_4109_metadata_only -> 0/9000**; siguiente
+**READ BINARY 00B00000 bloqueado antes de transmitir**. No SW de tarjeta a ese
+READ, ni contenido; module_exit_status=1/observer_result=events_recorded por
+bloqueo propio, no rechazo de tarjeta ni VERIFY6982. No PIN, MSE/GA/VERIFY/PSO.
+
+Modo compare permite SELECT4109 exacto únicamente con ATR de conexión validado,
+ADF conocido/9000, 4141 seleccionado y lectura acotada previa; no READ4109.
+SELECT revoca permiso de lectura anterior; warning/61xx/fallo no habilitan
+lectura ni conservan ADF. Default discovery/spy siguen bloqueando SELECT4109.
+comparison_scope=read4141_max400_select4109_only_no_recording_no_authentication.
+No nueva variable, respuestas o campos identificables registrados.
+Pasaron **44 pruebas observador/decoder y 45 lanzador**, fake transporte y
+redirector real; biblioteca real compilada. Helper/firmador/driver sin cambios;
+58 helper y 6 lanzador firma previas vigentes, no repetir por documentación.
+
+Siguiente investigación: Idopte necesita leer 4109 durante enumeración; propósito
+desconocido, no probar PIN nuevamente. Si se prepara una excepción, separar
+READ4109 del default, limitarlo a los 17 bytes conocidos y a su forma solicitada,
+sin registrar contenido, sin autenticación/firma/escritura. No habilitar por
+SELECT9000/tag86 ni copiar protocolo ZIP. La consulta idéntica ya respondió qué
+sigue; no repetirla sin nuevo diagnóstico. JCOP4/RSA3072 siguen pendientes.
+Git continúa limitado por montaje de `.git` de solo lectura: autorización del
+usuario existe, commits deben ejecutarse fuera de ese montaje si persiste.
+
+**Resultado anterior: SELECT 4109, 13 de octubre de 2026, 20:00:55 UTC.**
 El usuario creó `32616a2` para el diagnóstico anterior, Git limpio al comenzar;
 OpenSC `3dfef6704` intacto. Agente ejecutó
 `nix develop --offline -c make inspect/jcop4-file4109 READER=0`.

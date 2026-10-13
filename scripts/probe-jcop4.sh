@@ -149,7 +149,7 @@ if [[ $task_mode == --idopte || $task_mode == --idopte-discovery || $task_mode =
         task_command_env=("LIBPCSCLITE_DELEGATE=$task_root/build/diagnostics/pcsc-public-observer.so" "JCOP4_PUBLIC_DISCOVERY_TRACE=$task_trace")
         if [[ $task_mode == --idopte-compare ]]; then
             task_command_env+=("JCOP4_DIAGNOSTIC_READ4141=1")
-            printf 'comparison_scope=read4141_max400_no_recording_no_authentication\n' >> "$task_report"
+            printf 'comparison_scope=read4141_max400_select4109_only_no_recording_no_authentication\n' >> "$task_report"
         fi
         if [[ $task_mode == --idopte-spy ]]; then
             task_spy_raw="$task_dir/select4141-spy.raw"

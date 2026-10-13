@@ -119,6 +119,58 @@ int main(void)
 	check_private(file);
 	puts("PASS public observer forwards only allowed discovery and logs no payloads or lengths");
 	{
+		const unsigned char source[] = { 0, 0xA4, 2, 0, 2, 0x41, 0x41, 0 };
+		const unsigned char target[] = { 0, 0xA4, 2, 0, 2, 0x41, 0x09, 0 };
+		const unsigned char record[] = { 0, 0xB2, 1, 4, 0 };
+		for (int i = 0; i < 3; i++) {
+			file = fixture_reset(); compare_read4141 = 1;
+			assert(send_command(app, sizeof(app)) == 0 && send_command(source, sizeof(source)) == 0);
+			assert(send_large(read, sizeof(read)) == 0 && read4141_calls == 1);
+			assert(send_command(target, sizeof(target) - (i == 1)) == 0 && calls == 4 &&
+					selected_app && !selected_mf && !selected_public_file && read4141_calls == 1);
+			assert(send_command(i == 0 ? read : i == 1 ? record : pin,
+					i == 0 ? sizeof(read) : i == 1 ? sizeof(record) : sizeof(pin)) != 0 && calls == 4 && stopped);
+			{
+				char log[2048] = {0};
+				fflush(file); rewind(file); assert(fread(log, 1, sizeof(log)-1, file) < sizeof(log)-1);
+				assert(strstr(log, "public_select=known_4109_metadata_only"));
+			}
+			check_private(file);
+		}
+		puts("PASS comparison SELECT 4109 after bounded READ 4141 revokes read permission and blocks READ BINARY, RECORD and PIN before transport");
+		for (int i = 0; i < 7; i++) {
+			unsigned char bad[sizeof(target)]; memcpy(bad, target, sizeof(bad));
+			file = fixture_reset(); compare_read4141 = 1;
+			assert(send_command(app, sizeof(app)) == 0 && send_command(source, sizeof(source)) == 0);
+			assert(send_large(read, sizeof(read)) == 0);
+			if (i == 0) compare_read4141 = 0;
+			if (i == 1) comparison_atr_ok = 0;
+			if (i == 2) { assert(send_command(root, sizeof(root)) == 0); }
+			if (i == 3) bad[0] = 1;
+			if (i == 4) bad[2] = 0;
+			if (i == 5) bad[3] = 0x0C;
+			if (i == 6) bad[6] = 0x08;
+			int before = calls;
+			assert(send_command(bad, sizeof(bad)) != 0 && calls == before);
+			check_private(file);
+		}
+		file = fixture_reset(); compare_read4141 = 1;
+		assert(send_command(app, sizeof(app)) == 0 && send_command(source, sizeof(source)) == 0);
+		assert(send_command(target, sizeof(target)) != 0 && calls == 2);
+		check_private(file);
+		puts("PASS SELECT 4109 remains blocked outside the comparison, prior-read sequence, verified ATR, known ADF and exact basic-channel form");
+		for (int i = 0; i < 2; i++) {
+			file = fixture_reset(); compare_read4141 = 1;
+			assert(send_command(app, sizeof(app)) == 0 && send_command(source, sizeof(source)) == 0);
+			assert(send_large(read, sizeof(read)) == 0);
+			fixture_sw = i ? 0x6101 : 0x6982;
+			assert(send_command(target, sizeof(target)) == 0 && !selected_app && !selected_public_file);
+			assert(send_command(read, sizeof(read)) != 0 && calls == 4);
+			check_private(file);
+		}
+		puts("PASS failed or pending SELECT 4109 never retains the previous file read permission");
+	}
+	{
 		const unsigned char target[] = { 0, 0xA4, 2, 0, 2, 0x41, 0x41, 0 };
 		const unsigned char rest[] = { 0, 0xB0, 1, 0, 144 };
 		const unsigned char full[] = { 0, 0xB0, 0, 0, 0, 1, 0x90 };

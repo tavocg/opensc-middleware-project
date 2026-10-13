@@ -145,6 +145,12 @@ local/jcop4-file4109-LKNy75nY/report.txt; 58 comprobaciones del helper y 45 del
 lanzador correctas. El agente puede ejecutar estos diagnósticos sin PIN/GUI,
 según autorización vigente en AGENTS.md. JCOP4 aún no firma con el driver libre.
 
+El modo de comparación permite ahora SELECT 4109 exclusivamente después de
+una lectura acotada de 4141 en la aplicación conocida. La ejecución posterior
+confirmó SELECT 4109 -> 9000 y un intento de READ BINARY de 4109 bloqueado
+antes de transmitir. **No se habilita READ 4109**; no fue un rechazo de tarjeta.
+Pasaron 44 comprobaciones del observador y 45 del lanzador; no hubo PIN ni firma.
+
 Capturas privadas bajo local/jcop4-idopte-spy-*/; no agregarlas a Git.
 Pasaron previamente **30 comprobaciones del observador/decoder y 40 del
 lanzador** con transporte ficticio. El diagnóstico de firma pasó además
