@@ -48,21 +48,24 @@ La JCOP4 disponible tiene dos certificados **RSA 2048**, corroborados con
 OpenSSL. Se leyeron PKCS#15 y certificados sin PIN: LlaveDeFirma referencia
 `0x91`, autenticación `0x90`, PIN global 1. Su AID ChipDoc
 `E828BD080FA00000036364796E6964` y referencias difieren de JCOP3.
-La selección temporal RSA/SHA-256 ya obtuvo `9000`. La siguiente consulta
-comprueba el estado y formato declarado del PIN antes de intentar autenticar:
+La selección temporal RSA/SHA-256 obtuvo `9000`; VERIFY vacío devolvió
+`63C7`, con siete intentos disponibles, PIN global 1 y formato UTF-8.
+El siguiente paso es **un intento de firma experimental de texto por APDU**:
 
 ```bash
-make inspect/jcop4-pin-status READER=0
+nix develop
+make sign/jcop4-apdu READER=0
 ```
 
-Cerrar firmador y otros clientes antes de consultar y mantener la misma
-JCOP4 insertada. Compila una herramienta pequeña contra OpenSC existente.
-Lee metadatos públicos y envía un VERIFY vacío a la referencia 1;
-no solicita ni prueba ningún PIN. La firma JCOP4 sigue pendiente.
-Pasaron 17 comprobaciones del lanzador y 24 del helper con API simuladas.
-Informes privados bajo `local/`. El soporte RSA 3072 y la modularidad para
-futuras generaciones siguen pendientes; se deben separar perfil y tamaño RSA.
-La evidencia y el protocolo propuesto están en [docs/jcop4.md](docs/jcop4.md).
+Cerrar firmador y otros clientes, mantener esta JCOP4 insertada e introducir
+su PIN solo en terminal, sin eco. Compila una herramienta pequeña contra
+OpenSC existente; mantiene una transacción, no reintenta PIN/firma y verifica
+con OpenSSL usando el certificado de esa tarjeta. Es la validación del
+protocolo previa a integrar JCOP4 en el módulo PKCS#11. Informes privados
+en `local/jcop4-signature-*/`. Pasaron siete comprobaciones de operación y
+cuatro del lanzador con transporte/helper simulados; hardware aún pendiente.
+RSA 3072 y modularidad para futuras generaciones siguen pendientes.
+La evidencia y el protocolo están en [docs/jcop4.md](docs/jcop4.md).
 
 ## Historial de desarrollo y comandos de diagnóstico
 

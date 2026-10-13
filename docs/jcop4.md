@@ -321,6 +321,90 @@ no que haya login o firma. Se revisará antes de solicitar el PIN por primera
 vez. La autenticación real se preparará con formato/contexto comprobados,
 sin capturas APDU ni reintentos de PIN automáticos.
 
+## Resultado de estado PIN: 13 de octubre, 08:10:14 UTC
+
+Informe `local/jcop4-pin-status-BYJtNyTV/report.txt`, principal `765ef89`,
+OpenSC `3dfef6704`. Binding/selección correctos, transporte 0, **SW 63C7**:
+PIN no verificado, siete intentos disponibles. Transacción liberada y proceso 0.
+No se introdujo PIN ni hay evidencia de consumo de un intento de autenticación.
+No repetir por inercia.
+
+Los metadatos declaran autenticación PIN/CHV, referencia global 1, formato
+UTF-8 (`2`), flags `0x11` sin padding, carácter de pad `00`, límites 6–14 y
+ruta vacía. El objeto se vincula a la llave de firma por su auth ID Card PIN;
+la credencial administrativa que protege el objeto no intervino. Estos
+parámetros permiten delimitar una primera autenticación experimental.
+
+## Primera firma experimental por APDU
+
+Con firmador y otros clientes cerrados, misma JCOP4 insertada y su PIN
+conocido, ejecutar **una sola vez**:
+
+```bash
+nix develop
+make sign/jcop4-apdu READER=0
+```
+
+Se compila solo `tools/card-sign-test.c`, usando `util_getpass()` de OpenSC
+para la entrada sin eco. El resultado queda en `local/jcop4-signature-*/`:
+texto técnico `message.txt`, SHA-256 `digest.bin`, certificado público
+`certificate.der`, llave pública PEM, firma e informe. Directorio 0700,
+archivos 0600, sin datos privados en Git. El texto se muestra antes del PIN.
+No se envía ningún PDF a la tarjeta.
+
+Es una prueba de protocolo sobre libopensc y el driver genérico, previa a
+integrar JCOP4 en PKCS#11. La firma por este helper no demostraría aún que
+firmador pueda cargar la biblioteca y usar esta tarjeta.
+
+El helper exige terminal tanto en stdin como stdout y comprueba ATR conectado,
+AID anunciado y binding nativo. Valida un único ID LlaveDeFirma RSA nativa
+2048/ref 0x91/uso SIGN/ruta vacía y un único PIN vinculado con los parámetros
+observados, incluido UTF-8 y ausencia de padding. Lee únicamente el certificado
+público del mismo ID y corrobora tipo RSA y módulo de 256 bytes antes del PIN.
+No se traslada la llave 3 ni la excepción de PIN de JCOP3. Los límites actuales
+son controles de esta prueba, no diseño definitivo para variantes futuras.
+
+En una sola transacción:
+
+1. Selecciona el AID de aplicación tras leer los archivos públicos.
+2. Consulta VERIFY vacío; bloqueo, estado inesperado o error detienen antes
+   de pedir el PIN. No se toma un estado ya verificado como permiso para omitirlo.
+3. Configura MSE `91 02 28 91`, ya aceptado en hardware.
+4. Recoge el PIN sin eco, valida límites públicos y envía **un VERIFY** a
+   referencia 1, sin padding ni transformaciones. Borra el buffer inmediatamente.
+5. Ante VERIFY 9000, envía **un PSO `00 2A 9E 9A`**, con el SHA-256 de 32 bytes
+   como entrada y Le 256. No selecciona archivos ni relee metadatos después
+   de la autenticación. La entrada digest es una hipótesis por verificar.
+6. Tras cualquier intento autenticado, reinicia la sesión con `sc_reset(card,0)`
+   y libera la transacción; no altera PIN, llaves ni objetos persistentes.
+7. Si PSO devuelve 9000 y 256 bytes y la limpieza termina bien, OpenSSL
+   verifica RSA/SHA-256 sobre el texto usando el certificado leído de la tarjeta.
+
+VERIFY, MSE y PSO no se reenvían automáticamente por 6C. GET RESPONSE se
+permite para recuperar la respuesta normal de PSO, sin repetir la firma.
+No CAN/PACE, cambio de PIN, desbloqueo, lectura de componentes privados ni
+operaciones administrativas. Un error detiene sin otro PIN ni variante de
+comando. Revisar el informe antes de proponer otro intento.
+
+No capturar APDU durante esta prueba. El helper autenticado conserva la
+terminal, sin tee/redirección; debug 0, trazas API y experimentos JCOP3
+apagados. Solo registra etapas, resultados/SW y tamaño público de firma,
+**nunca el PIN, su longitud real ni hash**. No usa caché ni replay de PIN.
+La única tubería tee corresponde a verificación offline posterior al helper.
+
+El helper real compiló contra OpenSC offline. Pasaron siete comprobaciones
+C de perfil/operación con credenciales sintéticas, sin lector, y cuatro del
+lanzador bajo PTY con helper/OpenSSL simulados. Cubren flujo único,
+rechazos antes del PIN, formatos distintos, PIN sintético rechazado,
+VERIFY/PSO negativos, respuesta corta, transporte y reset fallidos,
+limpieza de memoria y ausencia de credencial en el informe. Log C:
+`build/opensc-offline/jcop4-sign-operation-tests.log`. Las pruebas con PTY
+comprueban terminal/configuración/permisos y detención sin reintentos; no
+producen una firma criptográfica real. Ambos conjuntos se agregaron a
+`make test/iasecc`; util-linux en el flake proporciona `script` para la PTY.
+No se repitió la suite JCOP3 ni cambió el driver durante esta preparación.
+La firma en hardware, login y verificación real siguen pendientes.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño

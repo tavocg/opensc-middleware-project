@@ -29,6 +29,7 @@
               gnumake
               opensc
               pcsc-tools
+              util-linux # script: terminal fixture for authenticated launcher tests
             ];
             nativeBuildInputs = with pkgs; [
               autoconf
