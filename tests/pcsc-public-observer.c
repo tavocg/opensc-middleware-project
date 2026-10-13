@@ -50,7 +50,7 @@ static FILE *fixture_reset(void)
 	FILE *file = tmpfile();
 	assert(file);
 	trace_fd = fileno(file);
-	stopped = selected_public_file = selected_mf = handle_set = pending_response = calls = events = lifecycle_events = 0;
+	stopped = selected_public_file = selected_mf = selected_app = handle_set = pending_response = calls = events = lifecycle_events = 0;
 	control_calls = control_missing = control_capacity = 0;
 	control_size = 16; control_result = 0;
 	fixture_sw = 0x9000;
@@ -98,6 +98,92 @@ int main(void)
 			send_command(version, sizeof(version)) == 0 && calls == 5);
 	check_private(file);
 	puts("PASS public observer forwards only allowed discovery and logs no payloads or lengths");
+	{
+		const unsigned char target[] = { 0, 0xA4, 2, 0, 2, 0x41, 0x41, 0 };
+		const unsigned char record[] = { 0, 0xB2, 1, 4, 0 };
+		const unsigned char *reads[] = { read, record };
+		for (size_t i = 0; i < 2; i++) {
+			file = fixture_reset();
+			assert(send_command(app, sizeof(app)) == 0 && selected_app);
+			assert(send_command(select, sizeof(select)) == 0 && selected_app && selected_public_file);
+			assert(send_command(target, 7 + i) == 0 && selected_app && !selected_mf && !selected_public_file);
+			assert(send_command(reads[i], 5) != 0 && calls == 3 && stopped);
+			assert(send_command(version, sizeof(version)) != 0 && calls == 3);
+			{
+				char log[1024] = {0};
+				fflush(file); rewind(file);
+				assert(fread(log, 1, sizeof(log) - 1, file) < sizeof(log) - 1);
+				assert(strstr(log, "public_select=known_4141_metadata_only") && !strstr(log, "blocked_select_ef=4141"));
+			}
+			check_private(file);
+		}
+		puts("PASS SELECT 4141 requires known application and revokes previous file READ permission before blocking binary or record access");
+		{
+			const unsigned char variants[][16] = {
+				{ 1, 0xA4, 2, 0, 2, 0x41, 0x41 },
+				{ 0x0C, 0xA4, 2, 0, 2, 0x41, 0x41 },
+				{ 0, 0xA4, 0, 0, 2, 0x41, 0x41 },
+				{ 0, 0xA4, 2, 0x0C, 2, 0x41, 0x41 },
+				{ 0, 0xA4, 8, 0, 4, 0x3F, 0, 0x41, 0x41 },
+				{ 0, 0xA4, 2, 0, 10, 'S','E','C','R','E','T','_','P','I','N' },
+				{ 0, 0xA4, 2, 0, 2, 0x41, 0x42 }
+			};
+			const size_t sizes[] = { 7, 7, 7, 7, 9, 15, 7 };
+			for (size_t i = 0; i < 7; i++) {
+				file = fixture_reset();
+				assert(send_command(app, sizeof(app)) == 0);
+				assert(send_command(variants[i], sizes[i]) != 0 && calls == 1 && stopped);
+				check_private(file);
+			}
+		}
+		file = fixture_reset();
+		assert(send_command(target, sizeof(target)) != 0 && !calls);
+		check_private(file);
+		file = fixture_reset();
+		assert(send_command(root, sizeof(root)) == 0 && !selected_app);
+		assert(send_command(target, sizeof(target)) != 0 && calls == 1);
+		check_private(file);
+		puts("PASS metadata-only 4141 exception rejects other context, channels, selection forms, arbitrary payloads and neighboring files");
+		for (int i = 0; i < 8; i++) {
+			file = fixture_reset();
+			assert(send_command(app, sizeof(app)) == 0 && selected_app);
+			if (i == 0) { fixture_sw = 0x6A82; assert(send_command(app, sizeof(app)) == 0); }
+			if (i == 1) { fixture_sw = 0x6A82; assert(send_command(select, sizeof(select)) == 0); }
+			if (i == 2) assert(send_command(mf, sizeof(mf)) == 0);
+			if (i == 3) assert(send_command(root, sizeof(root)) == 0);
+			if (i == 4) {
+				DWORD protocol;
+				assert(SCardReconnect(7, SCARD_SHARE_SHARED, SCARD_PROTOCOL_T1, SCARD_RESET_CARD, &protocol) == 0);
+			}
+			if (i == 5) {
+				const unsigned char channel_version[] = { 1, 0xCA, 1, 0x16, 6 };
+				assert(send_command(channel_version, sizeof(channel_version)) == 0);
+			}
+			if (i == 6) {
+				const unsigned char absolute[] = { 0, 0xA4, 8, 0, 4, 0x3F, 0, 0x2F, 0 };
+				assert(send_command(absolute, sizeof(absolute)) == 0);
+			}
+			if (i == 7) { fixture_sw = 0x6104; assert(send_command(app, sizeof(app)) == 0); }
+			assert(!selected_app);
+			int before = calls;
+			assert(send_command(target, sizeof(target)) != 0 && calls == before && stopped);
+			check_private(file);
+		}
+		puts("PASS known application eligibility is lost on failed or pending selection, MF/path/channel changes and reconnect");
+		file = fixture_reset();
+		assert(send_command(app, sizeof(app)) == 0);
+		fixture_sw = 0x6104;
+		assert(send_command(target, sizeof(target)) == 0 && pending_response && !selected_public_file);
+		fixture_sw = 0x9000;
+		assert(send_command(get_response, sizeof(get_response)) == 0 && !pending_response && !selected_public_file);
+		assert(send_command(read, sizeof(read)) != 0 && calls == 3 && stopped);
+		check_private(file);
+		file = fixture_reset();
+		assert(send_command(app, sizeof(app)) == 0 && send_command(target, sizeof(target)) == 0);
+		assert(send_command(pin, sizeof(pin)) != 0 && calls == 2 && stopped);
+		check_private(file);
+		puts("PASS metadata continuation grants no file READ or authentication permission and preserves private response handling");
+	}
 	file = fixture_reset();
 	assert(send_command(serial, sizeof(serial)) != 0 && !calls);
 	check_private(file);

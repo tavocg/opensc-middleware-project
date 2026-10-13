@@ -53,11 +53,19 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *pci,
 	if (cmd[1] == 0xCA) {
 		assert(size == 5 && cmd[2] == 1 && (cmd[3] == 0x16 || cmd[3] == 0));
 	} else if (cmd[1] == 0xA4) {
-		assert(size == 7 && cmd[3] == 0 && cmd[4] == 2);
-		unsigned int fid = ((unsigned int)cmd[5] << 8) | cmd[6];
-		assert((cmd[2] == 0 && fid == 0x3F00) ||
-				(cmd[2] == 2 && fid == 0xD003 && selected_file == 0x3F00));
-		selected_file = fid;
+		if (cmd[2] == 4) {
+			const unsigned char aid[] = { 0xE8, 0x28, 0xBD, 8, 0x0F, 0xA0, 0, 0, 3, 0x63, 0x64, 0x79, 0x6E, 0x69, 0x64 };
+			assert(size == 5 + sizeof(aid) && cmd[3] == 0x0C && cmd[4] == sizeof(aid) &&
+					!memcmp(cmd + 5, aid, sizeof(aid)));
+			selected_file = 0xFFFF; /* Synthetic known ADF marker. */
+		} else {
+			assert((size == 7 || size == 8) && cmd[3] == 0 && cmd[4] == 2);
+			unsigned int fid = ((unsigned int)cmd[5] << 8) | cmd[6];
+			assert((size == 7 && cmd[2] == 0 && fid == 0x3F00) ||
+					(size == 7 && cmd[2] == 2 && fid == 0xD003 && selected_file == 0x3F00) ||
+					(size == 8 && cmd[7] == 0 && cmd[2] == 2 && fid == 0x4141 && selected_file == 0xFFFF));
+			selected_file = fid;
+		}
 	} else {
 		assert(size == 5 && cmd[1] == 0xB0 && cmd[2] == 0 && cmd[3] == 0 && selected_file == 0xD003);
 	}

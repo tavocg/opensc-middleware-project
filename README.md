@@ -57,19 +57,20 @@ del PIN devolvió `6D00` en raíz y aplicación, sin obtener datos. Idopte recon
 ChipDoc v3.2, anuncia PIN inicializado y límites 6–14. El directorio `5031`
 confirmó referencias a `7001` (autenticación), `7002` (metadatos de llaves
 privadas), `7004` (llaves públicas) y `7005` (certificados); no a `4141` en el
-bloque leído. El siguiente paso consulta únicamente los metadatos de control
-del archivo que intentó seleccionar Idopte:
+bloque leído. SELECT `4141` obtuvo `9000`: es un archivo transparente de
+400 bytes en la aplicación conocida. Su propósito y contenido siguen sin
+identificarse; no se leyó. El siguiente paso observa el comando que intenta
+Idopte después de seleccionarlo:
 
 ```bash
-nix develop -c make inspect/jcop4-file4141 READER=0
+nix develop -c make inspect/jcop4-idopte-discovery READER=0
 ```
 
-Cerrar firmador y otros clientes y mantener esta JCOP4 insertada. Compila solo
-el helper, selecciona la aplicación conocida y envía SELECT `4141`. No lee su
-contenido ni carga Idopte; resume estructura/tamaño de FCP/FCI sin respuestas
-brutas ni binding PKCS#15. `6A82` solo indicaría ausencia en ese contexto; otros
-errores detienen sin reintentos. Pasaron 45 comprobaciones del helper y 35 del
-lanzador sin tarjeta.
+Cerrar firmador y otros clientes y mantener esta JCOP4 insertada. El observador
+v6 permite solo el SELECT de `4141` bajo la aplicación conocida confirmada;
+**su lectura permanece bloqueada**. No introduce PIN. Idopte puede fallar al
+intentar una lectura; revisar el primer bloqueo antes de continuar. Pasaron 25
+comprobaciones del observador/constructor y 35 del lanzador sin tarjeta.
 
 El descubrimiento Idopte previo (`make inspect/jcop4-idopte-discovery`) compila
 solo un observador y consulta información de módulo/slots/tokens, sin login
@@ -81,13 +82,16 @@ Nombre/versión y selección inicial dieron `9000`; el siguiente SELECT EF
 identificó `D003`, usado para identificación/serie en perfiles documentados.
 Ahora se permite su selección y lectura binaria únicamente tras confirmar
 el MF, sin guardar su respuesta ni serial. Informes privados en
-`local/jcop4-idopte-discovery-*/`. Las veinte comprobaciones previas del
-observador/constructor siguen vigentes. El intento OUj06FEQ (15:45:03 UTC)
+`local/jcop4-idopte-discovery-*/`. Las pruebas del
+observador/constructor se ampliaron a 25 comprobaciones. El intento OUj06FEQ (15:45:03 UTC)
 obtuvo transporte 0 en la consulta de capacidades 42000D48 y 9000 en todas
 las APDU transmitidas; el registro omite FIDs/AID permitidos y respuestas.
-El nuevo bloqueo es SELECT EF `4141`, aún sin identificar. El observador
-mantiene ese archivo bloqueado. La consulta independiente de SELECT ayudará
-a comprobar su existencia en la aplicación conocida sin permitir su lectura.
+El bloqueo de esa captura fue SELECT EF `4141`, cuyo propósito sigue sin
+identificarse. El observador
+v6 permite su SELECT acotado, tras el diagnóstico independiente Kzi6aI8S
+(16:12:31 UTC), y registra etiquetas fijas de raíz/aplicación/selección de
+metadatos para aclarar el contexto. No registra respuestas ni datos arbitrarios
+y no concede acceso a READ de ese archivo.
 No repetir el intento de PIN hasta identificar el requisito que falta.
 JCOP4 aún no está integrada en PKCS#11.
 RSA 3072 y modularidad para futuras generaciones siguen pendientes.

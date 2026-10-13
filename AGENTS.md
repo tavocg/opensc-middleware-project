@@ -1,6 +1,39 @@
 # libjcop3p11: contexto para continuar
 
 **JCOP4, 13 de octubre de 2026:** último informe revisado
+`local/jcop4-file4141-Kzi6aI8S/report.txt`, **16:12:31 UTC**, principal
+`e4c5d1e`, OpenSC `3dfef6704`, ambos Git limpios al comenzar. Inventario,
+compilación, conexión y aplicación correctos. **SELECT 4141 -> transporte
+0/SW 9000, estructura transparente, tamaño 400 bytes**. Existe bajo el AID
+ChipDoc conocido; su propósito/contenido/ACL no se identificaron. No READ
+ni binding; unlock y proceso 0. No PIN ni autenticación. No equiparar selección
+exitosa con archivo público o permiso para leerlo. ODF previo no lo referencia
+en el bloque leído; las búsquedas públicas nuevas tampoco lo identificaron.
+Preparado observador **v6** para la misma consulta pública Idopte: permite
+exclusivamente SELECT 4141, CLA 00/P1 02/P2 00/Lc 2/total 7 u 8, después
+de SELECT AID ChipDoc conocido en canal básico con SW 9000. Conserva ese
+contexto solo al seleccionar EF bootstrap relativo conocido con éxito; MF,
+raíz, ruta absoluta, otro canal, SELECT fallido o pendiente y conexión/
+reconexión lo descartan. **Nunca habilita READ BINARY/RECORD de 4141**;
+seleccionarlo elimina el permiso de lectura del EF anterior. GET RESPONSE
+solo tras 61xx permitido y sin habilitar lectura/autenticación. Nueva observación:
+etiquetas fijas public_select=known_chipdoc_application/known_root_application/
+known_4141_metadata_only, derivadas exclusivamente de coincidencias con
+constantes públicas; no AID/FID arbitrario, contenidos, ACL ni respuestas.
+Las etiquetas preceden transporte: consultar SW para saber si SELECT tuvo éxito.
+Permisos restantes de v5 intactos: no VERIFY/MSE/PSO/SM/escrituras, no controles
+salvo capacidades vacías; primer bloqueo/error de transporte/69xx/otro
+handle/límite 128 sigue definitivo. Pasaron **25 comprobaciones del observador/constructor y
+35 del lanzador**, biblioteca real compilada, redirector PC/SC con transporte
+ficticio y ninguna tarjeta/Idopte por el agente. Las 45 del helper previas
+siguen vigentes, sin cambios de ese código. Driver/submódulo intactos.
+Siguiente intervención: `nix develop -c make inspect/jcop4-idopte-discovery READER=0`,
+misma JCOP4, firmador/otros clientes cerrados, sin PIN. Revisar etiquetas,
+transportes/SW y primer bloqueo; **un error de Idopte sigue siendo esperable
+si intenta leer 4141**. No permitir esa lectura ni pedir otro PIN por inercia;
+VERIFY 6982 sigue pendiente. Dar comandos de commit solo del principal.
+
+Informe anterior del mapa de directorios, antes de SELECT 4141:
 `local/jcop4-odf-map-eAjoi575/report.txt`, **15:58:49 UTC**, principal
 `458573f`, OpenSC `3dfef6704`, ambos Git limpios al comenzar. Inventario,
 compilación, contexto/conexión y aplicación correctos. SELECT 5031 y READ
@@ -284,11 +317,11 @@ Evidencia anterior ya revisada:
 La generación JCOP4 la indica el usuario, RSA 2048 sí se corroboró. No activar
 excepciones JCOP3/eOI por ATR/etiqueta; precedente ChipDoc ANS enlazado en docs.
 
-**Siguiente intervención:** `nix develop -c make inspect/jcop4-file4141 READER=0`,
-firmador y otros clientes cerrados y misma JCOP4 insertada. Solo SELECT del
-archivo observado 4141 y resumen de sus metadatos de control, sin READ.
-ODF ya revisado: cuatro rutas, ninguna 4141 en el bloque leído. El observador
-Idopte conserva ese SELECT bloqueado; no repetirlo como primer paso.
+**Siguiente intervención:** `nix develop -c make inspect/jcop4-idopte-discovery READER=0`,
+firmador y otros clientes cerrados y misma JCOP4 insertada, sin PIN. Observador
+v6: SELECT 4141 limitado a aplicación conocida confirmada, **sin READ**.
+ODF y SELECT directo ya revisados; no repetirlos como primer paso. Revisar
+primer bloqueo y contexto en las etiquetas fijas antes de ampliar permisos.
 
 **Descubrimiento Idopte conservado para investigación posterior:**
 Inventario PC/SC/ATR conocido primero, después pkcs11-tool local con
@@ -303,9 +336,13 @@ PC/SC (establecer contexto, conectar, reconectar) y resultados, con máximo
 128 registros de ciclo de vida. Además, cabeceras de cuatro bytes y transporte/SW,
 sin buffers de datos, tamaños, Lc/Le, PIN, hash ni respuestas completas.
 **Única excepción de datos de comando en formato
-v3/v4/v5:** identificador de dos bytes de un SELECT EF bloqueado, exclusivamente
+v3/v4/v5/v6:** identificador de dos bytes de un SELECT EF bloqueado, exclusivamente
 CLA 00/INS A4/P1 02/P2 00, Lc 2 y tamaño total 7/8; otras formas solo
 unsupported. No registra payloads arbitrarios ni cambia permisos por ese dato.
+**v6 agrega solo etiquetas fijas** public_select para raíz/aplicación conocida
+básica y SELECT 4141 de metadatos, sin registrar los valores de payload ni datos
+arbitrarios. SELECT 4141 se permite solo bajo aplicación conocida ya seleccionada
+con 9000, CLA 00/P1 02/P2 00/Lc 2/total 7 u 8; jamás habilita B0/B2 del archivo.
 El formato v4 también registra dwControlCode en hexadecimal del primer
 SCardControl bloqueado, identificador de operación del lector; clasifica
 únicamente el código estándar CM_IOCTL_GET_FEATURE_REQUEST como empty o
@@ -318,7 +355,8 @@ control_transport; no la lista devuelta ni su longitud. Esa lista no añade
 permisos. Todos los demás controles, incluso con entrada vacía, se bloquean.
 Bloquea antes del transporte todo
 lo ajeno a la lista de descubrimiento: SELECT ISO limitado al MF/AID raíz/
-aplicación observados y archivos bootstrap públicos, CA 01 16 de versión,
+aplicación observados, archivos bootstrap públicos y SELECT 4141 acotado
+sin READ según v6; CA 01 16 de versión,
 CA 01 00 de nombre de aplicación solo en canal básico y caso-2 corto,
 READ BINARY/RECORD solo tras SELECT de 2F00/2F01/5031/5032 y GET RESPONSE
 solo tras 61xx de una operación permitida. Se agrega D003 solo con SELECT

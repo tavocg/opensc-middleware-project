@@ -102,6 +102,8 @@ int run_fixture(int mode)
     const unsigned char mf[] = { 0, 0xA4, 0, 0, 2, 0x3F, 0 };
     const unsigned char serial[] = { 0, 0xA4, 2, 0, 2, 0xD0, 3 };
     const unsigned char read[] = { 0, 0xB0, 0, 0, 0 };
+    const unsigned char app[] = { 0, 0xA4, 4, 0x0C, 15, 0xE8, 0x28, 0xBD, 8, 0x0F, 0xA0, 0, 0, 3, 0x63, 0x64, 0x79, 0x6E, 0x69, 0x64 };
+    const unsigned char target[] = { 0, 0xA4, 2, 0, 2, 0x41, 0x41, 0 };
     const unsigned char pin[] = { 0, 0x20, 0, 1, 10, 'S','E','C','R','E','T','_','P','I','N' };
     unsigned char response[64]; DWORD len = sizeof(response), protocol;
     SCARDCONTEXT context; SCARDHANDLE card;
@@ -111,6 +113,20 @@ int run_fixture(int mode)
     if (mode == 1) { assert(rv == SCARD_E_SHARING_VIOLATION); return 0; }
     assert(rv == 0 && protocol == SCARD_PROTOCOL_T1);
     assert(SCardReconnect(card, SCARD_SHARE_SHARED, SCARD_PROTOCOL_T1, SCARD_LEAVE_CARD, &protocol) == 0);
+    if (mode == 14 || mode == 15 || mode == 16) {
+        if (mode != 15) {
+            assert(SCardTransmit(card, 0, mode == 14 ? app : mf,
+                    mode == 14 ? sizeof(app) : sizeof(mf), 0, response, &len) == 0);
+            len = sizeof(response);
+        }
+        LONG selected = SCardTransmit(card, 0, target, sizeof(target), 0, response, &len);
+        assert(mode == 14 ? selected == 0 : selected != 0);
+        len = sizeof(response);
+        assert(SCardTransmit(card, 0, read, sizeof(read), 0, response, &len) != 0 && len == 0);
+        len = sizeof(response);
+        assert(SCardTransmit(card, 0, pin, sizeof(pin), 0, response, &len) != 0);
+        return 0;
+    }
     if (mode == 3) {
         assert(SCardControl(card, 0, pin, sizeof(pin), response, sizeof(response), &len) != 0);
         return 0;
@@ -188,7 +204,7 @@ int main(int argc, char **argv)
     void *core = dlopen(argv[2], RTLD_NOW | RTLD_LOCAL);
     assert(core);
     int (*count)(void) = (int (*)(void))dlsym(core, "fixture_count");
-    assert(count && count() == (mode == 9 ? 3 : mode == 7 ? 2 : mode == 0 || mode == 10 ? 1 : 0));
+    assert(count && count() == (mode == 9 ? 3 : mode == 7 || mode == 14 ? 2 : mode == 0 || mode == 10 || mode == 16 ? 1 : 0));
     int (*controls)(void) = (int (*)(void))dlsym(core, "fixture_control_count");
     if (controls) assert(controls() == (mode == 10 || mode == 12 || mode == 13 ? 1 : 0));
     return 0;
@@ -220,7 +236,7 @@ task_pcsc_libdir=$(pkg-config --variable=libdir libpcsclite)
 "${CC:-cc}" -std=c99 -Wall -Wextra -Werror -fPIC -shared "${task_pcsc_cflags[@]}" \
     "$task_tmp/plugin.c" -L"$task_pcsc_libdir" -Wl,-rpath,"$task_pcsc_libdir" \
     -lpcsclite -o "$task_tmp/redirect-plugin.so"
-for task_mode in 0 1 3 4 7 8 9 10 11 12 13; do
+for task_mode in 0 1 3 4 7 8 9 10 11 12 13 14 15 16; do
     env -u LD_PRELOAD -u LIBPCSCLITE_SPY_DELEGATE \
         LIBPCSCLITE_DELEGATE="$task_tmp/delegate.so" JCOP4_PUBLIC_DISCOVERY_TRACE="$task_tmp/delegate-$task_mode.txt" \
         "$task_tmp/local-client" "$task_tmp/redirect-plugin.so" "$task_tmp/libfakepcsc.so" "$task_mode"
@@ -229,7 +245,7 @@ for task_mode in 0 1 3 4 7 8 9 10 11 12 13; do
        $task_headers == *'pcsc_call=SCardEstablishContext'* && $task_headers == *'pcsc_call=SCardConnect'* &&
        $task_headers != *'PRIVATE_'* && $task_headers != *'SECRET_PIN'* &&
        $task_headers != *'length'* && $task_headers != *'data='* ]]
-    [[ $task_headers == *'format=public_discovery_headers_v5'* ]]
+    [[ $task_headers == *'format=public_discovery_headers_v6'* ]]
 done
 [[ $(< "$task_tmp/delegate-0.txt") == *'public_header=00CA0116'* &&
    $(< "$task_tmp/delegate-0.txt") == *'sw=9000'* &&
@@ -258,6 +274,14 @@ for task_mode in 12 13; do
        $(< "$task_tmp/delegate-$task_mode.txt") == *'blocked_control_code=42000006'* &&
        $(< "$task_tmp/delegate-$task_mode.txt") != *'public_header='* ]]
 done
+[[ $(< "$task_tmp/delegate-14.txt") == *'public_select=known_4141_metadata_only'* &&
+   $(< "$task_tmp/delegate-14.txt") == *'blocked_header=00B00000'* &&
+   $(< "$task_tmp/delegate-14.txt") != *'public_header=00B00000'* &&
+   $(< "$task_tmp/delegate-15.txt") == *'blocked_select_ef=4141'* &&
+   $(< "$task_tmp/delegate-15.txt") != *'public_select='* &&
+   $(< "$task_tmp/delegate-16.txt") == *'blocked_select_ef=4141'* &&
+   $(< "$task_tmp/delegate-16.txt") != *'public_select='* ]]
+printf 'PASS actual PC/SC delegation permits only known-ADF SELECT 4141 and blocks its READ before fake transport\n'
 env -u LD_PRELOAD -u JCOP4_PUBLIC_DISCOVERY_TRACE -u LIBPCSCLITE_SPY_DELEGATE \
     LIBPCSCLITE_DELEGATE="$task_tmp/delegate.so" \
     "$task_tmp/local-client" "$task_tmp/redirect-plugin.so" "$task_tmp/libfakepcsc.so" 6

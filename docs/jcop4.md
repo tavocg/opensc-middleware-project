@@ -1200,6 +1200,70 @@ nix develop -c make inspect/jcop4-file4141 READER=0
 Revisar el informe antes de decidir cualquier lectura o ampliación del
 observador. No repetir intentos de PIN; VERIFY 6982 permanece sin resolver.
 
+## SELECT 4141 confirmado: 13 de octubre, 16:12:31 UTC
+
+Informe privado `local/jcop4-file4141-Kzi6aI8S/report.txt`, principal `e4c5d1e`
+y OpenSC `3dfef6704`; ambos árboles limpios al comenzar. Inventario, compilación,
+contexto/conexión y selección de la aplicación correctos. Resultados:
+
+```text
+file4141_select_transport=0
+file4141_select_sw=9000
+file4141_structure=transparent
+file4141_size=400
+file4141_result=selected_metadata_only_no_read
+unlock_result=0
+exit_status=0
+```
+
+El archivo existe bajo el AID ChipDoc conocido. No se leyó contenido, ni se
+hizo binding/autenticación. **Su propósito, contenido y política de acceso
+siguen pendientes**; tamaño/estructura y selección exitosa no justifican
+leerlo. ODF no lo referencia en el bloque previamente leído. Nuevas búsquedas
+públicas tampoco identificaron el FID; no interpretarlo como AODF/CAN.
+
+### Observador v6: selección de metadatos sin permiso de lectura
+
+El SELECT ISO del archivo concreto ya se interpretó y confirmó en hardware.
+Se permite ahora ese único SELECT a Idopte para observar su siguiente operación,
+sin habilitar el contenido del EF ni una selección general de archivos:
+
+- Solo CLA 00/INS A4/P1 02/P2 00, Lc 2, FID 4141 y total de 7 u 8 bytes,
+  bajo AID ChipDoc conocido previamente seleccionado en canal básico con 9000.
+- Se conserva la aplicación al seleccionar un EF bootstrap relativo conocido
+  con éxito. SELECT MF/raíz/ruta absoluta, canal diferente, SELECT fallido o
+  pendiente y conexión/reconexión descartan su elegibilidad. Un 61xx en SELECT
+  de aplicación no acredita todavía ese contexto para la excepción.
+- SELECT 4141 revoca el permiso READ del archivo anterior y **no habilita
+  READ BINARY/RECORD**. GET RESPONSE sigue limitado a 61xx de comandos permitidos
+  y no habilita lectura ni autenticación. Respuestas completas siempre omitidas.
+- Se agregan etiquetas constantes `public_select=known_chipdoc_application`,
+  `known_root_application` y `known_4141_metadata_only`. Se obtienen solo de
+  coincidencias con constantes públicas ya permitidas; no guardan AID/FID
+  arbitrarios ni buffers. Preceden al transporte, por lo que describen un
+  intento permitido: consultar su SW antes de afirmar éxito.
+- Se mantienen los demás permisos, límites y bloqueo definitivo de v5. No
+  VERIFY, PIN, MSE, PSO, SM, escritura ni controles del lector salvo la consulta
+  vacía de capacidades. No usar este observador con firmador ni login/firma.
+
+Pasaron **25 comprobaciones del observador/constructor y 35 del lanzador**,
+con transporte ficticio, incluida delegación PC/SC real y plugin RTLD_LOCAL.
+La integración permite aplicación/SELECT 4141 pero aborta si READ o PIN alcanzan
+el backend falso; otros contextos/formas y pérdida de contexto también se
+comprueban. La biblioteca de diagnóstico real compiló. No se cargó Idopte ni
+se usó hardware por el agente. Helper y driver/submódulo sin cambios; las 45
+comprobaciones previas del helper siguen vigentes.
+
+Siguiente intervención, misma JCOP4 y firmador/otros clientes cerrados:
+
+```bash
+nix develop -c make inspect/jcop4-idopte-discovery READER=0
+```
+
+Sin PIN. Un error de Idopte si intenta READ de 4141 es esperable. Revisar
+etiquetas, transporte/SW y primer bloqueo; no conceder lectura ni reintentar
+PIN por inercia. VERIFY 6982 sigue sin resolver.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño

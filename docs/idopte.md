@@ -98,11 +98,18 @@ su propósito. La consulta independiente ODF eAjoi575 (15:58:49 UTC) obtuvo
 9000 en SELECT/READ de 5031: autenticación 7001, metadatos de llaves privadas
 7002, llaves públicas 7004 y certificados 7005; 4141 no figura en ese bloque.
 No se siguieron referencias ni se introdujo PIN. No demuestra ausencia global.
-El siguiente paso es `make inspect/jcop4-file4141`: SELECT exclusivamente del
-archivo observado en la aplicación conocida, sin leer contenido ni usar Idopte.
-Solo resume estructura/tamaño de metadatos estándar de control; no registra
-nombres, ACL ni respuesta bruta. 6A82 solo significa no encontrado en ese
-contexto. No ampliar permisos del observador ni repetir la misma captura aún.
+La consulta SELECT independiente Kzi6aI8S (16:12:31 UTC, principal e4c5d1e)
+confirmó transporte 0/SW 9000, estructura transparente y tamaño 400 bytes bajo
+la aplicación conocida, sin leer contenido ni binding. Propósito/ACL pendientes.
+El siguiente paso vuelve a `make inspect/jcop4-idopte-discovery` con observador
+v6: permite únicamente SELECT 4141 bajo AID conocido confirmado con 9000 y
+**bloquea todas sus lecturas**. La selección descarta permisos de lectura del
+archivo anterior. Se agregan solo etiquetas constantes de raíz/aplicación y
+SELECT 4141 de metadatos, sin AID/FID arbitrarios ni respuestas. Las etiquetas
+indican el intento, no su éxito; revisar transporte/SW y primer bloqueo.
+Un error de Idopte al intentar READ es esperable, no rechazo de tarjeta a un
+comando bloqueado. Pasaron 25 comprobaciones del observador/constructor y 35
+del lanzador con transporte ficticio; driver/submódulo intactos. Sin PIN.
 
 `pcsc-spy` estándar registra los buffers transmitidos, que pueden incluir el
 PIN durante autenticación. No usarlo con el PIN real ni considerar un filtro
