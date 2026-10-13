@@ -246,6 +246,14 @@ no necesariamente del DER. Pasaron **156 comprobaciones** del helper/lanzador.
 El próximo contraste es observar la lectura acotada de B001 solicitada por
 Idopte; sus permisos actuales siguen bloqueando SELECT/READ de ese archivo.
 
+`make inspect/jcop4-idopte-b001 READER=0` habilita una excepción separada para
+SELECT B001 y lecturas contiguas, hasta 3000 bytes solicitados/16 solicitudes,
+con datos solo al cliente. La prueba real obtuvo SELECT9000 y **14 READ9000**;
+luego bloqueó SELECT B002 antes de transmitir. No PIN ni login; C_GetTokenInfo
+sigue con CKR_TOKEN_NOT_PRESENT por el guard. Pasaron **197 comprobaciones**
+de los componentes modificados. Próximo contraste: SELECT-only B002 para
+conocer sus metadatos; no asumir el tamaño de B001. Driver libre JCOP4 pendiente.
+
 Capturas privadas bajo local/jcop4-idopte-spy-*/; no agregarlas a Git.
 Pasaron previamente **30 comprobaciones del observador/decoder y 40 del
 lanzador** con transporte ficticio. El diagnóstico de firma pasó además

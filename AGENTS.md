@@ -6,7 +6,47 @@ la tarjeta. El usuario ejecuta las operaciones que requieran PIN o GUI. Esto
 sustituye las restricciones anteriores de no ejecutar Git/hardware/Idopte por
 el agente; conservar límites de cada diagnóstico y privacidad de los registros.
 
-**Último resultado: SELECT-only B001 aceptado, transparente/3000 bytes.**
+**Último resultado: Idopte READ B001 aceptado; SELECT B002 bloqueado.**
+Usuario registró `afda47f`, principal y OpenSC `3dfef6704` limpios al comenzar.
+Nuevo modo separado `inspect/jcop4-idopte-b001` / --idopte-b001, opt-in
+`JCOP4_DIAGNOSTIC_CERT_B001=1` depende de READ_DF0F y todos sus padres, solo
+dentro de inventario Idopte con stdin vacío. Conserva bloqueo B001 en modos
+anteriores; inventario previo/otros modos/firma eliminan variable externa.
+Permite un SELECT B001 exacto básico A4/02/00/Lc2/total7u8, ATR/ADF conocidos,
+estado vacío MF válido y READ DF0F previa. SELECT distinto de9000 detiene sin
+GET RESPONSE/reintentos. Después permite B0 caso2 básico sin SFI/SM, Le<=256,
+contiguo con cursor de bytes devueltos, **3000 bytes solicitados como máximo y
+16 solicitudes**, presupuesto global por proceso sin reposición por SELECT o
+reconexión. Buffer temporal Le+2 y SW9000/6282; respuesta solo al cliente,
+contenido nunca en logs. Marker privado obligatorio antes de SELECT/READ;
+fallos de log/buffer/transporte/SW/tamaño detienen. PIN con datos/MSE/GA/SM/
+PSO/escrituras/otros certificados siguen bloqueados. No interpretar 86 como ACL.
+
+Pasaron **110 comprobaciones observador/constructor/decoder, 81 lanzador y 6
+lanzador firma (197)**, fake transporte/redirector real; biblioteca real
+compilada. Helper77/operación12 anteriores intactos, no repetir sin cambios.
+Agente ejecutó una vez, sin PIN/GUI:
+`nix develop --offline -c make inspect/jcop4-idopte-b001 READER=0`.
+Informe privado `local/jcop4-idopte-b001-y0qYQHxM/report.txt`, **22:46:41 UTC**:
+build/inventario correctos, ATR conectado conocido; **88 APDU:87 SW9000 y un
+63C7 de estado vacío**. SELECT B001 ->0/9000; **14 READ B001 ->0/9000**, última
+cabecera00B00B53 (offset2899). No contenido/longitudes de respuestas registrados;
+no afirmar DER completo/válido o longitud DER. Luego **SELECT EF B002 bloqueado
+antes de transmitir**, sin SW/control/contenido de B002. Módulo0,
+token_info_result=CKR_TOKEN_NOT_PRESENT, diagnóstico1/token_info_unavailable,
+observer_result=events_recorded. El fallo corresponde al guard antes de B002,
+no rechazo READ B001 ni nuevo VERIFY6982. No credencial/login/firma nuevos;
+hubo la única consulta de estado VERIFY sin datos ya permitida, no autenticación.
+
+**Próximo contraste:** SELECT-only B002 bajo el AID conocido, por su referencia
+X.509/private=0 en CDF y solicitud efectiva Idopte. Obtener tamaño/estructura/
+control antes de ampliar permisos. B002 todavía bloqueado; no asumir tamaño
+igual a B001/ACL por private=0 ni autorizar lecturas por tag86/9000. No repetir
+inventario Idopte o B001/PIN idénticos por inercia. Driver/submódulo intactos;
+JCOP4/RSA3072 pendientes. Informes local/0700/0600 fuera de Git/chat.
+Git autorizado, .git de solo lectura todavía impide commits si persiste; no eludir.
+
+**Resultado anterior: SELECT-only B001 aceptado, transparente/3000 bytes.**
 Usuario registró `2cff02e`; principal y OpenSC `3dfef6704` limpios al comenzar.
 Nuevo `make inspect/jcop4-fileb001 READER=0` / --fileb001: reutiliza helper
 SELECT-only con default driver, ATR/AID conocidos y anunciados en EF.DIR.

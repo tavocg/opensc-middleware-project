@@ -19,8 +19,9 @@
 
 static int trace_fd = -1, stopped, selected_public_file, selected_mf, selected_app, handle_set, pending_response;
 static int select_spy_fd = -1;
-static int compare_read4141, compare_read4109, compare_aodf, compare_prkdf, compare_pukdf, compare_cdf, compare_pin_status, compare_select_df0f, compare_read_df0f;
-static unsigned int select_df0f_calls, read_df0f_calls;
+static int compare_read4141, compare_read4109, compare_aodf, compare_prkdf, compare_pukdf, compare_cdf, compare_pin_status, compare_select_df0f, compare_read_df0f, compare_b001;
+static unsigned int select_df0f_calls, read_df0f_calls, select_b001_calls;
+static unsigned int read_b001_budget, read_b001_offset, read_b001_calls;
 static int pin_status_result_valid;
 static unsigned int pin_status_calls;
 static int comparison_atr_ok;
@@ -112,6 +113,14 @@ __attribute__((constructor)) static void observer_init(void)
 		else {
 			compare_read_df0f = 1;
 			if (dprintf(trace_fd, "comparison_df0f_read=once150_contents_omitted\n") < 0) stopped = 1;
+		}
+	}
+	path = getenv("JCOP4_DIAGNOSTIC_CERT_B001");
+	if (path) {
+		if (strcmp(path, "1") || !compare_read_df0f || trace_fd < 0) stopped = 1;
+		else {
+			compare_b001 = 1;
+			if (dprintf(trace_fd, "comparison_certificate_b001=bounded3000_contents_omitted\n") < 0) stopped = 1;
 		}
 	}
 	path = getenv("JCOP4_PUBLIC_SELECT_SPY_TRACE");
@@ -347,6 +356,16 @@ static int allowed_command(const unsigned char *cmd, DWORD len, int *next_file, 
 				*next_app = 1;
 				return 1;
 			}
+			if (fid == 0xB001) {
+				/* This CDF7005 references B001 as X.509, and its control
+				 * independently announced a transparent 3000-byte EF. */
+				if (!compare_b001 || !comparison_atr_ok || !selected_app ||
+						!read_df0f_calls || !pin_status_result_valid || select_b001_calls ||
+						cmd[0] != 0 || cmd[2] != 2 || cmd[3] != 0 || lc != 2)
+					return 0;
+				*next_file = 10; *next_mf = 0; *next_app = 1;
+				return 1;
+			}
 			if (fid == 0xD003) {
 				/* EF.SN precedent: ANS CPS4 section 3.1.2. Only the observed
 				 * SELECT EF form under a confirmed MF; never record its data. */
@@ -426,6 +445,13 @@ static int allowed_command(const unsigned char *cmd, DWORD len, int *next_file, 
 		 * A larger Le is blocked, never silently rewritten. */
 		return compare_read_df0f && comparison_atr_ok && selected_app && !read_df0f_calls &&
 				read4141_size(cmd, len) == 150 && cmd[2] == 0 && cmd[3] == 0;
+	if (cmd[1] == 0xB0 && selected_public_file == 10) {
+		unsigned int size = read4141_size(cmd, len);
+		unsigned int offset = ((unsigned int)cmd[2] << 8) | cmd[3];
+		return compare_b001 && comparison_atr_ok && selected_app && size && size <= 256 &&
+				offset == read_b001_offset && offset <= 3000 && size <= 3000 - offset &&
+				read_b001_budget <= 3000 - size && read_b001_calls < 16;
+	}
 	if (cmd[1] == 0xB0)
 		return selected_public_file && len == 5 && !(cmd[2] & 0x80) &&
 				(selected_public_file != 2 || cmd[0] == 0);
@@ -449,7 +475,7 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
 	unsigned char bounded[402];
 	DWORD bounded_size = sizeof(bounded);
 	unsigned int read_size = 0, read_fid = 0;
-	int diagnostic_read = 0, diagnostic_pin_status = 0, diagnostic_select_df0f = 0;
+	int diagnostic_read = 0, diagnostic_pin_status = 0, diagnostic_select_df0f = 0, diagnostic_select_b001 = 0;
 	int next_file = -1, next_mf = -1, next_app = -1;
 	unsigned int sw;
 	struct timeval start;
@@ -495,17 +521,19 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
 		stopped = 1;
 		goto out;
 	}
-	diagnostic_read = (selected_public_file >= 3 && selected_public_file <= 9) && cmd[1] == 0xB0;
+	diagnostic_read = (selected_public_file >= 3 && selected_public_file <= 10) && cmd[1] == 0xB0;
 	if (diagnostic_read) {
 		read_size = read4141_size(cmd, len);
-		read_fid = selected_public_file == 9 ? 0xDF0F : selected_public_file == 8 ? 0x7005 : selected_public_file == 7 ? 0x7004 : selected_public_file == 6 ? 0x7002 : selected_public_file == 5 ? 0x7001 : selected_public_file == 4 ? 0x4109 : 0x4141;
+		read_fid = selected_public_file == 10 ? 0xB001 : selected_public_file == 9 ? 0xDF0F : selected_public_file == 8 ? 0x7005 : selected_public_file == 7 ? 0x7004 : selected_public_file == 6 ? 0x7002 : selected_public_file == 5 ? 0x7001 : selected_public_file == 4 ? 0x4109 : 0x4141;
 		if (!response || !response_len || capacity < read_size + 2) {
 			dprintf(trace_fd, "blocked=read%04X_output_buffer\n", read_fid);
 			stopped = 1;
 			goto out;
 		}
 		bounded_size = read_size + 2;
-		if (read_fid == 0xDF0F)
+		if (read_fid == 0xB001) {
+			read_b001_budget += read_size; read_b001_calls++;
+		} else if (read_fid == 0xDF0F)
 			read_df0f_calls++;
 		else if (read_fid == 0x4141) {
 			read4141_budget += read_size;
@@ -536,6 +564,14 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
 		select_df0f_calls++;
 		if (dprintf(trace_fd, "public_select=%s\n", compare_read_df0f ?
 				"known_df0f_bounded_read_comparison" : "known_df0f_metadata_only") < 0) {
+			stopped = 1; goto out;
+		}
+	}
+	diagnostic_select_b001 = cmd[1] == 0xA4 && cmd[2] == 2 && cmd[4] == 2 &&
+			cmd[5] == 0xB0 && cmd[6] == 1;
+	if (diagnostic_select_b001) {
+		select_b001_calls++;
+		if (dprintf(trace_fd, "public_select=known_b001_bounded_read_comparison\n") < 0) {
 			stopped = 1; goto out;
 		}
 	}
@@ -592,6 +628,7 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
 				if (read_fid == 0x7002) read7002_offset += bounded_size - 2;
 				if (read_fid == 0x7004) read7004_offset += bounded_size - 2;
 				if (read_fid == 0x7005) read7005_offset += bounded_size - 2;
+				if (read_fid == 0xB001) read_b001_offset += bounded_size - 2;
 			} else {
 				dprintf(trace_fd, "read%04X_transport=%ld\nread%04X_sw=%04X\nblocked=read%04X_status\n",
 						read_fid, (long)rv, read_fid, sw, read_fid);
@@ -619,7 +656,7 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
 		sw = ((unsigned int)response[*response_len - 2] << 8) | response[*response_len - 1];
 		dprintf(trace_fd, "sw=%04X\n", sw);
 		pending_response = (sw >> 8) == 0x61;
-		if (diagnostic_select_df0f && sw != 0x9000) stopped = 1; /* No follow-up or GET RESPONSE. */
+		if ((diagnostic_select_df0f || diagnostic_select_b001) && sw != 0x9000) stopped = 1; /* No follow-up or GET RESPONSE. */
 		if ((sw >> 8) == 0x69)
 			stopped = 1;
 		if (next_file >= 0 && (sw == 0x9000 || (sw >> 8) == 0x61)) {

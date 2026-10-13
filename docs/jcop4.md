@@ -3053,6 +3053,76 @@ inercia. No repetir el SELECT o inventario idénticos sin nueva información.
 Informes privados0700/0600 fuera de Git; driver/submódulo intactos. Firma JCOP4,
 VERIFY6982 y RSA3072 continúan pendientes.
 
+## Idopte lee B001; SELECT B002 bloqueado: 13 de octubre, 22:46:41 UTC
+
+El usuario registró `afda47f`; principal y OpenSC `3dfef6704` limpios antes de
+esta revisión. El modo separado `make inspect/jcop4-idopte-b001 READER=0`
+permite observar la lectura de B001 por Idopte durante su inventario habitual,
+sin introducir PIN ni pedir login. `JCOP4_DIAGNOSTIC_CERT_B001=1` requiere
+READ_DF0F y todos sus padres y se habilita exclusivamente dentro del proceso
+Idopte; el inventario previo, otros modos y el lanzador de firma la eliminan.
+Los modos anteriores conservan el bloqueo de SELECT/READ B001.
+
+La excepción exige ATR conectado conocido, ADF seleccionado, estado vacío MF
+aceptado y lectura DF0F previa. Permite **un solo SELECT básico B001**
+00/A4/02/00/Lc2/total7u8 bytes; cualquier SW distinto de9000 detiene los pasos
+posteriores, incluso GET RESPONSE. No aplica la seguridad86 como política:
+la decisión experimental se limita a la referencia X.509 de este CDF y al
+control de 3000 bytes observado por separado.
+
+Permite READ BINARY caso2 corto/extendido con CLA00, sin SFI ni SM, Le<=256,
+rango dentro de 3000 bytes y offset contiguo al número real de bytes devueltos.
+El presupuesto cuenta **bytes solicitados**, máximo3000 y 16 solicitudes; no
+se repone con SELECT o reconexión. No modifica ninguna APDU. Cada respuesta
+usa un buffer temporal Le+2 y solo pasa al cliente con SW9000/6282 y tamaño
+válido; no hay datos de certificados en trace/report/spy. SELECT y READ exigen
+un marker privado escrito antes de transmitir. Fallos de buffer, log, tamaño,
+SW o transporte detienen sin GET RESPONSE/reintentos/fallback. PIN con datos,
+MSE, GA, SM, PSO, escrituras y otros certificados siguen bloqueados.
+
+Pasaron **110 comprobaciones del observador/constructor/decoder**, **81 del
+lanzador público** y **6 del lanzador de firma**: 197. Incluyen límite de bytes
+y solicitudes, contigüidad, EOF, contexto/opt-ins, B002 no permitido, respuesta
+corta6282, falta de buffer, log fallido, pérdida de contexto, selección no9000,
+constructor inválido/sin padre y delegación PC/SC real con transporte ficticio.
+Biblioteca real compilada. Helper77/operación12 previos intactos; no se
+repitieron sus suites. Driver/submódulo intactos.
+
+Después, el agente ejecutó una vez:
+
+```sh
+nix develop --offline -c make inspect/jcop4-idopte-b001 READER=0
+```
+
+Informe privado `local/jcop4-idopte-b001-y0qYQHxM/report.txt`,
+**2026-10-13T22:46:41Z**. Inventario y compilación correctos, ATR conectado
+conocido. **88 APDU transmitidas:87 SW9000 y un estado vacío63C7**. SELECT B001
+respondió0/9000 y **14 lecturas B001** recibieron transporte0/SW9000; la última
+cabecera fue00B00B53 (offset2899). Sus datos y longitudes de respuesta no se
+registraron. No afirmar por ello DER válido/completo, longitud DER o identidad
+del certificado. El siguiente paso fue:
+
+```text
+blocked_header=00A40200
+blocked_select_ef=B002
+```
+
+SELECT B002 fue bloqueado **antes de transmitir**: no hay SW, control o
+contenido de ese archivo. `module_exit_status=0`,
+`token_info_result=CKR_TOKEN_NOT_PRESENT`,
+`diagnostic_result=token_info_unavailable` y `observer_result=events_recorded`;
+el diagnóstico terminó1. El fallo se corresponde con el guard, no con rechazo
+de READ B001 por la tarjeta ni con VERIFY6982 autenticado de informes anteriores.
+No se introdujo PIN ni se pidió login, MSE, GA, SM, PSO, escritura o firma.
+Hubo únicamente el estado VERIFY sin datos ya permitido; no autentica con PIN.
+
+El próximo contraste es SELECT-only B002 bajo el AID conocido, justificado por
+su referencia X.509 en CDF7005 y la solicitud observada del proveedor. Consultar
+control/tamaño/estructura antes de decidir lectura acotada: no asumir tamaño
+igual a B001 ni ACL por private=0/86/9000. B002 sigue bloqueado en el guard.
+No repetir el mismo inventario o PIN por inercia. Capturas privadas0700/0600
+bajo local/, fuera de Git; firma JCOP4/VERIFY6982/RSA3072 pendientes.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño

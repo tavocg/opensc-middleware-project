@@ -64,7 +64,7 @@ static FILE *fixture_reset(void)
 	control_size = 16; control_result = 0;
 	fixture_sw = 0x9000;
 	fixture_payload = 16; fixture_overrun = 0;
-	compare_read_df0f = read_df0f_calls = compare_select_df0f = select_df0f_calls = pin_status_result_valid = compare_pin_status = pin_status_calls = compare_cdf = read7005_budget = read7005_offset = read7005_calls = compare_pukdf = read7004_budget = read7004_offset = read7004_calls = compare_prkdf = read7002_budget = read7002_offset = read7002_calls = compare_aodf = read7001_budget = read7001_offset = read7001_calls = compare_read4109 = read4109_calls = compare_read4141 = read4141_budget = read4141_offset = read4141_calls = 0;
+	compare_b001 = select_b001_calls = read_b001_budget = read_b001_offset = read_b001_calls = compare_read_df0f = read_df0f_calls = compare_select_df0f = select_df0f_calls = pin_status_result_valid = compare_pin_status = pin_status_calls = compare_cdf = read7005_budget = read7005_offset = read7005_calls = compare_pukdf = read7004_budget = read7004_offset = read7004_calls = compare_prkdf = read7002_budget = read7002_offset = read7002_calls = compare_aodf = read7001_budget = read7001_offset = read7001_calls = compare_read4109 = read4109_calls = compare_read4141 = read4141_budget = read4141_offset = read4141_calls = 0;
 	comparison_atr_ok = 1; /* Unit fixture simulates a validated connection. */
 	return file;
 }
@@ -142,6 +142,19 @@ static FILE *fixture_df0f(void)
 	assert(send_command(app, sizeof(app)) == 0 && selected_app);
 	return file;
 }
+static FILE *fixture_before_b001(void)
+{
+	const unsigned char target[] = { 0, 0xA4, 2, 0, 2, 0xDF, 0x0F, 0 };
+	const unsigned char read[] = { 0, 0xB0, 0, 0, 150 };
+	const unsigned char mf[] = { 0, 0xA4, 0, 0, 2, 0x3F, 0 };
+	const unsigned char app[] = { 0, 0xA4, 4, 0x0C, 15, 0xE8, 0x28, 0xBD, 8, 0x0F, 0xA0, 0, 0, 3, 0x63, 0x64, 0x79, 0x6E, 0x69, 0x64 };
+	FILE *file = fixture_df0f(); compare_read_df0f = compare_b001 = 1;
+	assert(send_command(target, sizeof(target)) == 0);
+	fixture_payload = 150; assert(send_large(read, sizeof(read)) == 0);
+	fixture_payload = 16;
+	assert(send_command(mf, sizeof(mf)) == 0 && send_command(app, sizeof(app)) == 0);
+	return file;
+}
 int main(void)
 {
 	const unsigned char select[] = { 0, 0xA4, 0, 0x0C, 2, 0x2F, 0 };
@@ -169,6 +182,80 @@ int main(void)
 			send_command(version, sizeof(version)) == 0 && calls == 5);
 	check_private(file);
 	puts("PASS public observer forwards only allowed discovery and logs no payloads or lengths");
+	{
+		const unsigned char target[] = { 0, 0xA4, 2, 0, 2, 0xB0, 1, 0 };
+		for (int i = 0; i < 8; i++) {
+			file = fixture_before_b001(); int before = calls;
+			unsigned char bad[sizeof(target)]; memcpy(bad, target, sizeof(bad));
+			if (i == 0) compare_b001 = 0;
+			if (i == 1) comparison_atr_ok = 0;
+			if (i == 2) selected_app = 0;
+			if (i == 3) read_df0f_calls = 0;
+			if (i == 4) pin_status_result_valid = 0;
+			if (i == 5) bad[0] = 1;
+			if (i == 6) bad[3] = 0x0C;
+			if (i == 7) bad[6] = 2;
+			assert(send_command(bad, sizeof(bad)) != 0 && calls == before); check_private(file);
+		}
+		puts("PASS B001 SELECT requires opt-in/ATR/ADF/DF0F READ/status and blocks other channels/forms or B002");
+		file = fixture_before_b001();
+		assert(send_command(target, sizeof(target)) == 0 && selected_public_file == 10);
+		fixture_payload = 256; unsigned char chunk[] = { 0, 0xB0, 0, 0, 0 };
+		for (unsigned int i = 0; i < 11; i++) {
+			chunk[2] = i; assert(send_large(chunk, sizeof(chunk)) == 0);
+		}
+		chunk[2] = 11; chunk[4] = 184; fixture_payload = 184;
+		assert(send_large(chunk, sizeof(chunk)) == 0 && read_b001_offset == 3000 && read_b001_budget == 3000);
+		chunk[3] = 184; chunk[4] = 1; int before = calls;
+		assert(send_large(chunk, sizeof(chunk)) != 0 && calls == before); check_private(file);
+		puts("PASS B001 READ returns at most 3000 contiguous bytes with actual response cursor and no EOF overrun");
+		for (int i = 0; i < 8; i++) {
+			file = fixture_before_b001(); assert(send_command(target, sizeof(target)) == 0); before = calls;
+			unsigned char bad[] = { 0, 0xB0, 0, 0, 0, 1, 1 };
+			if (i == 0) compare_b001 = 0;
+			if (i == 1) comparison_atr_ok = 0;
+			if (i == 2) selected_app = 0;
+			if (i == 3) bad[0] = 0x0C;
+			if (i == 4) bad[2] = 0x80;
+			if (i == 5) bad[3] = 1;
+			assert(send_large(bad, i == 6 ? 7 : i == 7 ? 6 : 5) != 0 && calls == before); check_private(file);
+		}
+		puts("PASS B001 READ rejects missing context, SM/SFI/offsets, Le above 256 and payload before transport");
+		file = fixture_before_b001(); assert(send_command(target, sizeof(target)) == 0);
+		unsigned char tiny[] = { 0, 0xB0, 0, 0, 1 }; fixture_payload = 1;
+		for (int i = 0; i < 16; i++) { tiny[3] = i; assert(send_large(tiny, sizeof(tiny)) == 0); }
+		tiny[3] = 16; before = calls;
+		assert(send_large(tiny, sizeof(tiny)) != 0 && calls == before); check_private(file);
+		puts("PASS B001 READ has an independent maximum of 16 requests even for tiny reads");
+		for (int i = 0; i < 5; i++) {
+			file = fixture_before_b001(); assert(send_command(target, sizeof(target)) == 0); before = calls;
+			fixture_sw = i == 0 ? 0x6982 : i == 1 ? 0x6101 : 0x9000;
+			if (i == 2) fixture_overrun = 1;
+			int saved = trace_fd;
+			if (i == 4) { trace_fd = open("/dev/full", O_WRONLY); assert(trace_fd >= 0); }
+			assert((i == 3 ? send_command(read, sizeof(read)) : send_large(read, sizeof(read))) != 0 && stopped &&
+					calls == before + (i < 3));
+			if (i == 4) { close(trace_fd); trace_fd = saved; }
+			assert(send_command(get_response, sizeof(get_response)) != 0 && send_command(pin, sizeof(pin)) != 0);
+			check_private(file);
+		}
+		puts("PASS B001 errors/oversize/output buffers/log failures stop without exposing response contents or forwarding PIN/GET RESPONSE");
+		file = fixture_before_b001(); assert(send_command(target, sizeof(target)) == 0);
+		fixture_payload = 16; fixture_sw = 0x6282;
+		assert(send_large(read, sizeof(read)) == 0 && read_b001_offset == 16 && read_b001_budget == 256);
+		before = calls; assert(send_command(target, sizeof(target)) != 0 && calls == before); check_private(file);
+		puts("PASS B001 short 6282 response advances actual cursor but does not replenish requested-byte budget by reselection");
+		for (int i = 0; i < 3; i++) {
+			file = fixture_before_b001(); fixture_sw = i == 0 ? 0x6101 : i == 1 ? 0x6A82 : 0x6982;
+			assert(send_command(target, sizeof(target)) == 0 && stopped);
+			before = calls; assert(send_command(get_response, sizeof(get_response)) != 0 && calls == before); check_private(file);
+		}
+		puts("PASS B001 non-9000 SELECT stops all follow-up while preserving the observed SW");
+		file = fixture_before_b001(); assert(send_command(target, sizeof(target)) == 0 && send_large(read, sizeof(read)) == 0);
+		before = calls; drop_card_context();
+		assert(stopped && send_large(read, sizeof(read)) != 0 && calls == before); check_private(file);
+		puts("PASS B001 context loss cannot replenish read allowance or enable a fallback");
+	}
 	{
 		const unsigned char target[] = { 0, 0xA4, 2, 0, 2, 0xDF, 0x0F, 0 };
 		const unsigned char record[] = { 0, 0xB2, 1, 4, 0 };
