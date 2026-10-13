@@ -6,7 +6,51 @@ la tarjeta. El usuario ejecuta las operaciones que requieran PIN o GUI. Esto
 sustituye las restricciones anteriores de no ejecutar Git/hardware/Idopte por
 el agente; conservar límites de cada diagnóstico y privacidad de los registros.
 
-**Último resultado: SELECT-only B002 aceptado, transparente/3000 bytes.**
+**Último resultado: Idopte READ B002 aceptado; segunda conexión bloqueada.**
+Usuario registró `a1b7092`, principal y OpenSC `3dfef6704` limpios al comenzar.
+Nuevo `inspect/jcop4-idopte-b002` / --idopte-b002, opt-in
+`JCOP4_DIAGNOSTIC_CERT_B002=1` depende de CERT_B001 y padres anteriores, solo
+en inventario Idopte/stdin vacío. Modos anteriores bloquean B002; inventario
+previo/otros modos/firma eliminan variable externa. Exige ATR/ADF conocidos,
+estado vacío MF válido y una lectura B001 aceptada; un SELECT B002 básico
+exacto A4/02/00/Lc2/7u8 bytes. SELECT no9000 detiene sin follow-up. B0 caso2
+básico corto/extendido, sin SFI/SM, Le<=256, cursor contiguo de bytes recibidos,
+**presupuesto propio 3000 bytes solicitados/16 solicitudes**, sin reposición
+por SELECT/reconexión. Buffer Le+2/SW9000/6282, datos solo al cliente; marker
+privado obligatorio antes de SELECT/READ. Fallos detienen sin GET RESPONSE/
+reintentos/fallback. PIN con datos/MSE/GA/SM/PSO/escrituras siguen bloqueados.
+
+Pasaron **122 observador/constructor/decoder, 85 lanzador y 6 lanzador firma
+(213)**, transporte ficticio/redirector real; biblioteca real compilada. Helper79
+/operación12 intactos, suites previas vigentes, no repetir sin cambios. Agente
+hizo una consulta sin PIN/GUI:
+`nix develop --offline -c make inspect/jcop4-idopte-b002 READER=0`.
+Informe privado `local/jcop4-idopte-b002-Q0vWkui7/report.txt`, **23:04:02 UTC**:
+build/inventario correctos, ATR de primera conexión conocido. **103 APDU:102
+SW9000 y un63C7 de estado vacío**; SELECT B002 y **14 READ B002 ->0/9000**,
+última cabecera00B00B53/offset2899. B001 también14READ9000. Dos controles
+42000D48 ->0, sin respuestas de capacidades registradas. Después de B002 y
+segundo control: SCardEstablishContext0 -> **blocked=read4141_connection_boundary**
+-> SCardConnect0. No SCardReconnect ni nueva cabecera APDU bloqueada. No
+atribuir un archivo/PIN/comando al bloqueo ni afirmar mismo lector/tarjeta en
+segunda conexión: el guard detenido no volvió a comprobar su ATR/identidad.
+Módulo0/token_info_result=CKR_TOKEN_NOT_PRESENT/diagnóstico1/token_info_unavailable,
+events_recorded. No rechazo nuevo APDU ni VERIFY6982; límite128 no alcanzado.
+No credencial/login/firma nuevos, solo el estado VERIFY sin datos ya permitido.
+Datos/longitudes de respuestas omitidos; no prueba DER válido/completo/uso.
+
+**Próximo contraste:** caracterizar esa segunda conexión y el primer comando
+que el guard omite cuando ya está detenido, con clasificación fija sin nombres,
+handles, payloads ni transmisión adicional. Revisar si se trata de nuevo
+lector/contexto y qué operación se solicita antes de decidir cualquier
+excepción. No relajar la barrera global ni reiniciar presupuestos/contadores
+por inercia; no repetir el mismo inventario sin instrumentación nueva. Los
+SELECT/READ de certificados ya respondieron9000; no pedir otro PIN por ello.
+Driver/submódulo intactos; JCOP4/VERIFY6982/RSA3072 pendientes. Informes
+local/0700/0600 fuera de Git/chat. Git autorizado; .git de solo lectura aún
+impide commits si persiste, no eludirlo.
+
+**Resultado anterior: SELECT-only B002 aceptado, transparente/3000 bytes.**
 Usuario registró `e48d508`; principal y OpenSC `3dfef6704` limpios al comenzar.
 Nuevo `make inspect/jcop4-fileb002 READER=0` / --fileb002: reutiliza helper
 SELECT-only con default driver, ATR/AID conocidos y anunciados en EF.DIR.

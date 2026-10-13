@@ -80,6 +80,11 @@ if [[ ${FIXTURE_B001_MODE:-0} == 1 ]]; then
 else
     [[ ${JCOP4_DIAGNOSTIC_CERT_B001-unset} == unset ]] || exit 96
 fi
+if [[ ${FIXTURE_B002_MODE:-0} == 1 ]]; then
+    [[ ${JCOP4_DIAGNOSTIC_CERT_B002-} == 1 ]] || exit 96
+else
+    [[ ${JCOP4_DIAGNOSTIC_CERT_B002-unset} == unset ]] || exit 96
+fi
 if [[ ${JCOP4_PUBLIC_DISCOVERY_TRACE-unset} != unset ]]; then
     [[ ${LD_PRELOAD-unset} == unset &&
        ${LIBPCSCLITE_DELEGATE-} == "$FIXTURE_PROBE_ROOT/build/diagnostics/pcsc-public-observer.so" &&
@@ -152,7 +157,7 @@ esac
    ${OPENSC_DEEPBIND-unset} == unset &&
    ${LD_PRELOAD-unset} == unset && ${LIBPCSCLITE_DELEGATE-unset} == unset &&
    ${LIBPCSCLITE_SPY_DELEGATE-unset} == unset && ${JCOP4_PUBLIC_SELECT_SPY_TRACE-unset} == unset &&
-   ${JCOP4_DIAGNOSTIC_READ4141-unset} == unset && ${JCOP4_DIAGNOSTIC_READ4109-unset} == unset && ${JCOP4_DIAGNOSTIC_AODF-unset} == unset && ${JCOP4_DIAGNOSTIC_PRKDF-unset} == unset && ${JCOP4_DIAGNOSTIC_PUKDF-unset} == unset && ${JCOP4_DIAGNOSTIC_CDF-unset} == unset && ${JCOP4_DIAGNOSTIC_PIN_STATUS-unset} == unset && ${JCOP4_DIAGNOSTIC_SELECT_DF0F-unset} == unset && ${JCOP4_DIAGNOSTIC_READ_DF0F-unset} == unset && ${JCOP4_DIAGNOSTIC_CERT_B001-unset} == unset &&
+   ${JCOP4_DIAGNOSTIC_READ4141-unset} == unset && ${JCOP4_DIAGNOSTIC_READ4109-unset} == unset && ${JCOP4_DIAGNOSTIC_AODF-unset} == unset && ${JCOP4_DIAGNOSTIC_PRKDF-unset} == unset && ${JCOP4_DIAGNOSTIC_PUKDF-unset} == unset && ${JCOP4_DIAGNOSTIC_CDF-unset} == unset && ${JCOP4_DIAGNOSTIC_PIN_STATUS-unset} == unset && ${JCOP4_DIAGNOSTIC_SELECT_DF0F-unset} == unset && ${JCOP4_DIAGNOSTIC_READ_DF0F-unset} == unset && ${JCOP4_DIAGNOSTIC_CERT_B001-unset} == unset && ${JCOP4_DIAGNOSTIC_CERT_B002-unset} == unset &&
    ${OPENSC_API_TRACE_FILE-unset} == unset &&
    ${OPENSC_JCOP3_SESSION_STATE-unset} == unset &&
    ${OPENSC_JCOP3_PIN_STATUS_IN_PLACE-unset} == unset &&
@@ -209,6 +214,7 @@ export JCOP4_DIAGNOSTIC_PIN_STATUS=1
 export JCOP4_DIAGNOSTIC_SELECT_DF0F=1
 export JCOP4_DIAGNOSTIC_READ_DF0F=1
 export JCOP4_DIAGNOSTIC_CERT_B001=1
+export JCOP4_DIAGNOSTIC_CERT_B002=1
 export OPENSC_DEBUG=99 OPENSC_DEBUG_FILE=/should/not/be/used
 export OPENSC_CONF=/should/not/be/used OPENSC_API_TRACE_FILE=/should/not/be/used
 export OPENSC_DEEPBIND=1
@@ -676,6 +682,18 @@ task_run 17 2 --idopte-b001
 [[ $(< "$task_tmp/output.txt") != *'Consulta pública de Idopte terminada'* ]]
 printf 'PASS B001 mode preserves provider failure without authentication fallback\n'
 unset FIXTURE_IDOPTE_EXIT FIXTURE_COMPARE_MODE FIXTURE_READ4109_MODE FIXTURE_AODF_MODE FIXTURE_PRKDF_MODE FIXTURE_PUKDF_MODE FIXTURE_CDF_MODE FIXTURE_STATUS_MODE FIXTURE_DF0F_MODE FIXTURE_READ_DF0F_MODE FIXTURE_B001_MODE
+export FIXTURE_COMPARE_MODE=1 FIXTURE_READ4109_MODE=1 FIXTURE_AODF_MODE=1 FIXTURE_PRKDF_MODE=1 FIXTURE_PUKDF_MODE=1 FIXTURE_CDF_MODE=1 FIXTURE_STATUS_MODE=1 FIXTURE_DF0F_MODE=1 FIXTURE_READ_DF0F_MODE=1 FIXTURE_B001_MODE=1 FIXTURE_B002_MODE=1
+task_run 0 2 --idopte-b002
+task_b002_report=$(sed -n 's/^Informe: //p' "$task_tmp/output.txt")
+[[ $task_b002_report == */jcop4-idopte-b002-*/report.txt &&
+   $(< "$task_b002_report") == *'certificate_b002_scope=select_once_read_max3000_max16_requests_contents_omitted_no_authentication'* &&
+   $(stat -c %a "$task_b002_report") == 600 && $(stat -c %a "${task_b002_report%/*}") == 700 ]]
+printf 'PASS B002 mode enables its separate flag only inside guarded inventory with empty stdin and private reports\n'
+export FIXTURE_IDOPTE_EXIT=17
+task_run 17 2 --idopte-b002
+[[ $(< "$task_tmp/output.txt") != *'Consulta pública de Idopte terminada'* ]]
+printf 'PASS B002 mode preserves provider failure without authentication fallback\n'
+unset FIXTURE_IDOPTE_EXIT FIXTURE_COMPARE_MODE FIXTURE_READ4109_MODE FIXTURE_AODF_MODE FIXTURE_PRKDF_MODE FIXTURE_PUKDF_MODE FIXTURE_CDF_MODE FIXTURE_STATUS_MODE FIXTURE_DF0F_MODE FIXTURE_READ_DF0F_MODE FIXTURE_B001_MODE FIXTURE_B002_MODE
 export FIXTURE_TOKEN_INFO_ERROR=1
 task_run 1 2 --idopte-discovery
 task_token_report=$(sed -n 's/^Informe: //p' "$task_tmp/output.txt")

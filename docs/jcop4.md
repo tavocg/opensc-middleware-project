@@ -3180,6 +3180,83 @@ escrituras/otros archivos. El guard actual todavía bloquea SELECT/READ B002.
 No repetir SELECT/helper o inventario idénticos por inercia. Informes privados
 0700/0600 bajo local/, fuera de Git; firma JCOP4/VERIFY6982/RSA3072 pendientes.
 
+## Idopte lee B002; barrera de segunda conexión: 13 de octubre, 23:04:02 UTC
+
+El usuario registró `a1b7092`; principal y OpenSC `3dfef6704` limpios antes de
+esta revisión. Nuevo modo separado `make inspect/jcop4-idopte-b002 READER=0`,
+con `JCOP4_DIAGNOSTIC_CERT_B002=1`, dependiente de CERT_B001 y sus padres.
+Se habilita exclusivamente dentro del inventario Idopte con stdin vacío;
+inventario previo, otros modos y firma eliminan la variable externa. Los modos
+anteriores conservan su bloqueo B002.
+
+La excepción exige ATR conectado conocido, ADF seleccionado, estado vacío MF
+aceptado y lectura B001 aceptada. Permite un solo SELECT B002 básico exacto
+00/A4/02/00/Lc2/total7u8 bytes; SW distinto de9000 detiene sin GET RESPONSE.
+Tras seleccionarlo, acepta READ BINARY caso2 corto/extendido, CLA00, sin SFI/SM,
+Le<=256 y offset contiguo al número real de bytes recibidos. El presupuesto
+propio es **3000 bytes solicitados y 16 solicitudes**, independiente del de
+B001; no se repone por SELECT o reconexión. No modifica APDU ni atribuye una
+ACL al tag86. Buffer temporal Le+2/SW9000/6282; respuesta solo a Idopte, sin
+datos de certificados en trace/report/spy. SELECT/READ requieren marker privado
+escrito antes de transmitir. Fallos de log/buffer/transporte/tamaño/SW detienen
+sin reintentos/fallback. PIN con datos/MSE/GA/SM/PSO/escrituras siguen bloqueados.
+
+Pasaron **122 comprobaciones del observador/constructor/decoder**, **85 del
+lanzador público** y **6 del lanzador de firma**: 213. Incluyen presupuesto
+independiente, límite de bytes y solicitudes, contexto/opt-in/padres, offsets,
+Le, EOF, buffer, log fallido, SW/oversize, selección fallida, pérdida de contexto,
+constructor inválido/sin padre y delegación PC/SC real con transporte ficticio.
+Biblioteca real compilada; helper79/operación12 anteriores intactos, sin repetir
+sus suites. Driver/submódulo sin cambios.
+
+El agente ejecutó una vez, sin PIN ni GUI:
+
+```sh
+nix develop --offline -c make inspect/jcop4-idopte-b002 READER=0
+```
+
+Informe privado `local/jcop4-idopte-b002-Q0vWkui7/report.txt`,
+**2026-10-13T23:04:02Z**. Compilación e inventario correctos, ATR de la primera
+conexión conocido. **103 APDU**, transporte correcto:102 SW9000 y un estado
+vacío63C7. SELECT B002 respondió0/9000 y **14 READ B002** recibieron0/9000,
+última cabecera00B00B53 (offset2899). B001 también tuvo14 READ9000. No datos ni
+longitudes de respuestas registrados: esto no prueba DER completo/válido ni
+identidad/uso del certificado. Dos controles de capacidades42000D48 terminaron0;
+sus respuestas no se guardaron y no habilitan otros controles.
+
+Después de B002 y la segunda consulta de capacidades, la traza termina con:
+
+```text
+pcsc_call=SCardEstablishContext
+pcsc_result=0
+blocked=read4141_connection_boundary
+pcsc_call=SCardConnect
+pcsc_result=0
+```
+
+Es la barrera global ya existente de `drop_card_context`: una nueva conexión
+cuando hubo lectura4141 detiene futuros transportes y descarta la selección y
+el estado comprobado. **No se observó SCardReconnect ni una nueva cabecera APDU
+bloqueada** después de B002. SCardConnect llegó al backend y retornó0, pero el
+guard ya detenido no volvió a comprobar el ATR. No afirmar mismo lector/tarjeta
+ni inferir el siguiente comando; `READER=0` corresponde al inventario previo,
+no selecciona el lector dentro del módulo Idopte que enumera slots.
+
+`module_exit_status=0`, `token_info_result=CKR_TOKEN_NOT_PRESENT`,
+`diagnostic_result=token_info_unavailable`, `observer_result=events_recorded`;
+el diagnóstico termina1. No fue el límite128 ni rechazo de READ B002 por la
+tarjeta, y no hubo un nuevo VERIFY6982. No se introdujo PIN ni se pidió login,
+MSE, GA, SM, PSO, escritura o firma; hubo únicamente el estado VERIFY sin datos
+ya permitido.
+
+Próximo contraste: caracterizar la segunda conexión y el primer comando que
+el guard omite cuando ya está detenido, con etiquetas fijas sin nombres,
+handles o payloads y sin transmitir nuevos comandos. Distinguir lector/contexto
+antes de decidir cualquier excepción; **no relajar la barrera ni reiniciar
+presupuestos** por inercia. No repetir idéntico inventario sin nueva observación
+ni pedir PIN para confirmar lecturas ya aceptadas. Informes privados0700/0600
+bajo local/, fuera de Git; firma JCOP4/VERIFY6982/RSA3072 pendientes.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño

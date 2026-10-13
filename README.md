@@ -260,6 +260,14 @@ No leyó el certificado ni pidió PIN. Pasaron **162 comprobaciones** del helper
 lanzador modificados. Próximo contraste: observación separada y acotada de la
 lectura B002 solicitada por Idopte; el guard actual todavía la bloquea.
 
+`make inspect/jcop4-idopte-b002 READER=0` observa SELECT/READ B002 con un
+presupuesto propio de 3000 bytes/16 solicitudes, sin registrar el certificado.
+La prueba real obtuvo **14 READ9000**; luego una segunda conexión PC/SC activó
+la barrera global del guard. C_GetTokenInfo sigue con CKR_TOKEN_NOT_PRESENT,
+sin nuevo rechazo APDU ni PIN. Pasaron **213 comprobaciones** de los componentes
+modificados. El próximo contraste es caracterizar esa conexión y su primer
+comando omitido, conservando los límites de transporte y privacidad.
+
 Capturas privadas bajo local/jcop4-idopte-spy-*/; no agregarlas a Git.
 Pasaron previamente **30 comprobaciones del observador/decoder y 40 del
 lanzador** con transporte ficticio. El diagnóstico de firma pasó además
