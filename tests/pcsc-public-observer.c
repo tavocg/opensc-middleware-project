@@ -63,6 +63,11 @@ int main(void)
 	const unsigned char app[] = { 0, 0xA4, 4, 0x0C, 15, 0xE8, 0x28, 0xBD, 8, 0x0F, 0xA0, 0, 0, 3, 0x63, 0x64, 0x79, 0x6E, 0x69, 0x64 };
 	const unsigned char read[] = { 0, 0xB0, 0, 0, 0 };
 	const unsigned char version[] = { 0, 0xCA, 1, 0x16, 6 };
+	const unsigned char name[] = { 0, 0xCA, 1, 0, 0 };
+	const unsigned char unknown_name_tag[] = { 0, 0xCA, 1, 1, 0 };
+	const unsigned char name_with_payload[] = { 0, 0xCA, 1, 0, 1, 'x' };
+	const unsigned char other_channel_name[] = { 1, 0xCA, 1, 0, 0 };
+	const unsigned char protected_name[] = { 0x0C, 0xCA, 1, 0, 0 };
 	const unsigned char get_response[] = { 0, 0xC0, 0, 0, 0 };
 	const unsigned char pin[] = { 0, 0x20, 0, 1, 10, 'S','E','C','R','E','T','_','P','I','N' };
 	const unsigned char private_select[] = { 0, 0xA4, 0, 0x0C, 2, 0xE0, 0 };
@@ -74,6 +79,19 @@ int main(void)
 			send_command(version, sizeof(version)) == 0 && calls == 5);
 	check_private(file);
 	puts("PASS public observer forwards only allowed discovery and logs no payloads or lengths");
+	file = fixture_reset();
+	assert(send_command(name, sizeof(name)) == 0 && calls == 1);
+	check_private(file);
+	{
+		const unsigned char *rejected[] = { unknown_name_tag, name_with_payload, other_channel_name, protected_name, name };
+		const size_t sizes[] = { sizeof(unknown_name_tag), sizeof(name_with_payload), sizeof(other_channel_name), sizeof(protected_name), 4 };
+		for (size_t i = 0; i < sizeof(sizes) / sizeof(sizes[0]); i++) {
+			file = fixture_reset();
+			assert(send_command(rejected[i], sizes[i]) != 0 && !calls && stopped);
+			check_private(file);
+		}
+	}
+	puts("PASS ChipDoc name discovery permits only basic-channel case-2 GET DATA and keeps replies private");
 	file = fixture_reset();
 	assert(send_command(pin, sizeof(pin)) != 0 && !calls && stopped);
 	assert(send_command(version, sizeof(version)) != 0 && !calls);

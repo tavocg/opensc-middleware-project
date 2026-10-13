@@ -1,6 +1,24 @@
 # libjcop3p11: contexto para continuar
 
 **JCOP4, 13 de octubre de 2026:** último informe revisado
+`local/jcop4-idopte-discovery-aPCZL12P/report.txt`, **14:53:29 UTC**, principal
+`7f31abc`, OpenSC `3dfef6704`, ambos Git limpios al comenzar. El observador
+v2 funcionó: SCardEstablishContext y SCardConnect devuelven 0; primer intento
+APDU **00 CA 01 00 bloqueado antes de transmitir**. Una segunda conexión
+devuelve 0, pero transporte sigue bloqueado. Idopte muestra slot vacío y
+sale 1; consecuencia compatible con el bloqueo, no rechazo de la tarjeta.
+No hubo PIN ni autenticación. ANSSI-CC-2018/07, sección 1.2.4, documenta
+00 CA 01 00 00 como GET DATA del nombre de la aplicación ChipDoc Lite.
+Es precedente público para interpretar el comando, no prueba del contenido
+de la respuesta en la JCOP4 CR. Se permite únicamente caso-2 corto, CLA 00,
+P1 01/P2 00, sin datos de entrada; respuestas no se registran. Los demás
+tags, casos con payload, otros canales, SM y autenticación siguen bloqueados.
+Pasaron **30 pruebas del lanzador y 11 del observador**, incluida la nueva
+consulta a través del redirector real con transporte ficticio. Pendiente una
+consulta pública actualizada con el mismo objetivo Make, sin PIN ni cambios
+del driver. No repetir firmas todavía.
+
+Informe anterior del observador v1:
 `local/jcop4-idopte-discovery-y7dskS3z/report.txt`, **14:32:27 UTC**, principal
 `fbf3434`, OpenSC `3dfef6704`. Compilación del observador 0, inventario/ATR
 correctos; Idopte mostró slot vacío y salió 1. public-headers.txt contiene
@@ -12,8 +30,8 @@ de un plugin RTLD_LOCAL. Explica una limitación comprobada del observador,
 pero **no demuestra la causa exacta de la ausencia total de eventos en hardware**.
 Se corrigió el diagnóstico con LIBPCSCLITE_DELEGATE y una dependencia explícita
 de libpcsclite_real.so.1; añade resultados de contexto/conexión/reconexión,
-sin nombres/handles/ATR/payloads. Pendiente una consulta pública con la nueva
-versión; no requiere PIN ni recompilar OpenSC. Pasaron **30 pruebas del
+sin nombres/handles/ATR/payloads. Su funcionamiento ya se comprobó en el
+informe aPCZL12P anterior. En su preparación pasaron **30 pruebas del
 lanzador y 10 del observador**, incluidos redirector PC/SC real, plugin local,
 scope global/local, transporte ficticio y rechazo de VERIFY/control/atributos.
 No se cargó Idopte ni usó hardware por el agente.
@@ -104,6 +122,7 @@ PC/SC (establecer contexto, conectar, reconectar) y resultados, con máximo
 Lc/Le, PIN, hash ni respuestas completas. Bloquea antes del transporte todo
 lo ajeno a la lista de descubrimiento: SELECT ISO limitado al MF/AID raíz/
 aplicación observados y archivos bootstrap públicos, CA 01 16 de versión,
+CA 01 00 de nombre de aplicación solo en canal básico y caso-2 corto,
 READ BINARY/RECORD solo tras SELECT de 2F00/2F01/5031/5032 y GET RESPONSE
 solo tras 61xx de una operación permitida. Otros archivos, GET DATA, CLA
 protegida/propietaria, VERIFY (incluso vacío), MSE, PSO, autenticación,
@@ -144,13 +163,14 @@ La documentación pública NXP de ChipDoc 3.2 contempla PACE con PIN/CAN/MRZ
 y canales de confianza, sin resolver aún el requisito de la personalización CR.
 No copiar implementación privativa ni intentar autenticación administrativa.
 Las **35 comprobaciones del helper** pasaron en la preparación previa.
-Ahora pasaron **30 del lanzador** y **10 del observador**, incluyendo
+Ahora pasaron **30 del lanzador** y **11 del observador**, incluyendo
 bloqueo anterior a transporte, privacidad, reproducción de RTLD_NEXT local y
 delegación PC/SC real contra transporte falso. make test/pcsc-public-observer
 y test/iasecc incluyen este último conjunto.
 Biblioteca real compilada; no se cargó Idopte ni usó tarjeta por el agente.
-Sin cambios ni recompilación del driver OpenSC; descubrimiento observado en
-hardware pendiente. Reconocimiento normal Idopte ya comprobado.
+Sin cambios ni recompilación del driver OpenSC; delegación y primer bloqueo
+observados en hardware. Avanzar más allá de CA 01 00 sigue pendiente.
+Reconocimiento normal Idopte ya comprobado.
 
 Herramienta autenticada anterior, conservada para investigación futura:
 

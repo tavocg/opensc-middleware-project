@@ -112,7 +112,11 @@ static int allowed_command(const unsigned char *cmd, DWORD len, int *next_file)
 		return 0;
 	}
 	if (cmd[1] == 0xCA)
-		return len == 5 && cmd[2] == 1 && cmd[3] == 0x16;
+		/* 0100 is ChipDoc applet-name discovery (ANSSI-CC-2018/07,
+		 * section 1.2.4). Only the observed basic-channel case-2 command;
+		 * its response remains private and is never logged. */
+		return len == 5 && cmd[2] == 1 &&
+				(cmd[3] == 0x16 || (cmd[0] == 0 && cmd[3] == 0));
 	if (cmd[1] == 0xB0)
 		return selected_public_file && len == 5 && !(cmd[2] & 0x80);
 	if (cmd[1] == 0xB2)

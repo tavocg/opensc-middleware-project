@@ -35,7 +35,8 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *pci,
 {
 	(void)pci; (void)rpci;
 	/* Any leaked authentication or other command fails the fixture immediately. */
-	assert(card == 7 && size == 5 && cmd[0] == 0 && cmd[1] == 0xCA && cmd[2] == 1 && cmd[3] == 0x16);
+	assert(card == 7 && size == 5 && cmd[0] == 0 && cmd[1] == 0xCA && cmd[2] == 1 &&
+			(cmd[3] == 0x16 || cmd[3] == 0));
 	assert(*len >= 18);
 	calls++;
 	memcpy(response, "PRIVATE_RESPONSE", 16);

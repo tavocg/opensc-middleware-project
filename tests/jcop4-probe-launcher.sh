@@ -38,7 +38,7 @@ if [[ ${JCOP4_PUBLIC_DISCOVERY_TRACE-unset} != unset ]]; then
     if [[ ${FIXTURE_OBSERVER_LIFECYCLE_ONLY:-0} == 1 ]]; then
         printf 'pcsc_call=SCardConnect\npcsc_result=2148532235\n' >> "$JCOP4_PUBLIC_DISCOVERY_TRACE"
     elif [[ ${FIXTURE_OBSERVER_NO_EVENTS:-0} == 0 ]]; then
-        printf 'public_header=00A40400\nsw=9000\nblocked_header=00CA0100\n' >> "$JCOP4_PUBLIC_DISCOVERY_TRACE"
+        printf 'public_header=00A40400\nsw=9000\nblocked_header=00CA0101\n' >> "$JCOP4_PUBLIC_DISCOVERY_TRACE"
     fi
 else
     [[ ${LIBPCSCLITE_DELEGATE-unset} == unset && ${LIBPCSCLITE_SPY_DELEGATE-unset} == unset ]] || exit 96

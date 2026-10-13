@@ -754,6 +754,56 @@ No solicita PIN. Revisar los resultados de conexión y el primer bloqueo
 antes de ampliar consultas. Una captura estándar con pcsc-spy durante firma
 podría registrar el PIN; este observador todavía no admite sesiones autenticadas.
 
+## Primer bloqueo identificado: 13 de octubre, 14:53:29 UTC
+
+Informe `local/jcop4-idopte-discovery-aPCZL12P/report.txt`, principal
+`7f31abc`, OpenSC `3dfef6704`. Compilación e inventario correctos. La
+delegación sí funcionó: SCardEstablishContext -> 0, SCardConnect -> 0,
+**blocked_header=00CA0100**, segunda conexión -> 0. Idopte mostró el slot
+vacío y terminó 1; observer_result=events_recorded. El primer comando
+**no llegó a la tarjeta**, y el observador bloquea las transmisiones siguientes.
+Esto distingue el fallo de observación anterior de un descubrimiento ahora
+interrumpido por la lista permitida. No hay SW de tarjeta para este comando.
+Sin PIN, VERIFY ni firma.
+
+El informe adicional `jcop4-idopte-discovery-zA0uhMiU`, 14:40:29 UTC,
+todavía usa formato v1 y solo contiene el marcador inicial; no añade una
+secuencia APDU ni sustituye el nuevo resultado.
+
+La búsqueda del comando encontró una fuente primaria:
+[ANSSI-CC-2018/07](https://www.commoncriteriaportal.org/nfs/ccpfiles/files/epfiles/anssi-cc-2018-07fr.pdf),
+sección 1.2.4, páginas 6–7, documenta **00 CA 01 00 00** como GET DATA
+del nombre de la aplicación ChipDoc Lite. Es una aplicación anterior,
+no la personalización costarricense actual; su interpretación es un
+precedente para una consulta de identificación sin autenticación, **no una
+predicción del contenido exacto ni prueba de compatibilidad completa**.
+El informe público de ChipDoc 3.2 también enumera nombre/version/capabilities
+como identificación por GET_DATA, pero no proporciona aquí los P1/P2.
+
+Se amplía únicamente la condición del observador para permitir CA 01 00
+con **CLA 00 y cinco bytes (caso-2 corto sin payload)**. Conserva la omisión
+de todas las respuestas y los límites/bloqueos existentes. Tags vecinos,
+comandos con datos de entrada, otros canales y secure messaging quedan
+rechazados. No se agregan consultas de plataforma, INSTALL ni otros comandos
+que aparecen en el informe de certificación.
+
+Pasaron **30 comprobaciones del lanzador y 11 del observador**. La regresión
+nueva permite la consulta básica y rechaza variantes con payload, otros
+tags/canales, SM y caso truncado, manteniendo datos sintéticos fuera del log.
+La integración con redirector PC/SC real y plugin local confirma dos GET
+DATA permitidos (nombre/versión) antes de bloquear VERIFY, con transporte
+exclusivamente ficticio. Compilado solo el observador; OpenSC sin cambios.
+
+Siguiente intervención, misma JCOP4 y otros clientes cerrados, sin PIN:
+
+```bash
+make inspect/jcop4-idopte-discovery READER=0
+```
+
+Revisar el SW de esta consulta y el siguiente bloqueo, si existe. No ampliar
+la lista por inercia ni volver al intento autenticado mientras VERIFY 6982
+siga sin explicación.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño

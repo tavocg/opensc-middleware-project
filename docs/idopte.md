@@ -61,6 +61,10 @@ estados y resultados de conexión. La primera versión con LD_PRELOAD no
 observó eventos en y7dskS3z; eso no acredita un fallo de la tarjeta. El
 diagnóstico normal ya confirmó
 NXP/ChipDoc v3.2 y PIN inicializado en la JCOP4 (13 de octubre, 14:17:31 UTC).
+El informe aPCZL12P, 14:53:29 UTC, confirmó conexión y bloqueo de CA 01 00
+antes del transporte. La lista pública ahora permite exclusivamente el
+caso-2 corto de ese GET DATA en canal básico; no registra la respuesta.
+El precedente de identificación ChipDoc y sus límites están en [jcop4.md](jcop4.md).
 
 `pcsc-spy` estándar registra los buffers transmitidos, que pueden incluir el
 PIN durante autenticación. No usarlo con el PIN real ni considerar un filtro
