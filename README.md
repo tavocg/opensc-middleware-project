@@ -207,6 +207,12 @@ intentó SELECT DF0F bajo la aplicación conocida, bloqueado antes de transmitir
 DF0F sigue de propósito desconocido. Pasaron66 comprobaciones del helper,
 83 del observador,69 del lanzador y6 del lanzador de firma. No firma JCOP4 nueva.
 
+`make inspect/jcop4-filedf0f READER=0` consulta únicamente el control de DF0F
+bajo el AID conocido. Resultado: SELECT9000, transparente,150bytes, seguridad86
+sin interpretar. Sin READ, binding o PIN; esto no identifica contenido ni permiso
+de lectura. Pasaron68 comprobaciones del helper y71 del lanzador. El guard
+Idopte sigue bloqueando SELECT/READ DF0F; driver y protocolo de firma intactos.
+
 Capturas privadas bajo local/jcop4-idopte-spy-*/; no agregarlas a Git.
 Pasaron previamente **30 comprobaciones del observador/decoder y 40 del
 lanzador** con transporte ficticio. El diagnóstico de firma pasó además

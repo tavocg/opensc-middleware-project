@@ -2715,6 +2715,53 @@ control, o una definición primaria del perfil que identifique el archivo.
 No repetir la consulta de estado ni pedir PIN por inercia. La prueba del estado
 bajo MF ya respondió63C7; el siguiente bloqueo está identificado.
 
+## SELECT-only DF0F aceptado: 13 de octubre, 21:43:59 UTC
+
+El usuario registró el diagnóstico anterior en `d07b7c2`, principal limpio al
+comenzar; OpenSC `3dfef6704` intacto. Se agregó el target fijo
+`inspect/jcop4-filedf0f` y la opción --filedf0f al helper/lanzador existentes.
+El agente ejecutó `nix develop --offline -c make inspect/jcop4-filedf0f READER=0`
+sin PIN/GUI. Informe privado `local/jcop4-filedf0f-6FBH76f8/report.txt`:
+
+```text
+fileDF0F_select_transport=0
+fileDF0F_select_sw=9000
+fileDF0F_structure=transparent
+fileDF0F_size=150
+fileDF0F_security_format=profile_uninterpreted
+fileDF0F_security_direct_tags=86
+fileDF0F_standard_compact_read=uninterpreted
+fileDF0F_result=selected_metadata_only_no_read
+```
+
+Inventario, compilación, conexión/lock, EF.ATR/EF.DIR, unlock y proceso0.
+Exige ATR conectado conocido, AID conocido anunciado y selección exitosa de
+esa aplicación. Luego envía únicamente `00 A4 02 00 02 DF 0F 00`, con máximo
+256bytes de control, sin GET RESPONSE/reintentos. No READ de DF0F, binding,
+VERIFY/PIN/MSE/GA/PSO o escritura. No repite la inicialización/estado de Idopte:
+confirma selección bajo el AID observado, no equivalencia de todo su estado.
+
+El analizador compartido valida83=DF0F cuando aparece; omite valores86,
+identificadores/nombres, ACL y respuesta bruta. La existencia/tamaño/control
+no identifican propósito ni autorizan lectura. La página oficial de licencias
+citada antes no identifica ese FID; **150bytes no demuestran que sea licencia,
+CAN/PACE/CA o causa de VERIFY6982**. No se deduce política de lectura de86.
+
+Pasaron **68 comprobaciones del helper y71 del lanzador**, sin tarjeta;
+helper real compilado. Nuevas regresiones verifican el comando/FID exacto,
+identificador distinto en control, ATR, ausencia contextual6A82, transporte,
+69xx/61xx y control malformado, sin leer/autenticar/reintentar. Observador y sus
+permisos intactos: sigue bloqueando SELECT/READ DF0F. Driver/operación de firma
+intactos, suites83/6/12 previas vigentes, sin repetir por este cambio.
+Informes privados0700/0600, no incorporar local/ a Git.
+
+Próximo contraste posible: permitir exclusivamente el SELECT DF0F ya observado
+al proveedor, conservando READ bloqueado, para distinguir una solicitud de
+lectura de otro paso. Es una observación nueva y acotada, no una autorización
+para leer archivos arbitrarios. No repetir SELECT-only ni estado vacío idénticos
+por inercia, ni pedir PIN mientras se investiga esta fase de inventario.
+JCOP4/RSA3072 y la ruta de autenticación/firma siguen pendientes.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño

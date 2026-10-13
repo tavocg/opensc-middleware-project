@@ -6,7 +6,30 @@ la tarjeta. El usuario ejecuta las operaciones que requieran PIN o GUI. Esto
 sustituye las restricciones anteriores de no ejecutar Git/hardware/Idopte por
 el agente; conservar límites de cada diagnóstico y privacidad de los registros.
 
-**Último resultado: estado vacío63C7 -> SELECT DF0F bloqueado, 21:38:03 UTC.**
+**Último resultado: SELECT-only DF0F, 21:43:59 UTC.**
+Usuario registró `d07b7c2`, principal limpio al comenzar; OpenSC `3dfef6704`
+intacto. Agente ejecutó `nix develop --offline -c make inspect/jcop4-filedf0f
+READER=0`, sin PIN/GUI. Informe `local/jcop4-filedf0f-6FBH76f8/report.txt`:
+SELECTtransporte0/**9000**, transparente/**150bytes**, security_direct_tags=86,
+security_format=profile_uninterpreted, standard_compact_read=uninterpreted.
+Inventario/build/conexión/lock/EF.ATR/EF.DIR/unlock/proceso0. No READ deDF0F,
+binding/PIN/VERIFY/MSE/GA/PSO/escritura. Solo ADF conocido anunciado y
+00 A4 02 00 02 DF 0F 00; no reproduce toda la inicialización deIdopte ni estado.
+
+Nuevo target inspect/jcop4-filedf0f/--filedf0f, parser compartido con FID83
+validado y valores/nombres/ACL/raw omitidos. No sondeo arbitrario ni follow-up
+tras6A82/errores/61xx. Pasaron **68 helper y71 lanzador**, fake APIs, helper real
+compilado. Observador/permisos y driver intactos; suites83observador/6firma/
+12operación previas vigentes, no repetir sin cambios. Capturas0700/0600local/.
+**El guard Idopte aún bloquea SELECT/READ DF0F**; no nueva captura Idopte.
+150bytes/tag86/selección aceptada no identifican licencia, CAN/PACE/CA, permiso
+público o causa de6982. Página oficial de licencias anterior no identificaFID.
+Próximo contraste: SELECT-only DF0F del proveedor tras la secuencia ya observada,
+con READ bloqueado, para identificar su próximo comando; no repetir este
+SELECT/helper o consulta estado idénticos ni pedir PIN porinercia. JCOP4/RSA3072
+pendientes. Git autorizado pero montaje.gitreadonly impide commits si persiste.
+
+**Resultado anterior: estado vacío63C7 -> SELECT DF0F bloqueado, 21:38:03 UTC.**
 Usuario registró `387d233`, OpenSC `3dfef6704`, limpios al comenzar. Agente hizo
 sin PIN/GUI: SELECT-only7005 (`local/jcop4-file7005-eK0x57Vx/report.txt`,21:26:20),
 0/9000/transparente2368bytes/tag86nointerpretado, inventario/build/conexión/

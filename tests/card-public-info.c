@@ -161,15 +161,15 @@ int sc_transmit_apdu(sc_card_t *card, sc_apdu_t *apdu)
 		assert(select_calls == 1 && !file4141_calls && !bind_calls && !object_calls && !cert_calls && !mse_calls && !pin_calls &&
 				!odf_read_calls && apdu->cla == 0 && apdu->ins == 0xA4 && apdu->p1 == 2 && apdu->p2 == 0 &&
 				apdu->cse == SC_APDU_CASE_4_SHORT && apdu->lc == 2 && apdu->datalen == 2 &&
-				apdu->data[0] == (file4141_mode >= 3 ? 0x70 : 0x41) &&
-				apdu->data[1] == (file4141_mode == 6 ? 5 : file4141_mode == 5 ? 4 : file4141_mode == 4 ? 2 : file4141_mode == 3 ? 1 : file4141_mode == 2 ? 0x09 : 0x41) && apdu->le == 256 && apdu->resplen == 256 &&
+				apdu->data[0] == (file4141_mode == 7 ? 0xDF : file4141_mode >= 3 ? 0x70 : 0x41) &&
+				apdu->data[1] == (file4141_mode == 7 ? 0x0F : file4141_mode == 6 ? 5 : file4141_mode == 5 ? 4 : file4141_mode == 4 ? 2 : file4141_mode == 3 ? 1 : file4141_mode == 2 ? 0x09 : 0x41) && apdu->le == 256 && apdu->resplen == 256 &&
 				(apdu->flags & (SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP)) ==
 				(SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP));
 		file4141_calls++;
 		memcpy(apdu->resp, fixture_fcp, sizeof(fixture_fcp));
 		if (!file4141_wrongfid && file4141_mode > 1) {
-			apdu->resp[7] = file4141_mode >= 3 ? 0x70 : 0x41;
-			apdu->resp[8] = file4141_mode == 6 ? 5 : file4141_mode == 5 ? 4 : file4141_mode == 4 ? 2 : file4141_mode == 3 ? 1 : 0x09;
+			apdu->resp[7] = file4141_mode == 7 ? 0xDF : file4141_mode >= 3 ? 0x70 : 0x41;
+			apdu->resp[8] = file4141_mode == 7 ? 0x0F : file4141_mode == 6 ? 5 : file4141_mode == 5 ? 4 : file4141_mode == 4 ? 2 : file4141_mode == 3 ? 1 : 0x09;
 		}
 		apdu->resplen = file4141_size;
 		apdu->sw1 = file4141_sw >> 8; apdu->sw2 = file4141_sw & 0xFF;
@@ -740,6 +740,29 @@ int main(void)
 		reset_fixture(); file4141_mode = 6; mismatch = 1;
 		assert(card_public_info_main(5, args) == 1 && !file4141_calls);
 		puts("PASS CDF7005 SELECT-only requires connected ATR, sends exact FID and rejects other returned FID without READ or binding");
+	}
+	{
+		char *args[] = { "card-public-info", "2", fixture_atr, "--filedf0f", fixture_aid };
+		reset_fixture(); file4141_mode = 7;
+		assert(card_public_info_main(5, args) == 0 && file4141_calls == 1 && unlock_calls == 1 &&
+				!bind_calls && !object_calls && !cert_calls && !pin_calls && !mse_calls && !odf_read_calls);
+		reset_fixture(); file4141_mode = 7; file4141_wrongfid = 1;
+		assert(card_public_info_main(5, args) == 1 && file4141_calls == 1 && unlock_calls == 1);
+		reset_fixture(); file4141_mode = 7; mismatch = 1;
+		assert(card_public_info_main(5, args) == 1 && !file4141_calls);
+		puts("PASS DF0F SELECT-only requires connected ATR, sends exact FID and rejects other returned FID without READ or binding");
+		reset_fixture(); file4141_mode = 7; file4141_sw = 0x6A82;
+		assert(card_public_info_main(5, args) == 0 && file4141_calls == 1 && unlock_calls == 1);
+		for (int i = 0; i < 4; i++) {
+			reset_fixture(); file4141_mode = 7;
+			if (i == 0) file4141_transport = SC_ERROR_READER;
+			if (i == 1) file4141_sw = 0x6982;
+			if (i == 2) file4141_sw = 0x6101;
+			if (i == 3) file4141_size = sizeof(fixture_fcp) - 1;
+			assert(card_public_info_main(5, args) == 1 && file4141_calls == 1 && unlock_calls == 1 &&
+					!bind_calls && !pin_calls && !mse_calls && !odf_read_calls);
+		}
+		puts("PASS DF0F treats 6A82 as a context-specific diagnostic and stops on status/transport/malformed data without follow-up");
 	}
 	{
 		char *args[] = { "card-public-info", "2", fixture_atr, "--file4109", fixture_aid };
