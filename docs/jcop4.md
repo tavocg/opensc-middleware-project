@@ -1006,6 +1006,67 @@ Sin PIN. Se espera que el control siga bloqueado; la nueva captura lo
 identificará antes de decidir si admite una consulta pública acotada.
 VERIFY 6982 continúa pendiente y no se solicita otro intento autenticado.
 
+## Control de capacidades identificado: 13 de octubre, 15:35:59 UTC
+
+Informe `local/jcop4-idopte-discovery-eIa1G5Gt/report.txt`, principal `526338a`,
+OpenSC `3dfef6704`, ambos árboles limpios al comenzar. Inventario/ATR y
+compilación correctos. Contexto/conexión 0 y las mismas ocho APDU permitidas
+con transporte 0/SW 9000. Primer bloqueo:
+
+```text
+blocked=reader_control
+blocked_control_code=42000D48
+blocked_control_kind=feature_request_empty
+```
+
+Ahora sí identifica CM_IOCTL_GET_FEATURE_REQUEST de PC/SC Part 10, sin entrada.
+El observador v4 lo detuvo antes de llegar al lector: **no hay respuesta de
+capacidades ni resultado de transporte de ese control**. Segunda conexión 0
+sin rehabilitar transporte. Módulo 1, slot vacío, events_recorded; compatible
+con la interrupción del guard. No hubo PIN, VERIFY ni firma.
+
+La [documentación oficial CCID](https://github.com/LudovicRousseau/CCID/blob/master/SCARDCONTROL.md)
+identifica SCARD_CTL_CODE(3400) como descubrimiento de capacidades Part 10.
+La [implementación pública IFDHControl](https://github.com/LudovicRousseau/CCID/blob/master/src/ifdhandler.c)
+construye una lista TLV de funciones disponibles del lector, distinta de los
+controles que ejecutan esas funciones. Consultar esa lista no autentica un
+PIN. El hecho de que anuncie PIN-pad/PACE no demuestra que Idopte los use.
+
+El observador v5 añade exclusivamente ese control **sin entrada** a la lista
+permitida. Siempre envía NULL/0 al backend, incluso si el cliente proporciona
+un puntero con longitud cero. Requiere buffer/contador de salida válidos,
+log privado y primer handle; comparte con APDU el presupuesto de 128 eventos.
+Usa buffer interno de hasta 256 bytes, limitado además por el buffer del
+cliente. Copia al cliente solo una respuesta exitosa que quepa en el buffer;
+fallo, transporte ausente o tamaño inválido detienen sin copiar ni reintentar.
+No cambia el contexto de archivos tras una consulta exitosa.
+
+Registra únicamente public_control_code y control_transport, sin TLV,
+capacidades, longitud ni buffers. **Las funciones anunciadas no crean permisos**:
+todos los demás controles, incluidos PIN-pad, escape y PACE, permanecen
+bloqueados incluso con entrada vacía; SCardSetAttrib, VERIFY, MSE y firma
+también siguen bloqueados. El lanzador reconoce la consulta como evento de
+control, sin afirmar que sea una APDU.
+
+Pasaron **20 comprobaciones del observador/constructor y 31 del lanzador**,
+sin hardware. La suite del observador se ejecutó desde nix develop --offline
+y compiló la biblioteca real. Cubre límite de respuesta, buffer inválido,
+fallo/símbolo ausente, privacidad, contexto, límite de eventos/handle, estado
+detenido y ausencia de log. Con redirector real/plugin local y transporte
+ficticio se permite la consulta, se anuncia un IOCTL de PIN sintético y se
+comprueba que ese IOCTL con/sin datos y VERIFY no alcanzan el backend.
+La nueva regresión del lanzador reconoce una captura de solo control público
+sin confundirla con conexiones solas o una APDU. Driver/submódulo intactos.
+
+Siguiente intervención, misma JCOP4 y otros clientes cerrados:
+
+```bash
+nix develop -c make inspect/jcop4-idopte-discovery READER=0
+```
+
+Sin PIN. Revisar control_transport y la primera operación bloqueada antes de
+permitir cualquier otra consulta. VERIFY 6982 sigue sin resolverse.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño

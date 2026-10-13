@@ -23,7 +23,7 @@ __attribute__((constructor)) static void observer_init(void)
 	if (path)
 		trace_fd = open(path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
 	if (trace_fd >= 0)
-		dprintf(trace_fd, "format=public_discovery_headers_v4\n");
+		dprintf(trace_fd, "format=public_discovery_headers_v5\n");
 }
 
 /* Dependency lookup works when this library is loaded as a PC/SC delegate.
@@ -209,20 +209,46 @@ out:
 LONG SCardControl(SCARDHANDLE card, DWORD code, const void *send, DWORD send_len,
 		void *receive, DWORD receive_len, DWORD *returned)
 {
-	/* Reader IOCTLs can perform PIN-pad authentication: none are forwarded. */
-	(void)card; (void)send; (void)receive; (void)receive_len;
+	typedef LONG (*control_fn)(SCARDHANDLE, DWORD, const void *, DWORD, void *, DWORD, DWORD *);
+	unsigned char features[256];
+	DWORD capacity = receive_len < sizeof(features) ? receive_len : sizeof(features), count = 0;
+	LONG rv = SCARD_E_UNSUPPORTED_FEATURE;
+	control_fn control;
+	(void)send; /* The only forwarded operation always has NULL/zero input. */
 	pthread_mutex_lock(&trace_mutex);
-	if (trace_fd >= 0 && !stopped) {
-		/* dwControlCode identifies the reader operation, not its input buffer.
-		 * Classify the standard Part 10 query without forwarding even that query. */
+	if (returned) *returned = 0;
+	if (trace_fd < 0 || stopped)
+		goto out;
+	if (!handle_set) { trace_handle = card; handle_set = 1; }
+	if (card != trace_handle || ++events > 128) {
+		dprintf(trace_fd, "blocked=handle_or_event_limit\n");
+		stopped = 1;
+		goto out;
+	}
+	/* PC/SC Part 10 capability discovery only. Returned feature IOCTLs never
+	 * become permissions; PIN-pad, escape and all other controls stay blocked. */
+	if (code != CM_IOCTL_GET_FEATURE_REQUEST || send_len != 0 || !receive || !capacity || !returned) {
 		dprintf(trace_fd, "blocked=reader_control\nblocked_control_code=%08lX\n", (unsigned long)code);
 		dprintf(trace_fd, "blocked_control_kind=%s\n", code == CM_IOCTL_GET_FEATURE_REQUEST ?
 				(send_len == 0 ? "feature_request_empty" : "feature_request_unsupported") : "unknown");
+		stopped = 1;
+		goto out;
 	}
-	stopped = 1;
-	if (returned) *returned = 0;
+	dprintf(trace_fd, "public_control_code=%08lX\n", (unsigned long)code);
+	control = (control_fn)dlsym(RTLD_NEXT, "SCardControl");
+	rv = control ? control(card, code, NULL, 0, features, capacity, &count) : SCARD_E_UNSUPPORTED_FEATURE;
+	if (rv == SCARD_S_SUCCESS && count > capacity)
+		rv = SCARD_E_INSUFFICIENT_BUFFER;
+	dprintf(trace_fd, "control_transport=%ld\n", (long)rv);
+	if (rv == SCARD_S_SUCCESS) {
+		memcpy(receive, features, count);
+		*returned = count;
+	} else {
+		stopped = 1;
+	}
+out:
 	pthread_mutex_unlock(&trace_mutex);
-	return SCARD_E_UNSUPPORTED_FEATURE;
+	return rv;
 }
 
 LONG SCardSetAttrib(SCARDHANDLE card, DWORD attribute, const unsigned char *data, DWORD len)

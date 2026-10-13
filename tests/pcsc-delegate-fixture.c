@@ -3,15 +3,28 @@
 #include <stdlib.h>
 #include <string.h>
 #include <winscard.h>
+#include <reader.h>
 
-static int calls;
+static int calls, control_calls;
 static unsigned int selected_file;
 int fixture_count(void) { return calls; }
+int fixture_control_count(void) { return control_calls; }
 
 LONG SCardEstablishContext(DWORD scope, const void *r1, const void *r2, SCARDCONTEXT *context)
 {
 	assert(scope == SCARD_SCOPE_USER && !r1 && !r2);
 	*context = 17;
+	return SCARD_S_SUCCESS;
+}
+
+LONG SCardControl(SCARDHANDLE card, DWORD code, const void *send, DWORD size,
+		void *receive, DWORD capacity, DWORD *returned)
+{
+	const unsigned char features[] = { FEATURE_VERIFY_PIN_DIRECT, 4, 0x42, 0, 0, 6 };
+	assert(card == 7 && code == CM_IOCTL_GET_FEATURE_REQUEST && !send && !size);
+	assert(receive && capacity >= sizeof(features) && capacity <= 256 && returned);
+	memcpy(receive, features, sizeof(features)); *returned = sizeof(features);
+	control_calls++;
 	return SCARD_S_SUCCESS;
 }
 LONG SCardConnect(SCARDCONTEXT context, const char *reader, DWORD share,
@@ -67,8 +80,6 @@ UNEXPECTED(SCardEndTransaction, (SCARDHANDLE card U, DWORD action U))
 UNEXPECTED(SCardStatus, (SCARDHANDLE card U, char *reader U, DWORD *size U, DWORD *state U,
 		DWORD *protocol U, unsigned char *atr U, DWORD *atr_size U))
 UNEXPECTED(SCardGetStatusChange, (SCARDCONTEXT context U, DWORD timeout U, SCARD_READERSTATE *states U, DWORD count U))
-UNEXPECTED(SCardControl, (SCARDHANDLE card U, DWORD code U, const void *send U,
-		DWORD size U, void *receive U, DWORD capacity U, DWORD *returned U))
 UNEXPECTED(SCardListReaderGroups, (SCARDCONTEXT context U, char *groups U, DWORD *size U))
 UNEXPECTED(SCardListReaders, (SCARDCONTEXT context U, const char *groups U, char *readers U, DWORD *size U))
 UNEXPECTED(SCardFreeMemory, (SCARDCONTEXT context U, const void *data U))

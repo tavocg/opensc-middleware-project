@@ -143,7 +143,7 @@ if [[ $task_mode == --idopte || $task_mode == --idopte-discovery ]]; then
         if [[ -f $task_trace ]]; then
             while IFS= read -r task_line; do
                 case $task_line in
-                    public_header=*|blocked_header=*|blocked=*) task_events_observed=yes ;;
+                    public_header=*|public_control_code=*|blocked_header=*|blocked=*) task_events_observed=yes ;;
                     pcsc_call=*) task_lifecycle_observed=yes ;;
                 esac
             done < "$task_trace"

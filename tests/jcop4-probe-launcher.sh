@@ -34,8 +34,10 @@ if [[ ${JCOP4_PUBLIC_DISCOVERY_TRACE-unset} != unset ]]; then
     [[ ${LD_PRELOAD-unset} == unset &&
        ${LIBPCSCLITE_DELEGATE-} == "$FIXTURE_PROBE_ROOT/build/diagnostics/pcsc-public-observer.so" &&
        ${LIBPCSCLITE_SPY_DELEGATE-unset} == unset ]] || exit 96
-    printf 'format=public_discovery_headers_v3\n' > "$JCOP4_PUBLIC_DISCOVERY_TRACE"
-    if [[ ${FIXTURE_OBSERVER_LIFECYCLE_ONLY:-0} == 1 ]]; then
+    printf 'format=public_discovery_headers_v5\n' > "$JCOP4_PUBLIC_DISCOVERY_TRACE"
+    if [[ ${FIXTURE_OBSERVER_CONTROL_ONLY:-0} == 1 ]]; then
+        printf 'pcsc_call=SCardConnect\npcsc_result=0\npublic_control_code=42000D48\ncontrol_transport=0\n' >> "$JCOP4_PUBLIC_DISCOVERY_TRACE"
+    elif [[ ${FIXTURE_OBSERVER_LIFECYCLE_ONLY:-0} == 1 ]]; then
         printf 'pcsc_call=SCardConnect\npcsc_result=2148532235\n' >> "$JCOP4_PUBLIC_DISCOVERY_TRACE"
     elif [[ ${FIXTURE_OBSERVER_NO_EVENTS:-0} == 0 ]]; then
         printf 'public_header=00A40400\nsw=9000\nblocked_header=00CA0101\n' >> "$JCOP4_PUBLIC_DISCOVERY_TRACE"
@@ -300,6 +302,14 @@ task_lifecycle_report=$(sed -n 's/^Informe: //p' "$task_tmp/output.txt")
    $(< "$task_lifecycle_report") == *'module_exit_status=0'* ]]
 printf 'PASS JCOP4 discovery preserves lifecycle failures without claiming APDU observation or falling back\n'
 unset FIXTURE_OBSERVER_LIFECYCLE_ONLY
+export FIXTURE_OBSERVER_CONTROL_ONLY=1
+task_run 0 2 --idopte-discovery
+task_control_report=$(sed -n 's/^Informe: //p' "$task_tmp/output.txt")
+[[ $(< "$task_control_report") == *'observer_result=events_recorded'* &&
+   $(< "$task_control_report") == *'public_control_code=42000D48'* &&
+   $(< "$task_control_report") != *'public_header='* ]]
+printf 'PASS JCOP4 discovery recognizes a public reader-control event without claiming an APDU was observed\n'
+unset FIXTURE_OBSERVER_CONTROL_ONLY
 export FIXTURE_OBSERVER_BUILD_EXIT=19
 task_run 19 2 --idopte-discovery
 [[ ! -e $task_tmp/idopte-called && $(wc -l < "$task_tmp/called") == 3 ]]

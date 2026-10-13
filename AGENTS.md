@@ -1,6 +1,32 @@
 # libjcop3p11: contexto para continuar
 
 **JCOP4, 13 de octubre de 2026:** último informe revisado
+`local/jcop4-idopte-discovery-eIa1G5Gt/report.txt`, **15:35:59 UTC**, principal
+`526338a`, OpenSC `3dfef6704`, ambos Git limpios al comenzar. Inventario/ATR
+y compilación correctos; contexto/conexión 0, las mismas ocho APDU 0/9000.
+Primer control bloqueado identificado: **42000D48 / feature_request_empty**,
+CM_IOCTL_GET_FEATURE_REQUEST (PC/SC Part 10), sin entrada. No llegó al lector;
+no hay resultado ni contenido de sus capacidades todavía. Idopte muestra slot
+vacío/sale 1, events_recorded; no rechazo APDU, PIN, VERIFY ni firma. Segunda
+conexión 0, sin rehabilitar transporte. Observador **v5** preparado: permite
+exclusivamente ese control sin entrada, normaliza NULL/0 al backend, limita
+respuesta a mínimo de buffer del cliente/256 bytes y registra solo código/
+resultado de transporte; nunca capacidades/TLV/longitudes/respuestas. La
+lista anunciada no habilita controles adicionales: PIN-pad/escape/PACE y
+todos los demás siguen bloqueados, también sin entrada. Requiere buffer/
+contador de salida válidos, log privado, primer handle y presupuesto conjunto
+de 128 APDU/controles; error/resultado superior al buffer detiene sin copiar
+respuesta ni fallback. Una consulta exitosa conserva contexto de archivos.
+Lanzador reconoce public_control_code como evento sin atribuirle una APDU.
+Pasaron **20 comprobaciones del observador/constructor y 31 del lanzador**,
+sin hardware; integración con redirector real/transporte ficticio permite
+descubrir un control de PIN sintético pero bloquea su ejecución y VERIFY.
+Biblioteca de diagnóstico compilada, driver/submódulo intactos. Próximo paso:
+`nix develop -c make inspect/jcop4-idopte-discovery READER=0`, misma JCOP4,
+firmador/otros clientes cerrados, sin PIN. Revisar control_transport y el
+siguiente bloqueo antes de ampliar permisos. VERIFY 6982 sigue pendiente.
+
+Informe anterior antes de identificar el control:
 `local/jcop4-idopte-discovery-qKJ16Ogh/report.txt`, **15:31:33 UTC**, principal
 `e240c20`, OpenSC `3dfef6704`, ambos Git limpios al comenzar. Inventario/ATR
 correctos, compilación del observador 0; contexto/conexión 0. Ocho APDU
@@ -211,15 +237,19 @@ PC/SC (establecer contexto, conectar, reconectar) y resultados, con máximo
 128 registros de ciclo de vida. Además, cabeceras de cuatro bytes y transporte/SW,
 sin buffers de datos, tamaños, Lc/Le, PIN, hash ni respuestas completas.
 **Única excepción de datos de comando en formato
-v3/v4:** identificador de dos bytes de un SELECT EF bloqueado, exclusivamente
+v3/v4/v5:** identificador de dos bytes de un SELECT EF bloqueado, exclusivamente
 CLA 00/INS A4/P1 02/P2 00, Lc 2 y tamaño total 7/8; otras formas solo
 unsupported. No registra payloads arbitrarios ni cambia permisos por ese dato.
 El formato v4 también registra dwControlCode en hexadecimal del primer
 SCardControl bloqueado, identificador de operación del lector; clasifica
 únicamente el código estándar CM_IOCTL_GET_FEATURE_REQUEST como empty o
 unsupported según admita la forma sin entrada. Otros códigos son unknown.
-No registra buffers, longitudes reales ni respuestas, y todos los controles
-siguen bloqueados sin llamar al transporte.
+No registra buffers, longitudes reales ni respuestas. En v5 se permite solo
+CM_IOCTL_GET_FEATURE_REQUEST sin entrada, con respuesta interna acotada a
+256 bytes/buffer del cliente, primer handle/log privado y presupuesto
+conjunto de 128 operaciones APDU/controles. Registra public_control_code y
+control_transport; no la lista devuelta ni su longitud. Esa lista no añade
+permisos. Todos los demás controles, incluso con entrada vacía, se bloquean.
 Bloquea antes del transporte todo
 lo ajeno a la lista de descubrimiento: SELECT ISO limitado al MF/AID raíz/
 aplicación observados y archivos bootstrap públicos, CA 01 16 de versión,
@@ -231,8 +261,9 @@ sin SFI, no READ RECORD. MF/permiso se invalidan antes de cada selección y
 se restablecen únicamente tras 9000/61xx con el contexto esperado.
 Otros archivos, GET DATA, CLA
 protegida/propietaria, VERIFY (incluso vacío), MSE, PSO, autenticación,
-escrituras, SCardSetAttrib y todos los controles del lector se bloquean. Tras primer bloqueo,
-error de transporte/69xx, otro handle o más de 128 APDU, no transmite más.
+escrituras, SCardSetAttrib y controles distintos de la consulta de capacidades
+vacía se bloquean. Tras primer bloqueo, error de transporte/69xx, otro handle
+o más de 128 operaciones APDU/consulta de capacidades, no transmite más.
 Log privado O_EXCL/NOFOLLOW/0600 requerido; sin log no transmite.
 No usa flags JCOP3 ni helper autenticado. Stdin vacío y debug OpenSC 0.
 Config y delegación aisladas: env externo OPENSC_DEEPBIND, LD_PRELOAD/trace y ambos

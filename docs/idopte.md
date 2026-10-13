@@ -52,7 +52,7 @@ y flags anunciados del token. Detalles en [jcop4.md](jcop4.md).
 `make inspect/jcop4-idopte-discovery READER=0` repite solo ese descubrimiento
 público bajo un observador de cabeceras PC/SC. Bloquea comandos fuera de una
 lista pública acotada; puede causar un error deliberado del módulo. No captura
-datos ni permite VERIFY, login/firma o controles del lector. Usar exclusivamente
+datos ni permite VERIFY, login/firma o controles de autenticación del lector. Usar exclusivamente
 ese objetivo; no activarlo en firmador. El diagnóstico usa la delegación
 `LIBPCSCLITE_DELEGATE`, con dependencia explícita del transporte
 `libpcsclite_real.so.1`, sin instalar ni sustituir bibliotecas. Descarta
@@ -85,6 +85,12 @@ pidió el módulo; el observador v4 ahora registra su código y clasificación
 limitada de consulta de capacidades. Ningún control se transmite ni se
 registra su entrada/respuesta. El slot vacío/error del módulo es compatible
 con esa interrupción, no demuestra fallo de tarjeta ni requisito de PIN-pad.
+El informe eIa1G5Gt (15:35:59 UTC) identificó ese control como 42000D48,
+CM_IOCTL_GET_FEATURE_REQUEST sin entrada: consulta estándar de capacidades.
+Todavía bloqueado en hardware; sin respuesta del lector. El observador v5
+permite solo esa consulta con buffer de salida acotado y sin registrar sus
+capacidades. Todos los demás controles siguen bloqueados, aunque el lector
+los anuncie. Falta revisar el resultado y el siguiente bloqueo, sin PIN.
 
 `pcsc-spy` estándar registra los buffers transmitidos, que pueden incluir el
 PIN durante autenticación. No usarlo con el PIN real ni considerar un filtro

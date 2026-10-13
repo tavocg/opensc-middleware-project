@@ -119,7 +119,23 @@ int run_fixture(int mode)
         assert(SCardSetAttrib(card, 0, pin, sizeof(pin)) != 0);
         return 0;
     }
-    if (mode == 10 || mode == 11) {
+    if (mode == 10 || mode == 12 || mode == 13) {
+        assert(SCardControl(card, CM_IOCTL_GET_FEATURE_REQUEST, 0, 0,
+                response, sizeof(response), &len) == 0 && len == 6 && response[0] == FEATURE_VERIFY_PIN_DIRECT);
+        len = sizeof(response);
+        if (mode != 10) {
+            assert(SCardControl(card, 0x42000006, mode == 12 ? pin : 0,
+                    mode == 12 ? sizeof(pin) : 0, response, sizeof(response), &len) != 0 && len == 0);
+            len = sizeof(response);
+            assert(SCardTransmit(card, 0, version, sizeof(version), 0, response, &len) != 0);
+            return 0;
+        }
+        assert(SCardTransmit(card, 0, version, sizeof(version), 0, response, &len) == 0);
+        len = sizeof(response);
+        assert(SCardTransmit(card, 0, pin, sizeof(pin), 0, response, &len) != 0);
+        return 0;
+    }
+    if (mode == 11) {
         assert(SCardControl(card, CM_IOCTL_GET_FEATURE_REQUEST,
                 mode == 10 ? 0 : pin, mode == 10 ? 0 : sizeof(pin),
                 response, sizeof(response), &len) != 0 && len == 0);
@@ -172,7 +188,9 @@ int main(int argc, char **argv)
     void *core = dlopen(argv[2], RTLD_NOW | RTLD_LOCAL);
     assert(core);
     int (*count)(void) = (int (*)(void))dlsym(core, "fixture_count");
-    assert(count && count() == (mode == 9 ? 3 : mode == 7 ? 2 : mode == 0 ? 1 : 0));
+    assert(count && count() == (mode == 9 ? 3 : mode == 7 ? 2 : mode == 0 || mode == 10 ? 1 : 0));
+    int (*controls)(void) = (int (*)(void))dlsym(core, "fixture_control_count");
+    if (controls) assert(controls() == (mode == 10 || mode == 12 || mode == 13 ? 1 : 0));
     return 0;
 }
 LOCAL
@@ -202,7 +220,7 @@ task_pcsc_libdir=$(pkg-config --variable=libdir libpcsclite)
 "${CC:-cc}" -std=c99 -Wall -Wextra -Werror -fPIC -shared "${task_pcsc_cflags[@]}" \
     "$task_tmp/plugin.c" -L"$task_pcsc_libdir" -Wl,-rpath,"$task_pcsc_libdir" \
     -lpcsclite -o "$task_tmp/redirect-plugin.so"
-for task_mode in 0 1 3 4 7 8 9 10 11; do
+for task_mode in 0 1 3 4 7 8 9 10 11 12 13; do
     env -u LD_PRELOAD -u LIBPCSCLITE_SPY_DELEGATE \
         LIBPCSCLITE_DELEGATE="$task_tmp/delegate.so" JCOP4_PUBLIC_DISCOVERY_TRACE="$task_tmp/delegate-$task_mode.txt" \
         "$task_tmp/local-client" "$task_tmp/redirect-plugin.so" "$task_tmp/libfakepcsc.so" "$task_mode"
@@ -211,7 +229,7 @@ for task_mode in 0 1 3 4 7 8 9 10 11; do
        $task_headers == *'pcsc_call=SCardEstablishContext'* && $task_headers == *'pcsc_call=SCardConnect'* &&
        $task_headers != *'PRIVATE_'* && $task_headers != *'SECRET_PIN'* &&
        $task_headers != *'length'* && $task_headers != *'data='* ]]
-    [[ $task_headers == *'format=public_discovery_headers_v4'* ]]
+    [[ $task_headers == *'format=public_discovery_headers_v5'* ]]
 done
 [[ $(< "$task_tmp/delegate-0.txt") == *'public_header=00CA0116'* &&
    $(< "$task_tmp/delegate-0.txt") == *'sw=9000'* &&
@@ -229,12 +247,17 @@ done
    $(< "$task_tmp/delegate-9.txt") == *'public_header=00A40200'* &&
    $(< "$task_tmp/delegate-9.txt") == *'public_header=00B00000'* &&
    $(< "$task_tmp/delegate-9.txt") == *'blocked_header=00200001'* ]]
-[[ $(< "$task_tmp/delegate-10.txt") == *'blocked_control_code=42000D48'* &&
-   $(< "$task_tmp/delegate-10.txt") == *'blocked_control_kind=feature_request_empty'* &&
-   $(< "$task_tmp/delegate-10.txt") != *'public_header='* &&
+[[ $(< "$task_tmp/delegate-10.txt") == *'public_control_code=42000D48'* &&
+   $(< "$task_tmp/delegate-10.txt") == *'control_transport=0'* &&
+   $(< "$task_tmp/delegate-10.txt") == *'blocked_header=00200001'* &&
    $(< "$task_tmp/delegate-11.txt") == *'blocked_control_code=42000D48'* &&
    $(< "$task_tmp/delegate-11.txt") == *'blocked_control_kind=feature_request_unsupported'* &&
    $(< "$task_tmp/delegate-11.txt") != *'public_header='* ]]
+for task_mode in 12 13; do
+    [[ $(< "$task_tmp/delegate-$task_mode.txt") == *'public_control_code=42000D48'* &&
+       $(< "$task_tmp/delegate-$task_mode.txt") == *'blocked_control_code=42000006'* &&
+       $(< "$task_tmp/delegate-$task_mode.txt") != *'public_header='* ]]
+done
 env -u LD_PRELOAD -u JCOP4_PUBLIC_DISCOVERY_TRACE -u LIBPCSCLITE_SPY_DELEGATE \
     LIBPCSCLITE_DELEGATE="$task_tmp/delegate.so" \
     "$task_tmp/local-client" "$task_tmp/redirect-plugin.so" "$task_tmp/libfakepcsc.so" 6

@@ -3,7 +3,9 @@
 #undef dlsym
 #include <assert.h>
 
-static int calls;
+static int calls, control_calls, control_missing;
+static DWORD control_capacity, control_size = 16;
+static LONG control_result;
 static unsigned int fixture_sw = 0x9000;
 static LONG fixture_transmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
 		const unsigned char *cmd, DWORD len, SCARD_IO_REQUEST *recv_pci,
@@ -24,10 +26,21 @@ static LONG fixture_reconnect(SCARDHANDLE card, DWORD share, DWORD protocols,
 	*protocol = SCARD_PROTOCOL_T1;
 	return SCARD_S_SUCCESS;
 }
+static LONG fixture_control(SCARDHANDLE card, DWORD code, const void *send, DWORD size,
+		void *receive, DWORD capacity, DWORD *returned)
+{
+	assert(card == 7 && code == CM_IOCTL_GET_FEATURE_REQUEST && !send && !size);
+	assert(receive && capacity && capacity <= 256 && returned);
+	control_calls++; control_capacity = capacity;
+	if (capacity >= 16) memcpy(receive, "PRIVATE_RESPONSE", 16);
+	*returned = control_size;
+	return control_result;
+}
 void *fixture_dlsym(void *handle, const char *name)
 {
 	assert(handle == RTLD_NEXT);
 	if (!strcmp(name, "SCardTransmit")) return (void *)fixture_transmit;
+	if (!strcmp(name, "SCardControl")) return control_missing ? NULL : (void *)fixture_control;
 	assert(!strcmp(name, "SCardReconnect"));
 	return (void *)fixture_reconnect;
 }
@@ -38,6 +51,8 @@ static FILE *fixture_reset(void)
 	assert(file);
 	trace_fd = fileno(file);
 	stopped = selected_public_file = selected_mf = handle_set = pending_response = calls = events = lifecycle_events = 0;
+	control_calls = control_missing = control_capacity = 0;
+	control_size = 16; control_result = 0;
 	fixture_sw = 0x9000;
 	return file;
 }
@@ -241,16 +256,16 @@ int main(void)
 	check_private(file);
 	puts("PASS public observer stops on security errors and blocks reader PIN-pad control paths");
 	{
-		const DWORD codes[] = { CM_IOCTL_GET_FEATURE_REQUEST, CM_IOCTL_GET_FEATURE_REQUEST, CM_IOCTL_GET_FEATURE_REQUEST, 0x42000006 };
-		const void *inputs[] = { NULL, "SECRET_PIN", "SECRET_PIN", "SECRET_PIN" };
-		const DWORD sizes[] = { 0, 0, 10, 10 };
-		const char *kinds[] = { "feature_request_empty", "feature_request_empty", "feature_request_unsupported", "unknown" };
+		const DWORD codes[] = { CM_IOCTL_GET_FEATURE_REQUEST, 0x42000006, 0x42000006 };
+		const void *inputs[] = { "SECRET_PIN", "SECRET_PIN", NULL };
+		const DWORD sizes[] = { 10, 10, 0 };
+		const char *kinds[] = { "feature_request_unsupported", "unknown", "unknown" };
 		for (size_t i = 0; i < sizeof(codes) / sizeof(codes[0]); i++) {
 			char log[1024] = {0}, identifier[80];
 			unsigned char response[64]; DWORD returned = 99;
 			file = fixture_reset();
 			assert(SCardControl(7, codes[i], inputs[i], sizes[i], response, sizeof(response), &returned) != 0);
-			assert(returned == 0 && stopped && !calls);
+			assert(returned == 0 && stopped && !calls && !control_calls);
 			assert(send_command(version, sizeof(version)) != 0 && !calls);
 			/* Later controls cannot add diagnostics after the first stop. */
 			assert(SCardControl(7, 0xDEADBEEF, NULL, 0, NULL, 0, NULL) != 0);
@@ -262,6 +277,55 @@ int main(void)
 		}
 	}
 	puts("PASS blocked reader controls record only their identifier and bounded feature-query classification without forwarding");
+	{
+		unsigned char response[512]; DWORD returned;
+		file = fixture_reset();
+		assert(send_command(mf, sizeof(mf)) == 0 && send_command(serial, sizeof(serial)) == 0);
+		assert(SCardControl(7, CM_IOCTL_GET_FEATURE_REQUEST, NULL, 0, response, sizeof(response), &returned) == 0);
+		assert(control_calls == 1 && control_capacity == 256 && returned == 16);
+		assert(!memcmp(response, "PRIVATE_RESPONSE", 16) && selected_mf && selected_public_file == 2);
+		assert(send_command(read, sizeof(read)) == 0 && calls == 3);
+		/* A pointer with zero length is normalized to NULL before forwarding. */
+		control_size = 0;
+		assert(SCardControl(7, CM_IOCTL_GET_FEATURE_REQUEST, "SECRET_PIN", 0, response, 64, &returned) == 0);
+		assert(control_calls == 2 && control_capacity == 64 && returned == 0 && !stopped);
+		check_private(file);
+	}
+	puts("PASS empty reader capability query forwards bounded responses privately and preserves card context");
+	{
+		unsigned char response[64]; DWORD returned;
+		for (int i = 0; i < 6; i++) {
+			file = fixture_reset();
+			if (i == 0) control_result = SCARD_E_NOT_TRANSACTED;
+			if (i == 1) control_size = 65;
+			if (i == 2) control_missing = 1;
+			memset(response, 0xAA, sizeof(response)); returned = 99;
+			assert(SCardControl(7, CM_IOCTL_GET_FEATURE_REQUEST, NULL, 0,
+					i == 3 ? NULL : response, i == 4 ? 0 : sizeof(response), i == 5 ? NULL : &returned) != 0);
+			assert(stopped && !calls && control_calls == (i < 2 ? 1 : 0));
+			assert(response[0] == 0xAA && (i == 5 || returned == 0));
+			assert(send_command(version, sizeof(version)) != 0 && !calls);
+			check_private(file);
+		}
+	}
+	puts("PASS reader query rejects errors, oversized replies, missing transport and invalid buffers before copying responses");
+	{
+		unsigned char response[64]; DWORD returned;
+		file = fixture_reset(); events = 128;
+		assert(SCardControl(7, CM_IOCTL_GET_FEATURE_REQUEST, NULL, 0, response, sizeof(response), &returned) != 0 && !control_calls);
+		check_private(file);
+		file = fixture_reset();
+		assert(send_command(version, sizeof(version)) == 0);
+		assert(SCardControl(8, CM_IOCTL_GET_FEATURE_REQUEST, NULL, 0, response, sizeof(response), &returned) != 0 && !control_calls);
+		check_private(file);
+		file = fixture_reset();
+		assert(SCardControl(7, CM_IOCTL_GET_FEATURE_REQUEST, NULL, 0, response, sizeof(response), &returned) == 0);
+		assert(SCardControl(7, 0x42000006, NULL, 0, response, sizeof(response), &returned) != 0 && control_calls == 1);
+		assert(SCardControl(7, CM_IOCTL_GET_FEATURE_REQUEST, NULL, 0, response, sizeof(response), &returned) != 0 && control_calls == 1);
+		check_private(file);
+		assert(SCardControl(7, CM_IOCTL_GET_FEATURE_REQUEST, NULL, 0, response, sizeof(response), &returned) != 0 && control_calls == 1);
+	}
+	puts("PASS reader queries share APDU handle/event limits and cannot bypass a stop or missing private log");
 	file = fixture_reset(); events = 128;
 	assert(send_command(version, sizeof(version)) != 0 && !calls);
 	check_private(file);

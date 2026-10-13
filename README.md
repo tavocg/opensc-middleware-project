@@ -71,13 +71,15 @@ Nombre/versión y selección inicial dieron `9000`; el siguiente SELECT EF
 identificó `D003`, usado para identificación/serie en perfiles documentados.
 Ahora se permite su selección y lectura binaria únicamente tras confirmar
 el MF, sin guardar su respuesta ni serial. Informes privados en
-`local/jcop4-idopte-discovery-*/`. Pasaron 30 comprobaciones del lanzador y
-diecisiete del observador/constructor sin tarjeta. El intento qKJ16Ogh
-(15:31:33 UTC) ya compiló y las ocho APDU transmitidas dieron 9000, incluidos
+`local/jcop4-idopte-discovery-*/`. Pasaron 31 comprobaciones del lanzador y
+veinte del observador/constructor sin tarjeta. El intento eIa1G5Gt
+(15:35:59 UTC) compiló y las ocho APDU transmitidas dieron 9000, incluidos
 dos SELECT EF y dos READ BINARY; el registro omite los FIDs permitidos y sus
-respuestas. El siguiente bloqueo es un control del lector sin identificar.
-El formato v4 registra su código/clasificación, sin buffers y manteniendo
-todos los controles bloqueados. Falta revisar ese código antes de continuar.
+respuestas. El control bloqueado es 42000D48: consulta estándar de capacidades
+del lector sin entrada. El formato v5 permite únicamente esa consulta,
+con respuesta acotada/omitida del registro. Los controles anunciados por el
+lector siguen bloqueados. Falta comprobar su resultado y el siguiente paso
+de Idopte en hardware.
 No repetir el intento de PIN hasta identificar el requisito que falta.
 JCOP4 aún no está integrada en PKCS#11.
 RSA 3072 y modularidad para futuras generaciones siguen pendientes.
