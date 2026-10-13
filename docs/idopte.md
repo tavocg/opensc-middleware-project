@@ -65,6 +65,10 @@ El informe aPCZL12P, 14:53:29 UTC, confirmó conexión y bloqueo de CA 01 00
 antes del transporte. La lista pública ahora permite exclusivamente el
 caso-2 corto de ese GET DATA en canal básico; no registra la respuesta.
 El precedente de identificación ChipDoc y sus límites están en [jcop4.md](jcop4.md).
+El informe fZcrQuOX, 14:57:38 UTC, confirmó nombre/versión y SELECT inicial
+9000, antes de bloquear SELECT EF 00 A4 02 00. El formato v3 añade solo
+el identificador de dos bytes de ese SELECT bloqueado si su forma es válida,
+manteniendo el bloqueo y sin capturar contenido de archivos.
 
 `pcsc-spy` estándar registra los buffers transmitidos, que pueden incluir el
 PIN durante autenticación. No usarlo con el PIN real ni considerar un filtro

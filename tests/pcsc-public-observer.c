@@ -71,6 +71,8 @@ int main(void)
 	const unsigned char get_response[] = { 0, 0xC0, 0, 0, 0 };
 	const unsigned char pin[] = { 0, 0x20, 0, 1, 10, 'S','E','C','R','E','T','_','P','I','N' };
 	const unsigned char private_select[] = { 0, 0xA4, 0, 0x0C, 2, 0xE0, 0 };
+	const unsigned char blocked_ef[] = { 0, 0xA4, 2, 0, 2, 0xE0, 0 };
+	const unsigned char payload_ef[] = { 0, 0xA4, 2, 0, 10, 'S','E','C','R','E','T','_','P','I','N' };
 	const unsigned char private_get[] = { 0, 0xCA, 0x7F, 0x48, 0 };
 	const unsigned char protected_version[] = { 0x0C, 0xCA, 1, 0x16, 6 };
 	FILE *file = fixture_reset();
@@ -97,6 +99,26 @@ int main(void)
 	assert(send_command(version, sizeof(version)) != 0 && !calls);
 	check_private(file);
 	puts("PASS public observer blocks VERIFY before transport and blocks subsequent fallback commands");
+	file = fixture_reset();
+	assert(send_command(blocked_ef, sizeof(blocked_ef)) != 0 && !calls && stopped);
+	assert(send_command(read, sizeof(read)) != 0 && !calls);
+	{
+		char log[256] = {0};
+		fflush(file); rewind(file);
+		assert(fread(log, 1, sizeof(log) - 1, file) < sizeof(log) - 1);
+		assert(strstr(log, "blocked_header=00A40200") && strstr(log, "blocked_select_ef=E000"));
+	}
+	check_private(file);
+	file = fixture_reset();
+	assert(send_command(payload_ef, sizeof(payload_ef)) != 0 && !calls && stopped);
+	{
+		char log[256] = {0};
+		fflush(file); rewind(file);
+		assert(fread(log, 1, sizeof(log) - 1, file) < sizeof(log) - 1);
+		assert(strstr(log, "blocked_select_form=unsupported") && !strstr(log, "blocked_select_ef="));
+	}
+	check_private(file);
+	puts("PASS blocked SELECT logs only a validated two-byte EF identifier and never forwards selection or fallback reads");
 	file = fixture_reset();
 	assert(send_command(private_select, sizeof(private_select)) != 0 && !calls);
 	assert(send_command(read, sizeof(read)) != 0 && !calls);

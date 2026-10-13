@@ -1,4 +1,5 @@
-/* Observe bounded public discovery only. Never log command/response payloads. */
+/* Observe bounded public discovery. No response or authentication data;
+ * the only command-field exception is the FID of a blocked ISO SELECT EF. */
 #define _GNU_SOURCE
 #include <dlfcn.h>
 #include <fcntl.h>
@@ -21,7 +22,7 @@ __attribute__((constructor)) static void observer_init(void)
 	if (path)
 		trace_fd = open(path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
 	if (trace_fd >= 0)
-		dprintf(trace_fd, "format=public_discovery_headers_v2\n");
+		dprintf(trace_fd, "format=public_discovery_headers_v3\n");
 }
 
 /* Dependency lookup works when this library is loaded as a PC/SC delegate.
@@ -147,11 +148,18 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
 		goto out;
 	}
 	if (!allowed_command(cmd, len, &next_file)) {
-		/* Header only, never Lc/Le/length, values, hashes or response data. */
+		/* Header only except a validated, blocked ISO SELECT EF identifier.
+		 * Never authentication values, Lc/Le/lengths, hashes or responses. */
 		if (cmd && len >= 4)
 			dprintf(trace_fd, "blocked_header=%02X%02X%02X%02X\n", cmd[0], cmd[1], cmd[2], cmd[3]);
 		else
 			dprintf(trace_fd, "blocked=invalid_command\n");
+		if (cmd && len >= 4 && cmd[0] == 0 && cmd[1] == 0xA4 && cmd[2] == 2 && cmd[3] == 0) {
+			if ((len == 7 || len == 8) && cmd[4] == 2)
+				dprintf(trace_fd, "blocked_select_ef=%02X%02X\n", cmd[5], cmd[6]);
+			else
+				dprintf(trace_fd, "blocked_select_form=unsupported\n");
+		}
 		stopped = 1;
 		goto out;
 	}

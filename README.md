@@ -68,10 +68,11 @@ ni PIN. El observador guarda cabeceras/estados y bloquea comandos ajenos al
 descubrimiento permitido; **Idopte puede fallar por ese bloqueo**. No usar
 el observador para firmar. Usa `LIBPCSCLITE_DELEGATE`, sin precarga ni cambios
 al sistema, y registra resultados de conexión además de cabeceras APDU.
-La versión corregida conectó correctamente y bloqueó GET DATA `00 CA 01 00`.
-Ahora se permite esa consulta de nombre de aplicación, manteniendo los demás
-bloqueos. Informes privados en `local/jcop4-idopte-discovery-*/`.
-Pasaron 30 comprobaciones del lanzador y once del observador sin tarjeta.
+Nombre/versión y selección inicial dieron `9000`; el siguiente SELECT EF
+quedó bloqueado. El observador ahora registra únicamente el identificador
+de dos bytes de ese SELECT para decidir cómo continuar, sin permitirlo ni
+registrar su contenido. Informes privados en `local/jcop4-idopte-discovery-*/`.
+Pasaron 30 comprobaciones del lanzador y doce del observador sin tarjeta.
 No repetir el intento de PIN hasta identificar el requisito que falta.
 JCOP4 aún no está integrada en PKCS#11.
 RSA 3072 y modularidad para futuras generaciones siguen pendientes.

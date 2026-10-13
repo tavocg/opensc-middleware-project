@@ -34,7 +34,7 @@ if [[ ${JCOP4_PUBLIC_DISCOVERY_TRACE-unset} != unset ]]; then
     [[ ${LD_PRELOAD-unset} == unset &&
        ${LIBPCSCLITE_DELEGATE-} == "$FIXTURE_PROBE_ROOT/build/diagnostics/pcsc-public-observer.so" &&
        ${LIBPCSCLITE_SPY_DELEGATE-unset} == unset ]] || exit 96
-    printf 'format=public_discovery_headers_v2\n' > "$JCOP4_PUBLIC_DISCOVERY_TRACE"
+    printf 'format=public_discovery_headers_v3\n' > "$JCOP4_PUBLIC_DISCOVERY_TRACE"
     if [[ ${FIXTURE_OBSERVER_LIFECYCLE_ONLY:-0} == 1 ]]; then
         printf 'pcsc_call=SCardConnect\npcsc_result=2148532235\n' >> "$JCOP4_PUBLIC_DISCOVERY_TRACE"
     elif [[ ${FIXTURE_OBSERVER_NO_EVENTS:-0} == 0 ]]; then

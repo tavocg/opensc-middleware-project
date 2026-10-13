@@ -1,6 +1,25 @@
 # libjcop3p11: contexto para continuar
 
 **JCOP4, 13 de octubre de 2026:** último informe revisado
+`local/jcop4-idopte-discovery-fZcrQuOX/report.txt`, **14:57:38 UTC**, principal
+`7c046dc`, OpenSC `3dfef6704`, ambos Git limpios al comenzar. Contexto y
+conexión PC/SC 0. GET DATA **00 CA 01 00** y **00 CA 01 16** -> transporte
+0/SW 9000; SELECT **00 A4 00 00** -> 0/9000; siguiente SELECT **00 A4 02 00
+bloqueado antes de transmitir**. Segunda conexión 0, pero transporte sigue
+bloqueado. Módulo 1, slot vacío, events_recorded. No es un rechazo de tarjeta
+al último SELECT: no llegó a ella. No hubo PIN ni autenticación. La captura
+omite los datos, por lo que **no identifica el EF solicitado** ni el contenido
+de las respuestas. No permitir SELECT/lectura de cualquier archivo por inercia.
+Observador v3 preparado: añade exclusivamente blocked_select_ef=XXXX para
+un SELECT EF 00 A4 02 00 válido con Lc 2 y total 7/8 bytes, sin transmitirlo;
+formas distintas se marcan unsupported sin registrar payload/longitud. Es
+un identificador de archivo, no contenido ni credencial. Se mantienen todos
+los permisos de v2. Pasaron **12 comprobaciones del observador y 30 del
+lanzador**, con transporte ficticio; OpenSC sin cambios. Siguiente intervención:
+misma consulta pública Make, sin PIN, para identificar ese EF antes de decidir
+si pertenece a archivos públicos ya conocidos. No repetir firmas todavía.
+
+Informe anterior con el primer GET DATA bloqueado:
 `local/jcop4-idopte-discovery-aPCZL12P/report.txt`, **14:53:29 UTC**, principal
 `7f31abc`, OpenSC `3dfef6704`, ambos Git limpios al comenzar. El observador
 v2 funcionó: SCardEstablishContext y SCardConnect devuelven 0; primer intento
@@ -15,8 +34,8 @@ P1 01/P2 00, sin datos de entrada; respuestas no se registran. Los demás
 tags, casos con payload, otros canales, SM y autenticación siguen bloqueados.
 Pasaron **30 pruebas del lanzador y 11 del observador**, incluida la nueva
 consulta a través del redirector real con transporte ficticio. Pendiente una
-consulta pública actualizada con el mismo objetivo Make, sin PIN ni cambios
-del driver. No repetir firmas todavía.
+consulta pública realizada y revisada en fZcrQuOX; no repetir esa versión
+como primer paso. No hubo cambios del driver.
 
 Informe anterior del observador v1:
 `local/jcop4-idopte-discovery-y7dskS3z/report.txt`, **14:32:27 UTC**, principal
@@ -118,8 +137,13 @@ PC/SC de este proceso mediante LIBPCSCLITE_DELEGATE, sin LD_PRELOAD.
 Requiere libpcsclite_real.so.1 de pkg-config; no sustituye archivos del sistema.
 **Nunca usar con firmador/login/firma**. Registra nombres de tres funciones
 PC/SC (establecer contexto, conectar, reconectar) y resultados, con máximo
-128 registros de ciclo de vida. Además, cabeceras de cuatro bytes y transporte/SW, sin datos, tamaños,
-Lc/Le, PIN, hash ni respuestas completas. Bloquea antes del transporte todo
+128 registros de ciclo de vida. Además, cabeceras de cuatro bytes y transporte/SW,
+sin buffers de datos, tamaños, Lc/Le, PIN, hash ni respuestas completas.
+**Única excepción de datos de comando en formato
+v3:** identificador de dos bytes de un SELECT EF bloqueado, exclusivamente
+CLA 00/INS A4/P1 02/P2 00, Lc 2 y tamaño total 7/8; otras formas solo
+unsupported. No registra payloads arbitrarios ni cambia permisos por ese dato.
+Bloquea antes del transporte todo
 lo ajeno a la lista de descubrimiento: SELECT ISO limitado al MF/AID raíz/
 aplicación observados y archivos bootstrap públicos, CA 01 16 de versión,
 CA 01 00 de nombre de aplicación solo en canal básico y caso-2 corto,
@@ -163,13 +187,14 @@ La documentación pública NXP de ChipDoc 3.2 contempla PACE con PIN/CAN/MRZ
 y canales de confianza, sin resolver aún el requisito de la personalización CR.
 No copiar implementación privativa ni intentar autenticación administrativa.
 Las **35 comprobaciones del helper** pasaron en la preparación previa.
-Ahora pasaron **30 del lanzador** y **11 del observador**, incluyendo
+Ahora pasaron **30 del lanzador** y **12 del observador**, incluyendo
 bloqueo anterior a transporte, privacidad, reproducción de RTLD_NEXT local y
 delegación PC/SC real contra transporte falso. make test/pcsc-public-observer
 y test/iasecc incluyen este último conjunto.
 Biblioteca real compilada; no se cargó Idopte ni usó tarjeta por el agente.
 Sin cambios ni recompilación del driver OpenSC; delegación y primer bloqueo
-observados en hardware. Avanzar más allá de CA 01 00 sigue pendiente.
+observados en hardware. CA 01 00/01 16 y SELECT A4 00 00 ya dieron 9000;
+identificar el siguiente SELECT A4 02 00 sigue pendiente.
 Reconocimiento normal Idopte ya comprobado.
 
 Herramienta autenticada anterior, conservada para investigación futura:

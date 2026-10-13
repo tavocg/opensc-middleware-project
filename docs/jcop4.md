@@ -804,6 +804,53 @@ Revisar el SW de esta consulta y el siguiente bloqueo, si existe. No ampliar
 la lista por inercia ni volver al intento autenticado mientras VERIFY 6982
 siga sin explicación.
 
+## Identificación aceptada, SELECT EF bloqueado: 13 de octubre, 14:57:38 UTC
+
+Informe `local/jcop4-idopte-discovery-fZcrQuOX/report.txt`, principal
+`7c046dc`, OpenSC `3dfef6704`. Contexto y conexión PC/SC 0. Secuencia:
+
+| Cabecera | Transporte | SW / resultado |
+| --- | --- | --- |
+| 00 CA 01 00 | 0 | 9000 |
+| 00 CA 01 16 | 0 | 9000 |
+| 00 A4 00 00 | 0 | 9000 |
+| 00 A4 02 00 | No transmitido | Bloqueado por el observador |
+
+Segunda conexión 0, pero el guard sigue detenido. Módulo 1, slot vacío,
+observer_result=events_recorded. No hubo PIN, VERIFY ni firma. **Los 9000
+confirman aceptación de esas operaciones, no el contenido de las respuestas**:
+el observador las omite. Tampoco identifican cuál fue el archivo de la
+selección inicial, aunque fue uno de los permitidos por el guard.
+
+La nueva cabecera corresponde a selección de EF; no contiene el identificador
+del archivo. Buscar el comando en el código público y documentación disponible
+no permitió identificar su destino. No se habilita SELECT/READ arbitrario:
+podría tratarse de un fichero diferente de los bootstrap públicos.
+
+El formato **public_discovery_headers_v3** añade una única excepción a la
+omisión de campos de comando: `blocked_select_ef=XXXX`, identificador de dos
+bytes de **un SELECT ya bloqueado**. Solo se reconoce la forma exacta CLA 00,
+INS A4, P1 02, P2 00, Lc 2 y siete u ocho bytes totales. Forma distinta:
+`blocked_select_form=unsupported`, sin payload ni tamaño. No se registra
+contenido de archivo, datos de autenticación ni respuestas. No se transmite
+ese SELECT ni ningún fallback, y no se amplía la lista de permisos.
+
+Pasaron **12 comprobaciones del observador y 30 del lanzador**. La regresión
+nueva comprueba el FID sintético, bloqueo anterior al transporte y rechazo
+del READ posterior. Un SELECT con payload sintético de credencial se marca
+unsupported sin registrarlo. La integración con redirector PC/SC real también
+confirma SELECT/fallback bloqueados, contador del transporte ficticio cero y
+únicamente FID en el log privado. OpenSC sin cambios ni recompilación.
+
+Siguiente intervención, otros clientes cerrados y la misma JCOP4 insertada:
+
+```bash
+make inspect/jcop4-idopte-discovery READER=0
+```
+
+No solicita PIN. Revisar el FID/forma del SELECT bloqueado antes de permitir
+otra consulta; conservar el fallo como evidencia de los límites del observador.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño
