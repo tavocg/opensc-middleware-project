@@ -654,7 +654,7 @@ contador exacto o una firma con Idopte. La confirmación de uso previo de esta
 JCOP4 con Idopte solicitada al usuario continúa pendiente. No repetir la
 consulta normal como primer paso ni atribuir 6982 a un cambio de PIN sin evidencia.
 
-## Descubrimiento público observado, pendiente
+## Primera versión del observador público (v1, sustituida)
 
 Preparado `tools/pcsc-public-observer.c`, precarga PC/SC para **este único
 diagnóstico sin login**, sin modificar OpenSC ni Idopte. Objetivo: identificar
@@ -699,6 +699,60 @@ limpieza/fallback sin transmisión, controles del lector, límites/errores y
 precarga ELF real contra transporte falso. Biblioteca real compilada, sin
 Idopte ni PC/SC real en pruebas. Repetibles con `make test/pcsc-public-observer`
 e incluidas en `test/iasecc`; no se repitió la suite completa JCOP3.
+
+## Sin eventos observados: 13 de octubre, 14:32:27 UTC
+
+Informe `local/jcop4-idopte-discovery-y7dskS3z/report.txt`, principal
+`fbf3434`, OpenSC `3dfef6704`. Inventario y ATR correctos, compilación del
+observador 0. Idopte mostró slot vacío y terminó 1. El archivo de cabeceras
+solo contiene el marcador de formato v1: **no registró transmisión, control
+ni bloqueo**. No hay respuesta APDU para interpretar. No demuestra que la
+tarjeta rechazara un comando ni que el módulo no transmitiera por otra ruta.
+
+La investigación local reprodujo una limitación de la implementación v1:
+una biblioteca precargada puede interceptar la llamada de un plugin
+RTLD_LOCAL sin encontrar su transporte mediante RTLD_NEXT. Esa reproducción
+registra una cabecera, pero no llega al transporte falso; por tanto, **no
+explica por sí sola la ausencia total de eventos del informe real**.
+
+OpenSC carga módulos PKCS#11 con RTLD_LOCAL en src/common/libscdl.c;
+OPENSC_DEEPBIND puede modificar esa búsqueda. El lanzador v2 elimina también
+esta variable externa para mantener el diagnóstico reproducible.
+
+La versión v2 usa la [delegación oficial de pcsc-lite](https://pcsclite.apdu.fr/api/libredirect_8c_source.html):
+`LIBPCSCLITE_DELEGATE` apunta al observador únicamente en el proceso público
+de Idopte. El observador depende explícitamente de `libpcsclite_real.so.1`
+del libdir de pkg-config, que proporciona las demás funciones PC/SC y el
+transporte siguiente. El compilador conserva esa dependencia y su ruta;
+si no existe la biblioteca real, se detiene antes de ejecutar Idopte.
+No hay sustitución de bibliotecas del sistema ni LD_PRELOAD en el diagnóstico.
+
+Conserva la misma lista limitada de APDU y bloqueos de autenticación/firma,
+añadiendo bloqueo de SCardSetAttrib. Registra únicamente nombre/resultado de
+SCardEstablishContext, SCardConnect y SCardReconnect, con límite de 128 eventos;
+no nombres de lector, handles, ATR, datos, longitudes ni respuestas completas.
+Conexión/reconexión eliminan permisos de lectura/GET RESPONSE anteriores.
+Si solo se observan estas funciones, el informe dice pcsc_lifecycle_only y
+termina 1; sin eventos, no_pcsc_event_observed. Ambos conservan el log y el
+estado real de Idopte sin anunciar observación APDU ni reintentar.
+
+Pasaron **30 comprobaciones del lanzador y 10 del observador**. La nueva
+regresión carga un plugin local a través del redirector PC/SC real, pero
+delega exclusivamente a una biblioteca ficticia, sin daemon/tarjeta/Idopte.
+Comprueba scopes local/global, conexión fallida, dependencia resoluble,
+omisión de datos privados y bloqueo de VERIFY, controles y atributos antes
+del transporte. También conserva la reproducción del defecto anterior.
+Se compiló el observador real; no se modificó ni recompiló OpenSC.
+
+Siguiente intervención, misma JCOP4 y otros clientes cerrados:
+
+```bash
+make inspect/jcop4-idopte-discovery READER=0
+```
+
+No solicita PIN. Revisar los resultados de conexión y el primer bloqueo
+antes de ampliar consultas. Una captura estándar con pcsc-spy durante firma
+podría registrar el PIN; este observador todavía no admite sesiones autenticadas.
 
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 

@@ -53,8 +53,22 @@ y flags anunciados del token. Detalles en [jcop4.md](jcop4.md).
 público bajo un observador de cabeceras PC/SC. Bloquea comandos fuera de una
 lista pública acotada; puede causar un error deliberado del módulo. No captura
 datos ni permite VERIFY, login/firma o controles del lector. Usar exclusivamente
-ese objetivo; no precargarlo en firmador. El diagnóstico normal ya confirmó
+ese objetivo; no activarlo en firmador. El diagnóstico usa la delegación
+`LIBPCSCLITE_DELEGATE`, con dependencia explícita del transporte
+`libpcsclite_real.so.1`, sin instalar ni sustituir bibliotecas. Descarta
+variables de precarga/delegación externas y conserva únicamente cabeceras,
+estados y resultados de conexión. La primera versión con LD_PRELOAD no
+observó eventos en y7dskS3z; eso no acredita un fallo de la tarjeta. El
+diagnóstico normal ya confirmó
 NXP/ChipDoc v3.2 y PIN inicializado en la JCOP4 (13 de octubre, 14:17:31 UTC).
+
+`pcsc-spy` estándar registra los buffers transmitidos, que pueden incluir el
+PIN durante autenticación. No usarlo con el PIN real ni considerar un filtro
+de pantalla o una anonimización posterior equivalente a descartarlo antes
+del registro. El observador público actual **bloquea**, no permite estudiar
+una firma autenticada. Esa instrumentación requerirá otro diseño y pruebas.
+Referencias del proyecto PC/SC: [advertencia sobre el PIN](https://pcsclite.apdu.fr/)
+y [delegación de bibliotecas](https://pcsclite.apdu.fr/api/libredirect_8c_source.html).
 
 No se ha capturado una firma ni una sesión autenticada de Idopte. OpenSC ya
 enumera los objetos y produjo una firma RSA SHA-256 verificada con OpenSSL.

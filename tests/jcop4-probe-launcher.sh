@@ -27,14 +27,21 @@ set -euo pipefail
 [[ $# == 4 && $1 == --module && $2 == "$FIXTURE_PROBE_ROOT/fixture-idopte.so" &&
    $3 == --show-info && $4 == --list-slots ]] || exit 97
 [[ ${OPENSC_DEBUG-} == 0 && ${OPENSC_API_TRACE_FILE-unset} == unset &&
-   ${OPENSC_DEBUG_FILE-unset} == unset && $(stat -c %a "$OPENSC_CONF") == 600 ]] || exit 98
+   ${OPENSC_DEBUG_FILE-unset} == unset && ${OPENSC_DEEPBIND-unset} == unset &&
+   $(stat -c %a "$OPENSC_CONF") == 600 ]] || exit 98
 if IFS= read -r task_input; then exit 99; fi
 if [[ ${JCOP4_PUBLIC_DISCOVERY_TRACE-unset} != unset ]]; then
-    [[ ${LD_PRELOAD-} == "$FIXTURE_PROBE_ROOT/build/diagnostics/pcsc-public-observer.so" ]] || exit 96
-    printf 'format=public_discovery_headers_v1\n' > "$JCOP4_PUBLIC_DISCOVERY_TRACE"
-    if [[ ${FIXTURE_OBSERVER_NO_EVENTS:-0} == 0 ]]; then
+    [[ ${LD_PRELOAD-unset} == unset &&
+       ${LIBPCSCLITE_DELEGATE-} == "$FIXTURE_PROBE_ROOT/build/diagnostics/pcsc-public-observer.so" &&
+       ${LIBPCSCLITE_SPY_DELEGATE-unset} == unset ]] || exit 96
+    printf 'format=public_discovery_headers_v2\n' > "$JCOP4_PUBLIC_DISCOVERY_TRACE"
+    if [[ ${FIXTURE_OBSERVER_LIFECYCLE_ONLY:-0} == 1 ]]; then
+        printf 'pcsc_call=SCardConnect\npcsc_result=2148532235\n' >> "$JCOP4_PUBLIC_DISCOVERY_TRACE"
+    elif [[ ${FIXTURE_OBSERVER_NO_EVENTS:-0} == 0 ]]; then
         printf 'public_header=00A40400\nsw=9000\nblocked_header=00CA0100\n' >> "$JCOP4_PUBLIC_DISCOVERY_TRACE"
     fi
+else
+    [[ ${LIBPCSCLITE_DELEGATE-unset} == unset && ${LIBPCSCLITE_SPY_DELEGATE-unset} == unset ]] || exit 96
 fi
 printf '%s\n' "$*" > "$FIXTURE_PROBE_ROOT/idopte-called"
 printf 'Idopte fixture\n  token flags: PIN initialized\n'
@@ -82,6 +89,9 @@ case "$*" in
     *) exit 92 ;;
 esac
 [[ ${OPENSC_DEBUG-} == 0 && ${OPENSC_DEBUG_FILE-unset} == unset &&
+   ${OPENSC_DEEPBIND-unset} == unset &&
+   ${LD_PRELOAD-unset} == unset && ${LIBPCSCLITE_DELEGATE-unset} == unset &&
+   ${LIBPCSCLITE_SPY_DELEGATE-unset} == unset &&
    ${OPENSC_API_TRACE_FILE-unset} == unset &&
    ${OPENSC_JCOP3_SESSION_STATE-unset} == unset &&
    ${OPENSC_JCOP3_PIN_STATUS_IN_PLACE-unset} == unset &&
@@ -117,6 +127,8 @@ chmod +x "$task_tmp/bin/git" "$task_tmp/build/opensc/src/tools/opensc-tool"
 export PATH="$task_tmp/bin:$PATH" FIXTURE_PROBE_ROOT="$task_tmp" READER=2
 export OPENSC_DEBUG=99 OPENSC_DEBUG_FILE=/should/not/be/used
 export OPENSC_CONF=/should/not/be/used OPENSC_API_TRACE_FILE=/should/not/be/used
+export OPENSC_DEEPBIND=1
+export LIBPCSCLITE_DELEGATE=/should/not/be/used LIBPCSCLITE_SPY_DELEGATE=/should/not/be/used
 export OPENSC_JCOP3_SESSION_STATE=yes OPENSC_JCOP3_PIN_STATUS_IN_PLACE=yes
 export OPENSC_JCOP3_POST_LOGIN_STATUS=yes OPENSC_JCOP3_POST_LOGIN_SELECT=yes
 task_run() {
@@ -279,6 +291,15 @@ task_run 1 2 --idopte-discovery
 [[ $(< "$task_tmp/output.txt") == *'No se observaron llamadas PC/SC'* ]]
 printf 'PASS JCOP4 discovery reports absent interposition events instead of claiming success\n'
 unset FIXTURE_OBSERVER_NO_EVENTS
+export FIXTURE_OBSERVER_LIFECYCLE_ONLY=1
+task_run 1 2 --idopte-discovery
+[[ $(< "$task_tmp/output.txt") == *'Se observaron conexiones PC/SC, pero no APDU'* ]]
+task_lifecycle_report=$(sed -n 's/^Informe: //p' "$task_tmp/output.txt")
+[[ $(< "$task_lifecycle_report") == *'observer_result=pcsc_lifecycle_only'* &&
+   $(< "$task_lifecycle_report") == *'pcsc_call=SCardConnect'* &&
+   $(< "$task_lifecycle_report") == *'module_exit_status=0'* ]]
+printf 'PASS JCOP4 discovery preserves lifecycle failures without claiming APDU observation or falling back\n'
+unset FIXTURE_OBSERVER_LIFECYCLE_ONLY
 export FIXTURE_OBSERVER_BUILD_EXIT=19
 task_run 19 2 --idopte-discovery
 [[ ! -e $task_tmp/idopte-called && $(wc -l < "$task_tmp/called") == 3 ]]

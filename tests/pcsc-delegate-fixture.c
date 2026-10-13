@@ -1,0 +1,65 @@
+/* Synthetic PC/SC implementation for ELF/delegate tests. No daemon or card. */
+#include <assert.h>
+#include <stdlib.h>
+#include <string.h>
+#include <winscard.h>
+
+static int calls;
+int fixture_count(void) { return calls; }
+
+LONG SCardEstablishContext(DWORD scope, const void *r1, const void *r2, SCARDCONTEXT *context)
+{
+	assert(scope == SCARD_SCOPE_USER && !r1 && !r2);
+	*context = 17;
+	return SCARD_S_SUCCESS;
+}
+LONG SCardConnect(SCARDCONTEXT context, const char *reader, DWORD share,
+		DWORD protocols, SCARDHANDLE *card, DWORD *protocol)
+{
+	assert(context == 17 && share == SCARD_SHARE_SHARED && protocols == SCARD_PROTOCOL_T1);
+	if (!strcmp(reader, "PRIVATE_READER_CONNECT_FAILURE"))
+		return SCARD_E_SHARING_VIOLATION;
+	assert(!strcmp(reader, "PRIVATE_READER"));
+	*card = 7; *protocol = SCARD_PROTOCOL_T1;
+	return SCARD_S_SUCCESS;
+}
+LONG SCardReconnect(SCARDHANDLE card, DWORD share, DWORD protocols, DWORD action, DWORD *protocol)
+{
+	assert(card == 7 && share == SCARD_SHARE_SHARED && protocols == SCARD_PROTOCOL_T1 && action == SCARD_LEAVE_CARD);
+	*protocol = SCARD_PROTOCOL_T1;
+	return SCARD_S_SUCCESS;
+}
+LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *pci,
+		const unsigned char *cmd, DWORD size, SCARD_IO_REQUEST *rpci,
+		unsigned char *response, DWORD *len)
+{
+	(void)pci; (void)rpci;
+	/* Any leaked authentication or other command fails the fixture immediately. */
+	assert(card == 7 && size == 5 && cmd[0] == 0 && cmd[1] == 0xCA && cmd[2] == 1 && cmd[3] == 0x16);
+	assert(*len >= 18);
+	calls++;
+	memcpy(response, "PRIVATE_RESPONSE", 16);
+	response[16] = 0x90; response[17] = 0; *len = 18;
+	return SCARD_S_SUCCESS;
+}
+
+/* pcsc-lite resolves its full API when establishing a context. These symbols
+ * must exist, but this test must never invoke them or reach a real PC/SC API. */
+#define U __attribute__((unused))
+#define UNEXPECTED(name, args) LONG name args { abort(); }
+UNEXPECTED(SCardReleaseContext, (SCARDCONTEXT context U))
+UNEXPECTED(SCardIsValidContext, (SCARDCONTEXT context U))
+UNEXPECTED(SCardDisconnect, (SCARDHANDLE card U, DWORD action U))
+UNEXPECTED(SCardBeginTransaction, (SCARDHANDLE card U))
+UNEXPECTED(SCardEndTransaction, (SCARDHANDLE card U, DWORD action U))
+UNEXPECTED(SCardStatus, (SCARDHANDLE card U, char *reader U, DWORD *size U, DWORD *state U,
+		DWORD *protocol U, unsigned char *atr U, DWORD *atr_size U))
+UNEXPECTED(SCardGetStatusChange, (SCARDCONTEXT context U, DWORD timeout U, SCARD_READERSTATE *states U, DWORD count U))
+UNEXPECTED(SCardControl, (SCARDHANDLE card U, DWORD code U, const void *send U,
+		DWORD size U, void *receive U, DWORD capacity U, DWORD *returned U))
+UNEXPECTED(SCardListReaderGroups, (SCARDCONTEXT context U, char *groups U, DWORD *size U))
+UNEXPECTED(SCardListReaders, (SCARDCONTEXT context U, const char *groups U, char *readers U, DWORD *size U))
+UNEXPECTED(SCardFreeMemory, (SCARDCONTEXT context U, const void *data U))
+UNEXPECTED(SCardCancel, (SCARDCONTEXT context U))
+UNEXPECTED(SCardGetAttrib, (SCARDHANDLE card U, DWORD attribute U, unsigned char *data U, DWORD *size U))
+UNEXPECTED(SCardSetAttrib, (SCARDHANDLE card U, DWORD attribute U, const unsigned char *data U, DWORD size U))

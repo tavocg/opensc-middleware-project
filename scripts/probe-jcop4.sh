@@ -77,7 +77,8 @@ task_record_tool() {
     printf '\n$ %q' "${task_binary##*/}" >> "$task_report"
     printf ' %q' "$@" >> "$task_report"
     printf '\n' >> "$task_report"
-    env -u OPENSC_API_TRACE_FILE -u OPENSC_DEBUG_FILE -u LD_PRELOAD -u JCOP4_PUBLIC_DISCOVERY_TRACE \
+    env -u OPENSC_API_TRACE_FILE -u OPENSC_DEBUG_FILE -u OPENSC_DEEPBIND -u LD_PRELOAD -u JCOP4_PUBLIC_DISCOVERY_TRACE \
+        -u LIBPCSCLITE_DELEGATE -u LIBPCSCLITE_SPY_DELEGATE \
         -u OPENSC_JCOP3_SESSION_STATE -u OPENSC_JCOP3_PIN_STATUS_IN_PLACE \
         -u OPENSC_JCOP3_POST_LOGIN_STATUS -u OPENSC_JCOP3_POST_LOGIN_SELECT \
         OPENSC_DEBUG=0 OPENSC_CONF="$task_config" "${task_command_env[@]}" \
@@ -133,26 +134,35 @@ if [[ $task_mode == --idopte || $task_mode == --idopte-discovery ]]; then
             exit "$task_build_status"
         fi
         task_trace="$task_dir/public-headers.txt"
-        task_command_env=("LD_PRELOAD=$task_root/build/diagnostics/pcsc-public-observer.so" "JCOP4_PUBLIC_DISCOVERY_TRACE=$task_trace")
+        task_command_env=("LIBPCSCLITE_DELEGATE=$task_root/build/diagnostics/pcsc-public-observer.so" "JCOP4_PUBLIC_DISCOVERY_TRACE=$task_trace")
         task_allow_diagnostic_failure=yes
         task_status=0
         task_record_tool "$task_pkcs11_tool" --module "$task_idopte_module" --show-info --list-slots || task_status=$?
         task_events_observed=no
+        task_lifecycle_observed=no
         if [[ -f $task_trace ]]; then
             while IFS= read -r task_line; do
                 case $task_line in
                     public_header=*|blocked_header=*|blocked=*) task_events_observed=yes ;;
+                    pcsc_call=*) task_lifecycle_observed=yes ;;
                 esac
             done < "$task_trace"
         fi
-        if [[ $task_events_observed != yes ]]; then
+        if [[ -f $task_trace ]]; then
+            printf '\nobserver_headers:\n' >> "$task_report"
+            cat "$task_trace" >> "$task_report"
+        fi
+        printf 'module_exit_status=%s\n' "$task_status" >> "$task_report"
+        if [[ $task_events_observed != yes && $task_lifecycle_observed == yes ]]; then
+            printf 'observer_result=pcsc_lifecycle_only\n' >> "$task_report"
+            printf 'Se observaron conexiones PC/SC, pero no APDU ni controles; revisar sus resultados en el informe.\n' >&2
+            exit 1
+        elif [[ $task_events_observed != yes ]]; then
             printf 'observer_result=no_pcsc_event_observed\n' >> "$task_report"
             printf 'No se observaron llamadas PC/SC; revisar el informe.\n' >&2
             exit 1
         fi
-        printf '\nobserver_headers:\n' >> "$task_report"
-        cat "$task_trace" >> "$task_report"
-        printf 'observer_result=events_recorded\nmodule_exit_status=%s\n' "$task_status" >> "$task_report"
+        printf 'observer_result=events_recorded\n' >> "$task_report"
         printf 'Descubrimiento público observado. El guard puede bloquear comandos y provocar error de Idopte; revisar el informe antes de continuar.\n'
         exit "$task_status"
     fi

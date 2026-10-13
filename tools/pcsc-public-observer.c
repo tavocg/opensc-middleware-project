@@ -11,6 +11,7 @@
 
 static int trace_fd = -1, stopped, selected_public_file, handle_set, pending_response;
 static unsigned int events;
+static unsigned int lifecycle_events;
 static SCARDHANDLE trace_handle;
 static pthread_mutex_t trace_mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -20,7 +21,56 @@ __attribute__((constructor)) static void observer_init(void)
 	if (path)
 		trace_fd = open(path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
 	if (trace_fd >= 0)
-		dprintf(trace_fd, "format=public_discovery_headers_v1\n");
+		dprintf(trace_fd, "format=public_discovery_headers_v2\n");
+}
+
+/* Dependency lookup works when this library is loaded as a PC/SC delegate.
+ * Do not log reader names, handles, ATRs, input buffers or returned data. */
+static void log_lifecycle(const char *name, LONG rv)
+{
+	pthread_mutex_lock(&trace_mutex);
+	if (trace_fd >= 0 && lifecycle_events++ < 128)
+		dprintf(trace_fd, "pcsc_call=%s\npcsc_result=%ld\n", name, (long)rv);
+	pthread_mutex_unlock(&trace_mutex);
+}
+
+static void drop_card_context(void)
+{
+	pthread_mutex_lock(&trace_mutex);
+	selected_public_file = pending_response = 0;
+	pthread_mutex_unlock(&trace_mutex);
+}
+
+LONG SCardEstablishContext(DWORD scope, const void *reserved1, const void *reserved2,
+		SCARDCONTEXT *context)
+{
+	typedef LONG (*fn)(DWORD, const void *, const void *, SCARDCONTEXT *);
+	fn real = (fn)dlsym(RTLD_NEXT, "SCardEstablishContext");
+	LONG rv = real ? real(scope, reserved1, reserved2, context) : SCARD_F_INTERNAL_ERROR;
+	log_lifecycle("SCardEstablishContext", rv);
+	return rv;
+}
+
+LONG SCardConnect(SCARDCONTEXT context, const char *reader, DWORD share,
+		DWORD protocols, SCARDHANDLE *card, DWORD *protocol)
+{
+	typedef LONG (*fn)(SCARDCONTEXT, const char *, DWORD, DWORD, SCARDHANDLE *, DWORD *);
+	fn real = (fn)dlsym(RTLD_NEXT, "SCardConnect");
+	drop_card_context();
+	LONG rv = real ? real(context, reader, share, protocols, card, protocol) : SCARD_F_INTERNAL_ERROR;
+	log_lifecycle("SCardConnect", rv);
+	return rv;
+}
+
+LONG SCardReconnect(SCARDHANDLE card, DWORD share, DWORD protocols, DWORD action,
+		DWORD *protocol)
+{
+	typedef LONG (*fn)(SCARDHANDLE, DWORD, DWORD, DWORD, DWORD *);
+	fn real = (fn)dlsym(RTLD_NEXT, "SCardReconnect");
+	drop_card_context();
+	LONG rv = real ? real(card, share, protocols, action, protocol) : SCARD_F_INTERNAL_ERROR;
+	log_lifecycle("SCardReconnect", rv);
+	return rv;
 }
 
 static int public_file(unsigned int fid)
@@ -137,6 +187,17 @@ LONG SCardControl(SCARDHANDLE card, DWORD code, const void *send, DWORD send_len
 		dprintf(trace_fd, "blocked=reader_control\n");
 	stopped = 1;
 	if (returned) *returned = 0;
+	pthread_mutex_unlock(&trace_mutex);
+	return SCARD_E_UNSUPPORTED_FEATURE;
+}
+
+LONG SCardSetAttrib(SCARDHANDLE card, DWORD attribute, const unsigned char *data, DWORD len)
+{
+	(void)card; (void)attribute; (void)data; (void)len;
+	pthread_mutex_lock(&trace_mutex);
+	if (trace_fd >= 0 && !stopped)
+		dprintf(trace_fd, "blocked=reader_attribute\n");
+	stopped = 1;
 	pthread_mutex_unlock(&trace_mutex);
 	return SCARD_E_UNSUPPORTED_FEATURE;
 }

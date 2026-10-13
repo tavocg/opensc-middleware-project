@@ -66,8 +66,11 @@ Cerrar firmador y otros clientes y mantener esta JCOP4 insertada. Compila
 solo un observador y consulta información de módulo/slots/tokens, sin login
 ni PIN. El observador guarda cabeceras/estados y bloquea comandos ajenos al
 descubrimiento permitido; **Idopte puede fallar por ese bloqueo**. No usar
-el observador para firmar. Informes privados en `local/jcop4-idopte-discovery-*/`.
-Pasaron 29 comprobaciones del lanzador y siete del observador sin tarjeta.
+el observador para firmar. Usa `LIBPCSCLITE_DELEGATE`, sin precarga ni cambios
+al sistema, y registra resultados de conexión además de cabeceras APDU.
+La versión anterior no observó eventos; su resultado no permite concluir
+un rechazo de la tarjeta. Informes privados en `local/jcop4-idopte-discovery-*/`.
+Pasaron 30 comprobaciones del lanzador y diez del observador sin tarjeta.
 No repetir el intento de PIN hasta identificar el requisito que falta.
 JCOP4 aún no está integrada en PKCS#11.
 RSA 3072 y modularidad para futuras generaciones siguen pendientes.

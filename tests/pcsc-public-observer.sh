@@ -54,3 +54,112 @@ task_headers=$(< "$task_tmp/headers.txt")
    $task_headers == *'public_header=00CA0116'* && $task_headers == *'blocked_header=00200001'* &&
    $task_headers != *'length'* && $task_headers != *'data='* ]]
 printf 'PASS public observer interposes the real dynamic call and prevents VERIFY from reaching a fake transport\n'
+
+# Match Idopte's loading boundary: a client dlopens a plugin with RTLD_LOCAL.
+# First reproduce the old RTLD_NEXT failure, then exercise the actual pcsc-lite
+# redirector with an observer delegate whose ONLY transport is our fake library.
+cat > "$task_tmp/plugin.c" <<'PLUGIN'
+#include <assert.h>
+#include <winscard.h>
+int run_fixture(int mode)
+{
+    const unsigned char version[] = { 0, 0xCA, 1, 0x16, 6 };
+    const unsigned char pin[] = { 0, 0x20, 0, 1, 10, 'S','E','C','R','E','T','_','P','I','N' };
+    unsigned char response[64]; DWORD len = sizeof(response), protocol;
+    SCARDCONTEXT context; SCARDHANDLE card;
+    assert(SCardEstablishContext(SCARD_SCOPE_USER, 0, 0, &context) == 0);
+    LONG rv = SCardConnect(context, mode == 1 ? "PRIVATE_READER_CONNECT_FAILURE" : "PRIVATE_READER",
+            SCARD_SHARE_SHARED, SCARD_PROTOCOL_T1, &card, &protocol);
+    if (mode == 1) { assert(rv == SCARD_E_SHARING_VIOLATION); return 0; }
+    assert(rv == 0 && protocol == SCARD_PROTOCOL_T1);
+    assert(SCardReconnect(card, SCARD_SHARE_SHARED, SCARD_PROTOCOL_T1, SCARD_LEAVE_CARD, &protocol) == 0);
+    if (mode == 3) {
+        assert(SCardControl(card, 0, pin, sizeof(pin), response, sizeof(response), &len) != 0);
+        return 0;
+    }
+    if (mode == 4) {
+        assert(SCardSetAttrib(card, 0, pin, sizeof(pin)) != 0);
+        return 0;
+    }
+    rv = SCardTransmit(card, 0, version, sizeof(version), 0, response, &len);
+    if (mode == 2 || mode == 6) { assert(rv != 0); return 0; }
+    assert(rv == 0);
+    len = sizeof(response);
+    assert(SCardTransmit(card, 0, pin, sizeof(pin), 0, response, &len) != 0 && len == 0);
+    len = sizeof(response);
+    assert(SCardTransmit(card, 0, version, sizeof(version), 0, response, &len) != 0);
+    return 0;
+}
+PLUGIN
+cat > "$task_tmp/local-client.c" <<'LOCAL'
+#include <assert.h>
+#include <dlfcn.h>
+#include <stdlib.h>
+int main(int argc, char **argv)
+{
+    assert(argc == 4);
+    int mode = atoi(argv[3]);
+    void *plugin = dlopen(argv[1], RTLD_NOW | RTLD_LOCAL);
+    assert(plugin);
+    int (*run)(int) = (int (*)(int))dlsym(plugin, "run_fixture");
+    assert(run && run(mode) == 0);
+    void *core = dlopen(argv[2], RTLD_NOW | RTLD_LOCAL);
+    assert(core);
+    int (*count)(void) = (int (*)(void))dlsym(core, "fixture_count");
+    assert(count && count() == (mode == 0 ? 1 : 0));
+    return 0;
+}
+LOCAL
+"${CC:-cc}" -std=c99 -Wall -Wextra -Werror -fPIC -shared "${task_pcsc_cflags[@]}" \
+    "$task_root/tests/pcsc-delegate-fixture.c" -Wl,-soname,libfakepcsc.so -o "$task_tmp/libfakepcsc.so"
+"${CC:-cc}" -std=c99 -Wall -Wextra -Werror "$task_tmp/local-client.c" -ldl -o "$task_tmp/local-client"
+"${CC:-cc}" -std=c99 -Wall -Wextra -Werror -fPIC -shared "${task_pcsc_cflags[@]}" \
+    "$task_tmp/plugin.c" -L"$task_tmp" -Wl,-rpath,"$task_tmp" -lfakepcsc -o "$task_tmp/direct-plugin.so"
+# Compile the original guard shape without a transport dependency. Only APDU
+# and control wrappers are preloaded; lifecycle APIs stay in the local plugin.
+sed '/^static void log_lifecycle(/,/^static int public_file(/ { /^static int public_file(/!d; }' \
+    "$task_root/tools/pcsc-public-observer.c" > "$task_tmp/preload-v1.c"
+"${CC:-cc}" -std=c99 -Wall -Wextra -Werror -Wno-unused-variable -fPIC -shared "${task_pcsc_cflags[@]}" \
+    "$task_tmp/preload-v1.c" -ldl -pthread -o "$task_tmp/preload-v1.so"
+env -u LIBPCSCLITE_DELEGATE -u LIBPCSCLITE_SPY_DELEGATE \
+    LD_PRELOAD="$task_tmp/preload-v1.so" JCOP4_PUBLIC_DISCOVERY_TRACE="$task_tmp/scope.txt" \
+    "$task_tmp/local-client" "$task_tmp/direct-plugin.so" "$task_tmp/libfakepcsc.so" 2
+task_headers=$(< "$task_tmp/scope.txt")
+[[ $task_headers == *'public_header=00CA0116'* && $task_headers != *'transport='* ]]
+printf 'PASS reproduces missing RTLD_NEXT transport when the original preload observes a locally loaded plugin\n'
+
+task_pcsc_libdir=$(pkg-config --variable=libdir libpcsclite)
+"${CC:-cc}" -std=c99 -Wall -Wextra -Werror -fPIC -shared "${task_pcsc_cflags[@]}" \
+    "$task_root/tools/pcsc-public-observer.c" -ldl -pthread \
+    -Wl,--no-as-needed "$task_tmp/libfakepcsc.so" -Wl,--as-needed -Wl,-rpath,"$task_tmp" \
+    -o "$task_tmp/delegate.so"
+"${CC:-cc}" -std=c99 -Wall -Wextra -Werror -fPIC -shared "${task_pcsc_cflags[@]}" \
+    "$task_tmp/plugin.c" -L"$task_pcsc_libdir" -Wl,-rpath,"$task_pcsc_libdir" \
+    -lpcsclite -o "$task_tmp/redirect-plugin.so"
+for task_mode in 0 1 3 4; do
+    env -u LD_PRELOAD -u LIBPCSCLITE_SPY_DELEGATE \
+        LIBPCSCLITE_DELEGATE="$task_tmp/delegate.so" JCOP4_PUBLIC_DISCOVERY_TRACE="$task_tmp/delegate-$task_mode.txt" \
+        "$task_tmp/local-client" "$task_tmp/redirect-plugin.so" "$task_tmp/libfakepcsc.so" "$task_mode"
+    task_headers=$(< "$task_tmp/delegate-$task_mode.txt")
+    [[ $(stat -c %a "$task_tmp/delegate-$task_mode.txt") == 600 &&
+       $task_headers == *'pcsc_call=SCardEstablishContext'* && $task_headers == *'pcsc_call=SCardConnect'* &&
+       $task_headers != *'PRIVATE_'* && $task_headers != *'SECRET_PIN'* &&
+       $task_headers != *'length'* && $task_headers != *'data='* ]]
+done
+[[ $(< "$task_tmp/delegate-0.txt") == *'public_header=00CA0116'* &&
+   $(< "$task_tmp/delegate-0.txt") == *'sw=9000'* &&
+   $(< "$task_tmp/delegate-0.txt") == *'blocked_header=00200001'* &&
+   $(< "$task_tmp/delegate-1.txt") != *'public_header='* &&
+   $(< "$task_tmp/delegate-3.txt") == *'blocked=reader_control'* &&
+   $(< "$task_tmp/delegate-4.txt") == *'blocked=reader_attribute'* ]]
+env -u LD_PRELOAD -u JCOP4_PUBLIC_DISCOVERY_TRACE -u LIBPCSCLITE_SPY_DELEGATE \
+    LIBPCSCLITE_DELEGATE="$task_tmp/delegate.so" \
+    "$task_tmp/local-client" "$task_tmp/redirect-plugin.so" "$task_tmp/libfakepcsc.so" 6
+# pkcs11-tool can also have the redirector in the executable's global scope.
+"${CC:-cc}" -std=c99 -Wall -Wextra -Werror "$task_tmp/local-client.c" -ldl \
+    -L"$task_pcsc_libdir" -Wl,-rpath,"$task_pcsc_libdir" -Wl,--no-as-needed -lpcsclite \
+    -o "$task_tmp/global-client"
+env -u LD_PRELOAD -u LIBPCSCLITE_SPY_DELEGATE \
+    LIBPCSCLITE_DELEGATE="$task_tmp/delegate.so" JCOP4_PUBLIC_DISCOVERY_TRACE="$task_tmp/global.txt" \
+    "$task_tmp/global-client" "$task_tmp/redirect-plugin.so" "$task_tmp/libfakepcsc.so" 0
+printf 'PASS actual PC/SC delegation handles local plugins, records connection failures privately and blocks VERIFY, controls and attributes before fake transport\n'

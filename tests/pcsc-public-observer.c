@@ -17,10 +17,19 @@ static LONG fixture_transmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
 	*response_len = 18;
 	return SCARD_S_SUCCESS;
 }
+static LONG fixture_reconnect(SCARDHANDLE card, DWORD share, DWORD protocols,
+		DWORD action, DWORD *protocol)
+{
+	assert(card == 7 && share == SCARD_SHARE_SHARED && protocols == SCARD_PROTOCOL_T1 && action == SCARD_RESET_CARD);
+	*protocol = SCARD_PROTOCOL_T1;
+	return SCARD_S_SUCCESS;
+}
 void *fixture_dlsym(void *handle, const char *name)
 {
-	assert(handle == RTLD_NEXT && !strcmp(name, "SCardTransmit"));
-	return (void *)fixture_transmit;
+	assert(handle == RTLD_NEXT);
+	if (!strcmp(name, "SCardTransmit")) return (void *)fixture_transmit;
+	assert(!strcmp(name, "SCardReconnect"));
+	return (void *)fixture_reconnect;
 }
 
 static FILE *fixture_reset(void)
@@ -28,7 +37,7 @@ static FILE *fixture_reset(void)
 	FILE *file = tmpfile();
 	assert(file);
 	trace_fd = fileno(file);
-	stopped = selected_public_file = handle_set = pending_response = calls = events = 0;
+	stopped = selected_public_file = handle_set = pending_response = calls = events = lifecycle_events = 0;
 	fixture_sw = 0x9000;
 	return file;
 }
@@ -96,12 +105,26 @@ int main(void)
 	assert(send_command(get_response, sizeof(get_response)) == 0 && calls == 2 && !pending_response);
 	check_private(file);
 	puts("PASS public observer permits GET RESPONSE only after a permitted command returned 61xx");
+	file = fixture_reset();
+	assert(send_command(select, sizeof(select)) == 0);
+	pending_response = 1;
+	{
+		DWORD protocol;
+		assert(SCardReconnect(7, SCARD_SHARE_SHARED, SCARD_PROTOCOL_T1, SCARD_RESET_CARD, &protocol) == 0);
+	}
+	assert(!selected_public_file && !pending_response);
+	assert(send_command(read, sizeof(read)) != 0 && calls == 1);
+	check_private(file);
+	puts("PASS reconnect drops file and pending-response permissions before later reads");
 	file = fixture_reset(); fixture_sw = 0x6982;
 	assert(send_command(version, sizeof(version)) == 0 && stopped && calls == 1);
 	assert(send_command(version, sizeof(version)) != 0 && calls == 1);
 	check_private(file);
 	file = fixture_reset();
 	assert(SCardControl(7, 0, "SECRET_PIN", 10, NULL, 0, NULL) != 0 && stopped && !calls);
+	check_private(file);
+	file = fixture_reset();
+	assert(SCardSetAttrib(7, 0, (const unsigned char *)"SECRET_PIN", 10) != 0 && stopped && !calls);
 	check_private(file);
 	puts("PASS public observer stops on security errors and blocks reader PIN-pad control paths");
 	file = fixture_reset(); events = 128;
