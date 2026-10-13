@@ -6,6 +6,7 @@
 .PHONY: inspect/jcop3-peer-context
 .PHONY: probe/jcop4
 .PHONY: inspect/jcop4-aids
+.PHONY: inspect/jcop4-files
 
 PDF_INPUT ?= doc.pdf
 PDF_OUTPUT ?= local/jcop3-cli.pdf
@@ -26,6 +27,7 @@ help:
 		'make probe/jcop3 READER=1  Selecciona otro índice de lector.' \
 		'make probe/jcop4           Consulta lector y ATR con la compilación local, sin PIN ni identificar aplicación.' \
 		'make inspect/jcop4-aids    Comprueba cuatro AID conocidos con SELECT público, sin PIN ni PACE.' \
+		'make inspect/jcop4-files   Lee metadatos de EF.ATR y enumera EF.DIR, sin PIN ni PACE.' \
 		'make inspect/jcop3         Identifica la aplicación y enumera objetos sin PIN.' \
 		'make read-dir/jcop3        Lee EF.DIR por APDU conocidas, sin PIN.' \
 		'make build/opensc          Compila el submódulo con PC/SC en build/opensc/.' \
@@ -57,6 +59,9 @@ probe/jcop4:
 
 inspect/jcop4-aids:
 	@bash scripts/probe-jcop4.sh "$$READER" --aids
+
+inspect/jcop4-files:
+	@bash scripts/probe-jcop4.sh "$$READER" --files
 
 inspect/jcop3:
 	@bash scripts/probe-jcop3.sh "$$READER" --inspect

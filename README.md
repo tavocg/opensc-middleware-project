@@ -44,19 +44,21 @@ siguen pendientes. No hay soporte completo ni cambios publicados upstream.
 Consultar [AGENTS.md](AGENTS.md) para continuar desde las capturas recientes.
 No repetir pruebas de firma/reinserción ya verificadas como primer paso.
 
-Hay una JCOP4 disponible para una investigación separada en este repositorio.
-Su primera consulta confirmó lector, tarjeta y un ATR idéntico al registrado
-para eOI, diferente del de la JCOP3. Todavía no se conoce su aplicación ni
-el tamaño RSA. La siguiente consulta usa OpenSC ya compilado y solo selecciona
-cuatro AID conocidos:
+Hay una JCOP4 con certificados RSA 2048, según el usuario, para investigación
+en este repositorio. Su ATR coincide con eOI, pero los cuatro AID conocidos
+consultados devolvieron 6A82. Todavía falta identificar su aplicación. La
+siguiente consulta obtiene metadatos públicos de EF.ATR y EF.DIR:
 
 ```bash
-make inspect/jcop4-aids READER=0
+make inspect/jcop4-files READER=0
 ```
 
 Cerrar firmador antes de consultar y mantener la misma JCOP4 insertada.
-No pide PIN ni ejecuta PACE. Pasaron ocho comprobaciones del lanzador con
-una herramienta simulada. Los informes quedan aparte en `local/jcop4-aids-*/`.
+No pide PIN ni ejecuta PACE. Compila una herramienta pequeña contra la
+biblioteca existente, sin recompilar OpenSC. Pasaron once comprobaciones del
+lanzador y ocho de la consulta pública con API simuladas. Los informes quedan
+aparte en `local/jcop4-files-*/`. El diseño deberá permitir RSA 3072 y futuras
+generaciones, con perfiles separados del tamaño RSA; ese soporte está pendiente.
 La consulta inicial sigue disponible como `make probe/jcop4`. Los pasos siguientes están
 en [docs/jcop4.md](docs/jcop4.md).
 

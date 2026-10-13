@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+task_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+task_build=${1:-"$task_root/build/opensc"}
+if (( $# > 1 )) || [[ ! -f $task_build/config.h || ! -f $task_build/src/libopensc/.libs/libopensc.so ]]; then
+    printf 'Falta una compilación de OpenSC; ejecutar make build/opensc.\n' >&2
+    exit 1
+fi
+task_build=$(cd -- "$task_build" && pwd)
+"${CC:-cc}" -std=c99 -D_GNU_SOURCE -DHAVE_CONFIG_H -Wall -Wextra -Werror \
+    -I"$task_build" -I"$task_root/vendor/opensc/src" \
+    "$task_root/tools/card-public-info.c" \
+    -L"$task_build/src/libopensc/.libs" -Wl,-rpath,"$task_build/src/libopensc/.libs" \
+    -lopensc -o "$task_build/card-public-info"

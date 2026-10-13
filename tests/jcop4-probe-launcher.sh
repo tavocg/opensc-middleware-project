@@ -7,6 +7,24 @@ task_tmp=$(mktemp -d)
 trap 'rm -rf -- "$task_tmp"' EXIT
 mkdir -p "$task_tmp/scripts" "$task_tmp/bin" "$task_tmp/build/opensc/src/tools"
 cp "$task_root/scripts/probe-jcop4.sh" "$task_tmp/scripts/"
+cat > "$task_tmp/scripts/build-card-public-info.sh" <<'BUILD'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ ${FIXTURE_PUBLIC_BUILD_EXIT:-0} != 0 ]]; then exit "$FIXTURE_PUBLIC_BUILD_EXIT"; fi
+cat > "$FIXTURE_PROBE_ROOT/build/opensc/card-public-info" <<'HELPER'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ $# == 2 && $1 == 2 && $2 == 3b:d5:18:ff:81:91:fe:1f:c3:80:73:c8:21:10:0a ]] || exit 97
+[[ ${OPENSC_DEBUG-} == 0 && ${OPENSC_API_TRACE_FILE-unset} == unset &&
+   ${OPENSC_JCOP3_PIN_STATUS_IN_PLACE-unset} == unset &&
+   $(stat -c %a "$OPENSC_CONF") == 600 ]] || exit 98
+if IFS= read -r task_input; then exit 99; fi
+printf 'public-files\n' > "$FIXTURE_PROBE_ROOT/public-called"
+printf 'ef_atr_result=0\nef_dir_result=0\napplication_count=1\n'
+exit "${FIXTURE_PUBLIC_EXIT:-0}"
+HELPER
+chmod +x "$FIXTURE_PROBE_ROOT/build/opensc/card-public-info"
+BUILD
 cat > "$task_tmp/bin/git" <<'GIT'
 #!/usr/bin/env bash
 case ${3-} in
@@ -68,6 +86,7 @@ task_run() {
     local task_expected=$1 task_rc=0
     shift
     rm -f "$task_tmp/called"
+    rm -f "$task_tmp/public-called"
     bash "$task_tmp/scripts/probe-jcop4.sh" "$@" > "$task_tmp/output.txt" 2>&1 || task_rc=$?
     [[ $task_rc == "$task_expected" ]]
 }
@@ -115,6 +134,18 @@ for task_sw_mode in missing duplicate; do
     [[ $(wc -l < "$task_tmp/called") == 4 ]]
 done
 printf 'PASS JCOP4 AID query rejects missing or duplicate responses without subsequent SELECT\n'
+printf 'synthetic unused stdin\n' | task_run 0 2 --files
+[[ $(wc -l < "$task_tmp/called") == 3 && -f $task_tmp/public-called &&
+   $(< "$task_tmp/output.txt") == *'Consulta de EF.ATR/EF.DIR terminada'* ]]
+printf 'PASS JCOP4 file discovery uses the isolated helper without candidate AID probes or stdin\n'
+export FIXTURE_PUBLIC_EXIT=17
+task_run 17 2 --files
+[[ -f $task_tmp/public-called && $(< "$task_tmp/output.txt") != *'Consulta de EF.ATR/EF.DIR terminada'* ]]
+printf 'PASS JCOP4 file discovery propagates helper failure without retries\n'
+export FIXTURE_PUBLIC_BUILD_EXIT=19
+task_run 19 2 --files
+[[ ! -e $task_tmp/public-called && $(wc -l < "$task_tmp/called") == 3 ]]
+printf 'PASS JCOP4 file discovery stops before helper execution if compilation fails\n'
 mv "$task_tmp/build/opensc/src/tools/opensc-tool" "$task_tmp/saved-tool"
 task_run 1
 [[ ! -e $task_tmp/called && $(< "$task_tmp/output.txt") == *'make build/opensc'* ]]

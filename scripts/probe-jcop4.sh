@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Inventory, followed optionally by public SELECT of four known application IDs.
+# Inventory and public application discovery, without login or signing.
 set -euo pipefail
 umask 077
 
 task_reader=${1:-${READER:-0}}
 task_mode=${2:---probe}
 if (( $# > 2 )) || [[ ! $task_reader =~ ^[0-9]+$ ]] ||
-        [[ $task_mode != --probe && $task_mode != --aids ]]; then
-    printf 'Uso: bash scripts/probe-jcop4.sh [índice numérico de lector] [--probe|--aids]\n' >&2
+        [[ $task_mode != --probe && $task_mode != --aids && $task_mode != --files ]]; then
+    printf 'Uso: bash scripts/probe-jcop4.sh [índice numérico de lector] [--probe|--aids|--files]\n' >&2
     exit 2
 fi
 task_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
@@ -20,6 +20,8 @@ fi
 mkdir -p -- "$task_root/local"
 if [[ $task_mode == --aids ]]; then
     task_dir=$(mktemp -d "$task_root/local/jcop4-aids-XXXXXXXX")
+elif [[ $task_mode == --files ]]; then
+    task_dir=$(mktemp -d "$task_root/local/jcop4-files-XXXXXXXX")
 else
     task_dir=$(mktemp -d "$task_root/local/jcop4-probe-XXXXXXXX")
 fi
@@ -51,18 +53,19 @@ CONFIG
 printf 'Informe: %s\n' "$task_report"
 task_query_index=0
 
-task_record() {
-    local task_status=0
+task_record_tool() {
+    local task_binary=$1 task_status=0
+    shift
     task_query_index=$((task_query_index + 1))
     task_last_output="$task_dir/query-$task_query_index.txt"
-    printf '\n$ opensc-tool' >> "$task_report"
+    printf '\n$ %q' "${task_binary##*/}" >> "$task_report"
     printf ' %q' "$@" >> "$task_report"
     printf '\n' >> "$task_report"
     env -u OPENSC_API_TRACE_FILE -u OPENSC_DEBUG_FILE \
         -u OPENSC_JCOP3_SESSION_STATE -u OPENSC_JCOP3_PIN_STATUS_IN_PLACE \
         -u OPENSC_JCOP3_POST_LOGIN_STATUS -u OPENSC_JCOP3_POST_LOGIN_SELECT \
         OPENSC_DEBUG=0 OPENSC_CONF="$task_config" \
-        "$task_tool" "$@" </dev/null > "$task_last_output" 2>&1 || task_status=$?
+        "$task_binary" "$@" </dev/null > "$task_last_output" 2>&1 || task_status=$?
     cat "$task_last_output" >> "$task_report"
     printf 'exit_status=%s\n' "$task_status" >> "$task_report"
     if (( task_status != 0 )); then
@@ -70,6 +73,8 @@ task_record() {
         exit "$task_status"
     fi
 }
+
+task_record() { task_record_tool "$task_tool" "$@"; }
 
 task_record --info
 # Do not add --verbose: list_readers would initialize card drivers.
@@ -88,8 +93,22 @@ while IFS= read -r task_line; do
     if [[ ${task_line,,} == "$task_expected_atr" ]]; then task_atr_ok=yes; fi
 done < "$task_last_output"
 if [[ $task_atr_ok != yes ]]; then
-    printf 'ATR distinto o ausente; no se enviaron SELECT de aplicaciones. Revisar el informe.\n' >&2
+    printf 'ATR distinto o ausente; no se consultaron aplicaciones ni archivos. Revisar el informe.\n' >&2
     exit 1
+fi
+
+if [[ $task_mode == --files ]]; then
+    # Compile only this discovery helper against the existing OpenSC library.
+    task_build_status=0
+    bash "$task_root/scripts/build-card-public-info.sh" >> "$task_report" 2>&1 || task_build_status=$?
+    printf 'helper_build_status=%s\n' "$task_build_status" >> "$task_report"
+    if (( task_build_status != 0 )); then
+        printf 'Falló la compilación de la herramienta pública; revisar el informe.\n' >&2
+        exit "$task_build_status"
+    fi
+    task_record_tool "$task_root/build/opensc/card-public-info" "$task_reader" "$task_expected_atr"
+    printf 'Consulta de EF.ATR/EF.DIR terminada; revisar resultados y aplicaciones del informe.\n'
+    exit 0
 fi
 
 task_selected_count=0
