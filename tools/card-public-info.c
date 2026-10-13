@@ -11,7 +11,7 @@
 #include "libopensc/pkcs15.h"
 #include "libopensc/asn1.h"
 
-enum inspect_mode { INSPECT_PKCS15, INSPECT_SIGN_SETUP, INSPECT_PIN_STATUS, INSPECT_SECURITY_INFO, INSPECT_PIN_POLICY, INSPECT_ODF_MAP, INSPECT_FILE4141, INSPECT_FILE4109, INSPECT_FILE7001, INSPECT_FILE7002, INSPECT_FILE7004, INSPECT_FILE7005, INSPECT_FILEDF0F, INSPECT_PUBLIC_KEYS };
+enum inspect_mode { INSPECT_PKCS15, INSPECT_SIGN_SETUP, INSPECT_PIN_STATUS, INSPECT_SECURITY_INFO, INSPECT_PIN_POLICY, INSPECT_ODF_MAP, INSPECT_FILE4141, INSPECT_FILE4109, INSPECT_FILE7001, INSPECT_FILE7002, INSPECT_FILE7004, INSPECT_FILE7005, INSPECT_FILEDF0F, INSPECT_PUBLIC_KEYS, INSPECT_CERTIFICATE_PATHS };
 
 static void print_hex(const char *name, const unsigned char *value, size_t len)
 {
@@ -588,6 +588,69 @@ static int inspect_public_key_metadata(sc_pkcs15_card_t *p15, const struct sc_ai
 	return 0;
 }
 
+/* Only CDF7005 from this AID's native ODF; never follow certificate paths.
+ * get_objects may hide parse errors or search trusted CDFs, so parse explicitly. */
+static int inspect_certificate_paths(sc_pkcs15_card_t *p15, const struct sc_aid *aid)
+{
+	sc_pkcs15_df_t *df, *target = NULL;
+	sc_pkcs15_object_t *obj;
+	unsigned int dirs = 0, seen = 0, count = 0;
+	int rv;
+	for (df = p15->df_list; df; df = df->next) {
+		if (++dirs > 32) return 1;
+		if (df->type != SC_PKCS15_CDF) continue;
+		if (target || (df->path.len != 2 && df->path.len != 4) ||
+				(df->path.type != SC_PATH_TYPE_PATH && df->path.type != SC_PATH_TYPE_FILE_ID) ||
+				(df->path.len == 4 && memcmp(df->path.value, "\x3F\x00", 2)) ||
+				df->path.value[df->path.len - 2] != 0x70 || df->path.value[df->path.len - 1] != 5 ||
+				(df->path.aid.len && (df->path.aid.len != aid->len ||
+				memcmp(df->path.aid.value, aid->value, aid->len)))) {
+			printf("certificate_paths_result=directory_mismatch_no_parse\n"); return 1;
+		}
+		target = df;
+	}
+	if (!target) {
+		printf("certificate_paths_result=directory_not_advertised_no_parse\n"); return 1;
+	}
+	rv = sc_pkcs15_parse_df(p15, target);
+	print_result("certificate_paths_parse_result", rv);
+	if (rv < 0) return 1;
+	/* Validate the entire result before emitting routes. No partial inventory. */
+	for (obj = p15->obj_list; obj; obj = obj->next) {
+		const sc_pkcs15_cert_info_t *info;
+		if (++seen > 128) return 1;
+		if (obj->df != target) continue;
+		if (obj->type != SC_PKCS15_TYPE_CERT_X509 || !obj->data || ++count > 32) return 1;
+		info = obj->data;
+		if (info->value.len) {
+			if (!info->value.value || info->path.len) return 1;
+			continue; /* Inline DER is neither printed nor followed. */
+		}
+		if (info->path.len < 2 || info->path.len > sizeof(info->path.value) || info->path.len % 2 ||
+				(info->path.type != SC_PATH_TYPE_PATH && info->path.type != SC_PATH_TYPE_FILE_ID) ||
+				info->path.index < 0 || info->path.count < -1 ||
+				(info->path.aid.len && (info->path.aid.len != aid->len ||
+				memcmp(info->path.aid.value, aid->value, aid->len)))) return 1;
+	}
+	printf("certificate_path_metadata_count=%u\n", count);
+	count = 0;
+	for (obj = p15->obj_list; obj; obj = obj->next) {
+		const sc_pkcs15_cert_info_t *info;
+		if (obj->df != target) continue;
+		info = obj->data;
+		printf("certificate_path_index=%u\ncertificate_path_private=%u\n", count++,
+				!!(obj->flags & SC_PKCS15_CO_FLAG_PRIVATE));
+		if (info->value.len) {
+			printf("certificate_storage=inline_contents_omitted\n"); continue;
+		}
+		printf("certificate_storage=path_no_follow\n");
+		print_hex("certificate_path", info->path.value, info->path.len);
+		printf("certificate_path_offset=%d\ncertificate_path_count=%d\n", info->path.index, info->path.count);
+	}
+	printf("certificate_paths_result=cdf7005_metadata_only_no_certificate_reads\n");
+	return 0;
+}
+
 static int inspect_native_pkcs15(sc_card_t *card, struct sc_aid *aid, enum inspect_mode mode)
 {
 	sc_pkcs15_card_t *p15;
@@ -622,6 +685,10 @@ static int inspect_native_pkcs15(sc_card_t *card, struct sc_aid *aid, enum inspe
 		goto out;
 	if (mode == INSPECT_PUBLIC_KEYS) {
 		status = inspect_public_key_metadata(p15, aid);
+		goto out;
+	}
+	if (mode == INSPECT_CERTIFICATE_PATHS) {
+		status = inspect_certificate_paths(p15, aid);
 		goto out;
 	}
 	if (p15->tokeninfo) {
@@ -757,7 +824,7 @@ int main(int argc, char **argv)
 	memset(&app_aid, 0, sizeof(app_aid));
 	app_aid.len = sizeof(app_aid.value);
 	if (argc == 5 && ((strcmp(argv[3], "--pkcs15") && strcmp(argv[3], "--sign-setup") &&
-			strcmp(argv[3], "--pin-status") && strcmp(argv[3], "--security-info") && strcmp(argv[3], "--pin-policy") && strcmp(argv[3], "--odf-map") && strcmp(argv[3], "--file4141") && strcmp(argv[3], "--file4109") && strcmp(argv[3], "--file7001") && strcmp(argv[3], "--file7002") && strcmp(argv[3], "--file7004") && strcmp(argv[3], "--file7005") && strcmp(argv[3], "--filedf0f") && strcmp(argv[3], "--public-keys")) ||
+			strcmp(argv[3], "--pin-status") && strcmp(argv[3], "--security-info") && strcmp(argv[3], "--pin-policy") && strcmp(argv[3], "--odf-map") && strcmp(argv[3], "--file4141") && strcmp(argv[3], "--file4109") && strcmp(argv[3], "--file7001") && strcmp(argv[3], "--file7002") && strcmp(argv[3], "--file7004") && strcmp(argv[3], "--file7005") && strcmp(argv[3], "--filedf0f") && strcmp(argv[3], "--public-keys") && strcmp(argv[3], "--certificate-paths")) ||
 			sc_hex_to_bin(argv[4], app_aid.value, &app_aid.len) < 0 || !app_aid.len))
 		return 2;
 
@@ -784,6 +851,7 @@ int main(int argc, char **argv)
 			!strcmp(argv[3], "--file7005") ? INSPECT_FILE7005 :
 			!strcmp(argv[3], "--filedf0f") ? INSPECT_FILEDF0F :
 			!strcmp(argv[3], "--public-keys") ? INSPECT_PUBLIC_KEYS :
+			!strcmp(argv[3], "--certificate-paths") ? INSPECT_CERTIFICATE_PATHS :
 			!strcmp(argv[3], "--pin-policy") ? INSPECT_PIN_POLICY : INSPECT_SECURITY_INFO;
 	}
 	memset(&params, 0, sizeof(params));

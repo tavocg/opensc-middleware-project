@@ -17,10 +17,11 @@ static sc_pkcs15_cert_info_t fixture_cert_info;
 static sc_pkcs15_prkey_info_t fixture_key_info;
 static sc_pkcs15_auth_info_t fixture_pin_info, fixture_authkey_info;
 static sc_pkcs15_cert_t fixture_cert;
-static sc_pkcs15_df_t fixture_pub_df;
+static sc_pkcs15_df_t fixture_pub_df, fixture_cert_df;
 static sc_pkcs15_object_t fixture_pub_rsa_obj, fixture_pub_ec_obj;
 static sc_pkcs15_pubkey_info_t fixture_pub_rsa_info, fixture_pub_ec_info;
 static int pub_parse_calls, pub_parse_result, pub_empty;
+static int cdf_parse_calls, cdf_parse_result, cdf_empty;
 static int atr_calls, dir_calls, lock_calls, unlock_calls, connect_calls, release_calls;
 static int atr_result, dir_result, lock_result, driver_result, mismatch;
 static int bind_calls, object_calls, cert_calls, p15_frees, cert_frees;
@@ -100,6 +101,15 @@ int sc_pkcs15_bind_internal(sc_pkcs15_card_t *p15, struct sc_aid *aid)
 }
 int sc_pkcs15_parse_df(sc_pkcs15_card_t *p15, sc_pkcs15_df_t *df)
 {
+	if (df == &fixture_cert_df) {
+		assert(p15 == &fixture_p15 && df->type == SC_PKCS15_CDF &&
+				df->path.value[df->path.len - 2] == 0x70 && df->path.value[df->path.len - 1] == 5);
+		assert(!object_calls && !cert_calls && !mse_calls && !pin_calls && !cdf_parse_calls && !pub_parse_calls);
+		cdf_parse_calls++;
+		if (cdf_parse_result < 0) return cdf_parse_result;
+		p15->obj_list = cdf_empty ? NULL : &fixture_cert_obj;
+		return 0;
+	}
 	assert(p15 == &fixture_p15 && df == &fixture_pub_df && df->type == SC_PKCS15_PUKDF &&
 			df->path.len == 2 && df->path.value[0] == 0x70 && df->path.value[1] == 4);
 	assert(!object_calls && !cert_calls && !mse_calls && !pin_calls && !pub_parse_calls);
@@ -305,6 +315,17 @@ static void reset_fixture(void)
 	memset(&fixture_cert, 0, sizeof(fixture_cert));
 	fixture_cert_obj.type = SC_PKCS15_TYPE_CERT_X509;
 	fixture_cert_obj.data = &fixture_cert_info;
+	memset(&fixture_cert_df, 0, sizeof(fixture_cert_df));
+	fixture_cert_df.type = SC_PKCS15_CDF;
+	fixture_cert_df.path.type = SC_PATH_TYPE_PATH;
+	fixture_cert_df.path.len = 2; memcpy(fixture_cert_df.path.value, "\x70\x05", 2);
+	fixture_cert_obj.df = &fixture_cert_df;
+	strcpy(fixture_cert_obj.label, "SECRET_CERTIFICATE_LABEL");
+	fixture_cert_info.id.len = 4; memcpy(fixture_cert_info.id.value, "SECR", 4);
+	fixture_cert_info.path.type = SC_PATH_TYPE_PATH;
+	fixture_cert_info.path.len = 2; memcpy(fixture_cert_info.path.value, "\xB0\x01", 2);
+	fixture_cert_info.path.count = -1;
+	cdf_parse_calls = cdf_parse_result = cdf_empty = 0;
 	fixture_key_obj.type = SC_PKCS15_TYPE_PRKEY_RSA;
 	fixture_key_obj.data = &fixture_key_info;
 	fixture_key_info.modulus_length = 3072;
@@ -696,6 +717,70 @@ int main(void)
 		reset_fixture(); bind_result = SC_ERROR_READER;
 		assert(card_public_info_main(5, args) == 1 && !pub_parse_calls && p15_frees == 1 && unlock_calls == 1);
 		puts("PASS public-key inventory bounds objects and cleans up on malformed metadata or binding error without crypto operations");
+	}
+	{
+		char *args[] = { "card-public-info", "2", fixture_atr, "--certificate-paths", fixture_aid };
+		char output[4096] = {0}; FILE *capture = tmpfile(); int saved = dup(STDOUT_FILENO);
+		assert(capture && saved >= 0);
+		reset_fixture(); fixture_p15.df_list = &fixture_cert_df;
+		fflush(stdout); assert(dup2(fileno(capture), STDOUT_FILENO) >= 0);
+		assert(card_public_info_main(5, args) == 0 && cdf_parse_calls == 1 && bind_calls == 1 &&
+				p15_frees == 1 && unlock_calls == 1 && !object_calls && !cert_calls && !pin_calls && !mse_calls);
+		fflush(stdout); rewind(capture); assert(fread(output, 1, sizeof(output)-1, capture) > 0);
+		assert(dup2(saved, STDOUT_FILENO) >= 0); close(saved); fclose(capture);
+		assert(strstr(output, "certificate_path=B001") && strstr(output, "certificate_path_metadata_count=1") &&
+				strstr(output, "certificate_path_private=0") && strstr(output, "certificate_path_count=-1"));
+		assert(!strstr(output, "SECRET") && !strstr(output, "certificate_id") && !strstr(output, "certificate_der"));
+		puts("PASS certificate paths parse only CDF7005 and omit certificate data, labels and IDs without following references");
+		reset_fixture(); fixture_p15.df_list = &fixture_cert_df; cdf_empty = 1;
+		assert(card_public_info_main(5, args) == 0 && cdf_parse_calls == 1 && !object_calls);
+		reset_fixture(); fixture_p15.df_list = &fixture_cert_df; cdf_parse_result = SC_ERROR_INVALID_ASN1_OBJECT;
+		assert(card_public_info_main(5, args) == 1 && cdf_parse_calls == 1 && unlock_calls == 1 && p15_frees == 1);
+		puts("PASS CDF paths distinguish a parsed empty directory from parse failure and clean up without fallback");
+		for (int i = 0; i < 8; i++) {
+			reset_fixture(); fixture_p15.df_list = &fixture_cert_df;
+			if (i == 0) fixture_p15.df_list = NULL;
+			if (i == 1) fixture_cert_df.path.value[1] = 4;
+			if (i == 2) fixture_cert_df.path.len = 0;
+			if (i == 3) fixture_cert_df.next = &fixture_cert_df;
+			if (i == 4) fixture_cert_df.path.aid.len = 1;
+			if (i == 5) fixture_cert_df.path.type = SC_PATH_TYPE_DF_NAME;
+			if (i == 6) mismatch = 1;
+			if (i == 7) bind_result = SC_ERROR_READER;
+			assert(card_public_info_main(5, args) == 1 && !cdf_parse_calls && !cert_calls && !pin_calls && !mse_calls);
+		}
+		puts("PASS CDF paths reject absent/different/duplicate/external/invalid directories, ATR mismatch and binding errors before parsing");
+		for (int i = 0; i < 9; i++) {
+			reset_fixture(); fixture_p15.df_list = &fixture_cert_df;
+			if (i == 0) fixture_cert_obj.data = NULL;
+			if (i == 1) fixture_cert_obj.type = SC_PKCS15_TYPE_PRKEY_RSA;
+			if (i == 2) fixture_cert_info.path.len = 1;
+			if (i == 3) fixture_cert_info.path.len = sizeof(fixture_cert_info.path.value) + 2;
+			if (i == 4) fixture_cert_info.path.type = SC_PATH_TYPE_DF_NAME;
+			if (i == 5) fixture_cert_info.path.index = -1;
+			if (i == 6) fixture_cert_info.path.count = -2;
+			if (i == 7) fixture_cert_info.path.aid.len = 1;
+			if (i == 8) fixture_cert_obj.next = &fixture_cert_obj;
+			assert(card_public_info_main(5, args) == 1 && cdf_parse_calls == 1 && !cert_calls && !pin_calls && !mse_calls);
+		}
+		puts("PASS CDF paths validate bounded objects/routes/ranges/AID and reject malformed metadata before emitting routes");
+		reset_fixture(); fixture_p15.df_list = &fixture_cert_df;
+		fixture_cert_obj.flags = SC_PKCS15_CO_FLAG_PRIVATE;
+		fixture_cert_info.path.aid = fixture_app.aid;
+		fixture_cert_df.path.len = 4; memcpy(fixture_cert_df.path.value, "\x3F\x00\x70\x05", 4);
+		assert(card_public_info_main(5, args) == 0 && cdf_parse_calls == 1 && !cert_calls);
+		puts("PASS CDF paths preserve private flags and accept matching AID and MF-prefixed directory without reading certificates");
+		reset_fixture(); fixture_p15.df_list = &fixture_cert_df;
+		fixture_cert_info.path.len = 0;
+		fixture_cert_info.value.value = (unsigned char *)"SECRET_INLINE_DER";
+		fixture_cert_info.value.len = 17;
+		assert(card_public_info_main(5, args) == 0 && !cert_calls);
+		cdf_parse_calls = 0; fixture_cert_info.value.value = NULL;
+		assert(inspect_certificate_paths(&fixture_p15, &fixture_app.aid) == 1);
+		puts("PASS inline certificates are classified without printing contents and invalid inline storage is rejected");
+		reset_fixture(); args[4] = "A001";
+		assert(card_public_info_main(5, args) == 2 && !connect_calls);
+		puts("PASS certificate paths require the known AID before connecting to hardware");
 	}
 	{
 		char *args[] = { "card-public-info", "2", fixture_atr, "--file7001", fixture_aid };

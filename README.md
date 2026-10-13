@@ -231,6 +231,14 @@ identificado para este perfil; el próximo contraste es su posible referencia
 en CDF7005. Pasaron **180 comprobaciones** de los componentes modificados.
 El driver libre sigue pendiente de firma JCOP4; no se cambió OpenSC.
 
+`make inspect/jcop4-certificate-paths READER=0` analiza solo las referencias
+de certificados de CDF7005. La consulta real confirmó rutas **B001 y B002**,
+ambas sin marca de objeto privado; no siguió las rutas ni leyó certificados.
+Eso vincula el SELECT B001 de Idopte con el CDF de esta tarjeta, pero no
+identifica su ACL ni cuál certificado sirve para firma. Pasaron **152
+comprobaciones** del helper/lanzador modificados. El próximo contraste es
+SELECT-only B001; el observador conserva su bloqueo de ese archivo.
+
 Capturas privadas bajo local/jcop4-idopte-spy-*/; no agregarlas a Git.
 Pasaron previamente **30 comprobaciones del observador/decoder y 40 del
 lanzador** con transporte ficticio. El diagnóstico de firma pasó además

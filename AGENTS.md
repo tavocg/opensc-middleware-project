@@ -6,7 +6,40 @@ la tarjeta. El usuario ejecuta las operaciones que requieran PIN o GUI. Esto
 sustituye las restricciones anteriores de no ejecutar Git/hardware/Idopte por
 el agente; conservar límites de cada diagnóstico y privacidad de los registros.
 
-**Último resultado: Idopte READ DF0F aceptado; SELECT B001 bloqueado.**
+**Último resultado: CDF7005 declara certificados en B001 y B002.**
+Usuario registró `2a30496`, principal y OpenSC `3dfef6704` limpios al comenzar.
+Nuevo `make inspect/jcop4-certificate-paths READER=0` / --certificate-paths:
+helper default driver con ATR/AID conocidos y anunciados, binding PKCS#15
+nativo sin cachés/emuladores/PIN, parse explícito exclusivamente del CDF7005
+anunciado en ODF. No usar get_objects para ocultar errores o buscar CDFs
+trusted/useful. Valida directorio único, rutas/tipos/AID, objetos/rangos y límites
+antes de emitir inventario; ciclos/metadata inválida/fallos detienen. Imprime
+solo rutas, offset/count, marca privado y almacenamiento path/inline (contenido
+omitido). Sin IDs/nombres/DER, lectura de certificados referenciados, PIN,
+VERIFY, MSE, PSO, escritura o Idopte. Valores inline no se imprimen; rutas no
+se siguen. Mantiene todos los permisos del observador sin modificaciones.
+
+Pasaron **75 comprobaciones del helper y 77 del lanzador (152)**, APIs falsas;
+helper real compilado offline. Observador 99, lanzador firma 6 y operación 12
+previos intactos, no repetir sin cambios. Agente ejecutó una vez sin PIN/GUI:
+`nix develop --offline -c make inspect/jcop4-certificate-paths READER=0`.
+Informe privado `local/jcop4-certificate-paths-HN4CjVzr/report.txt`,
+**22:27:46 UTC**. Inventario/build/binding nativo/parse CDF/unlock/proceso 0.
+**Dos objetos X.509: rutas B001 y B002, ambas private=0, offset=0, count=-1**
+(sin rango explícito). No se siguieron rutas ni se leyeron certificados.
+Esto identifica la referencia B001 en el CDF de este perfil, no certifica aún
+contenido DER/ACL, firma frente a autenticación o relación con llave/PIN6982.
+Sin nombres/IDs/seriales al chat/Git; informes0700/0600 bajo local/.
+
+**Próximo contraste:** SELECT-only B001 bajo el mismo AID para conocer control,
+FID/tamaño/estructura/seguridad, sin READ/PIN; después decidir observación
+acotada de la lectura solicitada por Idopte según evidencia. No asumir ACL por
+private=0 ni copiar el PIN/AID/llave del driver uruguayo. Guard Idopte sigue
+bloqueando SELECT/READ B001; no repetir inventario Idopte o CDF idénticos por
+inercia. Driver/submódulo intactos; firma JCOP4/RSA3072 siguen pendientes.
+Git autorizado, .git de solo lectura aún impide commits si persiste; no eludirlo.
+
+**Resultado anterior: Idopte READ DF0F aceptado; SELECT B001 bloqueado.**
 Usuario registró `442c70e`, principal y OpenSC `3dfef6704` limpios al comenzar.
 Nuevo modo separado `inspect/jcop4-idopte-read-df0f`, flag
 `JCOP4_DIAGNOSTIC_READ_DF0F=1` dependiente de SELECT_DF0F y sus padres, solo

@@ -112,7 +112,7 @@ cat > "$FIXTURE_PROBE_ROOT/build/opensc/card-public-info" <<'HELPER'
 set -euo pipefail
 [[ ($# == 2 || $# == 4) && $1 == 2 && $2 == 3b:d5:18:ff:81:91:fe:1f:c3:80:73:c8:21:10:0a ]] || exit 97
 if (( $# == 4 )); then
-    [[ ($3 == --pkcs15 || $3 == --sign-setup || $3 == --pin-status || $3 == --security-info || $3 == --pin-policy || $3 == --odf-map || $3 == --file4141 || $3 == --file4109 || $3 == --file7001 || $3 == --file7002 || $3 == --file7004 || $3 == --file7005 || $3 == --filedf0f || $3 == --public-keys) && $4 == E828BD080FA00000036364796E6964 ]] || exit 97
+    [[ ($3 == --pkcs15 || $3 == --sign-setup || $3 == --pin-status || $3 == --security-info || $3 == --pin-policy || $3 == --odf-map || $3 == --file4141 || $3 == --file4109 || $3 == --file7001 || $3 == --file7002 || $3 == --file7004 || $3 == --file7005 || $3 == --filedf0f || $3 == --public-keys || $3 == --certificate-paths) && $4 == E828BD080FA00000036364796E6964 ]] || exit 97
 fi
 [[ ${OPENSC_DEBUG-} == 0 && ${OPENSC_API_TRACE_FILE-unset} == unset &&
    ${OPENSC_JCOP3_PIN_STATUS_IN_PLACE-unset} == unset &&
@@ -446,6 +446,18 @@ export FIXTURE_PUBLIC_EXIT=17
 task_run 17 2 --public-keys
 [[ $(< "$task_tmp/output.txt") != *'Consulta de metadatos PuKDF7004 terminada'* ]]
 printf 'PASS public-key metadata mode propagates helper errors without retrying or announcing success\n'
+unset FIXTURE_PUBLIC_EXIT
+printf 'synthetic unused stdin\n' | task_run 0 2 --certificate-paths
+[[ $(< "$task_tmp/public-called") == '2 3b:d5:18:ff:81:91:fe:1f:c3:80:73:c8:21:10:0a --certificate-paths E828BD080FA00000036364796E6964' &&
+   $(< "$task_tmp/output.txt") == *'sin leer certificados ni PIN'* ]]
+for task_dir in "$task_tmp"/local/jcop4-certificate-paths-*; do
+    [[ $(stat -c %a "$task_dir") == 700 && $(stat -c %a "$task_dir/report.txt") == 600 ]]
+done
+printf 'PASS CDF certificate-path mode invokes isolated helper with empty stdin and private reports\n'
+export FIXTURE_PUBLIC_EXIT=17
+task_run 17 2 --certificate-paths
+[[ $(< "$task_tmp/output.txt") != *'Consulta de rutas de certificados CDF7005 terminada'* ]]
+printf 'PASS CDF certificate-path mode propagates helper failure without retries or false success\n'
 unset FIXTURE_PUBLIC_EXIT
 printf 'synthetic unused stdin\n' | task_run 0 2 --idopte
 [[ $(wc -l < "$task_tmp/called") == 3 && ! -e $task_tmp/public-called &&

@@ -2924,6 +2924,82 @@ constructor sin padre/inválido y delegación PC/SC real con backend ficticio.
 Biblioteca real compilada. Helper 68 y operación de firma 12 previos intactos;
 no se repitieron sus suites. Driver/submódulo intactos. JCOP4/RSA3072 pendientes.
 
+## CDF7005 referencia B001 y B002: 13 de octubre, 22:27:46 UTC
+
+El usuario registró `2a30496`. Principal y OpenSC `3dfef6704` limpios antes de
+la revisión. Para comprobar si el SELECT B001 bloqueado de Idopte corresponde
+a una referencia de certificado, se agregó el modo
+`make inspect/jcop4-certificate-paths READER=0`.
+
+El helper exige ATR/AID conocidos y AID anunciado en EF.DIR. Usa default driver
+con binding PKCS#15 nativo, cachés desactivadas y certificados privados sin
+declasificar. Localiza exclusivamente el CDF7005 anunciado en ODF, comprueba
+ruta de directorio única, tipo y AID, y llama directamente a
+`sc_pkcs15_parse_df`. No utiliza `get_objects`, que puede ocultar errores de
+análisis o buscar directorios trusted/useful. Este modo no solicita certificados
+ni sigue las rutas analizadas. El binding conserva sus lecturas de bootstrap
+nativas ya utilizadas en los diagnósticos anteriores.
+
+Antes de emitir rutas, valida todos los objetos del directorio: tipo X.509,
+puntero válido, rutas pares dentro del buffer, tipo PATH/FILE_ID, AID vacío o
+coincidente y rangos no negativos salvo count=-1. Máximo 32 directorios, 128
+objetos examinados y 32 certificados; las listas cíclicas quedan limitadas.
+Datos inválidos o errores detienen, sin inventario parcial de rutas ni fallback.
+Los valores inline se clasifican sin imprimir su DER. La salida conserva solo
+índice de inventario, marca privado, ruta y rango; omite IDs, nombres y valores.
+
+Pasaron **75 comprobaciones del helper y 77 del lanzador (152)**, mediante
+APIs ficticias. Incluyen CDF correcto/vacío, error de análisis, directorio
+incorrecto/ausente/duplicado, ATR/AID inválidos, rutas/rangos/objetos inválidos,
+objeto privado sin lectura, valores inline omitidos y limpieza de recursos.
+El helper real compiló offline; no se modificaron OpenSC ni el observador.
+Sus 99 comprobaciones, las 6 del lanzador de firma y las 12 de operación previas
+siguen vigentes, sin repetir suites intactas.
+
+Después, el agente ejecutó una vez, sin PIN ni GUI:
+
+```sh
+nix develop --offline -c make inspect/jcop4-certificate-paths READER=0
+```
+
+Informe privado `local/jcop4-certificate-paths-HN4CjVzr/report.txt`,
+**2026-10-13T22:27:46Z**. Inventario y compilación correctos, binding nativo y
+análisis del CDF con resultado 0, unlock y proceso 0. Resumen permitido:
+
+```text
+certificate_paths_parse_result=0
+certificate_path_metadata_count=2
+certificate_path_index=0
+certificate_path_private=0
+certificate_storage=path_no_follow
+certificate_path=B001
+certificate_path_offset=0
+certificate_path_count=-1
+certificate_path_index=1
+certificate_path_private=0
+certificate_storage=path_no_follow
+certificate_path=B002
+certificate_path_offset=0
+certificate_path_count=-1
+certificate_paths_result=cdf7005_metadata_only_no_certificate_reads
+```
+
+El CDF de esta personalización referencia B001 y B002 como certificados X.509,
+sin marca de objeto privado y sin rango explícito. Esto vincula la solicitud
+B001 de Idopte con una referencia del CDF de la misma aplicación. No acredita
+por sí solo el contenido DER real, la ACL de lectura del EF ni qué objeto es
+el certificado de firma frente al de autenticación: no se imprimieron IDs ni
+se leyeron los certificados. Tampoco resuelve VERIFY6982 ni demuestra qué
+secuencia requiere la autenticación.
+
+No hubo lectura de B001/B002, PIN, VERIFY, MSE, PSO, escritura o Idopte. El guard
+Idopte mantiene SELECT/READ B001 bloqueados. Próximo contraste: SELECT-only
+B001 bajo este AID para consultar tamaño/estructura/atributos de control antes
+de decidir una observación de lectura acotada. No asumir permiso de lectura
+por private=0 ni política por coincidencia con el perfil uruguayo. No repetir
+el CDF o inventario Idopte idénticos por inercia. Archivos privados0700/0600
+fuera de Git; driver intacto y firma JCOP4/RSA3072 pendientes.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño

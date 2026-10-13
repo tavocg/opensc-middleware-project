@@ -14,7 +14,7 @@
 .PHONY: inspect/jcop4-security-info
 .PHONY: inspect/jcop4-pin-policy
 .PHONY: inspect/jcop4-odf-map
-.PHONY: inspect/jcop4-file4141 inspect/jcop4-file4109 inspect/jcop4-file7001 inspect/jcop4-file7002 inspect/jcop4-file7004 inspect/jcop4-file7005 inspect/jcop4-filedf0f inspect/jcop4-public-keys
+.PHONY: inspect/jcop4-file4141 inspect/jcop4-file4109 inspect/jcop4-file7001 inspect/jcop4-file7002 inspect/jcop4-file7004 inspect/jcop4-file7005 inspect/jcop4-filedf0f inspect/jcop4-public-keys inspect/jcop4-certificate-paths
 .PHONY: inspect/jcop4-idopte-compare inspect/jcop4-idopte-read4109 inspect/jcop4-idopte-aodf inspect/jcop4-idopte-prkdf inspect/jcop4-idopte-pukdf inspect/jcop4-idopte-cdf inspect/jcop4-idopte-pin-status inspect/jcop4-idopte-df0f inspect/jcop4-idopte-read-df0f
 .PHONY: inspect/jcop4-idopte
 .PHONY: inspect/jcop4-idopte-discovery inspect/jcop4-idopte-spy test/pcsc-public-observer
@@ -48,6 +48,7 @@ help:
 		'make inspect/jcop4-filedf0f Consulta control de DF0F en el AID observado, sin READ ni PIN.' \
 		'make inspect/jcop4-file7005 Consulta control del directorio CDF7005, sin READ ni PIN.' \
 		'make inspect/jcop4-file7004 Consulta control del directorio PuKDF7004, sin READ ni PIN.' \
+		'make inspect/jcop4-certificate-paths Resume rutas de certificados en CDF7005 sin seguirlas ni usar PIN.' \
 		'make inspect/jcop4-public-keys Resume algoritmos/referencias del PuKDF7004, sin leer las llaves ni PIN.' \
 		'make inspect/jcop4-file7002 Consulta control del directorio PrKDF7002 observado, sin READ ni PIN.' \
 		'make inspect/jcop4-file7001 Consulta control del directorio AODF 7001 observado, sin READ ni PIN.' \
@@ -129,6 +130,9 @@ inspect/jcop4-file7005:
 
 inspect/jcop4-file7004:
 	@bash scripts/probe-jcop4.sh "$$READER" --file7004
+
+inspect/jcop4-certificate-paths:
+	@bash scripts/probe-jcop4.sh "$$READER" --certificate-paths
 
 inspect/jcop4-public-keys:
 	@bash scripts/probe-jcop4.sh "$$READER" --public-keys
