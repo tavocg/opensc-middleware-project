@@ -70,19 +70,18 @@ sin el resumen ampliado.
 El usuario confirmó que **esta misma JCOP4 ya firmó satisfactoriamente con
 Idopte instalado**, en una prueba previa. No se ejecutó otra firma para
 comprobarlo ni se identificó todavía el protocolo de autenticación.
-Se amplía el resumen del helper para distinguir tags directos y los TLV
-inmediatos de A1, sin valores ni lectura de contenido. Su codificación compacta,
-si puede resumirse, no se usa como política global ni permiso READ.
-Con la misma tarjeta y otros clientes cerrados, siguiente consulta sin PIN:
+La última consulta, `9gvwdH1n` (16:53:35 UTC), terminó correctamente:
+SELECT 4141 `9000`, transparente/400 bytes y **tag de seguridad directo 86**.
+No aparecen A1/9C entre los tags reconocidos. La política sigue sin interpretar;
+no se leyó contenido ni hubo PIN. No repetir esa consulta o el descubrimiento
+Idopte como siguiente paso: hace falta identificar el perfil/codificación o
+decidir otro alcance de observación, conservando el bloqueo de READ 4141.
+Se pidió indicar si hay acceso a documentación técnica ChipDoc 3.2 o al perfil
+BCCR, sin solicitar firma nueva. Referencias exactas y evidencia en
+[docs/jcop4.md](docs/jcop4.md).
 
-```bash
-nix develop -c make inspect/jcop4-file4141 READER=0
-```
-
-Compila solo el helper; no recompila OpenSC ni carga Idopte. Pasaron **54
-comprobaciones del helper** y su compilación offline. Observador/lanzador
-intactos; sus 25/35 comprobaciones anteriores siguen vigentes. Los diagnósticos
-y sus límites están documentados en [docs/jcop4.md](docs/jcop4.md).
+Helper, observador y lanzador sin cambios; sus 54/25/35 comprobaciones anteriores
+siguen vigentes. Esta revisión solo actualiza documentación.
 
 El descubrimiento Idopte previo (`make inspect/jcop4-idopte-discovery`) compila
 solo un observador y consulta información de módulo/slots/tokens, sin login

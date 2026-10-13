@@ -1,6 +1,50 @@
 # libjcop3p11: contexto para continuar
 
 **JCOP4, 13 de octubre de 2026:** último informe revisado
+`local/jcop4-file4141-9gvwdH1n/report.txt`, **16:53:35 UTC**, principal
+`e4a227e`, OpenSC `3dfef6704`; ambos Git limpios al comenzar. Inventario,
+compilación, conexión/aplicación correctos. SELECT 4141 -> transporte 0/SW
+9000, transparente/400 bytes; **security_direct_tags=86**, security_format=
+profile_uninterpreted y standard_compact_read=uninterpreted. Unlock y proceso
+0. Sin READ/binding/PIN/autenticación. No error nuevo de tarjeta ni intento de PIN.
+Entre los tags directos que busca el helper no aparecen A1/9C/8C/8B/AB/62/6F;
+86 es la única forma reconocida, **no demuestra un único atributo físico ni
+que no existan otros tags omitidos**. No hay A1 que investigar en este resumen.
+No aplicar estructura o política JCOP3, ni identificar 4141 como público,
+CAN, llave, PACE obligatorio o causa de VERIFY 6982. No se registraron valores
+de 86; la política y el propósito del archivo siguen desconocidos.
+
+**No repetir SELECT 4141 ni descubrimiento Idopte como siguiente paso.** La
+última consulta ya respondió la duda estructural y no permite decidir READ.
+Se mantiene observador v6 bloqueando READ 4141. El error Idopte mEpNvPwv
+fue ese bloqueo antes de transmitir; no es el VERIFY 6982 de 5Dpadr1N.
+El usuario confirmó una firma previa satisfactoria de esta misma JCOP4 con
+Idopte instalado; no se pidió ni verificó otra firma/PDF por el agente.
+
+Investigación pública adicional no identificó 4141 ni la codificación de 86
+para esta personalización. ISO default almacena 86 como atributo de seguridad
+sin interpretarlo; los drivers iasecc/eOI/ChipDoc italiano no constituyen
+especificación de este perfil. No probar otra ubicación CardAccess, nuevos
+archivos/GET DATA/variantes PIN sin precedente aplicable por inercia.
+La bibliografía de NXP/ANSSI-CC-2025/03, sección 9.2, identifica exactamente
+**ChipDoc 3.2 User Guide Manual ref. 678510**, Crypto Guide ref.
+CDv3.2_1_03210_ChipDoc3.2_Crypto_Guide y SSCD Personalization Guide ref. 678712;
+referencias en docs/jcop4.md. No se obtuvo el contenido de esos manuales:
+una referencia bibliográfica no es especificación APDU ni evidencia CR.
+Se pidió al usuario indicar si tiene acceso a esos documentos o al perfil
+BCCR, sin solicitar firma/PIN. Respuesta pendiente. Próxima intervención es
+esa información, **no un nuevo Make de tarjeta**. Sin documentos, decidir
+explícitamente otro alcance de observación que proteja credenciales; no
+conceder READ desconocido o captura autenticada automáticamente ni contactar
+terceros sin instrucción. Restricciones existentes siguen vigentes.
+
+Cambios actuales solo documentación (AGENTS/README/docs). Helper, observador,
+lanzador, driver y submódulo intactos; las 54/25/35 comprobaciones anteriores
+siguen vigentes y no se repitieron por documentación. Sin hardware/Idopte/PIN/
+Git por el agente. Dar comandos de commit del principal. JCOP4/RSA 3072 aún
+no integrados. Preservar capturas privadas; nunca usar 4FGWOtpI como evidencia.
+
+Informe anterior de metadatos, antes de distinguir el tag directo:
 `local/jcop4-file4141-o5gvxntR/report.txt`, **16:38:38 UTC**, principal
 `3f894c6`, OpenSC `3dfef6704`, ambos Git limpios al comenzar. Inventario,
 compilación, conexión y aplicación correctos. SELECT 4141 -> 0/9000,

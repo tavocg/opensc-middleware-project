@@ -135,10 +135,17 @@ inmediatos de un único A1, con nombres fijos y sin valores, referencias ni
 contenido del EF. Resume la codificación de una única 8C anidada cuando es
 válida para EF transparente, **sin atribuirle el significado de ACL de contacto
 ni convertirla en política global**. Las otras formas/condiciones quedan
-sin interpretar. READ 4141 sigue bloqueado. Siguiente consulta:
-`nix develop -c make inspect/jcop4-file4141 READER=0`, misma tarjeta y otros
-clientes cerrados, sin PIN. Pasaron 54 comprobaciones del helper y su
-compilación real offline. Observador/lanzador/driver/submódulo sin cambios.
+sin interpretar. READ 4141 sigue bloqueado. La consulta nueva 9gvwdH1n (16:53:35 UTC,
+principal e4a227e) terminó 0: SELECT 4141 0/9000, transparente/400 bytes,
+**security_direct_tags=86**, política READ sin interpretar. No aparecen A1/9C
+entre los tags directos reconocidos, y no se registran valores ni número de
+atributos físicos. No lectura, binding, PIN o autenticación. No repetir esta
+consulta o el descubrimiento como siguiente paso. Se pidió indicar si hay
+acceso a los manuales técnicos ChipDoc 3.2 o al perfil BCCR, con referencias
+bibliográficas exactas en docs/jcop4.md; no son manuales cuyo contenido ya
+se haya obtenido ni prueba de la personalización CR. Driver/submódulo/helper/
+observador/lanzador sin cambios. Sus 54/25/35 comprobaciones anteriores
+siguen vigentes; esta revisión solo modifica documentación.
 
 `pcsc-spy` estándar registra los buffers transmitidos, que pueden incluir el
 PIN durante autenticación. No usarlo con el PIN real ni considerar un filtro

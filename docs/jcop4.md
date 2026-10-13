@@ -1452,6 +1452,71 @@ decidir el siguiente paso. **READ 4141 permanece bloqueado**; no repetir
 captura Idopte ni intentar autenticación todavía. VERIFY 6982, propósito del
 archivo, integración JCOP4 y transporte RSA 3072 siguen pendientes.
 
+## Tag directo 86 confirmado: 13 de octubre, 16:53:35 UTC
+
+Informe privado `local/jcop4-file4141-9gvwdH1n/report.txt`, principal `e4a227e`
+y OpenSC `3dfef6704`; ambos Git limpios al comenzar. Inventario/ATR, compilación,
+conexión y selección de aplicación correctos. Resultados:
+
+```text
+file4141_select_transport=0
+file4141_select_sw=9000
+file4141_structure=transparent
+file4141_size=400
+file4141_security_format=profile_uninterpreted
+file4141_security_direct_tags=86
+file4141_standard_compact_read=uninterpreted
+file4141_result=selected_metadata_only_no_read
+unlock_result=0
+exit_status=0
+```
+
+La consulta funcionó. **86 es la única forma de seguridad directa reconocida**
+por el conjunto fijo de tags del helper; no aparecen A1/9C/8C/8B/AB/62/6F.
+Eso no acredita un único atributo físico, ausencia de otros tags omitidos ni
+una política concreta. No hay un A1 cuyo contenido anidado se pueda resumir
+en este informe. No se registraron valores de seguridad ni se leyó contenido del EF; no se
+ejecutó binding, PIN, autenticación o firma.
+
+[El parser ISO de OpenSC](../vendor/opensc/src/libopensc/iso7816.c) conserva
+86 como atributo de seguridad mediante sc_file_set_sec_attr, sin interpretar
+su política. La presencia de ese tag no identifica una aplicación particular.
+No trasladar el formato de ACL de otro driver; tampoco identifica 4141 como
+archivo público, CAN, llave o parámetros PACE. El VERIFY autenticado 6982 de
+5Dpadr1N permanece sin causa resuelta. El error de Idopte mEpNvPwv fue un READ
+bloqueado por el observador antes de llegar a la tarjeta, evidencia distinta.
+
+Las búsquedas adicionales no identificaron 4141 ni la codificación de 86 para
+esta personalización. No prueba que esa documentación no exista. Se identifican
+los manuales técnicos concretos que podrían resolverlo en la bibliografía
+9.2 (página 67) de la
+[cible de seguridad NXP/ANSSI-CC-2025/03](https://messervices.cyber.gouv.fr/visas/ANSSI-CC-2025-03-cible.pdf):
+
+| Documento | Referencia | Revisión |
+| --- | --- | --- |
+| ChipDoc 3.2 User Guide Manual | 678510 | 1.0, 22 de abril de 2021 |
+| ChipDoc 3.2 Crypto Guide | CDv3.2_1_03210_ChipDoc3.2_Crypto_Guide | 1.0, 29 de abril de 2021 |
+| ChipDoc 3.2 SSCD Personalization Guide | 678712 | 1.2, 2 de diciembre de 2024 |
+
+**Solo se obtuvo esa referencia bibliográfica, no el contenido de los manuales.**
+Tampoco acredita que la tarjeta CR use la configuración certificada descrita.
+Se pidió al usuario indicar si tiene acceso a esos documentos o a la
+especificación del perfil BCCR. La información necesaria es la función de 4141,
+la codificación de sus atributos 86, el canal/contexto requerido antes de VERIFY
+y la ubicación documentada de sus parámetros públicos. No se solicita otra
+firma ni PIN; ya confirmó firma previa satisfactoria con Idopte.
+
+No repetir SELECT/descubrimiento, explorar otro archivo o reintentar PIN por
+inercia. **READ 4141 permanece bloqueado**. Sin documentación, habrá que decidir
+otro alcance concreto de observación que proteja credenciales; este resultado
+no lo autoriza por sí solo. No contactar terceros ni capturar una sesión
+Idopte autenticada con pcsc-spy estándar.
+
+Cambios solo en documentación. Helper/observador/lanzador/driver/submódulo
+intactos; sus 54/25/35 comprobaciones anteriores siguen vigentes, sin repetir
+suites por estos cambios. No hardware, carga de Idopte, PIN ni Git por el agente.
+JCOP4, RSA 3072 y arquitectura final siguen pendientes.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño
