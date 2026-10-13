@@ -60,6 +60,12 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *pci,
 	(void)pci; (void)rpci;
 	/* Any leaked authentication or other command fails the fixture immediately. */
 	assert(card == 7 && cmd[0] == 0);
+	if (cmd[1] == 0x20) {
+		assert(size == 4 && !memcmp(cmd, "\x00\x20\x00\x01", 4) && selected_file == 0x3F00);
+		assert(getenv("JCOP4_DIAGNOSTIC_PIN_STATUS") && *len == 2);
+		calls++; response[0] = 0x63; response[1] = 0xC7; *len = 2;
+		return SCARD_S_SUCCESS;
+	}
 	if (cmd[1] == 0xCA) {
 		assert(size == 5 && cmd[2] == 1 && (cmd[3] == 0x16 || cmd[3] == 0));
 	} else if (cmd[1] == 0xA4) {
@@ -77,9 +83,17 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *pci,
 					(size == 8 && cmd[7] == 0 && cmd[2] == 2 && fid == 0x4109 && selected_file == 0x4141) ||
 					(size == 8 && cmd[7] == 0 && cmd[2] == 2 && fid == 0x7001 && selected_file == 0x4109) ||
 					(size == 8 && cmd[7] == 0 && cmd[2] == 2 && fid == 0x7002 && selected_file == 0x7001) ||
-					(size == 8 && cmd[7] == 0 && cmd[2] == 2 && fid == 0x7004 && selected_file == 0x7002));
+					(size == 8 && cmd[7] == 0 && cmd[2] == 2 && fid == 0x7004 && selected_file == 0x7002) ||
+					(size == 8 && cmd[7] == 0 && cmd[2] == 2 && fid == 0x7005 && selected_file == 0x7004));
 			selected_file = fid;
 		}
+	} else if (cmd[1] == 0xB0 && selected_file == 0x7005) {
+		assert(size == 5 && cmd[2] == 0 && cmd[3] == 0 && cmd[4] == 0);
+		assert(getenv("JCOP4_DIAGNOSTIC_CDF") && *len == 258);
+		calls++;
+		memset(response, 'X', 256); memcpy(response, "PRIVATE_CDF_INFO", 16);
+		response[256] = 0x90; response[257] = 0; *len = 258;
+		return SCARD_S_SUCCESS;
 	} else if (cmd[1] == 0xB0 && selected_file == 0x7004) {
 		assert(size == 5 && cmd[2] == 0 && cmd[3] == 0 && cmd[4] == 0);
 		assert(getenv("JCOP4_DIAGNOSTIC_PUKDF") && *len == 258);

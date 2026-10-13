@@ -2592,6 +2592,129 @@ obtenido. No habilitar otros archivos por inercia ni repetir esta consulta
 idéntica. Hasta ahora ningún comando de canal/autenticación de Idopte se ha
 observado antes del bloqueo; el requisito de VERIFY sigue pendiente.
 
+## CDF7005 y estado PIN sin datos; SELECT DF0F pendiente: 13 de octubre
+
+Principal `387d233`, OpenSC `3dfef6704`, ambos limpios al comenzar; usuario hizo
+commit anterior. El agente ejecutó las siguientes consultas sin PIN/GUI; no se
+solicitó login, firma o escritura. Las lecturas entregan datos solo a Idopte,
+no los registran. Directorio/informes privados0700/0600.
+
+### Control y lectura CDF
+
+SELECT-only7005, informe `local/jcop4-file7005-eK0x57Vx/report.txt`,
+**21:26:20 UTC**: SELECT0/9000, transparente/**2368bytes**, tag86/
+profile_uninterpreted/read_uninterpreted; conexión/inventario/compilación/
+EF.ATR/EF.DIR/unlock/proceso correctos, sin READ en esa consulta. El ODF ya
+identifica7005=`certificates` y el inventario nativo obtuvo certificados públicos.
+
+Nuevo modo **inspect/jcop4-idopte-cdf**, opt-in `JCOP4_DIAGNOSTIC_CDF=1` junto a
+los anteriores exclusivamente en Idopte inventario/slots/empty stdin. Requiere
+ATR/ADF conocidos y READ7004 previo para SELECT7005 exacto básico/9000.
+READ BINARY caso2 básico corto/extendido sin SFI/datos/SM, hasta256por petición,
+presupuesto2368 y11llamadas por proceso, continuidad desde0 según datos
+devueltos. SELECT/reconexión no reponen presupuesto/cursor. BufferLe+2 máximo258,
+SW9000/6282 únicamente; errores/tamaño/continuación/log fallido detienen sin
+GET RESPONSE/reintento. Modos anteriores siguen bloqueando7005; inventario/firma
+limpian el nuevo opt-in heredado. No se siguen otras rutas de certificados.
+
+Primera ejecución, `local/jcop4-idopte-cdf-x3Np9eLh/report.txt`,
+**21:29:08 UTC**: compilación/inventario/ATR correctos, **67 APDU0/9000**,
+11READ7005 aceptados (últimooffset08B6); luego SELECT00A40000/9000 y
+VERIFY00200001 bloqueado antes de transmitir. Proceso/módulo0, events_recorded.
+**El código0 no acreditaba inventario Cryptoki satisfactorio**: el resultado
+impreso por C_GetTokenInfo fue CKR_TOKEN_NOT_PRESENT. No PIN ni respuesta de
+tarjeta al VERIFY bloqueado.
+
+### Distinguir VERIFY vacío de una credencial
+
+Se añadieron dos etiquetas, sin cambiar permisos: `known_master_file` para
+SELECT básico al3F00 conocido, y `blocked_verify_form=case1_no_data` para
+00/20/00/01 de exactamente4bytes. Variante header+00 se clasifica separadamente;
+otros casos como other_contents_omitted, nunca contenido/longitud/otro PINref.
+La revisión anterior solo tenía cabeceras; esta consulta se repitió una vez
+para recuperar esa distinción antes omitida, no para reintentar autenticación.
+
+Informe `local/jcop4-idopte-cdf-WJMGxt0U/report.txt`, **21:31:50 UTC**: mismas
+67APDU0/9000 y module_exit_status0, **SELECT MF3F00/9000 seguido de VERIFY1
+case1_no_data bloqueado**. C_GetTokenInfo volvió a CKR_TOKEN_NOT_PRESENT; ningún
+PIN se proporcionó o llegó a la tarjeta. Solo se confirmó la forma/contexto de
+una consulta de estado. No identifica el contexto/formato usado por C_Login.
+
+### Excepción independiente para estado, sin autenticación
+
+Nuevo **inspect/jcop4-idopte-pin-status**, opt-in
+`JCOP4_DIAGNOSTIC_PIN_STATUS=1` solo junto al modo CDF. Permite exclusivamente
+00 20 00 01 (caso1 sin datos), una vez por proceso después de READ7005 y bajo
+MF confirmado/ATR conocido/sin continuación pendiente. Otro canal/ref/caso,
+credencial, repetición o falta de contexto se bloquean antes del backend.
+Usa buffer temporal de exactamente2bytes; solo una respuesta SW1/SW2 se devuelve.
+Error/tamaño distinto/log fallido detienen. No crea una sesión de login ni
+transmite un PIN; la consulta no es un intento de verificación con credencial.
+No cambia la prohibición de VERIFY en modos anteriores. PIN/MSE/GA/SM/PSO/
+escrituras siguen bloqueados. Inventario y firma limpian el opt-in externo.
+
+El agente ejecutó una vez:
+`nix develop --offline -c make inspect/jcop4-idopte-pin-status READER=0`.
+Informe `local/jcop4-idopte-pin-status-1qsDoPci/report.txt`, **21:38:03 UTC**:
+
+```text
+public_select=known_master_file
+transport=0
+sw=9000
+diagnostic_pin_status=mf_pin1_case1_no_data
+public_header=00200001
+transport=0
+sw=63C7
+public_select=known_chipdoc_application
+transport=0
+sw=9000
+blocked_header=00A40200
+blocked_select_ef=DF0F
+token_info_result=CKR_TOKEN_NOT_PRESENT
+module_exit_status=0
+observer_result=events_recorded
+diagnostic_result=token_info_unavailable
+```
+
+69APDU transmitidas:68SW9000 y una63C7. Consulta de estado aceptada, sin PIN/
+autenticación; 63C7 informa estado en ese momento, no verifica un PIN ni mide
+un contador antes/después de un intento. Idopte seleccionó otra vez el AID
+ChipDoc conocido y luego intentó SELECT DF0F; **DF0F no se transmitió**, no tiene
+SW de tarjeta, FCP o contenido capturado. Este bloqueo nuevo impide obtener
+información del token; no es el VERIFY6982 anterior ni un error del estado vacío.
+No ODF leído identificaDF0F; su función todavía no se conoce. No etiquetarlo
+como canal/PACE/CA/licencia ni permitir READ por su solo identificador.
+
+El lanzador ahora analiza solo mensajes fijos de pkcs11-tool para registrar
+`token_info_result` (returned/returned_uninitialized/CKR_/not_observed), sin
+IDs o etiquetas. Si C_GetTokenInfo falla aunque el proceso salga0, preserva
+module_exit_status0 y termina el diagnóstico con1/token_info_unavailable.
+Así un proceso terminado no se confunde con un token correctamente enumerado.
+
+Pasaron **66 helper,83 observador/constructor/decoder,69 lanzador y6 lanzador
+firma**, sin hardware; biblioteca/helper reales compilados. Nuevas regresiones
+cubren presupuesto CDF, clasificadores MF/VERIFY, SW-only de2bytes, contexto/
+referencia/caso/repetición, opt-ins aislados, PIN con datos bloqueado y fallo de
+C_GetTokenInfo con proceso0. El test previo que esperaba ausencia de cualquier
+etiqueta SELECT bajo MF se ajustó a la etiqueta MF nueva; la protección de
+SELECT4141 fuera de ADF se mantiene. Driver/operación firma intactos, suite12
+previa vigente sin repetir. JCOP4/RSA3072 siguen pendientes.
+
+### Investigación documental de DF0F
+
+No referencia aplicable encontrada en código local/ZIP revisado. La fuente
+primaria [License Management de Idopte](https://www.idopte.fr/licensesys/)
+confirma que su middleware maneja licencias almacenadas en un archivo de la
+tarjeta y que C_GetTokenInfo participa en ese sistema. **Esa página no identifica
+DF0F**, por lo que no demuestra que este FID sea el archivo de licencia en CR
+ni la causa de VERIFY6982. No se ejecutaron herramientas de licencias, cambios
+de atributos, generación, créditos o carga. No se modificó la tarjeta.
+
+Próximo paso concreto: SELECT-only DF0F en el AID observado para conocer su
+control, o una definición primaria del perfil que identifique el archivo.
+No repetir la consulta de estado ni pedir PIN por inercia. La prueba del estado
+bajo MF ya respondió63C7; el siguiente bloqueo está identificado.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño

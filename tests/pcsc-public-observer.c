@@ -64,7 +64,7 @@ static FILE *fixture_reset(void)
 	control_size = 16; control_result = 0;
 	fixture_sw = 0x9000;
 	fixture_payload = 16; fixture_overrun = 0;
-	compare_pukdf = read7004_budget = read7004_offset = read7004_calls = compare_prkdf = read7002_budget = read7002_offset = read7002_calls = compare_aodf = read7001_budget = read7001_offset = read7001_calls = compare_read4109 = read4109_calls = compare_read4141 = read4141_budget = read4141_offset = read4141_calls = 0;
+	compare_pin_status = pin_status_calls = compare_cdf = read7005_budget = read7005_offset = read7005_calls = compare_pukdf = read7004_budget = read7004_offset = read7004_calls = compare_prkdf = read7002_budget = read7002_offset = read7002_calls = compare_aodf = read7001_budget = read7001_offset = read7001_calls = compare_read4109 = read4109_calls = compare_read4141 = read4141_budget = read4141_offset = read4141_calls = 0;
 	comparison_atr_ok = 1; /* Unit fixture simulates a validated connection. */
 	return file;
 }
@@ -119,6 +119,15 @@ static FILE *fixture_pukdf(void)
 	assert(send_command(target, sizeof(target)) == 0 && selected_public_file == 7);
 	return file;
 }
+static FILE *fixture_cdf(void)
+{
+	const unsigned char read[] = { 0, 0xB0, 0, 0, 0 };
+	const unsigned char target[] = { 0, 0xA4, 2, 0, 2, 0x70, 5, 0 };
+	FILE *file = fixture_pukdf(); compare_cdf = 1;
+	assert(send_large(read, sizeof(read)) == 0 && read7004_calls == 1);
+	assert(send_command(target, sizeof(target)) == 0 && selected_public_file == 8);
+	return file;
+}
 int main(void)
 {
 	const unsigned char select[] = { 0, 0xA4, 0, 0x0C, 2, 0x2F, 0 };
@@ -146,6 +155,111 @@ int main(void)
 			send_command(version, sizeof(version)) == 0 && calls == 5);
 	check_private(file);
 	puts("PASS public observer forwards only allowed discovery and logs no payloads or lengths");
+	{
+		const unsigned char empty[] = { 0, 0x20, 0, 1 };
+		for (int i = 0; i < 9; i++) {
+			unsigned char bad[sizeof(empty)]; memcpy(bad, empty, sizeof(bad));
+			file = fixture_cdf(); compare_pin_status = 1;
+			assert(send_large(read, sizeof(read)) == 0 && read7005_calls == 1);
+			assert(send_command(mf, sizeof(mf)) == 0 && selected_mf && !selected_app);
+			fixture_payload = 0; fixture_sw = 0x63C7;
+			if (i == 1) bad[0] = 1;
+			if (i == 2) bad[3] = 0x81;
+			if (i == 3) compare_pin_status = 0;
+			if (i == 4) selected_mf = 0;
+			if (i == 5) read7005_calls = 0;
+			if (i == 6) comparison_atr_ok = 0;
+			if (i == 7) pending_response = 1;
+			if (i == 8) fixture_overrun = 1;
+			int before = calls;
+			assert((send_command(bad, sizeof(bad)) == 0) == (i == 0));
+			assert(calls == before + (i == 0 || i == 8));
+			if (i == 0) {
+				assert(pin_status_calls == 1);
+				assert(send_command(empty, sizeof(empty)) != 0 && calls == before + 1);
+			}
+			assert(send_command(pin, sizeof(pin)) != 0);
+			check_private(file);
+		}
+		puts("PASS independent no-data status opt-in allows one exact PIN1 query only under confirmed MF after CDF, bounds SW-only response and rejects retry/context errors");
+		file = fixture_cdf(); compare_pin_status = 1;
+		assert(send_large(read, sizeof(read)) == 0 && send_command(mf, sizeof(mf)) == 0);
+		int before = calls;
+		assert(send_command(pin, sizeof(pin)) != 0 && calls == before && !pin_status_calls);
+		check_private(file);
+		puts("PASS enabling PIN-status diagnostics still blocks any credential-bearing VERIFY before backend");
+	}
+	{
+		const unsigned char empty[] = { 0, 0x20, 0, 1 };
+		const unsigned char zero[] = { 0, 0x20, 0, 1, 0 };
+		for (int i = 0; i < 3; i++) {
+			char log[512] = {0};
+			file = fixture_reset();
+			assert(send_command(i == 0 ? empty : i == 1 ? zero : pin,
+					i == 0 ? sizeof(empty) : i == 1 ? sizeof(zero) : sizeof(pin)) != 0 && !calls);
+			fflush(file); rewind(file); assert(fread(log, 1, sizeof(log)-1, file) < sizeof(log)-1);
+			assert(strstr(log, i == 0 ? "blocked_verify_form=case1_no_data" :
+					i == 1 ? "blocked_verify_form=header_plus_zero_no_data" : "blocked_verify_form=other_contents_omitted"));
+			check_private(file);
+		}
+		puts("PASS known PIN-1 VERIFY classifier distinguishes no-data forms without forwarding any VERIFY or logging credentials/lengths");
+		file = fixture_reset(); assert(send_command(mf, sizeof(mf)) == 0);
+		{
+			char log[512] = {0};
+			fflush(file); rewind(file); assert(fread(log, 1, sizeof(log)-1, file) < sizeof(log)-1);
+			assert(strstr(log, "public_select=known_master_file"));
+		}
+		check_private(file);
+		puts("PASS master-file SELECT marker uses only the known basic-channel 3F00 constant without recording other selection data");
+	}
+	{
+		const unsigned char target[] = { 0, 0xA4, 2, 0, 2, 0x70, 5, 0 };
+		unsigned char chunk[] = { 0, 0xB0, 0, 0, 0 };
+		file = fixture_cdf(); fixture_payload = 256;
+		for (unsigned int i = 0; i < 9; i++) {
+			chunk[2] = i; chunk[3] = 0;
+			assert(send_large(chunk, sizeof(chunk)) == 0);
+		}
+		chunk[2] = 9; chunk[4] = 64; fixture_payload = 64;
+		assert(send_large(chunk, sizeof(chunk)) == 0 && read7005_budget == 2368 && read7005_offset == 2368 && read7005_calls == 10);
+		fixture_payload = 16; assert(send_command(target, sizeof(target)) == 0);
+		chunk[2] = 0; int before = calls;
+		assert(send_large(chunk, sizeof(chunk)) != 0 && calls == before);
+		check_private(file);
+		puts("PASS CDF enforces its 2368-byte contiguous budget with a short final read and no renewal on reselect");
+		file = fixture_cdf(); chunk[4] = 16; fixture_payload = 16;
+		for (unsigned int i = 0; i < 11; i++) {
+			chunk[3] = i * 16;
+			assert(send_large(chunk, sizeof(chunk)) == 0);
+		}
+		chunk[3] = 176; before = calls;
+		assert(send_large(chunk, sizeof(chunk)) != 0 && calls == before && read7005_calls == 11);
+		check_private(file);
+		puts("PASS CDF has an independent eleven-call limit even if its byte budget remains");
+		for (int i = 0; i < 11; i++) {
+			unsigned char bad[] = { 0, 0xB0, 0, 0, 0 };
+			file = fixture_cdf(); before = calls;
+			if (i == 0) bad[0] = 1;
+			if (i == 1) bad[0] = 0x0C;
+			if (i == 2) bad[2] = 0x80;
+			if (i == 3) bad[3] = 1;
+			if (i == 4) compare_cdf = 0;
+			if (i == 5) comparison_atr_ok = 0;
+			if (i == 6) fixture_sw = 0x6982;
+			if (i == 7) fixture_sw = 0x6101;
+			if (i == 8) fixture_overrun = 1;
+			if (i >= 9) {
+				if (i == 9) compare_cdf = 0;
+				if (i == 10) read7004_calls = 0;
+				assert(send_command(target, sizeof(target)) != 0 && calls == before);
+			} else {
+				assert(send_large(bad, sizeof(bad)) != 0 && stopped && calls == before + (i >= 6));
+			}
+			assert(send_large(get_response, sizeof(get_response)) != 0 && send_command(pin, sizeof(pin)) != 0);
+			check_private(file);
+		}
+		puts("PASS CDF rejects missing parent sequence, altered context/form, security/continuation or overrun and never transmits PIN");
+	}
 	{
 		const unsigned char target[] = { 0, 0xA4, 2, 0, 2, 0x70, 4, 0 };
 		unsigned char chunk[] = { 0, 0xB0, 0, 0, 0 };

@@ -14,8 +14,8 @@
 .PHONY: inspect/jcop4-security-info
 .PHONY: inspect/jcop4-pin-policy
 .PHONY: inspect/jcop4-odf-map
-.PHONY: inspect/jcop4-file4141 inspect/jcop4-file4109 inspect/jcop4-file7001 inspect/jcop4-file7002 inspect/jcop4-file7004 inspect/jcop4-public-keys
-.PHONY: inspect/jcop4-idopte-compare inspect/jcop4-idopte-read4109 inspect/jcop4-idopte-aodf inspect/jcop4-idopte-prkdf inspect/jcop4-idopte-pukdf
+.PHONY: inspect/jcop4-file4141 inspect/jcop4-file4109 inspect/jcop4-file7001 inspect/jcop4-file7002 inspect/jcop4-file7004 inspect/jcop4-file7005 inspect/jcop4-public-keys
+.PHONY: inspect/jcop4-idopte-compare inspect/jcop4-idopte-read4109 inspect/jcop4-idopte-aodf inspect/jcop4-idopte-prkdf inspect/jcop4-idopte-pukdf inspect/jcop4-idopte-cdf inspect/jcop4-idopte-pin-status
 .PHONY: inspect/jcop4-idopte
 .PHONY: inspect/jcop4-idopte-discovery inspect/jcop4-idopte-spy test/pcsc-public-observer
 
@@ -45,6 +45,7 @@ help:
 		'make inspect/jcop4-security-info Consulta metadatos de autenticación, versión y CardAccess, sin PIN.' \
 		'make inspect/jcop4-pin-policy Consulta DOCP del PIN 1 en raíz/aplicación, sin PIN ni autenticación.' \
 		'make inspect/jcop4-odf-map Lee referencias del directorio 5031 sin seguirlas ni autenticar.' \
+		'make inspect/jcop4-file7005 Consulta control del directorio CDF7005, sin READ ni PIN.' \
 		'make inspect/jcop4-file7004 Consulta control del directorio PuKDF7004, sin READ ni PIN.' \
 		'make inspect/jcop4-public-keys Resume algoritmos/referencias del PuKDF7004, sin leer las llaves ni PIN.' \
 		'make inspect/jcop4-file7002 Consulta control del directorio PrKDF7002 observado, sin READ ni PIN.' \
@@ -59,6 +60,8 @@ help:
 		'make inspect/jcop4-idopte-aodf Observa Idopte tras lectura acotada del directorio AODF7001, sin PIN.' \
 		'make inspect/jcop4-idopte-prkdf Observa Idopte tras lectura acotada de metadatos PrKDF7002, sin PIN.' \
 		'make inspect/jcop4-idopte-pukdf Observa Idopte tras lectura acotada de metadatos PuKDF7004, sin PIN.' \
+		'make inspect/jcop4-idopte-cdf Observa Idopte tras lectura acotada de CDF7005, sin PIN.' \
+		'make inspect/jcop4-idopte-pin-status Permite una sola consulta de estado VERIFY sin datos en MF, sin PIN ni login.' \
 		'make test/pcsc-public-observer Comprueba el observador sin lector ni tarjeta.' \
 		'make sign/jcop4-apdu      Firma experimental RSA SHA-256 por APDU y verifica, un intento de PIN.' \
 		'make sign/jcop4-verify-first Mismo diagnóstico, verifica PIN antes de MSE; un intento y verificación OpenSSL.' \
@@ -115,6 +118,9 @@ inspect/jcop4-pin-policy:
 inspect/jcop4-odf-map:
 	@bash scripts/probe-jcop4.sh "$$READER" --odf-map
 
+inspect/jcop4-file7005:
+	@bash scripts/probe-jcop4.sh "$$READER" --file7005
+
 inspect/jcop4-file7004:
 	@bash scripts/probe-jcop4.sh "$$READER" --file7004
 
@@ -132,6 +138,12 @@ inspect/jcop4-file4109:
 
 inspect/jcop4-file4141:
 	@bash scripts/probe-jcop4.sh "$$READER" --file4141
+
+inspect/jcop4-idopte-pin-status:
+	@bash scripts/probe-jcop4.sh "$$READER" --idopte-pin-status
+
+inspect/jcop4-idopte-cdf:
+	@bash scripts/probe-jcop4.sh "$$READER" --idopte-cdf
 
 inspect/jcop4-idopte-pukdf:
 	@bash scripts/probe-jcop4.sh "$$READER" --idopte-pukdf

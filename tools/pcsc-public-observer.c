@@ -2,8 +2,9 @@
  * An opt-in pcsc-spy stream captures only permitted SELECT 4141 control
  * information; never authentication buffers or that EF's contents.
  * Separate opt-ins permit bounded READ 4141, one 17-byte READ 4109 and
- * bounded AODF7001/PrKDF7002/PuKDF7004 reads to Idopte only, without recording
- * contents or forwarding authentication. */
+ * bounded AODF7001/PrKDF7002/PuKDF7004/CDF7005 reads to Idopte only, without
+ * recording contents or forwarding authentication. One further opt-in permits
+ * a single, exact no-data PIN status request under MF; never credentials. */
 #define _GNU_SOURCE
 #include <dlfcn.h>
 #include <fcntl.h>
@@ -18,12 +19,14 @@
 
 static int trace_fd = -1, stopped, selected_public_file, selected_mf, selected_app, handle_set, pending_response;
 static int select_spy_fd = -1;
-static int compare_read4141, compare_read4109, compare_aodf, compare_prkdf, compare_pukdf;
+static int compare_read4141, compare_read4109, compare_aodf, compare_prkdf, compare_pukdf, compare_cdf, compare_pin_status;
+static unsigned int pin_status_calls;
 static int comparison_atr_ok;
 static unsigned int read4141_budget, read4141_offset, read4141_calls, read4109_calls;
 static unsigned int read7001_budget, read7001_offset, read7001_calls;
 static unsigned int read7002_budget, read7002_offset, read7002_calls;
 static unsigned int read7004_budget, read7004_offset, read7004_calls;
+static unsigned int read7005_budget, read7005_offset, read7005_calls;
 static unsigned int events;
 static unsigned int lifecycle_events;
 static SCARDHANDLE trace_handle;
@@ -74,6 +77,22 @@ __attribute__((constructor)) static void observer_init(void)
 		else {
 			compare_pukdf = 1;
 			if (dprintf(trace_fd, "comparison_public_keys=bounded_pukdf7004_contents_omitted\n") < 0) stopped = 1;
+		}
+	}
+	path = getenv("JCOP4_DIAGNOSTIC_CDF");
+	if (path) {
+		if (strcmp(path, "1") || !compare_pukdf || trace_fd < 0) stopped = 1;
+		else {
+			compare_cdf = 1;
+			if (dprintf(trace_fd, "comparison_certificates=bounded_cdf7005_contents_omitted\n") < 0) stopped = 1;
+		}
+	}
+	path = getenv("JCOP4_DIAGNOSTIC_PIN_STATUS");
+	if (path) {
+		if (strcmp(path, "1") || !compare_cdf || trace_fd < 0) stopped = 1;
+		else {
+			compare_pin_status = 1;
+			if (dprintf(trace_fd, "comparison_pin_status=mf_pin1_case1_once_no_data\n") < 0) stopped = 1;
 		}
 	}
 	path = getenv("JCOP4_PUBLIC_SELECT_SPY_TRACE");
@@ -286,6 +305,17 @@ static int allowed_command(const unsigned char *cmd, DWORD len, int *next_file, 
 				*next_app = 1;
 				return 1;
 			}
+			if (fid == 0x7005) {
+				/* This ODF's CDF: transparent/2368 bytes independently
+				 * confirmed; public certificates inventoried without login. */
+				if (!compare_cdf || !comparison_atr_ok || !selected_app ||
+						!read7004_calls || cmd[0] != 0 || cmd[2] != 2 || cmd[3] != 0 || lc != 2)
+					return 0;
+				*next_file = 8;
+				*next_mf = 0;
+				*next_app = 1;
+				return 1;
+			}
 			if (fid == 0xD003) {
 				/* EF.SN precedent: ANS CPS4 section 3.1.2. Only the observed
 				 * SELECT EF form under a confirmed MF; never record its data. */
@@ -308,6 +338,12 @@ static int allowed_command(const unsigned char *cmd, DWORD len, int *next_file, 
 		}
 		return 0;
 	}
+	if (cmd[1] == 0x20)
+		/* Idopte observed this exact no-data status request after SELECT MF.
+		 * Never allow a credential-bearing VERIFY, another reference or retry. */
+		return compare_pin_status && comparison_atr_ok && selected_mf && !pending_response &&
+				read7005_calls && !pin_status_calls && len == 4 &&
+				!memcmp(cmd, "\x00\x20\x00\x01", 4);
 	if (cmd[1] == 0xCA)
 		/* 0100 is ChipDoc applet-name discovery (ANSSI-CC-2018/07,
 		 * section 1.2.4). Only the observed basic-channel case-2 command;
@@ -347,6 +383,13 @@ static int allowed_command(const unsigned char *cmd, DWORD len, int *next_file, 
 				offset == read7004_offset && offset <= 4096 && size <= 4096 - offset &&
 				read7004_budget <= 4096 - size && read7004_calls < 19;
 	}
+	if (cmd[1] == 0xB0 && selected_public_file == 8) {
+		unsigned int size = read4141_size(cmd, len);
+		unsigned int offset = ((unsigned int)cmd[2] << 8) | cmd[3];
+		return compare_cdf && comparison_atr_ok && selected_app && size && size <= 256 &&
+				offset == read7005_offset && offset <= 2368 && size <= 2368 - offset &&
+				read7005_budget <= 2368 - size && read7005_calls < 11;
+	}
 	if (cmd[1] == 0xB0)
 		return selected_public_file && len == 5 && !(cmd[2] & 0x80) &&
 				(selected_public_file != 2 || cmd[0] == 0);
@@ -370,7 +413,7 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
 	unsigned char bounded[402];
 	DWORD bounded_size = sizeof(bounded);
 	unsigned int read_size = 0, read_fid = 0;
-	int diagnostic_read = 0;
+	int diagnostic_read = 0, diagnostic_pin_status = 0;
 	int next_file = -1, next_mf = -1, next_app = -1;
 	unsigned int sw;
 	struct timeval start;
@@ -390,6 +433,11 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
 			dprintf(trace_fd, "blocked_header=%02X%02X%02X%02X\n", cmd[0], cmd[1], cmd[2], cmd[3]);
 		else
 			dprintf(trace_fd, "blocked=invalid_command\n");
+		/* Classify the known PIN-1 status shape without logging any
+		 * credential, input length or variable reference. Still blocked. */
+		if (cmd && len >= 4 && !memcmp(cmd, "\x00\x20\x00\x01", 4))
+			dprintf(trace_fd, "blocked_verify_form=%s\n", len == 4 ? "case1_no_data" :
+					len == 5 && !cmd[4] ? "header_plus_zero_no_data" : "other_contents_omitted");
 		if (cmd && len >= 4 && cmd[0] == 0 && cmd[1] == 0xA4 && cmd[2] == 2 && cmd[3] == 0) {
 			if ((len == 7 || len == 8) && cmd[4] == 2)
 				dprintf(trace_fd, "blocked_select_ef=%02X%02X\n", cmd[5], cmd[6]);
@@ -411,10 +459,10 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
 		stopped = 1;
 		goto out;
 	}
-	diagnostic_read = (selected_public_file >= 3 && selected_public_file <= 7) && cmd[1] == 0xB0;
+	diagnostic_read = (selected_public_file >= 3 && selected_public_file <= 8) && cmd[1] == 0xB0;
 	if (diagnostic_read) {
 		read_size = read4141_size(cmd, len);
-		read_fid = selected_public_file == 7 ? 0x7004 : selected_public_file == 6 ? 0x7002 : selected_public_file == 5 ? 0x7001 : selected_public_file == 4 ? 0x4109 : 0x4141;
+		read_fid = selected_public_file == 8 ? 0x7005 : selected_public_file == 7 ? 0x7004 : selected_public_file == 6 ? 0x7002 : selected_public_file == 5 ? 0x7001 : selected_public_file == 4 ? 0x4109 : 0x4141;
 		if (!response || !response_len || capacity < read_size + 2) {
 			dprintf(trace_fd, "blocked=read%04X_output_buffer\n", read_fid);
 			stopped = 1;
@@ -432,19 +480,35 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
 		} else if (read_fid == 0x7002) {
 			read7002_budget += read_size;
 			read7002_calls++;
-		} else {
+		} else if (read_fid == 0x7004) {
 			read7004_budget += read_size;
 			read7004_calls++;
+		} else {
+			read7005_budget += read_size;
+			read7005_calls++;
 		}
 		if (dprintf(trace_fd, "diagnostic_read=known_%04X_contents_omitted\n", read_fid) < 0) {
 			stopped = 1;
 			goto out;
 		}
 	}
+	diagnostic_pin_status = cmd[1] == 0x20;
+	if (diagnostic_pin_status) {
+		if (!response || !response_len || capacity < 2) {
+			dprintf(trace_fd, "blocked=pin_status_output_buffer\n"); stopped = 1; goto out;
+		}
+		bounded_size = 2; pin_status_calls++;
+		if (dprintf(trace_fd, "diagnostic_pin_status=mf_pin1_case1_no_data\n") < 0) {
+			stopped = 1; goto out;
+		}
+	}
 	dprintf(trace_fd, "public_header=%02X%02X%02X%02X\n", cmd[0], cmd[1], cmd[2], cmd[3]);
 	/* Fixed labels for known selections, never arbitrary payload values. */
 	if (cmd[1] == 0xA4 && cmd[2] == 4 && cmd[0] == 0)
 		dprintf(trace_fd, "public_select=%s\n", next_app ? "known_chipdoc_application" : "known_root_application");
+	if (cmd[0] == 0 && cmd[1] == 0xA4 && cmd[2] == 0 && cmd[4] == 2 &&
+			cmd[5] == 0x3F && cmd[6] == 0)
+		dprintf(trace_fd, "public_select=known_master_file\n");
 	if (cmd[1] == 0xA4 && cmd[2] == 2 && cmd[4] == 2 && cmd[5] == 0x41 && cmd[6] == 0x41)
 		dprintf(trace_fd, "public_select=%s\n", compare_read4141 ?
 				"known_4141_bounded_read_comparison" : "known_4141_metadata_only");
@@ -457,6 +521,8 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
 		dprintf(trace_fd, "public_select=known_prkdf7002_bounded_read_comparison\n");
 	if (cmd[1] == 0xA4 && cmd[2] == 2 && cmd[4] == 2 && cmd[5] == 0x70 && cmd[6] == 0x04)
 		dprintf(trace_fd, "public_select=known_pukdf7004_bounded_read_comparison\n");
+	if (cmd[1] == 0xA4 && cmd[2] == 2 && cmd[4] == 2 && cmd[5] == 0x70 && cmd[6] == 0x05)
+		dprintf(trace_fd, "public_select=known_cdf7005_bounded_read_comparison\n");
 	if (cmd[0] != 0) selected_app = 0;
 	/* A failed/warning SELECT may still change card context: drop old permission. */
 	if (next_file >= 0)
@@ -465,7 +531,8 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
 	if (!transmit) { stopped = 1; goto out; }
 	gettimeofday(&start, NULL);
 	rv = transmit(card, send_pci, cmd, len, recv_pci,
-			diagnostic_read ? bounded : response, diagnostic_read ? &bounded_size : response_len);
+			(diagnostic_read || diagnostic_pin_status) ? bounded : response,
+			(diagnostic_read || diagnostic_pin_status) ? &bounded_size : response_len);
 	if (diagnostic_read) {
 		/* The unknown contents go to Idopte only, never a trace or spy. */
 		if (rv == SCARD_S_SUCCESS && bounded_size >= 2 && bounded_size <= read_size + 2) {
@@ -477,12 +544,22 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
 				if (read_fid == 0x7001) read7001_offset += bounded_size - 2;
 				if (read_fid == 0x7002) read7002_offset += bounded_size - 2;
 				if (read_fid == 0x7004) read7004_offset += bounded_size - 2;
+				if (read_fid == 0x7005) read7005_offset += bounded_size - 2;
 			} else {
 				dprintf(trace_fd, "read%04X_transport=%ld\nread%04X_sw=%04X\nblocked=read%04X_status\n",
 						read_fid, (long)rv, read_fid, sw, read_fid);
 				stopped = 1;
 				rv = SCARD_E_NOT_TRANSACTED;
 			}
+		} else {
+			stopped = 1;
+			if (rv == SCARD_S_SUCCESS) rv = SCARD_E_INSUFFICIENT_BUFFER;
+		}
+	}
+	if (diagnostic_pin_status) {
+		/* A status-only response has exactly SW1/SW2, never card payload. */
+		if (rv == SCARD_S_SUCCESS && bounded_size == 2) {
+			memcpy(response, bounded, 2); *response_len = 2;
 		} else {
 			stopped = 1;
 			if (rv == SCARD_S_SUCCESS) rv = SCARD_E_INSUFFICIENT_BUFFER;

@@ -196,6 +196,17 @@ y encontró SELECT7005, bloqueado antes de transmitir; ODF7005 es el directorio
 de certificados. Los modos anteriores mantienen7004 bloqueado. Pasaron70
 comprobaciones del observador,61 del lanzador y6 del lanzador de firma.
 
+`make inspect/jcop4-file7005` confirmó un CDF transparente de2368bytes.
+`make inspect/jcop4-idopte-cdf` permite su lectura acotada (máximo2368bytes/
+11peticiones); Idopte llegó después a MF/3F00 y VERIFY1 sin datos, bloqueado.
+Aunque el proceso salía0, C_GetTokenInfo devolvía CKR_TOKEN_NOT_PRESENT: el
+lanzador ahora registra ese resultado y devuelve error si el inventario falla.
+Modo separado `make inspect/jcop4-idopte-pin-status READER=0` permite únicamente
+ese VERIFY vacío una vez en MF, nunca PIN/login. Obtuvo63C7 y después Idopte
+intentó SELECT DF0F bajo la aplicación conocida, bloqueado antes de transmitir.
+DF0F sigue de propósito desconocido. Pasaron66 comprobaciones del helper,
+83 del observador,69 del lanzador y6 del lanzador de firma. No firma JCOP4 nueva.
+
 Capturas privadas bajo local/jcop4-idopte-spy-*/; no agregarlas a Git.
 Pasaron previamente **30 comprobaciones del observador/decoder y 40 del
 lanzador** con transporte ficticio. El diagnóstico de firma pasó además

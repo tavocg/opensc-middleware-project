@@ -55,6 +55,16 @@ if [[ ${FIXTURE_PUKDF_MODE:-0} == 1 ]]; then
 else
     [[ ${JCOP4_DIAGNOSTIC_PUKDF-unset} == unset ]] || exit 96
 fi
+if [[ ${FIXTURE_CDF_MODE:-0} == 1 ]]; then
+    [[ ${JCOP4_DIAGNOSTIC_CDF-} == 1 ]] || exit 96
+else
+    [[ ${JCOP4_DIAGNOSTIC_CDF-unset} == unset ]] || exit 96
+fi
+if [[ ${FIXTURE_STATUS_MODE:-0} == 1 ]]; then
+    [[ ${JCOP4_DIAGNOSTIC_PIN_STATUS-} == 1 ]] || exit 96
+else
+    [[ ${JCOP4_DIAGNOSTIC_PIN_STATUS-unset} == unset ]] || exit 96
+fi
 if [[ ${JCOP4_PUBLIC_DISCOVERY_TRACE-unset} != unset ]]; then
     [[ ${LD_PRELOAD-unset} == unset &&
        ${LIBPCSCLITE_DELEGATE-} == "$FIXTURE_PROBE_ROOT/build/diagnostics/pcsc-public-observer.so" &&
@@ -74,6 +84,11 @@ else
     [[ ${LIBPCSCLITE_DELEGATE-unset} == unset && ${LIBPCSCLITE_SPY_DELEGATE-unset} == unset ]] || exit 96
 fi
 printf '%s\n' "$*" > "$FIXTURE_PROBE_ROOT/idopte-called"
+if [[ ${FIXTURE_TOKEN_INFO_ERROR:-0} == 1 ]]; then
+    printf 'C_GetTokenInfo() failed: rv = CKR_TOKEN_NOT_PRESENT\n'
+elif [[ ${FIXTURE_TOKEN_INFO_RETURNED:-0} == 1 ]]; then
+    printf '  token label        : PRIVATE_TOKEN_LABEL\n'
+fi
 printf 'Idopte fixture\n  token flags: PIN initialized\n'
 exit "${FIXTURE_IDOPTE_EXIT:-0}"
 PKCS11
@@ -87,7 +102,7 @@ cat > "$FIXTURE_PROBE_ROOT/build/opensc/card-public-info" <<'HELPER'
 set -euo pipefail
 [[ ($# == 2 || $# == 4) && $1 == 2 && $2 == 3b:d5:18:ff:81:91:fe:1f:c3:80:73:c8:21:10:0a ]] || exit 97
 if (( $# == 4 )); then
-    [[ ($3 == --pkcs15 || $3 == --sign-setup || $3 == --pin-status || $3 == --security-info || $3 == --pin-policy || $3 == --odf-map || $3 == --file4141 || $3 == --file4109 || $3 == --file7001 || $3 == --file7002 || $3 == --file7004 || $3 == --public-keys) && $4 == E828BD080FA00000036364796E6964 ]] || exit 97
+    [[ ($3 == --pkcs15 || $3 == --sign-setup || $3 == --pin-status || $3 == --security-info || $3 == --pin-policy || $3 == --odf-map || $3 == --file4141 || $3 == --file4109 || $3 == --file7001 || $3 == --file7002 || $3 == --file7004 || $3 == --file7005 || $3 == --public-keys) && $4 == E828BD080FA00000036364796E6964 ]] || exit 97
 fi
 [[ ${OPENSC_DEBUG-} == 0 && ${OPENSC_API_TRACE_FILE-unset} == unset &&
    ${OPENSC_JCOP3_PIN_STATUS_IN_PLACE-unset} == unset &&
@@ -122,7 +137,7 @@ esac
    ${OPENSC_DEEPBIND-unset} == unset &&
    ${LD_PRELOAD-unset} == unset && ${LIBPCSCLITE_DELEGATE-unset} == unset &&
    ${LIBPCSCLITE_SPY_DELEGATE-unset} == unset && ${JCOP4_PUBLIC_SELECT_SPY_TRACE-unset} == unset &&
-   ${JCOP4_DIAGNOSTIC_READ4141-unset} == unset && ${JCOP4_DIAGNOSTIC_READ4109-unset} == unset && ${JCOP4_DIAGNOSTIC_AODF-unset} == unset && ${JCOP4_DIAGNOSTIC_PRKDF-unset} == unset && ${JCOP4_DIAGNOSTIC_PUKDF-unset} == unset &&
+   ${JCOP4_DIAGNOSTIC_READ4141-unset} == unset && ${JCOP4_DIAGNOSTIC_READ4109-unset} == unset && ${JCOP4_DIAGNOSTIC_AODF-unset} == unset && ${JCOP4_DIAGNOSTIC_PRKDF-unset} == unset && ${JCOP4_DIAGNOSTIC_PUKDF-unset} == unset && ${JCOP4_DIAGNOSTIC_CDF-unset} == unset && ${JCOP4_DIAGNOSTIC_PIN_STATUS-unset} == unset &&
    ${OPENSC_API_TRACE_FILE-unset} == unset &&
    ${OPENSC_JCOP3_SESSION_STATE-unset} == unset &&
    ${OPENSC_JCOP3_PIN_STATUS_IN_PLACE-unset} == unset &&
@@ -174,6 +189,8 @@ export JCOP4_DIAGNOSTIC_READ4109=1
 export JCOP4_DIAGNOSTIC_AODF=1
 export JCOP4_DIAGNOSTIC_PRKDF=1
 export JCOP4_DIAGNOSTIC_PUKDF=1
+export JCOP4_DIAGNOSTIC_CDF=1
+export JCOP4_DIAGNOSTIC_PIN_STATUS=1
 export OPENSC_DEBUG=99 OPENSC_DEBUG_FILE=/should/not/be/used
 export OPENSC_CONF=/should/not/be/used OPENSC_API_TRACE_FILE=/should/not/be/used
 export OPENSC_DEEPBIND=1
@@ -380,6 +397,19 @@ task_run 17 2 --file7004
 [[ $(< "$task_tmp/output.txt") != *'Consulta SELECT/metadatos de 7004 terminada'* ]]
 printf 'PASS JCOP4 7004 SELECT stops on helper failure without retries or announcing success\n'
 unset FIXTURE_PUBLIC_EXIT
+printf 'synthetic unused stdin\n' | task_run 0 2 --file7005
+[[ $(wc -l < "$task_tmp/called") == 3 &&
+   $(< "$task_tmp/public-called") == '2 3b:d5:18:ff:81:91:fe:1f:c3:80:73:c8:21:10:0a --file7005 E828BD080FA00000036364796E6964' &&
+   $(< "$task_tmp/output.txt") == *'sin lectura de contenido ni PIN'* ]]
+for task_dir in "$task_tmp"/local/jcop4-file7005-*; do
+    [[ $(stat -c %a "$task_dir") == 700 && $(stat -c %a "$task_dir/report.txt") == 600 ]]
+done
+printf 'PASS JCOP4 7005 SELECT uses the isolated helper with empty stdin and private reports\n'
+export FIXTURE_PUBLIC_EXIT=17
+task_run 17 2 --file7005
+[[ $(< "$task_tmp/output.txt") != *'Consulta SELECT/metadatos de 7005 terminada'* ]]
+printf 'PASS JCOP4 7005 SELECT stops on helper failure without retries or announcing success\n'
+unset FIXTURE_PUBLIC_EXIT
 printf 'synthetic unused stdin\n' | task_run 0 2 --public-keys
 [[ $(< "$task_tmp/public-called") == '2 3b:d5:18:ff:81:91:fe:1f:c3:80:73:c8:21:10:0a --public-keys E828BD080FA00000036364796E6964' &&
    $(< "$task_tmp/output.txt") == *'sin leer llaves referenciadas ni PIN'* ]]
@@ -516,6 +546,45 @@ task_run 17 2 --idopte-pukdf
 [[ $(< "$task_tmp/output.txt") != *'Consulta pública de Idopte terminada'* ]]
 printf 'PASS PuKDF mode propagates blocked provider failure without retries or authentication fallback\n'
 unset FIXTURE_IDOPTE_EXIT FIXTURE_COMPARE_MODE FIXTURE_READ4109_MODE FIXTURE_AODF_MODE FIXTURE_PRKDF_MODE FIXTURE_PUKDF_MODE
+export FIXTURE_COMPARE_MODE=1 FIXTURE_READ4109_MODE=1 FIXTURE_AODF_MODE=1 FIXTURE_PRKDF_MODE=1 FIXTURE_PUKDF_MODE=1 FIXTURE_CDF_MODE=1
+task_run 0 2 --idopte-cdf
+task_cdf_report=$(sed -n 's/^Informe: //p' "$task_tmp/output.txt")
+[[ $task_cdf_report == */jcop4-idopte-cdf-*/report.txt &&
+   $(< "$task_cdf_report") == *'comparison_scope=read4141_max400_read4109_once17_aodf7001_max300_prkdf7002_max2048_pukdf7004_max4096_cdf7005_max2368_no_recording_no_authentication'* &&
+   $(stat -c %a "$task_cdf_report") == 600 ]]
+printf 'PASS CDF mode introduces its opt-in only inside guarded inventory with private scope reports\n'
+export FIXTURE_IDOPTE_EXIT=17
+task_run 17 2 --idopte-cdf
+[[ $(< "$task_tmp/output.txt") != *'Consulta pública de Idopte terminada'* ]]
+printf 'PASS CDF mode preserves blocked provider failure without retries or authentication fallback\n'
+unset FIXTURE_IDOPTE_EXIT FIXTURE_COMPARE_MODE FIXTURE_READ4109_MODE FIXTURE_AODF_MODE FIXTURE_PRKDF_MODE FIXTURE_PUKDF_MODE FIXTURE_CDF_MODE
+export FIXTURE_COMPARE_MODE=1 FIXTURE_READ4109_MODE=1 FIXTURE_AODF_MODE=1 FIXTURE_PRKDF_MODE=1 FIXTURE_PUKDF_MODE=1 FIXTURE_CDF_MODE=1 FIXTURE_STATUS_MODE=1
+task_run 0 2 --idopte-pin-status
+task_status_report=$(sed -n 's/^Informe: //p' "$task_tmp/output.txt")
+[[ $task_status_report == */jcop4-idopte-pin-status-*/report.txt &&
+   $(< "$task_status_report") == *'pin_status_scope=mf_pin1_case1_once_no_data_no_authentication'* &&
+   $(stat -c %a "$task_status_report") == 600 ]]
+printf 'PASS no-PIN status mode enables its separate flag only inside guarded inventory with empty stdin\n'
+export FIXTURE_IDOPTE_EXIT=17
+task_run 17 2 --idopte-pin-status
+[[ $(< "$task_tmp/output.txt") != *'Consulta pública de Idopte terminada'* ]]
+printf 'PASS status mode preserves provider errors without requesting a PIN or retrying\n'
+unset FIXTURE_IDOPTE_EXIT FIXTURE_COMPARE_MODE FIXTURE_READ4109_MODE FIXTURE_AODF_MODE FIXTURE_PRKDF_MODE FIXTURE_PUKDF_MODE FIXTURE_CDF_MODE FIXTURE_STATUS_MODE
+export FIXTURE_TOKEN_INFO_ERROR=1
+task_run 1 2 --idopte-discovery
+task_token_report=$(sed -n 's/^Informe: //p' "$task_tmp/output.txt")
+[[ $(< "$task_token_report") == *'module_exit_status=0'* &&
+   $(< "$task_token_report") == *'token_info_result=CKR_TOKEN_NOT_PRESENT'* &&
+   $(< "$task_token_report") == *'diagnostic_result=token_info_unavailable'* ]]
+printf 'PASS token-info failure is distinguished from process exit zero and does not claim successful inventory\n'
+unset FIXTURE_TOKEN_INFO_ERROR
+export FIXTURE_TOKEN_INFO_RETURNED=1
+task_run 0 2 --idopte-discovery
+task_token_report=$(sed -n 's/^Informe: //p' "$task_tmp/output.txt")
+[[ $(< "$task_token_report") == *'token_info_result=returned'* &&
+   $(< "$task_tmp/output.txt") != *'PRIVATE_TOKEN_LABEL'* ]]
+printf 'PASS token-info return is summarized without printing token identifiers to the terminal\n'
+unset FIXTURE_TOKEN_INFO_RETURNED
 task_run 0 2 --idopte-spy
 task_spy_report=$(sed -n 's/^Informe: //p' "$task_tmp/output.txt")
 [[ $(< "$task_spy_report") == *'spy_result=select4141_control_data_only'* &&

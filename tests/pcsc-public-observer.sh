@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 umask 077
-unset JCOP4_DIAGNOSTIC_READ4141 JCOP4_DIAGNOSTIC_READ4109 JCOP4_DIAGNOSTIC_AODF JCOP4_DIAGNOSTIC_PRKDF JCOP4_DIAGNOSTIC_PUKDF
+unset JCOP4_DIAGNOSTIC_READ4141 JCOP4_DIAGNOSTIC_READ4109 JCOP4_DIAGNOSTIC_AODF JCOP4_DIAGNOSTIC_PRKDF JCOP4_DIAGNOSTIC_PUKDF JCOP4_DIAGNOSTIC_CDF JCOP4_DIAGNOSTIC_PIN_STATUS
 task_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 # Dependency failures must stop before compilation, including failed flag lookup.
 (
@@ -125,13 +125,13 @@ int run_fixture(int mode)
     if (mode == 18) { assert(rv != 0); return 0; }
     assert(rv == 0 && protocol == SCARD_PROTOCOL_T1);
     assert(SCardReconnect(card, SCARD_SHARE_SHARED, SCARD_PROTOCOL_T1, SCARD_LEAVE_CARD, &protocol) == 0);
-    if (mode == 17 || mode == 19 || mode == 20 || mode == 21 || mode == 22) {
+    if (mode == 17 || mode == 19 || mode == 20 || mode == 21 || mode == 22 || mode == 23 || mode == 24) {
         assert(SCardTransmit(card, 0, app, sizeof(app), 0, response, &len) == 0);
         len = sizeof(response);
         assert(SCardTransmit(card, 0, target, sizeof(target), 0, response, &len) == 0);
         len = sizeof(response);
         assert(SCardTransmit(card, 0, read, sizeof(read), 0, response, &len) == 0);
-        if (mode == 19 || mode == 20 || mode == 21 || mode == 22) {
+        if (mode == 19 || mode == 20 || mode == 21 || mode == 22 || mode == 23 || mode == 24) {
             const unsigned char next[] = { 0, 0xA4, 2, 0, 2, 0x41, 0x09, 0 };
             const unsigned char small[] = { 0, 0xB0, 0, 0, 17 };
             len = sizeof(response);
@@ -139,7 +139,7 @@ int run_fixture(int mode)
             len = sizeof(response);
             assert(SCardTransmit(card, 0, small, sizeof(small), 0, response, &len) == 0 && len == 19);
         }
-        if (mode == 20 || mode == 21 || mode == 22) {
+        if (mode == 20 || mode == 21 || mode == 22 || mode == 23 || mode == 24) {
             const unsigned char aodf[] = { 0, 0xA4, 2, 0, 2, 0x70, 1, 0 };
             const unsigned char all[] = { 0, 0xB0, 0, 0, 0, 1, 0x2C };
             len = sizeof(response);
@@ -147,19 +147,34 @@ int run_fixture(int mode)
             len = sizeof(response);
             assert(SCardTransmit(card, 0, all, sizeof(all), 0, response, &len) == 0 && len == 302);
         }
-        if (mode == 21 || mode == 22) {
+        if (mode == 21 || mode == 22 || mode == 23 || mode == 24) {
             const unsigned char prkdf[] = { 0, 0xA4, 2, 0, 2, 0x70, 2, 0 };
             len = sizeof(response);
             assert(SCardTransmit(card, 0, prkdf, sizeof(prkdf), 0, response, &len) == 0);
             len = sizeof(response);
             assert(SCardTransmit(card, 0, read, sizeof(read), 0, response, &len) == 0 && len == 258);
         }
-        if (mode == 22) {
+        if (mode == 22 || mode == 23 || mode == 24) {
             const unsigned char pukdf[] = { 0, 0xA4, 2, 0, 2, 0x70, 4, 0 };
             len = sizeof(response);
             assert(SCardTransmit(card, 0, pukdf, sizeof(pukdf), 0, response, &len) == 0);
             len = sizeof(response);
             assert(SCardTransmit(card, 0, read, sizeof(read), 0, response, &len) == 0 && len == 258);
+        }
+        if (mode == 23 || mode == 24) {
+            const unsigned char cdf[] = { 0, 0xA4, 2, 0, 2, 0x70, 5, 0 };
+            len = sizeof(response);
+            assert(SCardTransmit(card, 0, cdf, sizeof(cdf), 0, response, &len) == 0);
+            len = sizeof(response);
+            assert(SCardTransmit(card, 0, read, sizeof(read), 0, response, &len) == 0 && len == 258);
+        }
+        if (mode == 24) {
+            const unsigned char empty[] = { 0, 0x20, 0, 1 };
+            len = sizeof(response);
+            assert(SCardTransmit(card, 0, mf, sizeof(mf), 0, response, &len) == 0);
+            len = sizeof(response);
+            assert(SCardTransmit(card, 0, empty, sizeof(empty), 0, response, &len) == 0 &&
+                    len == 2 && response[0] == 0x63 && response[1] == 0xC7);
         }
         len = sizeof(response);
         assert(SCardTransmit(card, 0, pin, sizeof(pin), 0, response, &len) != 0 && !len);
@@ -256,7 +271,7 @@ int main(int argc, char **argv)
     void *core = dlopen(argv[2], RTLD_NOW | RTLD_LOCAL);
     assert(core);
     int (*count)(void) = (int (*)(void))dlsym(core, "fixture_count");
-    assert(count && count() == (mode == 22 ? 11 : mode == 21 ? 9 : mode == 20 ? 7 : mode == 19 ? 5 : mode == 9 || mode == 17 ? 3 : mode == 7 || mode == 14 ? 2 : mode == 0 || mode == 10 || mode == 16 ? 1 : 0));
+    assert(count && count() == (mode == 24 ? 15 : mode == 23 ? 13 : mode == 22 ? 11 : mode == 21 ? 9 : mode == 20 ? 7 : mode == 19 ? 5 : mode == 9 || mode == 17 ? 3 : mode == 7 || mode == 14 ? 2 : mode == 0 || mode == 10 || mode == 16 ? 1 : 0));
     int (*controls)(void) = (int (*)(void))dlsym(core, "fixture_control_count");
     if (controls) assert(controls() == (mode == 10 || mode == 12 || mode == 13 ? 1 : 0));
     return 0;
@@ -332,7 +347,8 @@ done
    $(< "$task_tmp/delegate-15.txt") == *'blocked_select_ef=4141'* &&
    $(< "$task_tmp/delegate-15.txt") != *'public_select='* &&
    $(< "$task_tmp/delegate-16.txt") == *'blocked_select_ef=4141'* &&
-   $(< "$task_tmp/delegate-16.txt") != *'public_select='* ]]
+   $(< "$task_tmp/delegate-16.txt") == *'public_select=known_master_file'* &&
+   $(< "$task_tmp/delegate-16.txt") != *'public_select=known_4141_metadata_only'* ]]
 printf 'PASS actual PC/SC delegation permits only known-ADF SELECT 4141 and blocks its READ before fake transport\n'
 env -u LD_PRELOAD -u LIBPCSCLITE_SPY_DELEGATE -u JCOP4_PUBLIC_SELECT_SPY_TRACE \
     LIBPCSCLITE_DELEGATE="$task_tmp/delegate.so" JCOP4_PUBLIC_DISCOVERY_TRACE="$task_tmp/compare.txt" \
@@ -379,6 +395,43 @@ task_headers=$(< "$task_tmp/pukdf.txt")
    $task_headers == *'diagnostic_read=known_7004_contents_omitted'* &&
    $task_headers == *'blocked_header=00200001'* && $task_headers != *'PRIVATE_'* ]]
 printf 'PASS actual delegation returns bounded PuKDF metadata only to its caller and stops PIN before fake transport\n'
+env -u LD_PRELOAD -u LIBPCSCLITE_SPY_DELEGATE -u JCOP4_PUBLIC_SELECT_SPY_TRACE \
+    LIBPCSCLITE_DELEGATE="$task_tmp/delegate.so" JCOP4_PUBLIC_DISCOVERY_TRACE="$task_tmp/cdf.txt" \
+    JCOP4_DIAGNOSTIC_READ4141=1 JCOP4_DIAGNOSTIC_READ4109=1 JCOP4_DIAGNOSTIC_AODF=1 JCOP4_DIAGNOSTIC_PRKDF=1 JCOP4_DIAGNOSTIC_PUKDF=1 JCOP4_DIAGNOSTIC_CDF=1 \
+    "$task_tmp/local-client" "$task_tmp/redirect-plugin.so" "$task_tmp/libfakepcsc.so" 23
+task_headers=$(< "$task_tmp/cdf.txt")
+[[ $task_headers == *'comparison_certificates=bounded_cdf7005_contents_omitted'* &&
+   $task_headers == *'diagnostic_read=known_7005_contents_omitted'* &&
+   $task_headers == *'blocked_header=00200001'* && $task_headers != *'PRIVATE_'* ]]
+printf 'PASS actual delegation returns CDF data only to caller and blocks VERIFY before fake transport\n'
+env -u LD_PRELOAD -u LIBPCSCLITE_SPY_DELEGATE -u JCOP4_PUBLIC_SELECT_SPY_TRACE \
+    LIBPCSCLITE_DELEGATE="$task_tmp/delegate.so" JCOP4_PUBLIC_DISCOVERY_TRACE="$task_tmp/status.txt" \
+    JCOP4_DIAGNOSTIC_READ4141=1 JCOP4_DIAGNOSTIC_READ4109=1 JCOP4_DIAGNOSTIC_AODF=1 JCOP4_DIAGNOSTIC_PRKDF=1 JCOP4_DIAGNOSTIC_PUKDF=1 JCOP4_DIAGNOSTIC_CDF=1 JCOP4_DIAGNOSTIC_PIN_STATUS=1 \
+    "$task_tmp/local-client" "$task_tmp/redirect-plugin.so" "$task_tmp/libfakepcsc.so" 24
+task_headers=$(< "$task_tmp/status.txt")
+[[ $task_headers == *'diagnostic_pin_status=mf_pin1_case1_no_data'* &&
+   $task_headers == *'sw=63C7'* && $task_headers == *'blocked_verify_form=other_contents_omitted'* && $task_headers != *'PRIVATE_'* ]]
+printf 'PASS actual delegation transmits one SW-only status request but no credential-bearing VERIFY\n'
+for task_status_flag in invalid missing_parent; do
+    task_status_env=("JCOP4_DIAGNOSTIC_PIN_STATUS=invalid" "JCOP4_DIAGNOSTIC_CDF=1")
+    if [[ $task_status_flag == missing_parent ]]; then task_status_env=("JCOP4_DIAGNOSTIC_PIN_STATUS=1"); fi
+    env -u JCOP4_DIAGNOSTIC_CDF -u LD_PRELOAD -u LIBPCSCLITE_SPY_DELEGATE \
+        LIBPCSCLITE_DELEGATE="$task_tmp/delegate.so" JCOP4_PUBLIC_DISCOVERY_TRACE="$task_tmp/status-$task_status_flag.txt" \
+        JCOP4_DIAGNOSTIC_READ4141=1 JCOP4_DIAGNOSTIC_READ4109=1 JCOP4_DIAGNOSTIC_AODF=1 JCOP4_DIAGNOSTIC_PRKDF=1 JCOP4_DIAGNOSTIC_PUKDF=1 "${task_status_env[@]}" \
+        "$task_tmp/local-client" "$task_tmp/redirect-plugin.so" "$task_tmp/libfakepcsc.so" 6
+    [[ $(< "$task_tmp/status-$task_status_flag.txt") != *'public_header='* ]]
+    printf 'PASS PIN-status mode rejects %s configuration before transport\n' "$task_status_flag"
+done
+for task_cdf_flag in invalid missing_parent; do
+    task_cdf_env=("JCOP4_DIAGNOSTIC_CDF=invalid" "JCOP4_DIAGNOSTIC_PUKDF=1")
+    if [[ $task_cdf_flag == missing_parent ]]; then task_cdf_env=("JCOP4_DIAGNOSTIC_CDF=1"); fi
+    env -u JCOP4_DIAGNOSTIC_PUKDF -u LD_PRELOAD -u LIBPCSCLITE_SPY_DELEGATE \
+        LIBPCSCLITE_DELEGATE="$task_tmp/delegate.so" JCOP4_PUBLIC_DISCOVERY_TRACE="$task_tmp/cdf-$task_cdf_flag.txt" \
+        JCOP4_DIAGNOSTIC_READ4141=1 JCOP4_DIAGNOSTIC_READ4109=1 JCOP4_DIAGNOSTIC_AODF=1 JCOP4_DIAGNOSTIC_PRKDF=1 "${task_cdf_env[@]}" \
+        "$task_tmp/local-client" "$task_tmp/redirect-plugin.so" "$task_tmp/libfakepcsc.so" 6
+    [[ $(< "$task_tmp/cdf-$task_cdf_flag.txt") != *'public_header='* ]]
+    printf 'PASS CDF rejects %s configuration before transport\n' "$task_cdf_flag"
+done
 for task_pukdf_flag in invalid missing_parent; do
     task_pukdf_env=("JCOP4_DIAGNOSTIC_PUKDF=invalid" "JCOP4_DIAGNOSTIC_PRKDF=1")
     if [[ $task_pukdf_flag == missing_parent ]]; then task_pukdf_env=("JCOP4_DIAGNOSTIC_PUKDF=1"); fi

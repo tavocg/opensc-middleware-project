@@ -6,7 +6,53 @@ la tarjeta. El usuario ejecuta las operaciones que requieran PIN o GUI. Esto
 sustituye las restricciones anteriores de no ejecutar Git/hardware/Idopte por
 el agente; conservar límites de cada diagnóstico y privacidad de los registros.
 
-**Último resultado: READ7004 -> SELECT7005 bloqueado, 21:16:07 UTC.**
+**Último resultado: estado vacío63C7 -> SELECT DF0F bloqueado, 21:38:03 UTC.**
+Usuario registró `387d233`, OpenSC `3dfef6704`, limpios al comenzar. Agente hizo
+sin PIN/GUI: SELECT-only7005 (`local/jcop4-file7005-eK0x57Vx/report.txt`,21:26:20),
+0/9000/transparente2368bytes/tag86nointerpretado, inventario/build/conexión/
+EF.ATR/EF.DIR/unlock/proceso0, sin READ. CDF Idopte nuevo
+`local/jcop4-idopte-cdf-x3Np9eLh/report.txt`,21:29:08:67APDU0/9000,11READ7005,
+últimooffset08B6, finalSELECT00A40000/9000 y VERIFY00200001 bloqueado. **Módulo0
+pero C_GetTokenInfo CKR_TOKEN_NOT_PRESENT**: no inventario Cryptoki satisfactorio.
+Se repitió una vez para nueva clasificación antes omitida, no autenticación:
+`local/jcop4-idopte-cdf-WJMGxt0U/report.txt`,21:31:50, mismas67APDU0/9000,
+SELECT MF3F00/9000 -> blocked_verify_form=case1_no_data. Ningún PIN/VERIFY real.
+
+Nuevo modo independiente inspect/jcop4-idopte-pin-status (sin PIN/login/GUI),
+opt-in JCOP4_DIAGNOSTIC_PIN_STATUS=1 junto a CDF permite **una sola00 20 00 01
+caso1 sin datos** bajo MF confirmado/ATR conocido/despuésREAD7005/sin pending.
+Buffer temporal2, soloSW1/SW2; errores/tamaño/logfallido detienen. Cualquier
+credencial/ref/canal/caso/repetición bloqueado. No autentica ni consume un intento
+con PIN. Los modos anteriores siguen bloqueando incluso VERIFY vacío.
+Agente ejecutó una vez, informe
+`local/jcop4-idopte-pin-status-1qsDoPci/report.txt`,**21:38:03 UTC**:69APDU,
+68SW9000 y estado vacío0/**63C7**. Después SELECT ADF ChipDoc conocido0/9000,
+**SELECT EF DF0F bloqueado antes de transmitir**, sin SW/FCP/contenido deDF0F.
+Módulo0, token_info_result=CKR_TOKEN_NOT_PRESENT, events_recorded y diagnóstico1/
+token_info_unavailable. No PIN/MSE/GA/SM/PSO/escrituras/firmas. VERIFY6982
+anterior sigue pendiente. Estado63C7 no prueba PIN correcto ni contador antes/
+después de credencial; no repetir estado ni pedir otro PIN por inercia.
+
+Nuevo SELECT-only--file7005 y modo --idopte-cdf (opt-in JCOP4_DIAGNOSTIC_CDF=1
+junto aPUKDF/etc dentro de Idopte inventario/empty stdin): SELECT7005exacto/9000,
+ADF/ATR/READ7004previo, READ2368bytes/11calls/hasta256por solicitud, continuidad
+sin reposición porSELECT/reconexión, bufferLe+2/SW9000/6282, fallos detienen sin
+GET RESPONSE/reintentos. Contenidos solo al cliente,0700/0600local/. Nuevas
+etiquetas MF y VERIFY conocido distinguen formas fijas sin datos/longitudes.
+Launcher inventario/firma limpia opt-ins. Launcher registra C_GetTokenInfo por
+mensajes fijos: fallaTokenInfo+proceso0 termina1, preserva módulo0, no IDs alchat.
+Pasaron **66 helper,83 observador/constructor/decoder,69 lanzador y6 lanzador
+firma**,fakeAPIs/redirectorreal, biblioteca/helper compilados. Driver/operación
+firma intactos, suite12previa vigente, no repetir sin cambios.
+No referenciaDF0F en ODF/código/ZIP revisados. Fuente primaria
+https://www.idopte.fr/licensesys/ confirma licencias middleware en archivo de
+tarjeta, pero **no identificaDF0F** ni prueba causa6982; no etiquetarlo licencia/
+CA/PACE. No herramientas de licencias/administración/generación/carga/escrituras.
+Próximo paso: SELECT-only DF0F bajo el AID observado, o definición primaria del
+perfil; no READdesconocido/repetirconsultas porinercia. JCOP4/RSA3072 pendientes.
+Git autorizado; montaje.gitreadonly sigue impidiendo commits si persiste.
+
+**Resultado anterior: READ7004 -> SELECT7005 bloqueado, 21:16:07 UTC.**
 Usuario registró `adb68f9`, OpenSC `3dfef6704`, ambos limpios al comenzar.
 Agente preparó/ejecutó modo nuevo sin PIN/GUI:
 `nix develop --offline -c make inspect/jcop4-idopte-pukdf READER=0`.
