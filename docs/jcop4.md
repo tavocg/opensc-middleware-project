@@ -2530,6 +2530,68 @@ lectura PuKDF7004 acotada al tamaño confirmado y al mismo AID, sin registrar
 contenido, para identificar el siguiente comando de Idopte. La enumeración
 pública por sí sola no revela los pasos de C_Login. JCOP4/RSA3072 pendientes.
 
+## Idopte lee PuKDF7004; SELECT7005 bloqueado: 13 de octubre, 21:16:07 UTC
+
+El usuario registró el inventario público anterior en `adb68f9`, principal y
+OpenSC `3dfef6704` limpios al comenzar. PuKDF7004 ya fue confirmado por ODF,
+SELECT-only (transparente/4096 bytes) y análisis nativo (dos RSA2048, referencias
+0x90/0x91). Se preparó un modo nuevo para observar el acceso del proveedor a
+ese directorio de metadatos, sin seguir los valores/rutas de llaves.
+
+**inspect/jcop4-idopte-pukdf** usa un opt-in independiente
+`JCOP4_DIAGNOSTIC_PUKDF=1` junto a los cuatro anteriores dentro del proceso
+Idopte --show-info --list-slots, stdin vacío. Modos anteriores no lo introducen,
+inventario y lanzador de firma lo eliminan del entorno heredado. Configuración
+inválida/sin modo padre/raw-spy impide transporte. Exige ATR validado, ADF
+conocido/9000 y READ7002 previo para SELECT7004 básico exacto A4/02/00/Lc2,
+total7 u8. Selección pendiente o fallida no conserva ADF para lectura.
+
+READ BINARY caso2 básico, sin SFI/payload/SM, **hasta256 bytes por solicitud,
+hasta4096 bytes solicitados, máximo19 llamadas por proceso**. Offset inicial0,
+siguientes contiguos a datos devueltos; SELECT no repone presupuesto/cursor.
+Buffer temporal Le+2 (máximo258), transporte correcto/tamaño2..Le+2 y SW9000/
+6282 únicamente. Fallo de log, respuesta excesiva, otro SW/continuación o
+transporte detiene sin GET RESPONSE/reintentos. Reconexión no reinicia permisos.
+Contenido solo al cliente Idopte; sin respuestas crudas ni llaves en el registro.
+PIN/MSE/GA/SM/PSO/escrituras siguen bloqueados antes del backend.
+
+El agente ejecutó una vez, sin PIN/GUI:
+`nix develop --offline -c make inspect/jcop4-idopte-pukdf READER=0`. Informe
+privado `local/jcop4-idopte-pukdf-rI9D42no/report.txt`, **21:16:07 UTC**.
+Inventario/compilación correctos y comparison_atr=known_jcop4. **54 APDU
+transmitidas**, todas transporte0/SW9000; SELECT7004 y19 READ aceptados, último
+offset0FAE. No se registran Le ni longitud final devuelta: no afirmar lectura
+completa solo por las cabeceras. No nueva enumeración de algoritmos en esta
+traza; los dos objetos RSA proceden del helper anterior.
+
+```text
+blocked_header=00A40200
+blocked_select_ef=7005
+module_exit_status=1
+observer_result=events_recorded
+```
+
+**SELECT7005 no llegó a la tarjeta**: no SW de tarjeta ni contenido de7005.
+El error final es compatible con el bloqueo del guard, no con un rechazo de
+READ7004 ni con el VERIFY6982 anterior. El ODF de esta misma aplicación ya
+identifica7005=`certificates`; el helper nativo obtuvo antes certificados
+públicos sin login. Esto sigue describiendo inventario de slots, no la ruta de
+C_Login; no atribuir CA/PACE a esta secuencia ni solicitar otro PIN.
+
+Pasaron **70 comprobaciones del observador/constructor/decoder,61 del lanzador
+y6 del lanzador de firma**, sin hardware. Cubren presupuesto4096 no renovable,
+límite independiente19llamadas, contexto/secuencia/ATR, SW/overrun, privacidad
+y opt-in inválido/sin padre. Redirector real devuelve PuKDF sintético solo al
+cliente y bloquea VERIFY. Biblioteca real compilada. Helper público/operación
+de firma/driver intactos; suites65/12 previas vigentes, sin repetir por documentos.
+Registros privados0700/0600 bajo local/, no agregar inventarios o respuestas a Git.
+
+Siguiente contraste con precedente aplicable: control y acceso al CDF7005
+anunciado en el mismo ODF, comparando con el inventario de certificados ya
+obtenido. No habilitar otros archivos por inercia ni repetir esta consulta
+idéntica. Hasta ahora ningún comando de canal/autenticación de Idopte se ha
+observado antes del bloqueo; el requisito de VERIFY sigue pendiente.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño

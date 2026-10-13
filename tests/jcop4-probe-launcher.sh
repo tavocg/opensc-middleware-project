@@ -50,6 +50,11 @@ if [[ ${FIXTURE_PRKDF_MODE:-0} == 1 ]]; then
 else
     [[ ${JCOP4_DIAGNOSTIC_PRKDF-unset} == unset ]] || exit 96
 fi
+if [[ ${FIXTURE_PUKDF_MODE:-0} == 1 ]]; then
+    [[ ${JCOP4_DIAGNOSTIC_PUKDF-} == 1 ]] || exit 96
+else
+    [[ ${JCOP4_DIAGNOSTIC_PUKDF-unset} == unset ]] || exit 96
+fi
 if [[ ${JCOP4_PUBLIC_DISCOVERY_TRACE-unset} != unset ]]; then
     [[ ${LD_PRELOAD-unset} == unset &&
        ${LIBPCSCLITE_DELEGATE-} == "$FIXTURE_PROBE_ROOT/build/diagnostics/pcsc-public-observer.so" &&
@@ -117,7 +122,7 @@ esac
    ${OPENSC_DEEPBIND-unset} == unset &&
    ${LD_PRELOAD-unset} == unset && ${LIBPCSCLITE_DELEGATE-unset} == unset &&
    ${LIBPCSCLITE_SPY_DELEGATE-unset} == unset && ${JCOP4_PUBLIC_SELECT_SPY_TRACE-unset} == unset &&
-   ${JCOP4_DIAGNOSTIC_READ4141-unset} == unset && ${JCOP4_DIAGNOSTIC_READ4109-unset} == unset && ${JCOP4_DIAGNOSTIC_AODF-unset} == unset && ${JCOP4_DIAGNOSTIC_PRKDF-unset} == unset &&
+   ${JCOP4_DIAGNOSTIC_READ4141-unset} == unset && ${JCOP4_DIAGNOSTIC_READ4109-unset} == unset && ${JCOP4_DIAGNOSTIC_AODF-unset} == unset && ${JCOP4_DIAGNOSTIC_PRKDF-unset} == unset && ${JCOP4_DIAGNOSTIC_PUKDF-unset} == unset &&
    ${OPENSC_API_TRACE_FILE-unset} == unset &&
    ${OPENSC_JCOP3_SESSION_STATE-unset} == unset &&
    ${OPENSC_JCOP3_PIN_STATUS_IN_PLACE-unset} == unset &&
@@ -168,6 +173,7 @@ export JCOP4_DIAGNOSTIC_READ4141=1
 export JCOP4_DIAGNOSTIC_READ4109=1
 export JCOP4_DIAGNOSTIC_AODF=1
 export JCOP4_DIAGNOSTIC_PRKDF=1
+export JCOP4_DIAGNOSTIC_PUKDF=1
 export OPENSC_DEBUG=99 OPENSC_DEBUG_FILE=/should/not/be/used
 export OPENSC_CONF=/should/not/be/used OPENSC_API_TRACE_FILE=/should/not/be/used
 export OPENSC_DEEPBIND=1
@@ -498,6 +504,18 @@ task_run 17 2 --idopte-prkdf
 [[ $(< "$task_tmp/output.txt") != *'Consulta pública de Idopte terminada'* ]]
 printf 'PASS PrKDF mode propagates blocked provider failure without retries or authentication fallback\n'
 unset FIXTURE_IDOPTE_EXIT FIXTURE_COMPARE_MODE FIXTURE_READ4109_MODE FIXTURE_AODF_MODE FIXTURE_PRKDF_MODE
+export FIXTURE_COMPARE_MODE=1 FIXTURE_READ4109_MODE=1 FIXTURE_AODF_MODE=1 FIXTURE_PRKDF_MODE=1 FIXTURE_PUKDF_MODE=1
+task_run 0 2 --idopte-pukdf
+task_pukdf_report=$(sed -n 's/^Informe: //p' "$task_tmp/output.txt")
+[[ $task_pukdf_report == */jcop4-idopte-pukdf-*/report.txt &&
+   $(< "$task_pukdf_report") == *'comparison_scope=read4141_max400_read4109_once17_aodf7001_max300_prkdf7002_max2048_pukdf7004_max4096_no_recording_no_authentication'* &&
+   $(stat -c %a "$task_pukdf_report") == 600 ]]
+printf 'PASS PuKDF mode adds its opt-in only to guarded inventory and records independent scope privately\n'
+export FIXTURE_IDOPTE_EXIT=17
+task_run 17 2 --idopte-pukdf
+[[ $(< "$task_tmp/output.txt") != *'Consulta pública de Idopte terminada'* ]]
+printf 'PASS PuKDF mode propagates blocked provider failure without retries or authentication fallback\n'
+unset FIXTURE_IDOPTE_EXIT FIXTURE_COMPARE_MODE FIXTURE_READ4109_MODE FIXTURE_AODF_MODE FIXTURE_PRKDF_MODE FIXTURE_PUKDF_MODE
 task_run 0 2 --idopte-spy
 task_spy_report=$(sed -n 's/^Informe: //p' "$task_tmp/output.txt")
 [[ $(< "$task_spy_report") == *'spy_result=select4141_control_data_only'* &&

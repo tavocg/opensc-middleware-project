@@ -15,7 +15,7 @@
 .PHONY: inspect/jcop4-pin-policy
 .PHONY: inspect/jcop4-odf-map
 .PHONY: inspect/jcop4-file4141 inspect/jcop4-file4109 inspect/jcop4-file7001 inspect/jcop4-file7002 inspect/jcop4-file7004 inspect/jcop4-public-keys
-.PHONY: inspect/jcop4-idopte-compare inspect/jcop4-idopte-read4109 inspect/jcop4-idopte-aodf inspect/jcop4-idopte-prkdf
+.PHONY: inspect/jcop4-idopte-compare inspect/jcop4-idopte-read4109 inspect/jcop4-idopte-aodf inspect/jcop4-idopte-prkdf inspect/jcop4-idopte-pukdf
 .PHONY: inspect/jcop4-idopte
 .PHONY: inspect/jcop4-idopte-discovery inspect/jcop4-idopte-spy test/pcsc-public-observer
 
@@ -58,6 +58,7 @@ help:
 		'make inspect/jcop4-idopte-read4109 Compara siguiente paso Idopte tras READ 4109 único de 17 bytes, sin PIN.' \
 		'make inspect/jcop4-idopte-aodf Observa Idopte tras lectura acotada del directorio AODF7001, sin PIN.' \
 		'make inspect/jcop4-idopte-prkdf Observa Idopte tras lectura acotada de metadatos PrKDF7002, sin PIN.' \
+		'make inspect/jcop4-idopte-pukdf Observa Idopte tras lectura acotada de metadatos PuKDF7004, sin PIN.' \
 		'make test/pcsc-public-observer Comprueba el observador sin lector ni tarjeta.' \
 		'make sign/jcop4-apdu      Firma experimental RSA SHA-256 por APDU y verifica, un intento de PIN.' \
 		'make sign/jcop4-verify-first Mismo diagnóstico, verifica PIN antes de MSE; un intento y verificación OpenSSL.' \
@@ -131,6 +132,9 @@ inspect/jcop4-file4109:
 
 inspect/jcop4-file4141:
 	@bash scripts/probe-jcop4.sh "$$READER" --file4141
+
+inspect/jcop4-idopte-pukdf:
+	@bash scripts/probe-jcop4.sh "$$READER" --idopte-pukdf
 
 inspect/jcop4-idopte-prkdf:
 	@bash scripts/probe-jcop4.sh "$$READER" --idopte-prkdf

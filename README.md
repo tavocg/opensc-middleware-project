@@ -189,6 +189,13 @@ EC en ese directorio**. No identifica la clave P521 del prototipo ZIP ni
 descarta otra clave de canal fuera de PuKDF7004. Pasaron 65 comprobaciones
 del helper y 59 del lanzador; observador y driver intactos.
 
+`make inspect/jcop4-idopte-pukdf READER=0` añade una excepción separada para
+leer PuKDF7004 hasta4096 bytes/19 solicitudes contiguas de hasta256 bytes,
+sin guardar contenido ni autenticar. La ejecución real obtuvo 9000 en19 READ
+y encontró SELECT7005, bloqueado antes de transmitir; ODF7005 es el directorio
+de certificados. Los modos anteriores mantienen7004 bloqueado. Pasaron70
+comprobaciones del observador,61 del lanzador y6 del lanzador de firma.
+
 Capturas privadas bajo local/jcop4-idopte-spy-*/; no agregarlas a Git.
 Pasaron previamente **30 comprobaciones del observador/decoder y 40 del
 lanzador** con transporte ficticio. El diagnóstico de firma pasó además

@@ -6,7 +6,38 @@ la tarjeta. El usuario ejecuta las operaciones que requieran PIN o GUI. Esto
 sustituye las restricciones anteriores de no ejecutar Git/hardware/Idopte por
 el agente; conservar límites de cada diagnóstico y privacidad de los registros.
 
-**Último resultado: PuKDF7004 contiene dos RSA2048, 20:48:52 UTC.**
+**Último resultado: READ7004 -> SELECT7005 bloqueado, 21:16:07 UTC.**
+Usuario registró `adb68f9`, OpenSC `3dfef6704`, ambos limpios al comenzar.
+Agente preparó/ejecutó modo nuevo sin PIN/GUI:
+`nix develop --offline -c make inspect/jcop4-idopte-pukdf READER=0`.
+Informe `local/jcop4-idopte-pukdf-rI9D42no/report.txt`, **21:16:07 UTC**.
+Compilación/inventario correctos, ATR conectado conocido; **54 APDU0/9000**,
+SELECT7004 y19 READ aceptados, últimooffset0FAE. Contenido/Le/longitud final
+omitidos, no afirmar lectura completa por cabeceras. **SELECT7005 bloqueado
+antes de transmitir**, sin SW de tarjeta a ese comando. Módulo1/events_recorded
+por guard, no rechazo de READ ni nuevo VERIFY6982. Sin PIN/VERIFY/MSE/GA/SM/PSO/
+escritura/firma. ODF7005=certificates, con precedente de inventario nativo de
+certificados públicos sin login. Secuencia sigue siendo inventario; no identifica
+canal de C_Login. No descartar CA/PACE ni atribuirlo a4141/4109 por orden.
+
+Nuevo --idopte-pukdf/target inspect/jcop4-idopte-pukdf, opt-in
+JCOP4_DIAGNOSTIC_PUKDF=1 requiere PRKDF/AODF/READ4109/READ4141 dentro de Idopte
+inventario/slots/empty stdin. Modos anteriores mantienen SELECT/READ7004
+bloqueados. Exige ATR/ADF confirmados y READ7002 previo para SELECT7004 exacto
+básico/9000. READ caso2 básico corto/extendido, hasta256/solicitud,
+presupuesto4096 y19calls por proceso, offset0+continuidad sin reposición por
+SELECT ni reconexión. BufferLe+2 máx258, SW9000/6282; fallos detienen, sin GET
+RESPONSE/reintentos. Contenido solo al cliente, trazas privadas0700/0600.
+No nuevas lecturas de rutas de objetos. Inventario/firmador limpian opt-in.
+Pasaron **70 observador/constructor/decoder,61 lanzador y6 lanzadorfirma**,
+fake transporte/redirector real; biblioteca compilada. Helper público65/
+operación12 previos vigentes intactos, no repetir suites sin cambios.
+Submódulo/driver intactos. No repetir consulta idéntica ni pedir PIN. Próximo
+paso: control/acceso CDF7005 del mismo ODF con precedente de certificados
+públicos ya inventariados, sin habilitar otros FID por inercia. JCOP4/RSA3072
+pendientes. Git autorizado pero montaje.git readonly aún impide commits.
+
+**Resultado anterior: PuKDF7004 contiene dos RSA2048, 20:48:52 UTC.**
 Usuario registró `76c99c9`, OpenSC `3dfef6704`, ambos limpios al comenzar.
 Agente ejecutó --file7004 SELECT-only sin PIN/GUI, informe privado
 `local/jcop4-file7004-JRw8iNNl/report.txt`, **20:48:34 UTC**: SELECT0/9000,

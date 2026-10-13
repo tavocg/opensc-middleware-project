@@ -64,7 +64,7 @@ static FILE *fixture_reset(void)
 	control_size = 16; control_result = 0;
 	fixture_sw = 0x9000;
 	fixture_payload = 16; fixture_overrun = 0;
-	compare_prkdf = read7002_budget = read7002_offset = read7002_calls = compare_aodf = read7001_budget = read7001_offset = read7001_calls = compare_read4109 = read4109_calls = compare_read4141 = read4141_budget = read4141_offset = read4141_calls = 0;
+	compare_pukdf = read7004_budget = read7004_offset = read7004_calls = compare_prkdf = read7002_budget = read7002_offset = read7002_calls = compare_aodf = read7001_budget = read7001_offset = read7001_calls = compare_read4109 = read4109_calls = compare_read4141 = read4141_budget = read4141_offset = read4141_calls = 0;
 	comparison_atr_ok = 1; /* Unit fixture simulates a validated connection. */
 	return file;
 }
@@ -110,6 +110,15 @@ static FILE *fixture_prkdf(void)
 	assert(send_large(read, sizeof(read)) == 0 && send_command(target, sizeof(target)) == 0 && selected_public_file == 6);
 	return file;
 }
+static FILE *fixture_pukdf(void)
+{
+	const unsigned char read[] = { 0, 0xB0, 0, 0, 0 };
+	const unsigned char target[] = { 0, 0xA4, 2, 0, 2, 0x70, 4, 0 };
+	FILE *file = fixture_prkdf(); compare_pukdf = 1;
+	assert(send_large(read, sizeof(read)) == 0 && read7002_calls == 1);
+	assert(send_command(target, sizeof(target)) == 0 && selected_public_file == 7);
+	return file;
+}
 int main(void)
 {
 	const unsigned char select[] = { 0, 0xA4, 0, 0x0C, 2, 0x2F, 0 };
@@ -137,6 +146,53 @@ int main(void)
 			send_command(version, sizeof(version)) == 0 && calls == 5);
 	check_private(file);
 	puts("PASS public observer forwards only allowed discovery and logs no payloads or lengths");
+	{
+		const unsigned char target[] = { 0, 0xA4, 2, 0, 2, 0x70, 4, 0 };
+		unsigned char chunk[] = { 0, 0xB0, 0, 0, 0 };
+		file = fixture_pukdf(); fixture_payload = 256;
+		for (unsigned int i = 0; i < 16; i++) {
+			chunk[2] = i; chunk[3] = 0;
+			assert(send_large(chunk, sizeof(chunk)) == 0);
+		}
+		assert(read7004_budget == 4096 && read7004_offset == 4096 && read7004_calls == 16);
+		fixture_payload = 16; assert(send_command(target, sizeof(target)) == 0);
+		chunk[2] = 0; int before = calls;
+		assert(send_large(chunk, sizeof(chunk)) != 0 && calls == before);
+		check_private(file);
+		puts("PASS PuKDF allows at most 4096 contiguous bytes and refuses renewing byte budget or cursor on reselect");
+		file = fixture_pukdf(); chunk[4] = 16; fixture_payload = 16;
+		for (unsigned int i = 0; i < 19; i++) {
+			chunk[2] = (i * 16) >> 8; chunk[3] = (i * 16) & 0xFF;
+			assert(send_large(chunk, sizeof(chunk)) == 0);
+		}
+		chunk[2] = 1; chunk[3] = 48; before = calls;
+		assert(send_large(chunk, sizeof(chunk)) != 0 && calls == before && read7004_calls == 19);
+		check_private(file);
+		puts("PASS PuKDF has a separate nineteen-call process limit even before its byte budget is spent");
+		for (int i = 0; i < 11; i++) {
+			unsigned char bad[] = { 0, 0xB0, 0, 0, 0 };
+			file = fixture_pukdf(); before = calls;
+			if (i == 0) bad[0] = 1;
+			if (i == 1) bad[0] = 0x0C;
+			if (i == 2) bad[2] = 0x80;
+			if (i == 3) bad[3] = 1;
+			if (i == 4) compare_pukdf = 0;
+			if (i == 5) comparison_atr_ok = 0;
+			if (i == 6) fixture_sw = 0x6982;
+			if (i == 7) fixture_sw = 0x6101;
+			if (i == 8) fixture_overrun = 1;
+			if (i >= 9) {
+				if (i == 9) compare_pukdf = 0;
+				if (i == 10) read7002_calls = 0;
+				assert(send_command(target, sizeof(target)) != 0 && calls == before);
+			} else {
+				assert(send_large(bad, sizeof(bad)) != 0 && stopped && calls == before + (i >= 6));
+			}
+			assert(send_large(get_response, sizeof(get_response)) != 0 && send_command(pin, sizeof(pin)) != 0);
+			check_private(file);
+		}
+		puts("PASS PuKDF rejects context/form errors, missing prior PrKDF read, security/continuation or overrun and never forwards PIN");
+	}
 	{
 		const unsigned char target[] = { 0, 0xA4, 2, 0, 2, 0x70, 2, 0 };
 		unsigned char chunk[] = { 0, 0xB0, 0, 0, 0 };

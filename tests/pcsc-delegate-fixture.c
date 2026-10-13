@@ -76,9 +76,17 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *pci,
 					(size == 8 && cmd[7] == 0 && cmd[2] == 2 && fid == 0x4141 && selected_file == 0xFFFF) ||
 					(size == 8 && cmd[7] == 0 && cmd[2] == 2 && fid == 0x4109 && selected_file == 0x4141) ||
 					(size == 8 && cmd[7] == 0 && cmd[2] == 2 && fid == 0x7001 && selected_file == 0x4109) ||
-					(size == 8 && cmd[7] == 0 && cmd[2] == 2 && fid == 0x7002 && selected_file == 0x7001));
+					(size == 8 && cmd[7] == 0 && cmd[2] == 2 && fid == 0x7002 && selected_file == 0x7001) ||
+					(size == 8 && cmd[7] == 0 && cmd[2] == 2 && fid == 0x7004 && selected_file == 0x7002));
 			selected_file = fid;
 		}
+	} else if (cmd[1] == 0xB0 && selected_file == 0x7004) {
+		assert(size == 5 && cmd[2] == 0 && cmd[3] == 0 && cmd[4] == 0);
+		assert(getenv("JCOP4_DIAGNOSTIC_PUKDF") && *len == 258);
+		calls++;
+		memset(response, 'X', 256); memcpy(response, "PRIVATE_PUKDF_INFO", 18);
+		response[256] = 0x90; response[257] = 0; *len = 258;
+		return SCARD_S_SUCCESS;
 	} else if (cmd[1] == 0xB0 && selected_file == 0x7002) {
 		assert(size == 5 && cmd[2] == 0 && cmd[3] == 0 && cmd[4] == 0);
 		assert(getenv("JCOP4_DIAGNOSTIC_PRKDF") && *len == 258);
