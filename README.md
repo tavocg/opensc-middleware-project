@@ -52,21 +52,22 @@ La selección temporal RSA/SHA-256 obtuvo `9000`; VERIFY vacío devolvió
 `63C7`, con siete intentos disponibles, PIN global 1 y formato UTF-8.
 El primer intento autenticado devolvió **6982 en VERIFY**, sin llegar a
 firmar. La consulta pública posterior obtuvo versión `03020052` y CardAccess
-no disponible por SFI `1C` desde raíz (`6A82`). El siguiente paso es consultar
-la política pública del PIN 1 en raíz y aplicación, sin introducir el PIN:
+no disponible por SFI `1C` desde raíz (`6A82`). La consulta IAS/ECC de política
+del PIN devolvió `6D00` en raíz y aplicación, sin obtener datos. El siguiente
+paso es revisar el reconocimiento y estado público que anuncia Idopte:
 
 ```bash
 nix develop
-make inspect/jcop4-pin-policy READER=0
+make inspect/jcop4-idopte READER=0
 ```
 
-Cerrar firmador y otros clientes y mantener esta JCOP4 insertada. Compila
-solo una herramienta pequeña contra OpenSC existente y realiza hasta dos
-GET DATA de metadatos DOCP; no consulta el valor del PIN, autentica ni firma.
-Informes privados en `local/jcop4-pin-policy-*/`. Pasaron 35 comprobaciones
-del helper y 21 del lanzador, con transporte simulado.
-No repetir el intento de PIN
-hasta identificar el requisito que falta. JCOP4 aún no está integrada en PKCS#11.
+Cerrar firmador y otros clientes y mantener esta JCOP4 insertada. Consulta
+únicamente información del módulo instalado, slots y tokens. No recompila,
+abre sesiones, solicita PIN ni firma. Informes privados en
+`local/jcop4-idopte-*/`, con etiquetas/seriales identificables. Pasaron
+25 comprobaciones del lanzador con herramientas simuladas.
+No repetir el intento de PIN hasta identificar el requisito que falta.
+JCOP4 aún no está integrada en PKCS#11.
 RSA 3072 y modularidad para futuras generaciones siguen pendientes.
 La evidencia y el protocolo están en [docs/jcop4.md](docs/jcop4.md).
 

@@ -43,6 +43,12 @@ nix develop
 pkcs11-tool --module /run/current-system/sw/lib/SCMiddleware/libidop11.so --show-info --list-slots
 ```
 
+Para la JCOP4 actual, `make inspect/jcop4-idopte READER=0` prepara esta
+consulta con la herramienta compilada localmente, inventario/ATR previo,
+stdin vacío, trazas desactivadas e informe privado bajo `local/`. No solicita
+sesión/login/PIN, acceso a objetos ni firma; permite revisar el reconocimiento
+y flags anunciados del token. Detalles en [jcop4.md](jcop4.md).
+
 No se ha capturado una firma ni una sesión autenticada de Idopte. OpenSC ya
 enumera los objetos y produjo una firma RSA SHA-256 verificada con OpenSSL.
 La integración pendiente se prueba con `make firmador/jcop3`: fija

@@ -7,6 +7,24 @@ task_tmp=$(mktemp -d)
 trap 'rm -rf -- "$task_tmp"' EXIT
 mkdir -p "$task_tmp/scripts" "$task_tmp/bin" "$task_tmp/build/opensc/src/tools"
 cp "$task_root/scripts/probe-jcop4.sh" "$task_tmp/scripts/"
+# Replace only the fixed installed-module location in the copied fixture script.
+task_fixture_script=$(< "$task_tmp/scripts/probe-jcop4.sh")
+task_fixture_script=${task_fixture_script/'task_idopte_module=/run/current-system/sw/lib/SCMiddleware/libidop11.so'/'task_idopte_module="$task_root/fixture-idopte.so"'}
+printf '%s\n' "$task_fixture_script" > "$task_tmp/scripts/probe-jcop4.sh"
+touch "$task_tmp/fixture-idopte.so"
+cat > "$task_tmp/build/opensc/src/tools/pkcs11-tool" <<'PKCS11'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ $# == 4 && $1 == --module && $2 == "$FIXTURE_PROBE_ROOT/fixture-idopte.so" &&
+   $3 == --show-info && $4 == --list-slots ]] || exit 97
+[[ ${OPENSC_DEBUG-} == 0 && ${OPENSC_API_TRACE_FILE-unset} == unset &&
+   ${OPENSC_DEBUG_FILE-unset} == unset && $(stat -c %a "$OPENSC_CONF") == 600 ]] || exit 98
+if IFS= read -r task_input; then exit 99; fi
+printf '%s\n' "$*" > "$FIXTURE_PROBE_ROOT/idopte-called"
+printf 'Idopte fixture\n  token flags: PIN initialized\n'
+exit "${FIXTURE_IDOPTE_EXIT:-0}"
+PKCS11
+chmod +x "$task_tmp/build/opensc/src/tools/pkcs11-tool"
 cat > "$task_tmp/scripts/build-card-public-info.sh" <<'BUILD'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -90,6 +108,7 @@ task_run() {
     shift
     rm -f "$task_tmp/called"
     rm -f "$task_tmp/public-called"
+    rm -f "$task_tmp/idopte-called"
     bash "$task_tmp/scripts/probe-jcop4.sh" "$@" > "$task_tmp/output.txt" 2>&1 || task_rc=$?
     [[ $task_rc == "$task_expected" ]]
 }
@@ -205,6 +224,35 @@ export FIXTURE_PUBLIC_EXIT=17
 task_run 17 2 --pin-policy
 [[ -f $task_tmp/public-called && $(< "$task_tmp/output.txt") != *'Consulta de política pública del PIN terminada'* ]]
 printf 'PASS JCOP4 PIN policy propagates errors without retries or success announcement\n'
+unset FIXTURE_PUBLIC_EXIT
+printf 'synthetic unused stdin\n' | task_run 0 2 --idopte
+[[ $(wc -l < "$task_tmp/called") == 3 && ! -e $task_tmp/public-called &&
+   -f $task_tmp/idopte-called &&
+   $(< "$task_tmp/output.txt") == *'Consulta pública de Idopte terminada, sin login ni PIN'* &&
+   $(< "$task_tmp/output.txt") != *'token flags'* ]]
+for task_dir in "$task_tmp"/local/jcop4-idopte-*; do
+    [[ $(stat -c %a "$task_dir") == 700 && $(stat -c %a "$task_dir/report.txt") == 600 &&
+       $(< "$task_dir/report.txt") != *'synthetic unused stdin'* ]]
+done
+printf 'PASS JCOP4 Idopte query requests only module/slot/token metadata with empty stdin and private reports\n'
+export FIXTURE_IDOPTE_EXIT=17
+task_run 17 2 --idopte
+[[ -f $task_tmp/idopte-called && $(< "$task_tmp/output.txt") != *'Consulta pública de Idopte terminada'* ]]
+printf 'PASS JCOP4 Idopte query propagates module failure without retries or success announcement\n'
+unset FIXTURE_IDOPTE_EXIT
+export FIXTURE_PROBE_ATR=3b:00
+task_run 1 2 --idopte
+[[ ! -e $task_tmp/idopte-called && $(wc -l < "$task_tmp/called") == 3 ]]
+printf 'PASS JCOP4 Idopte query checks the observed ATR before loading the proprietary module\n'
+export FIXTURE_PROBE_ATR=3b:d5:18:ff:81:91:fe:1f:c3:80:73:c8:21:10:0a
+mv "$task_tmp/fixture-idopte.so" "$task_tmp/saved-idopte.so"
+task_run 1 2 --idopte
+[[ ! -e $task_tmp/idopte-called && ! -e $task_tmp/public-called ]]
+mv "$task_tmp/saved-idopte.so" "$task_tmp/fixture-idopte.so"
+mv "$task_tmp/build/opensc/src/tools/pkcs11-tool" "$task_tmp/saved-pkcs11-tool"
+task_run 1 2 --idopte
+[[ ! -e $task_tmp/idopte-called && ! -e $task_tmp/public-called ]]
+printf 'PASS JCOP4 Idopte query stops if the fixed module or local tool is absent without fallback\n'
 mv "$task_tmp/build/opensc/src/tools/opensc-tool" "$task_tmp/saved-tool"
 task_run 1
 [[ ! -e $task_tmp/called && $(< "$task_tmp/output.txt") == *'make build/opensc'* ]]

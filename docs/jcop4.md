@@ -538,7 +538,7 @@ Card PIN y Card Admin Key; no Card CAN enumerado. Unlock y proceso 0.
 No hubo PIN ni autenticación. No repetir el diagnóstico de versión/CardAccess
 como primer paso. La causa de VERIFY 6982 continúa pendiente.
 
-## Consulta de política del PIN, pendiente
+## Consulta de política del PIN
 
 El siguiente dato relevante es la política pública del objeto CHV 1. Se
 preparó una comparación acotada entre MF y el AID anunciado, usando la
@@ -573,6 +573,72 @@ exclusión de VERIFY/MSE/otras plantillas, metadatos incompatibles, ausencia
 opcional, errores de seguridad/transporte/SELECT, tamaño excesivo y limpieza.
 Log: `build/opensc-offline/card-public-pin-policy-tests.log`.
 Ninguna prueba del agente usó hardware; el submódulo OpenSC no cambió.
+
+## DOCP no disponible: 13 de octubre, 14:10:23 UTC
+
+Informe `local/jcop4-pin-policy-pMGzFYNL/report.txt`, principal `292c6b4`,
+OpenSC `3dfef6704`. Binding, metadatos y SELECT de ambos contextos correctos.
+GET DATA de CHV 1 / DOCP A0 devolvió transporte 0 y **6D00**, respuesta
+vacía, tanto en MF como en aplicación. El comando/formato IAS/ECC utilizado
+no está soportado en los contextos consultados: no hubo política que analizar.
+Esto impide reutilizar directamente esta consulta JCOP3; no prueba que toda
+la aplicación o sus mecanismos de firma sean incompatibles con IAS/ECC.
+No ampliar el barrido de referencias/plantillas sin evidencia de otro comando.
+
+Unlock y proceso 0: el helper terminó las consultas y liberó la tarjeta.
+No significa que obtuviera una política válida; se registró disponibilidad
+negativa. No hubo PIN, autenticación, firma ni operaciones administrativas.
+VERIFY 6982 anterior sigue pendiente; no diagnosticar PIN incorrecto a partir
+de estos datos ni solicitar otro intento por inercia.
+
+La revisión del módulo Idopte instalado confirmó dependencias PC/SC y
+nombres de funciones relacionadas con canales seguros y restricciones de
+PIN. Los símbolos no muestran qué protocolo utiliza para esta JCOP4, y
+no se copió implementación privativa. La
+[cible pública NXP ChipDoc 3.2 SSCD](https://messervices.cyber.gouv.fr/visas/ANSSI-CC-2025-03-cible.pdf),
+sección 1.3.2.1.3, contempla PACE con MRZ/CAN/PIN y comunicaciones protegidas.
+Es un marco de investigación, no prueba de que este perfil requiera PACE
+ni explicación suficiente de 6982. La ausencia de Card CAN y el 6A82 de
+CardAccess tampoco descartan todas las formas de canal seguro.
+
+## Información pública de Idopte, pendiente
+
+Antes de nuevas APDU hipotéticas, revisar qué perfil y estado anuncia el
+módulo instalado. Se pidió al usuario confirmar si esta JCOP4 había firmado
+correctamente con Idopte; no se le solicitó repetir una firma ni proporcionar
+su PIN. Esa confirmación es independiente de la consulta siguiente.
+
+Desde nix develop, tarjeta insertada y firmador/otros clientes cerrados:
+
+```bash
+make inspect/jcop4-idopte READER=0
+```
+
+El lanzador hace el inventario PC/SC y confirma el ATR observado. Después
+ejecuta exclusivamente `pkcs11-tool --module
+/run/current-system/sw/lib/SCMiddleware/libidop11.so --show-info --list-slots`
+con la herramienta compilada localmente. Según el flujo de pkcs11-tool estas
+opciones consultan información de biblioteca, slots y tokens sin pedir
+C_OpenSession ni C_Login. No leen objetos, autentican ni firman. Idopte
+puede realizar su descubrimiento interno de tarjeta; no se captura APDU.
+
+No recompila ni usa el helper de autenticación. Stdin vacío, debug OpenSC 0,
+trazas desactivadas y configuración aislada. Errores o faltas de módulo/
+herramienta detienen sin reintentos ni sustitución por otro módulo. Resultado
+privado en `local/jcop4-idopte-*/report.txt`: etiquetas y seriales pueden
+identificar al titular; no publicarlos sin anonimizar.
+
+Se revisará presencia/perfil y los flags anunciados de PIN (inicializado,
+bloqueado, último intento, cambio pendiente si corresponde). Esos flags
+no prueban autenticación o firma, y pueden depender de la lectura/caché del
+módulo. READER comprueba el lector PC/SC; la consulta Idopte enumera todos
+sus slots, con índices potencialmente distintos y varias vistas por tarjeta.
+
+Pasaron **25 comprobaciones del lanzador**, cuatro nuevas para Idopte:
+comando acotado y datos privados, stdin/configuración, propagación de errores,
+ATR distinto y herramientas/módulo ausentes. Las herramientas se simulan;
+no se cargó Idopte ni utilizó lector en estas pruebas. No se repitieron las
+regresiones C/JCOP3 ni se modificó el submódulo.
 
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 

@@ -1,8 +1,17 @@
 # libjcop3p11: contexto para continuar
 
 **JCOP4, 13 de octubre de 2026:** último informe revisado
-`local/jcop4-security-info-pveu5cDK/report.txt`, **14:03:00 UTC**, principal
-`83b2eda`, OpenSC `3dfef6704`; ambos Git limpios al comenzar. Binding y
+`local/jcop4-pin-policy-pMGzFYNL/report.txt`, **14:10:23 UTC**, principal
+`292c6b4`, OpenSC `3dfef6704`; ambos Git limpios al comenzar. Binding y
+metadatos correctos. SELECT MF y aplicación correctos; ambos GET DATA
+00 CB 3F FF / CHV 1 DOCP A0 -> transporte 0/**6D00**, sin datos. Esta
+consulta IAS/ECC no está soportada en los contextos probados; no se obtuvo
+política. Unlock y proceso 0 indican limpieza/consultas terminadas, no una
+política interpretada. Sin PIN ni autenticación. No repetir ni barrer nuevas
+referencias/plantillas por inercia. No aplicar política JCOP3 a JCOP4.
+
+Informe anterior `local/jcop4-security-info-pveu5cDK/report.txt`,
+**14:03:00 UTC**, principal `83b2eda`: binding y
 metadatos correctos: clase AUTH tiene Card PIN y Card Admin Key (AuthKey,
 derived=1); no objeto Card CAN en esta enumeración. No usar la llave
 administrativa ni interpretar su ausencia de ruta como permiso para leerla.
@@ -53,19 +62,23 @@ Evidencia anterior ya revisada:
 La generación JCOP4 la indica el usuario, RSA 2048 sí se corroboró. No activar
 excepciones JCOP3/eOI por ATR/etiqueta; precedente ChipDoc ANS enlazado en docs.
 
-**Siguiente intervención:** `make inspect/jcop4-pin-policy READER=0`,
+**Siguiente intervención:** `make inspect/jcop4-idopte READER=0`,
 desde nix develop, firmador y otros clientes cerrados y misma JCOP4 insertada.
-**Sin PIN ni autenticación**: binding nativo y validación del perfil observado
-y PIN global 1 vinculado a LlaveDeFirma; SELECT MF y SELECT aplicación, cada
-uno seguido de un GET DATA 00 CB 3F FF / plantilla 4D087006BF810102A080
-(CHV 1, solo DOCP A0, Le 256). Máximo dos consultas; no barrer referencias,
-variar plantillas ni leer el valor CHV 7F41. Formato tomado de
-iasecc_sdo_get_tagged_data y usado en JCOP3; aún no comprobado en JCOP4.
-Registrar bytes sin interpretar/reutilizar políticas JCOP3 automáticamente.
-Sin VERIFY, MSE, PSO, PACE, CAN, componentes privados ni comandos administrativos.
-Sin reintentos 6C/GET RESPONSE; cualquier error de seguridad/transporte detiene
-y libera transacción. Ausencia opcional se registra, sin afirmar política.
-Informe privado local/jcop4-pin-policy-*/report.txt.
+Inventario PC/SC/ATR conocido primero, después pkcs11-tool local con
+--module /run/current-system/sw/lib/SCMiddleware/libidop11.so --show-info
+--list-slots. Solo información módulo/slots/tokens: sin C_OpenSession,
+C_Login, objetos, PIN ni firma solicitados por la herramienta. No usa trazas
+APDU, flags experimentales JCOP3 ni helper de autenticación. Stdin vacío,
+debug OpenSC 0, configuración aislada, sin reintentos. No recompila nada.
+Faltas de herramienta/módulo o error terminan sin fallback. Informe privado
+local/jcop4-idopte-*/report.txt; contiene etiquetas/seriales identificables,
+mantener fuera de Git y no volcarlo completo al chat. Idopte enumera todos
+sus slots, que pueden ser varios por lector; no asumir que índice PC/SC
+selecciona el slot PKCS#11. Se revisará reconocimiento del perfil y flags
+de PIN sin tomar lo anunciado como prueba de autenticación/firma.
+
+Se pidió al usuario confirmar si esta JCOP4 ya había firmado con Idopte,
+sin solicitar una nueva prueba de PIN. Confirmación pendiente en esta revisión.
 
 El código local eoi_pin_cmd y el driver ChipDoc italiano abren PACE/CAN
 antes de VERIFY; eOI lo hace sin exigir interfaz contactless en esa condición.
@@ -73,10 +86,15 @@ Es una hipótesis para 6982, **no prueba del requisito en Costa Rica**. No
 activar eOI por ATR: AID/perfil/RSA difieren. También sigue sin resolverse
 si el orden MSE antes de VERIFY influye. La consulta nueva obtiene evidencia
 pública sin cambiar el protocolo autenticado ni el submódulo.
-Compiló el helper real offline; pasaron **35 comprobaciones del helper**
-y **21 del lanzador**, con transporte simulado. Log C:
-build/opensc-offline/card-public-pin-policy-tests.log. Política DOCP en hardware
-pendiente. No se cambió ni recompiló el driver OpenSC.
+La revisión estática del módulo instalado muestra funciones de canal seguro
+y restricciones de PIN; los nombres no demuestran qué usa esta tarjeta.
+La documentación pública NXP de ChipDoc 3.2 contempla PACE con PIN/CAN/MRZ
+y canales de confianza, sin resolver aún el requisito de la personalización CR.
+No copiar implementación privativa ni intentar autenticación administrativa.
+Las **35 comprobaciones del helper** pasaron en la preparación previa.
+Ahora pasaron **25 del lanzador** con herramientas simuladas, incluyendo
+consulta Idopte, stdin/permisos, ATR, errores y ausencia de módulos/herramientas.
+Sin cambios ni recompilación del driver OpenSC; consulta Idopte en hardware pendiente.
 
 Herramienta autenticada anterior, conservada para investigación futura:
 
@@ -157,7 +175,7 @@ previa. No repetir suite por documentación. Dar comandos de commit del
 principal; el agente no escribe Git ni firma/lee pass. Mantener datos privados
 fuera de Git. No modificar el perfil normal por defecto.
 
-**Próximo trabajo:** revisar la consulta DOCP del PIN JCOP4 y determinar
+**Próximo trabajo:** revisar reconocimiento/flags públicos Idopte para JCOP4 y determinar
 qué condición falta para VERIFY 6982 antes de solicitar otro PIN.
 Para integrar JCOP3, revisar/separar correcciones del perfil frente
 a instrumentación y experimentos antes de integrar. Diferencia local contra

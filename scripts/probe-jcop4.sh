@@ -6,8 +6,8 @@ umask 077
 task_reader=${1:-${READER:-0}}
 task_mode=${2:---probe}
 if (( $# > 2 )) || [[ ! $task_reader =~ ^[0-9]+$ ]] ||
-        [[ $task_mode != --probe && $task_mode != --aids && $task_mode != --files && $task_mode != --pkcs15 && $task_mode != --sign-setup && $task_mode != --pin-status && $task_mode != --security-info && $task_mode != --pin-policy ]]; then
-    printf 'Uso: bash scripts/probe-jcop4.sh [índice numérico de lector] [--probe|--aids|--files|--pkcs15|--sign-setup|--pin-status|--security-info|--pin-policy]\n' >&2
+        [[ $task_mode != --probe && $task_mode != --aids && $task_mode != --files && $task_mode != --pkcs15 && $task_mode != --sign-setup && $task_mode != --pin-status && $task_mode != --security-info && $task_mode != --pin-policy && $task_mode != --idopte ]]; then
+    printf 'Uso: bash scripts/probe-jcop4.sh [índice numérico de lector] [--probe|--aids|--files|--pkcs15|--sign-setup|--pin-status|--security-info|--pin-policy|--idopte]\n' >&2
     exit 2
 fi
 task_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
@@ -30,6 +30,8 @@ elif [[ $task_mode == --pin-status ]]; then
     task_dir=$(mktemp -d "$task_root/local/jcop4-pin-status-XXXXXXXX")
 elif [[ $task_mode == --pin-policy ]]; then
     task_dir=$(mktemp -d "$task_root/local/jcop4-pin-policy-XXXXXXXX")
+elif [[ $task_mode == --idopte ]]; then
+    task_dir=$(mktemp -d "$task_root/local/jcop4-idopte-XXXXXXXX")
 elif [[ $task_mode == --security-info ]]; then
     task_dir=$(mktemp -d "$task_root/local/jcop4-security-info-XXXXXXXX")
 else
@@ -105,6 +107,20 @@ done < "$task_last_output"
 if [[ $task_atr_ok != yes ]]; then
     printf 'ATR distinto o ausente; no se consultaron aplicaciones ni archivos. Revisar el informe.\n' >&2
     exit 1
+fi
+
+if [[ $task_mode == --idopte ]]; then
+    task_pkcs11_tool="$task_root/build/opensc/src/tools/pkcs11-tool"
+    task_idopte_module=/run/current-system/sw/lib/SCMiddleware/libidop11.so
+    if [[ ! -x $task_pkcs11_tool || ! -f $task_idopte_module ]]; then
+        printf 'Falta pkcs11-tool compilado o el módulo Idopte instalado; revisar las rutas del informe.\n' >&2
+        printf 'pkcs11_tool=%s\nidopte_module=%s\n' "$task_pkcs11_tool" "$task_idopte_module" >> "$task_report"
+        exit 1
+    fi
+    # Module/slot/token information only: no session, C_Login or object access.
+    task_record_tool "$task_pkcs11_tool" --module "$task_idopte_module" --show-info --list-slots
+    printf 'Consulta pública de Idopte terminada, sin login ni PIN. Revisar los flags de los tokens en el informe.\n'
+    exit 0
 fi
 
 if [[ $task_mode == --files || $task_mode == --pkcs15 || $task_mode == --sign-setup || $task_mode == --pin-status || $task_mode == --security-info || $task_mode == --pin-policy ]]; then

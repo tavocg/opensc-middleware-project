@@ -13,6 +13,7 @@
 .PHONY: sign/jcop4-apdu
 .PHONY: inspect/jcop4-security-info
 .PHONY: inspect/jcop4-pin-policy
+.PHONY: inspect/jcop4-idopte
 
 PDF_INPUT ?= doc.pdf
 PDF_OUTPUT ?= local/jcop3-cli.pdf
@@ -39,6 +40,7 @@ help:
 		'make inspect/jcop4-pin-status Consulta el estado de PIN 1 con VERIFY vacío, sin introducir PIN.' \
 		'make inspect/jcop4-security-info Consulta metadatos de autenticación, versión y CardAccess, sin PIN.' \
 		'make inspect/jcop4-pin-policy Consulta DOCP del PIN 1 en raíz/aplicación, sin PIN ni autenticación.' \
+		'make inspect/jcop4-idopte Consulta módulo y estado público de los tokens Idopte, sin login.' \
 		'make sign/jcop4-apdu      Firma experimental RSA SHA-256 por APDU y verifica, un intento de PIN.' \
 		'make inspect/jcop3         Identifica la aplicación y enumera objetos sin PIN.' \
 		'make read-dir/jcop3        Lee EF.DIR por APDU conocidas, sin PIN.' \
@@ -89,6 +91,9 @@ inspect/jcop4-security-info:
 
 inspect/jcop4-pin-policy:
 	@bash scripts/probe-jcop4.sh "$$READER" --pin-policy
+
+inspect/jcop4-idopte:
+	@bash scripts/probe-jcop4.sh "$$READER" --idopte
 
 sign/jcop4-apdu:
 	@bash scripts/sign-jcop4.sh
