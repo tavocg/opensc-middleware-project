@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # A separate, unauthenticated client selects the already observed IAS root.
-# Run only while firmador is idle, between completed signatures.
+# Controlled context test: before PIN, or after PIN only when explicitly
+# testing interference/lock_login. A login transaction can block this client;
+# let firmador finish and close it before waiting for this client to finish.
 set -euo pipefail
 umask 077
 task_reader=${READER:-0}

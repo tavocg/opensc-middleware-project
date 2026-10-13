@@ -2,6 +2,7 @@
 .PHONY: sign/jcop3-select-root
 .PHONY: firmador/jcop3-pin-status-in-place
 .PHONY: firmador/jcop3-cli
+.PHONY: firmador/jcop3-lock-login
 .PHONY: inspect/jcop3-peer-context
 
 PDF_INPUT ?= doc.pdf
@@ -40,6 +41,7 @@ help:
 		'make firmador/jcop3        Abre firmador con el módulo y perfil locales, sin depuración APDU.' \
 		'make firmador/jcop3-diagnose Registra únicamente metadatos de sesiones y firma, sin PIN ni APDU.' \
 		'make firmador/jcop3-pin-status-in-place Consulta el PIN conservando el contexto; corrección candidata optativa.' \
+		'make firmador/jcop3-lock-login Prueba aislada: reserva la tarjeta desde login; otros clientes pueden esperar hasta cerrar GUI.' \
 		'make firmador/jcop3-cli    Firma PDF_INPUT hacia PDF_OUTPUT con -dargs; PIN desde stdin o terminal.' \
 		'make firmador/jcop3-session-state Prueba aislada: omite consultas físicas de PIN de sesión y token tras login.'
 
@@ -105,6 +107,9 @@ firmador/jcop3-session-state:
 
 firmador/jcop3-pin-status-in-place:
 	@bash scripts/firmador-jcop3.sh --pin-status-in-place
+
+firmador/jcop3-lock-login:
+	@bash scripts/firmador-jcop3.sh --lock-login
 
 firmador/jcop3-cli:
 	@bash scripts/firmador-jcop3.sh --cli "$$PDF_INPUT" "$$PDF_OUTPUT"

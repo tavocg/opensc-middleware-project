@@ -3,6 +3,9 @@
 set -euo pipefail
 umask 077
 task_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+# Optional compiled checker uses the real OpenSC parser/options, without PC/SC.
+if (( $# > 1 )); then exit 2; fi
+export FIXTURE_CONFIG_CHECK=${1-}
 task_tmp=$(mktemp -d)
 trap 'rm -rf -- "$task_tmp"' EXIT
 mkdir -p "$task_tmp/scripts" "$task_tmp/bin" "$task_tmp/build/opensc/src/pkcs11/.libs" "$task_tmp/local"
@@ -27,6 +30,16 @@ task_config=$(< "$OPENSC_CONF")
 [[ $task_config == *'use_pin_caching = no;'* &&
    $task_config == *'try_emulation_first = yes;'* && $task_config == *'debug = 0;'* ]] || exit 94
 [[ $(stat -c %a "$OPENSC_CONF") == 600 ]] || exit 95
+if [[ ${FIXTURE_LOCK_LOGIN-no} == yes ]]; then
+    [[ $task_config == *'lock_login = yes;'* && $task_config == *'atomic = no;'* ]] || exit 102
+    task_expected_lock=1
+else
+    [[ $task_config != *lock_login* && $task_config != *atomic* ]] || exit 103
+    task_expected_lock=0
+fi
+if [[ -n $FIXTURE_CONFIG_CHECK ]]; then
+    "$FIXTURE_CONFIG_CHECK" "$OPENSC_CONF" "$task_expected_lock" || exit 104
+fi
 [[ ${OPENSC_JCOP3_SESSION_STATE-unset} == "${FIXTURE_SESSION-unset}" &&
    ${OPENSC_JCOP3_PIN_STATUS_IN_PLACE-unset} == "${FIXTURE_CANDIDATE-unset}" ]] || exit 96
 if [[ ${FIXTURE_TRACE-no} == yes ]]; then
@@ -58,7 +71,7 @@ task_run() {
     [[ $task_rc == 17 && -f "$task_tmp/called" ]]
     rm -f "$task_tmp/called"
 }
-export FIXTURE_MODE=cli FIXTURE_CANDIDATE=yes FIXTURE_SESSION=unset FIXTURE_TRACE=yes
+export FIXTURE_MODE=cli FIXTURE_CANDIDATE=yes FIXTURE_SESSION=unset FIXTURE_TRACE=yes FIXTURE_LOCK_LOGIN=no
 printf 'fixture-stdin\n' | task_run --cli 'input with spaces.pdf' 'local/result with spaces.pdf'
 printf 'PASS CLI forwards PDF arguments and stdin, preserves private configuration and exit status\n'
 task_reports=("$task_tmp"/local/jcop3-firmador-api-*/report.txt)
@@ -89,6 +102,20 @@ printf 'PASS GUI diagnostics preserves configuration without candidate opt-ins\n
 export FIXTURE_CANDIDATE=yes
 task_run --pin-status-in-place
 printf 'PASS GUI candidate keeps physical query and real VERIFY opt-in\n'
+export FIXTURE_LOCK_LOGIN=yes
+task_run --lock-login
+printf 'PASS GUI login transaction keeps candidate and caching off in private configuration\n'
+task_report_found=no
+for task_report_path in "$task_tmp"/local/jcop3-firmador-api-*/report.txt; do
+    task_report=$(< "$task_report_path")
+    if [[ $task_report == *'lock_login_experiment=yes'* &&
+          $task_report == *'pin_verify_experiment=fresh_verify'* ]]; then
+        task_report_found=yes
+    fi
+done
+[[ $task_report_found == yes ]]
+printf 'PASS login transaction is identified separately in the API report\n'
+export FIXTURE_LOCK_LOGIN=no
 export FIXTURE_CANDIDATE=unset FIXTURE_SESSION=yes
 task_run --session-state
 printf 'PASS legacy GUI experiment remains explicitly selected\n'

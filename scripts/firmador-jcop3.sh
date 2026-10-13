@@ -7,6 +7,7 @@ task_module="$task_root/build/opensc/src/pkcs11/.libs/opensc-pkcs11.so"
 task_trace_api=no
 task_session_state=no
 task_pin_status_in_place=no
+task_lock_login=no
 task_launch_mode=gui
 task_args=()
 
@@ -18,6 +19,10 @@ elif (( $# == 1 )) && [[ $1 == --session-state ]]; then
 elif (( $# == 1 )) && [[ $1 == --pin-status-in-place ]]; then
     task_trace_api=yes
     task_pin_status_in_place=yes
+elif (( $# == 1 )) && [[ $1 == --lock-login ]]; then
+    task_trace_api=yes
+    task_pin_status_in_place=yes
+    task_lock_login=yes
 elif (( $# == 3 )) && [[ $1 == --cli ]]; then
     task_trace_api=yes
     task_pin_status_in_place=yes
@@ -36,7 +41,7 @@ elif (( $# == 3 )) && [[ $1 == --cli ]]; then
     fi
     task_args=(-dargs "$task_input" "$task_result")
 elif (( $# != 0 )); then
-    printf 'Uso: make firmador/jcop3, make firmador/jcop3-diagnose, make firmador/jcop3-session-state, make firmador/jcop3-pin-status-in-place o make firmador/jcop3-cli\n' >&2
+    printf 'Uso: make firmador/jcop3, make firmador/jcop3-diagnose, make firmador/jcop3-session-state, make firmador/jcop3-pin-status-in-place, make firmador/jcop3-lock-login o make firmador/jcop3-cli\n' >&2
     exit 2
 fi
 if [[ ! -r "$task_module" ]]; then
@@ -67,6 +72,7 @@ if [[ $task_trace_api == yes ]]; then
         printf 'session_state_experiment=%s\n' "$task_session_state"
         printf 'launch_mode=%s\n' "$task_launch_mode"
         printf 'pin_status_in_place_experiment=%s\n' "$task_pin_status_in_place"
+        printf 'lock_login_experiment=%s\n' "$task_lock_login"
         if [[ $task_session_state == yes ]]; then
             printf 'pin_query_experiment=session_and_token_info\n'
         elif [[ $task_pin_status_in_place == yes ]]; then
@@ -92,9 +98,23 @@ if [[ $task_session_state == yes ]]; then
     printf 'Experimento: se omiten consultas físicas de PIN de C_GetSessionInfo y C_GetTokenInfo tras login.\n'
     printf 'Las banderas de intentos del token usan los últimos metadatos públicos disponibles.\n'
 fi
+if [[ $task_lock_login == yes ]]; then
+    printf 'Prueba aislada: transacción PC/SC desde login; otros clientes pueden esperar hasta cerrar esta GUI.\n'
+    printf 'Si la consulta externa queda esperando, continuar la firma aquí y cerrar firmador al terminar.\n'
+fi
 cat > "$task_config" <<'CONFIG'
 app default {
     debug = 0;
+CONFIG
+if [[ $task_lock_login == yes ]]; then
+    cat >> "$task_config" <<'CONFIG'
+    pkcs11 {
+        lock_login = yes;
+        atomic = no;
+    }
+CONFIG
+fi
+cat >> "$task_config" <<'CONFIG'
     framework pkcs15 {
         use_file_caching = no;
         use_pin_caching = no;

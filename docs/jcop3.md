@@ -2659,3 +2659,97 @@ Revisar PRE_VERIFY_SELECT antes de VERIFY, RSA y PDF. No pedir dos intentos,
 ni usar helper mientras autenticación/firma ya está en curso. Este caso
 restaura contexto antes del login; interferencia posterior al login y firmas
 concurrentes siguen pendientes. No activar por defecto ni reportar upstream.
+
+## Segundo cliente antes y después del PIN: proteger la sesión autenticada
+
+Revisión del 12 de octubre de 2026 sobre principal 313b286 y OpenSC
+3dfef6704, ambos limpios al comenzar. El usuario hizo dos casos separados,
+cerrando la primera GUI: helper antes de introducir PIN, firma exitosa;
+helper después de introducir PIN, firma con CKR_USER_NOT_LOGGED_IN.
+El momento relativo proviene del usuario: API no registra tiempos por evento.
+
+| Captura GUI | Inicio UTC | Eventos revisados | Resultado |
+| --- | --- | ---: | --- |
+| PL8z86NE | 22:56:06 | 231 | PRE_VERIFY_SELECT 134; VERIFY 136 = 9000; login 138 OK; RSA AT 229 = 9000; SignFinal 231 OK |
+| 6xTEQpUr | 22:56:59 | 289 | PRE_VERIFY_SELECT 115; VERIFY 117 = 9000; login 119 OK; RSA AT 210 = 6982; SignFinal 213 = 0x101 |
+
+Los helpers QGPk2Y3C (22:56:48) y W95JmHG0 (22:57:41) seleccionan raíz
+con 9000 y exit_status 0. Cada GUI contiene un solo login y una sola operación
+RSA en la copia revisada. Se preservaron api-reviewed.log y analysis.json
+privados, sin reemplazar capturas originales. El PIN fue aceptado en ambos
+casos; el fallo posterior es SC_ERROR_SECURITY_STATUS_NOT_SATISFIED en RSA,
+traducido a CKR_USER_NOT_LOGGED_IN. El éxito del helper acredita su SELECT,
+no la conservación del estado de autorización del otro proceso.
+
+local/jcop3-peer-fixed.pdf, 80462 bytes, queda copiado/verificado en
+local/jcop3-pdf-verification-sa2urtvb/report.json. CMS CAdES válido con el
+certificado exacto de LlaveDeFirma, revisión de 38402 bytes; sello CMS
+RFC3161 e imprint SHA-512 válidos para la revisión final. Original/texto/render
+preservados. No se comprobó confianza, revocación ni LTV. No atribuir un PDF
+válido al caso fallido.
+
+La selección ChipDoc antes de VERIFY queda respaldada por el primer caso.
+No protege de otro proceso que cambie selección después de VERIFY. La
+configuración usada no incluye lock_login; misc.c lo deja en 0. Los locks
+de sc_lock son contados y sus transacciones PC/SC ordinarias protegen bloques
+de comandos, sin mantener una reserva desde C_Login hasta C_SignFinal.
+La tarjeta comparte contexto por el canal usado por estos dos clientes.
+Los resultados apuntan a pérdida de autorización RSA por interferencia
+entre procesos; todavía no demuestran qué estado interno cambia, si SELECT
+por sí solo lo invalida o si intervienen conexión/desconexión del helper.
+No asignar significado a C9 ni afirmar un defecto de hardware o de PIN.
+
+[PC/SC Lite documenta SCardBeginTransaction](https://pcsclite.apdu.fr/api/group__API.html)
+como acceso temporal exclusivo para evitar que otro cliente cambie el
+archivo seleccionado; otro cliente puede esperar hasta liberar la transacción.
+OpenSC ya ofrece lock_login para extender esa protección desde el login.
+Su configuración de ejemplo advierte que limita la concurrencia y altera
+el comportamiento de compartición previsto por PKCS#11: es una opción de
+compatibilidad, no una solución universal para todos los firmadores.
+
+### Experimento separado lock_login, pendiente de hardware
+
+make firmador/jcop3-lock-login usa la candidata existente y agrega solamente
+este bloque dentro de app default en una configuración privada nueva:
+
+```text
+pkcs11 {
+    lock_login = yes;
+    atomic = no;
+}
+```
+
+Mantiene debug 0, use_pin_caching no, use_file_caching no y emulación primero.
+No cambia el driver ni los otros lanzadores. El informe identifica
+lock_login_experiment=yes. atomic queda explícitamente desactivado porque su
+implementación conserva credenciales y restaura login; no se usa como remedio.
+No se reenvía PIN automáticamente tras fallo RSA.
+
+framework-pkcs15.c toma lock_card antes de verificar PIN. Los locks internos
+posteriores quedan anidados. pkcs15_unbind llama unlock_card. En esta revisión,
+SW_PIN_LOGOUT_ONLY=1 hace que pkcs15_logout omita también unlock_card: no
+prometer liberación en C_Logout o al cerrar la última sesión. Un login fallido
+tampoco libera directamente el lock adquirido. Para este experimento cerrar
+la GUI al terminar o ante error; la liberación por desconexión/retirada debe
+validarse en hardware antes de ampliar pruebas de reinserción. No corregir
+esa ruta común como parte de una prueba de configuración.
+
+La suite pasa 288 comprobaciones. Nuevo fixture pkcs11-login-config.c usa
+scconf y load_pkcs11_parameters reales sobre los archivos que genera el
+lanzador, sin crear un contexto con lectores: comprueba lock_login, atomic
+desactivado, cachés desactivadas, emulación y debug. El mock del lanzador
+comprueba todos los modos, permisos, propagación de salida y etiquetado del
+experimento. Registro build/opensc-offline/login-lock-tests.log. No firma
+real ni evidencia de que el bloqueo resuelva el fallo en tarjeta todavía.
+
+Próxima intervención: cerrar GUI anterior, abrir make firmador/jcop3-lock-login,
+firmar el original doc.pdf una vez y repetir la interferencia después del PIN
+desde otra terminal. Guardar local/jcop3-peer-locked.pdf. Si helper espera,
+continuar y completar la firma en GUI sin esperar al helper; después cerrar
+GUI y comprobar si helper termina con 9000. También registrar si devuelve
+error de compartición o termina inmediatamente. Ante error de firma, no
+reintentar PIN: cerrar GUI y revisar capturas. No recompilar por este cambio
+de lanzador. Si confirma la hipótesis, valorar política de exclusión y sus
+límites antes de definir integración permanente y repetir reinserción/firma
+consecutiva con el perfil elegido. No reclamar concurrencia independiente;
+aislamiento mediante canales lógicos requeriría investigación adicional.
