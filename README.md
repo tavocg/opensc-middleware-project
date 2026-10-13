@@ -268,6 +268,13 @@ sin nuevo rechazo APDU ni PIN. Pasaron **213 comprobaciones** de los componentes
 modificados. El próximo contraste es caracterizar esa conexión y su primer
 comando omitido, conservando los límites de transporte y privacidad.
 
+La nueva instrumentación del modo B002 identifica la segunda conexión:
+**mismo nombre de lector, otro handle, SHARED/T1**, y como primer comando
+suprimido **SELECT MF3F00**, sin transmitirlo. No prueba identidad de tarjeta
+ni ruta de verificación del PIN. Pasaron **129 comprobaciones** del observador;
+los límites y permisos permanecen iguales. Próximo contraste: una excepción
+separada y comprobada únicamente para esa selección, sin rehabilitar lecturas.
+
 Capturas privadas bajo local/jcop4-idopte-spy-*/; no agregarlas a Git.
 Pasaron previamente **30 comprobaciones del observador/decoder y 40 del
 lanzador** con transporte ficticio. El diagnóstico de firma pasó además

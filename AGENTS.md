@@ -6,7 +6,53 @@ la tarjeta. El usuario ejecuta las operaciones que requieran PIN o GUI. Esto
 sustituye las restricciones anteriores de no ejecutar Git/hardware/Idopte por
 el agente; conservar límites de cada diagnóstico y privacidad de los registros.
 
-**Último resultado: Idopte READ B002 aceptado; segunda conexión bloqueada.**
+**Último resultado: segunda conexión shared/T1; primer bloqueado SELECT MF.**
+Usuario registró `2b7f401`, principal y OpenSC `3dfef6704` limpios al comenzar.
+Instrumentación nueva únicamente en modo B002 ya optativo: conserva primera
+conexión exitosa en memoria (nombre limitado a256 bytes, contexto y handle),
+emite máximo4 resúmenes de igualdad/clases, nunca nombres/valores/hashes.
+Igualdad de valores API no prueba recurso lógico ni identidad de tarjeta.
+Registra una sola operación omitida por la barrera como apdu/reader_control/
+reader_attribute; APDU solo cabecera4 bytes y clasificación de constantes
+públicas conocidas, nunca datos/longitudes/credenciales. Control solo código y
+feature_request_empty/unsupported/unknown; sin buffers/respuestas. Log omitido
+fuera de B002 o si la primera causa de parada fue otra. Fallos de log no habilitan
+transporte. **Sin nuevos APDU/permisos/GET ATR ni cambios de presupuestos**.
+
+Pasaron **129 comprobaciones observador/constructor/decoder** con transporte
+ficticio/redirector real: comparación privada, nombres largos/ausentes/fallos,
+límite4, primera operación única, APDU/PIN/datos omitidos, controles sin enviar,
+causa de parada y log fallido. Integración fake conecta segundo contexto/handle
+direct y bloquea control de capacidades; ese direct es caso sintético, no dato
+real. Biblioteca real compilada. Lanzador85/firma6/helper79/operación12 previos
+intactos; no repetir sin cambios. Agente hizo una consulta nueva para obtener
+información antes omitida, no repetición por error:
+`nix develop --offline -c make inspect/jcop4-idopte-b002 READER=0`.
+Informe `local/jcop4-idopte-b002-xkHMNglY/report.txt`, **23:16:08 UTC**:
+compilación/inventario correctos, primera conexión shared/T1/ATR conocido.
+**103 APDU:102SW9000 y un estado vacío63C7**, B001/B00214READ9000 cada uno,
+dos controles42000D48 ->0. Segunda EstablishContext0/Connect0 con
+**same_name_as_first, same_value_as_first(context), different_value_from_first
+(handle), shared, t1, stopped**. **boundary_first_operation=apdu,
+boundary_blocked_header=00A40000, boundary_command=known_master_file_select**.
+SELECT MF identificado por forma/payload público fijo3F00, **no transmitido**,
+sin SW. No lector/handle/contexto bruto guardado; no ATR nuevo comprobado en
+segunda conexión ni prueba de misma tarjeta/recurso. No SCARD_SHARE_DIRECT real.
+Módulo0/token_info_result=CKR_TOKEN_NOT_PRESENT/diagnóstico1/token_info_unavailable,
+events_recorded. Sin PIN/login/MSE/PSO/firma nuevos, solo estado vacío ya permitido.
+
+**Próximo contraste:** evaluar un modo separado que compruebe ATR y relación de
+lector de la segunda conexión y permita exclusivamente el SELECT MF observado
+una vez, conservando la parada para READ/control/auth y todos los presupuestos
+originales; clasificar el siguiente bloqueado sin enviarlo. No rehabilitar el
+transporte global ni reiniciar lecturas; no inferir la ruta de C_Login/VERIFY
+por esta consulta sin login. SELECT MF sigue bloqueado en el modo actual; no
+repetir idéntica observación ni pedir PIN por inercia. Driver/submódulo intactos;
+firma JCOP4/VERIFY6982/RSA3072 pendientes. Informes privados local/0700/0600
+fuera de Git/chat. Git autorizado, .git de solo lectura aún impide commits si
+persiste; no eludirlo.
+
+**Resultado anterior: Idopte READ B002 aceptado; segunda conexión bloqueada.**
 Usuario registró `a1b7092`, principal y OpenSC `3dfef6704` limpios al comenzar.
 Nuevo `inspect/jcop4-idopte-b002` / --idopte-b002, opt-in
 `JCOP4_DIAGNOSTIC_CERT_B002=1` depende de CERT_B001 y padres anteriores, solo

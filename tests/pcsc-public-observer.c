@@ -60,6 +60,8 @@ static FILE *fixture_reset(void)
 	trace_fd = fileno(file);
 	stopped = selected_public_file = selected_mf = selected_app = handle_set = pending_response = calls = events = lifecycle_events = 0;
 	control_calls = control_missing = control_capacity = 0;
+	connection_reference_set = connection_reader_valid = connection_records = connection_boundary_stop = boundary_operation_recorded = 0;
+	memset(connection_reference_reader, 0, sizeof(connection_reference_reader));
 	control_response_fixture = 0; select_spy_fd = -1;
 	control_size = 16; control_result = 0;
 	fixture_sw = 0x9000;
@@ -190,6 +192,69 @@ int main(void)
 			send_command(version, sizeof(version)) == 0 && calls == 5);
 	check_private(file);
 	puts("PASS public observer forwards only allowed discovery and logs no payloads or lengths");
+	{
+		file = fixture_reset(); compare_b002 = 1;
+		SCARDHANDLE first_card = 7, next_card = 8; DWORD proto = SCARD_PROTOCOL_T1;
+		log_connection_relation(17, "PRIVATE_READER", SCARD_SHARE_SHARED, &first_card, &proto, 0);
+		proto = 0;
+		log_connection_relation(18, "PRIVATE_READER", SCARD_SHARE_DIRECT, &next_card, &proto, 0);
+		log_connection_relation(17, "PRIVATE_OTHER_READER", SCARD_SHARE_EXCLUSIVE, &first_card, &proto, 0);
+		char log[4096] = {0}; fflush(file); rewind(file); assert(fread(log, 1, sizeof(log)-1, file) > 0);
+		assert(strstr(log, "connection_reader_relation=same_name_as_first") &&
+				strstr(log, "connection_reader_relation=different_name_from_first") &&
+				strstr(log, "connection_context_relation=different_value_from_first") &&
+				strstr(log, "connection_handle_relation=same_value_as_first") &&
+				strstr(log, "connection_share=direct") && strstr(log, "connection_protocol=none") && !strstr(log, "PRIVATE_"));
+		check_private(file);
+		puts("PASS connection comparison emits only fixed reader/context/handle relations and share/protocol classes");
+		file = fixture_reset(); compare_b002 = 1;
+		char oversized[300]; memset(oversized, 'X', sizeof(oversized)); oversized[299] = 0;
+		log_connection_relation(17, oversized, SCARD_SHARE_SHARED, &first_card, &proto, 0);
+		for (int i = 0; i < 10; i++) log_connection_relation(17, NULL, 999, NULL, NULL, SCARD_E_SHARING_VIOLATION);
+		memset(log, 0, sizeof(log)); fflush(file); rewind(file); assert(fread(log, 1, sizeof(log)-1, file) > 0);
+		assert(strstr(log, "connection_reader_relation=unavailable") && !strstr(log, "XXXXXXXX"));
+		unsigned int entries = 0; const char *at = log;
+		while ((at = strstr(at, "connection_reader_relation="))) { entries++; at++; }
+		assert(entries == 4); check_private(file);
+		puts("PASS unavailable/oversized names and failed connections expose no values and connection records are bounded");
+		for (int i = 0; i < 4; i++) {
+			file = fixture_reset(); compare_b002 = 1; read4141_calls = 1; drop_card_context();
+			const unsigned char short_cmd[] = { 0, 0xA4, 2 };
+			assert(send_command(i == 0 ? name : i == 1 ? pin : i == 2 ? short_cmd : NULL,
+					i == 0 ? sizeof(name) : i == 1 ? sizeof(pin) : i == 2 ? sizeof(short_cmd) : 0) != 0 && !calls);
+			assert(boundary_operation_recorded && stopped && !selected_app && !comparison_atr_ok && read4141_calls == 1);
+			assert(send_command(pin, sizeof(pin)) != 0 && !calls);
+			memset(log, 0, sizeof(log)); fflush(file); rewind(file); assert(fread(log, 1, sizeof(log)-1, file) > 0);
+			const char *entry = strstr(log, "boundary_first_operation=apdu");
+			assert(entry && !strstr(entry + 1, "boundary_first_operation="));
+			if (i == 0) assert(strstr(log, "boundary_command=known_chipdoc_name_query"));
+			if (i == 1) assert(strstr(log, "boundary_command=other_header_only") && !strstr(log, "SECRET"));
+			if (i >= 2) assert(strstr(log, "boundary_command=invalid_command"));
+			check_private(file);
+		}
+		puts("PASS first suppressed boundary APDU is classified once without forwarding any command or printing PIN data");
+		file = fixture_reset(); compare_b002 = 1; read4141_calls = 1; drop_card_context();
+		unsigned char response[256]; DWORD returned = 99;
+		assert(SCardControl(7, CM_IOCTL_GET_FEATURE_REQUEST, NULL, 0, response, sizeof(response), &returned) != 0 && !returned && !control_calls);
+		assert(send_command(pin, sizeof(pin)) != 0 && !calls);
+		memset(log, 0, sizeof(log)); fflush(file); rewind(file); assert(fread(log, 1, sizeof(log)-1, file) > 0);
+		assert(strstr(log, "boundary_first_operation=reader_control") && strstr(log, "boundary_control_kind=feature_request_empty") &&
+				!strstr(log, "boundary_blocked_header=")); check_private(file);
+		puts("PASS first suppressed boundary control is classified without transport and subsequent APDU is omitted");
+		for (int i = 0; i < 2; i++) {
+			file = fixture_reset(); compare_b002 = i; stopped = 1;
+			assert(send_command(pin, sizeof(pin)) != 0 && !calls && !boundary_operation_recorded);
+			check_private(file);
+		}
+		file = fixture_reset(); compare_b002 = 1; stopped = 1; read4141_calls = 1; drop_card_context();
+		assert(!connection_boundary_stop && send_command(pin, sizeof(pin)) != 0 && !boundary_operation_recorded); check_private(file);
+		puts("PASS boundary logging requires B002 mode and the barrier as the original stop reason");
+		file = fixture_reset(); compare_b002 = 1; read4141_calls = 1; drop_card_context();
+		int saved = trace_fd; trace_fd = open("/dev/full", O_WRONLY); assert(trace_fd >= 0);
+		assert(send_command(pin, sizeof(pin)) != 0 && !calls && stopped);
+		close(trace_fd); trace_fd = saved; check_private(file);
+		puts("PASS failure to log an already suppressed boundary operation cannot enable transport");
+	}
 	{
 		const unsigned char target[] = { 0, 0xA4, 2, 0, 2, 0xB0, 2, 0 };
 		for (int i = 0; i < 8; i++) {

@@ -3257,6 +3257,86 @@ presupuestos** por inercia. No repetir idéntico inventario sin nueva observaci�
 ni pedir PIN para confirmar lecturas ya aceptadas. Informes privados0700/0600
 bajo local/, fuera de Git; firma JCOP4/VERIFY6982/RSA3072 pendientes.
 
+## Segunda conexión: mismo nombre de lector, primer bloqueado SELECT MF
+
+Revisión del 13 de octubre de 2026, principal `2b7f401` y OpenSC `3dfef6704`
+limpios antes de cambios. Se amplió únicamente la observación en el modo B002
+optativo, para obtener datos omitidos por la parada de conexión anterior.
+**No se modificaron los comandos permitidos ni los presupuestos de lectura.**
+
+La primera conexión exitosa se conserva en memoria: nombre de lector limitado
+a256 bytes y valores de contexto/handle. Se emiten como máximo cuatro resúmenes
+de relaciones de igualdad, modo compartido/exclusivo/direct y protocolo, nunca
+nombres, valores brutos o hashes. Nombres ausentes/largos quedan unavailable.
+Igualdad de valores API no acredita recurso lógico ni tarjeta física.
+
+Si la barrera de conexión fue la primera causa de parada, se resume una sola
+operación posterior omitida: APDU, reader_control o reader_attribute. Para
+APDU, únicamente cabecera4 bytes y clasificación de formas públicas conocidas
+(GET DATA nombre/versión, estado vacío PIN1 o SELECT MF3F00); nunca datos,
+longitudes, credenciales, respuesta o FID arbitrario. Para control, únicamente
+código y clase de consulta de capacidades vacía/no soportada/desconocida. Los
+intentos posteriores no se registran. Fuera de B002, o tras otra causa de parada,
+no se habilita este registro. Un fallo de log no puede permitir transporte.
+No se agregó consulta ATR en segunda conexión ni se rehabilitó ningún handle.
+
+Pasaron **129 comprobaciones del observador/constructor/decoder** con transporte
+ficticio, incluida delegación PC/SC real: relaciones privadas, entradas
+largas/ausentes/fallidas, límite4, primera operación única, cabecera sin PIN,
+controles bloqueados, causa de parada y fallo de log. El caso de segunda conexión
+DIRECT de la integración es **sintético**, no evidencia del modo usado por
+Idopte. Biblioteca real compilada. Lanzador85/firma6/helper79/operación12 previos
+intactos, sin repetir suites. Driver/submódulo sin cambios.
+
+El agente ejecutó una vez con la instrumentación nueva, sin PIN ni GUI:
+
+```sh
+nix develop --offline -c make inspect/jcop4-idopte-b002 READER=0
+```
+
+Informe privado `local/jcop4-idopte-b002-xkHMNglY/report.txt`,
+**2026-10-13T23:16:08Z**. Inventario/build correctos, primera conexión
+shared/T1 y ATR conocido. Misma secuencia pública:103 APDU,102SW9000 y un estado
+vacío63C7;14READ B001 y14READ B0029000 cada uno. Dos controles42000D48 terminaron0,
+sin respuestas registradas. Tras el segundo EstablishContext/Connect0:
+
+```text
+blocked=read4141_connection_boundary
+connection_reader_relation=same_name_as_first
+connection_context_relation=same_value_as_first
+connection_handle_relation=different_value_from_first
+connection_share=shared
+connection_protocol=t1
+connection_transport_state=stopped
+pcsc_call=SCardConnect
+pcsc_result=0
+boundary_first_operation=apdu
+boundary_blocked_header=00A40000
+boundary_command=known_master_file_select
+```
+
+Idopte solicita el mismo nombre de lector y recibe otro valor de handle en una
+conexión **SHARED/T1**, con el mismo valor numérico de contexto. No confundirlo
+con una conexión DIRECT al lector, ni afirmar que el contexto lógico o la
+misma tarjeta física estén comprobados: sus valores pueden reutilizarse y no
+se volvió a consultar ATR. El primer comando suprimido corresponde exactamente
+a SELECT MF3F00; **no llegó a la tarjeta ni tiene SW**. No es READ desconocido,
+PIN, MSE o rechazo de tarjeta a ese SELECT.
+
+`module_exit_status=0`, `token_info_result=CKR_TOKEN_NOT_PRESENT`,
+`diagnostic_result=token_info_unavailable`, `observer_result=events_recorded`;
+el diagnóstico terminó1. No hubo login/PIN/firma, solo el estado VERIFY sin
+datos ya permitido. Esto muestra una selección MF durante inicialización pública,
+**no determina la ruta de C_Login/VERIFY ni explica todavía el6982**.
+
+Próximo contraste: evaluar un modo separado que compruebe ATR y relación del
+lector de esa segunda conexión y permita una sola selección MF observada,
+conservando la parada para lecturas/controles/auth y sin reiniciar presupuestos.
+Clasificar luego el siguiente comando bloqueado sin transmitirlo. No reabrir el
+transporte global ni repetir el mismo diagnóstico/PIN por inercia. El modo
+actual conserva SELECT MF de esa conexión bloqueado. Archivos privados0700/0600
+bajo local/, fuera de Git; JCOP4/VERIFY6982/RSA3072 pendientes.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño

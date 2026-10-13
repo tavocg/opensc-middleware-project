@@ -33,6 +33,13 @@ static unsigned int read7004_budget, read7004_offset, read7004_calls;
 static unsigned int read7005_budget, read7005_offset, read7005_calls;
 static unsigned int events;
 static unsigned int lifecycle_events;
+/* Private comparison values only; never serialize reader names or handles. */
+static char connection_reference_reader[256];
+static SCARDCONTEXT connection_reference_context;
+static SCARDHANDLE connection_reference_handle;
+static int connection_reference_set, connection_reader_valid;
+static unsigned int connection_records;
+static int connection_boundary_stop, boundary_operation_recorded;
 static SCARDHANDLE trace_handle;
 static pthread_mutex_t trace_mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -180,6 +187,44 @@ static void log_lifecycle(const char *name, LONG rv)
 	pthread_mutex_unlock(&trace_mutex);
 }
 
+/* Opt-in B002 diagnostics only. Equality of API values is not card identity.
+ * The first successful connection is retained in bounded process memory. */
+static void log_connection_relation(SCARDCONTEXT context, const char *reader,
+		DWORD share, const SCARDHANDLE *card, const DWORD *protocol, LONG rv)
+{
+	const char *reader_relation = "unavailable", *context_relation = "unavailable", *handle_relation = "unavailable";
+	const char *protocol_name = "unavailable";
+	int first = 0;
+	size_t size;
+	pthread_mutex_lock(&trace_mutex);
+	if (!compare_b002 || trace_fd < 0 || connection_records++ >= 4) goto done;
+	size = reader ? strnlen(reader, sizeof(connection_reference_reader)) : sizeof(connection_reference_reader);
+	if (rv == SCARD_S_SUCCESS && card && protocol) {
+		if (!connection_reference_set) {
+			connection_reference_set = first = 1;
+			connection_reference_context = context; connection_reference_handle = *card;
+			if (reader && size && size < sizeof(connection_reference_reader)) {
+				memcpy(connection_reference_reader, reader, size + 1); connection_reader_valid = 1;
+			}
+		}
+		if (connection_reader_valid && reader && size && size < sizeof(connection_reference_reader))
+			reader_relation = first ? "first_successful_name" : !strcmp(reader, connection_reference_reader) ?
+					"same_name_as_first" : "different_name_from_first";
+		context_relation = first ? "first_successful_value" : context == connection_reference_context ?
+				"same_value_as_first" : "different_value_from_first";
+		handle_relation = first ? "first_successful_value" : *card == connection_reference_handle ?
+				"same_value_as_first" : "different_value_from_first";
+		protocol_name = !*protocol ? "none" : *protocol == SCARD_PROTOCOL_T0 ? "t0" :
+				*protocol == SCARD_PROTOCOL_T1 ? "t1" : *protocol == SCARD_PROTOCOL_RAW ? "raw" : "other";
+	}
+	dprintf(trace_fd, "connection_reader_relation=%s\nconnection_context_relation=%s\nconnection_handle_relation=%s\nconnection_share=%s\nconnection_protocol=%s\nconnection_transport_state=%s\n",
+			reader_relation, context_relation, handle_relation,
+			share == SCARD_SHARE_SHARED ? "shared" : share == SCARD_SHARE_EXCLUSIVE ? "exclusive" :
+			share == SCARD_SHARE_DIRECT ? "direct" : "other", protocol_name, stopped ? "stopped" : "enabled");
+done:
+	pthread_mutex_unlock(&trace_mutex);
+}
+
 static void drop_card_context(void)
 {
 	pthread_mutex_lock(&trace_mutex);
@@ -187,7 +232,10 @@ static void drop_card_context(void)
 	comparison_atr_ok = pin_status_result_valid = 0;
 	/* Do not continue an unknown-file read across a connection/reset boundary. */
 	if (read4141_calls) {
-		if (!stopped && trace_fd >= 0) dprintf(trace_fd, "blocked=read4141_connection_boundary\n");
+		if (!stopped) {
+			if (compare_b002) connection_boundary_stop = 1;
+			if (trace_fd >= 0) dprintf(trace_fd, "blocked=read4141_connection_boundary\n");
+		}
 		stopped = 1;
 	}
 	pthread_mutex_unlock(&trace_mutex);
@@ -228,6 +276,7 @@ LONG SCardConnect(SCARDCONTEXT context, const char *reader, DWORD share,
 	LONG rv = real ? real(context, reader, share, protocols, card, protocol) : SCARD_F_INTERNAL_ERROR;
 	if (compare_read4141 && !stopped && rv == SCARD_S_SUCCESS)
 		rv = card ? check_comparison_atr(*card) : SCARD_F_INTERNAL_ERROR;
+	log_connection_relation(context, reader, share, card, protocol, rv);
 	log_lifecycle("SCardConnect", rv);
 	return rv;
 }
@@ -248,6 +297,29 @@ static int public_file(unsigned int fid)
 {
 	/* Bootstrap files. D003 is handled separately with confirmed MF context. */
 	return fid == 0x2F00 || fid == 0x2F01 || fid == 0x5031 || fid == 0x5032;
+}
+
+/* Called under the mutex. Only the first operation suppressed by the
+ * connection barrier is summarized; no extra transport, values or responses. */
+static int begin_boundary_record(const char *kind)
+{
+	if (!compare_b002 || !connection_boundary_stop || boundary_operation_recorded || trace_fd < 0) return 0;
+	boundary_operation_recorded = 1;
+	dprintf(trace_fd, "boundary_first_operation=%s\n", kind);
+	return 1;
+}
+static void log_boundary_apdu(const unsigned char *cmd, DWORD len)
+{
+	const char *kind = "other_header_only";
+	if (!begin_boundary_record("apdu")) return;
+	if (!cmd || len < 4) { dprintf(trace_fd, "boundary_command=invalid_command\n"); return; }
+	dprintf(trace_fd, "boundary_blocked_header=%02X%02X%02X%02X\n", cmd[0], cmd[1], cmd[2], cmd[3]);
+	if (len == 5 && !memcmp(cmd, "\x00\xCA\x01\x00", 4)) kind = "known_chipdoc_name_query";
+	else if (len == 5 && !memcmp(cmd, "\x00\xCA\x01\x16", 4)) kind = "known_chipdoc_version_query";
+	else if (len == 4 && !memcmp(cmd, "\x00\x20\x00\x01", 4)) kind = "known_pin1_status_without_data";
+	else if ((len == 7 || len == 8) && !memcmp(cmd, "\x00\xA4\x00\x00\x02\x3F\x00", 7))
+		kind = "known_master_file_select";
+	dprintf(trace_fd, "boundary_command=%s\n", kind);
 }
 
 static unsigned int read4141_size(const unsigned char *cmd, DWORD len)
@@ -506,8 +578,8 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
 	unsigned int sw;
 	struct timeval start;
 	pthread_mutex_lock(&trace_mutex);
-	if (trace_fd < 0 || stopped)
-		goto out;
+	if (trace_fd < 0) goto out;
+	if (stopped) { log_boundary_apdu(cmd, len); goto out; }
 	if (!handle_set) { trace_handle = card; handle_set = 1; }
 	if (card != trace_handle || ++events > 128) {
 		dprintf(trace_fd, "blocked=handle_or_event_limit\n");
@@ -727,8 +799,13 @@ LONG SCardControl(SCARDHANDLE card, DWORD code, const void *send, DWORD send_len
 	(void)send; /* The only forwarded operation always has NULL/zero input. */
 	pthread_mutex_lock(&trace_mutex);
 	if (returned) *returned = 0;
-	if (trace_fd < 0 || stopped)
+	if (trace_fd < 0) goto out;
+	if (stopped) {
+		if (begin_boundary_record("reader_control"))
+			dprintf(trace_fd, "boundary_blocked_control_code=%08lX\nboundary_control_kind=%s\n", (unsigned long)code,
+					code == CM_IOCTL_GET_FEATURE_REQUEST ? (send_len ? "feature_request_unsupported" : "feature_request_empty") : "unknown");
 		goto out;
+	}
 	if (!handle_set) { trace_handle = card; handle_set = 1; }
 	if (card != trace_handle || ++events > 128) {
 		dprintf(trace_fd, "blocked=handle_or_event_limit\n");
@@ -765,6 +842,7 @@ LONG SCardSetAttrib(SCARDHANDLE card, DWORD attribute, const unsigned char *data
 {
 	(void)card; (void)attribute; (void)data; (void)len;
 	pthread_mutex_lock(&trace_mutex);
+	if (stopped) begin_boundary_record("reader_attribute");
 	if (trace_fd >= 0 && !stopped)
 		dprintf(trace_fd, "blocked=reader_attribute\n");
 	stopped = 1;

@@ -5,7 +5,7 @@
 #include <winscard.h>
 #include <reader.h>
 
-static int calls, control_calls;
+static int calls, control_calls, context_calls;
 static unsigned int selected_file;
 int fixture_count(void) { return calls; }
 int fixture_control_count(void) { return control_calls; }
@@ -23,7 +23,7 @@ LONG SCardGetAttrib(SCARDHANDLE card, DWORD attribute, unsigned char *data, DWOR
 LONG SCardEstablishContext(DWORD scope, const void *r1, const void *r2, SCARDCONTEXT *context)
 {
 	assert(scope == SCARD_SCOPE_USER && !r1 && !r2);
-	*context = 17;
+	*context = 17 + context_calls++;
 	return SCARD_S_SUCCESS;
 }
 
@@ -40,6 +40,10 @@ LONG SCardControl(SCARDHANDLE card, DWORD code, const void *send, DWORD size,
 LONG SCardConnect(SCARDCONTEXT context, const char *reader, DWORD share,
 		DWORD protocols, SCARDHANDLE *card, DWORD *protocol)
 {
+	if (context == 18) {
+		assert(share == SCARD_SHARE_DIRECT && !protocols && !strcmp(reader, "PRIVATE_READER"));
+		*card = 8; *protocol = 0; return SCARD_S_SUCCESS;
+	}
 	assert(context == 17 && share == SCARD_SHARE_SHARED && protocols == SCARD_PROTOCOL_T1);
 	if (!strcmp(reader, "PRIVATE_READER_CONNECT_FAILURE"))
 		return SCARD_E_SHARING_VIOLATION;
