@@ -74,6 +74,11 @@ actual permite exclusivamente su SELECT EF básico desde MF confirmado y
 READ BINARY básico, con respuestas omitidas. El precedente de serie pública
 en otros perfiles no demuestra todavía el contenido en Costa Rica. Mantener
 etiqueta/serial/URI del inventario Idopte fuera de Git y de mensajes públicos.
+El intento posterior 4riCxCot (15:28:07 UTC) falló al compilar el observador:
+pkg-config no encontró libpcsclite. Idopte no llegó a cargarse y no existe
+captura APDU de ese intento. Ejecutar el objetivo mediante
+`nix develop -c make inspect/jcop4-idopte-discovery READER=0` para usar las
+dependencias del flake; no interpretar este fallo como respuesta de la tarjeta.
 
 `pcsc-spy` estándar registra los buffers transmitidos, que pueden incluir el
 PIN durante autenticación. No usarlo con el PIN real ni considerar un filtro

@@ -2,6 +2,38 @@
 set -euo pipefail
 umask 077
 task_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+# Dependency failures must stop before compilation, including failed flag lookup.
+(
+    task_dependency_tmp=$(mktemp -d)
+    trap 'rm -rf -- "$task_dependency_tmp"' EXIT
+    cat > "$task_dependency_tmp/pkg-config" <<'PKG_CONFIG'
+#!/usr/bin/env bash
+if [[ ${OBSERVER_DEPENDENCY_FIXTURE:-} == flags && $1 == --exists ]]; then exit 0; fi
+exit 1
+PKG_CONFIG
+    cat > "$task_dependency_tmp/compiler" <<'COMPILER'
+#!/usr/bin/env bash
+printf 'unexpected compiler call\n' > "$OBSERVER_COMPILER_MARKER"
+exit 1
+COMPILER
+    chmod +x "$task_dependency_tmp/pkg-config" "$task_dependency_tmp/compiler"
+    for task_dependency_mode in missing flags; do
+        if env PATH="$task_dependency_tmp:$PATH" CC="$task_dependency_tmp/compiler" \
+                OBSERVER_DEPENDENCY_FIXTURE="$task_dependency_mode" \
+                OBSERVER_COMPILER_MARKER="$task_dependency_tmp/compiler-called" \
+                bash "$task_root/scripts/build-pcsc-public-observer.sh" \
+                > "$task_dependency_tmp/output" 2>&1; then
+            printf 'Dependency fixture unexpectedly compiled: %s\n' "$task_dependency_mode" >&2
+            exit 1
+        fi
+        [[ ! -e $task_dependency_tmp/compiler-called ]]
+        if [[ $task_dependency_mode == missing ]]; then
+            task_dependency_output=$(< "$task_dependency_tmp/output")
+            [[ $task_dependency_output == *'nix develop -c make inspect/jcop4-idopte-discovery'* ]]
+        fi
+        printf 'PASS observer builder stops before compilation on %s pkg-config dependency\n' "$task_dependency_mode"
+    done
+)
 bash "$task_root/scripts/build-pcsc-public-observer.sh"
 read -r -a task_pcsc_cflags <<< "$(pkg-config --cflags libpcsclite)"
 "${CC:-cc}" -std=c99 -Wall -Wextra -Werror "${task_pcsc_cflags[@]}" \

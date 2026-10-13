@@ -910,6 +910,39 @@ Sin PIN. Puede volver a terminar con error del guard: revisar los SW de
 selección/lectura y el siguiente comando bloqueado antes de otra consulta.
 El fallo autenticado VERIFY 6982 sigue sin resolverse.
 
+## Compilación detenida: 13 de octubre, 15:28:07 UTC
+
+Informe `local/jcop4-idopte-discovery-4riCxCot/report.txt`, principal `e332630`,
+OpenSC `3dfef6704`; ambos árboles limpios al comenzar. Las tres consultas de
+inventario terminaron con 0 y el ATR coincide. La compilación del observador
+terminó con **observer_build_status=1** porque pkg-config no encontró
+`libpcsclite.pc`. No se cargó el módulo Idopte y no se creó public-headers.txt.
+No hay una nueva respuesta APDU, lectura de D003 ni intento de autenticación.
+
+El flake ya declara pcsclite y pkg-config. El informe no permite determinar
+por qué esa dependencia estaba ausente del entorno de la terminal usada.
+El constructor ahora comprueba la dependencia antes de compilar y da un
+comando que entra explícitamente al entorno del flake. Además, separa la
+consulta de flags del `read`: un error de pkg-config detiene el script en vez
+de quedar oculto por el éxito de read. No se añaden rutas fijas ni fallback.
+
+Pasaron **16 comprobaciones del observador/constructor** con transporte
+ficticio. Dos nuevas simulan dependencia ausente y fallo al consultar flags;
+ambas comprueban que el compilador no se invoca, y la primera verifica el
+diagnóstico con nix develop. Lanzador sin cambios, sus 30 comprobaciones
+previas siguen vigentes. No se modificó ni recompiló el driver.
+`nix develop --offline -c pkg-config --exists libpcsclite` terminó con 0
+en el entorno del agente, sin hardware ni carga de Idopte.
+
+Siguiente intervención, con la misma JCOP4 y otros clientes cerrados:
+
+```bash
+nix develop -c make inspect/jcop4-idopte-discovery READER=0
+```
+
+Sin PIN. Sigue pendiente comprobar SELECT/READ D003 y revisar el siguiente
+bloqueo; el fallo autenticado VERIFY 6982 permanece sin resolver.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño

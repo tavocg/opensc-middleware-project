@@ -1,6 +1,27 @@
 # libjcop3p11: contexto para continuar
 
 **JCOP4, 13 de octubre de 2026:** último informe revisado
+`local/jcop4-idopte-discovery-4riCxCot/report.txt`, **15:28:07 UTC**, principal
+`e332630`, OpenSC `3dfef6704`, ambos Git limpios al comenzar. Inventario/ATR
+correctos; **observer_build_status=1**, pkg-config no encontró libpcsclite.
+No se cargó Idopte ni se creó public-headers.txt; no hubo nuevas APDU de
+descubrimiento, lectura de D003, PIN ni autenticación. No es un rechazo de
+tarjeta ni un nuevo bloqueo del observador. No se conoce la causa exacta de
+la ausencia de la dependencia en la terminal usada; el flake ya la declara.
+El constructor ahora comprueba pkg-config/libpcsclite antes de compilar,
+muestra el comando con nix develop y conserva el fallo de consulta de flags
+sin continuar por una sustitución de comando dentro de read. Pasaron **16
+comprobaciones del observador/constructor** con transporte ficticio, incluidas
+dos nuevas de dependencias ausentes/flags fallidos y compilador no invocado.
+Lanzador y driver sin cambios; sus 30 comprobaciones previas siguen vigentes.
+`nix develop --offline -c pkg-config --exists libpcsclite` terminó con 0
+en este entorno; no usó hardware ni cargó Idopte.
+Siguiente intervención, misma JCOP4 y otros clientes cerrados:
+`nix develop -c make inspect/jcop4-idopte-discovery READER=0`.
+No pedir nuevo PIN. Sigue pendiente comprobar SELECT/READ D003 en hardware
+y resolver VERIFY 6982.
+
+Informe anterior, último descubrimiento APDU observado:
 `local/jcop4-idopte-discovery-FIyDDxFN/report.txt`, **15:07:25 UTC**, principal
 `3423abc`, OpenSC `3dfef6704`, ambos Git limpios al comenzar. Mismo contexto/
 conexión 0, GET DATA nombre/versión y SELECT inicial 9000. **SELECT EF bloqueado

@@ -58,8 +58,7 @@ ChipDoc v3.2, anuncia PIN inicializado y límites 6–14. El siguiente paso es
 observar su descubrimiento público con comandos limitados:
 
 ```bash
-nix develop
-make inspect/jcop4-idopte-discovery READER=0
+nix develop -c make inspect/jcop4-idopte-discovery READER=0
 ```
 
 Cerrar firmador y otros clientes y mantener esta JCOP4 insertada. Compila
@@ -73,7 +72,10 @@ identificó `D003`, usado para identificación/serie en perfiles documentados.
 Ahora se permite su selección y lectura binaria únicamente tras confirmar
 el MF, sin guardar su respuesta ni serial. Informes privados en
 `local/jcop4-idopte-discovery-*/`. Pasaron 30 comprobaciones del lanzador y
-catorce del observador sin tarjeta. La lectura de D003 en hardware está pendiente.
+dieciséis del observador/constructor sin tarjeta. El último intento (4riCxCot,
+15:28:07 UTC) terminó antes de cargar Idopte porque pkg-config no encontró
+libpcsclite; el comando anterior asegura el entorno de desarrollo del flake.
+La lectura de D003 en hardware está pendiente.
 No repetir el intento de PIN hasta identificar el requisito que falta.
 JCOP4 aún no está integrada en PKCS#11.
 RSA 3072 y modularidad para futuras generaciones siguen pendientes.
