@@ -2753,3 +2753,84 @@ de lanzador. Si confirma la hipótesis, valorar política de exclusión y sus
 límites antes de definir integración permanente y repetir reinserción/firma
 consecutiva con el perfil elegido. No reclamar concurrencia independiente;
 aislamiento mediante canales lógicos requeriría investigación adicional.
+
+## Reserva desde login observada en hardware y firma preservada
+
+Capturas del 13 de octubre de 2026 entre 04:51 y 05:04 UTC (12 de octubre,
+22:51–23:04 de Costa Rica). Principal cff289e y OpenSC 3dfef6704 limpios al
+iniciar revisión. El usuario repitió el experimento lock_login después de
+introducir PIN. Los helpers esperan mientras GUI permanece abierta y
+terminan cuando se cierra; sin firmador terminan directamente.
+
+| Helper | Inicio UTC | Resultado y límite de evidencia |
+| --- | --- | --- |
+| SaxRK4iv | 04:52:02 | Interrumpido por usuario con Ctrl-C; informe solo cabecera, sin SW ni exit_status; consulta incompleta |
+| KQoxVMs9 | 04:53:26 | Según usuario, espera hasta cierre GUI; informe final SELECT 9000, exit_status 0 |
+| i4wkkD0Q | 04:53:41 | Control sin GUI: SELECT 9000, exit_status 0, sin espera observada |
+| 5uguHH0s | 04:54:02 | Según usuario, espera hasta cierre GUI; SELECT 9000, exit_status 0 |
+| He2Iv722 | 05:04:02 | Usuario leyó solo cabecera durante espera; después de cerrar GUI aparecen respuesta 9000 y exit_status 0 |
+
+La fecha del prompt del shell no acredita hora de ejecución; usar date_utc
+del informe. Los informes anteriores no registran finalización, por lo que
+no permiten calcular duración exacta de la espera. El comportamiento de
+espera/liberación proviene del relato del usuario, corroborado por resultado
+final y configuración lock_login=yes.
+
+| GUI | Inicio UTC | Eventos revisados | Login/VERIFY | RSA/SignFinal |
+| --- | --- | ---: | --- | --- |
+| AGLImWrQ | 04:51:18 | 361 | 117/119 y 253/255: 9000/OK | 205/207 y 341/343: 9000/OK |
+| BB7isQyi | 04:52:55 | 68 | Ninguno | Ninguno |
+| Ff9HRCSA | 04:53:11 | 207 | 117/119: 9000/OK | 205/207: 9000/OK |
+| sKGD8Ilm | 04:53:47 | 225 | 117/119: 9000/OK | 205/207: 9000/OK |
+| 5yDObgnZ | 05:03:04 | 361 | 117/119 y 253/255: 9000/OK | 205/207 y 341/343: 9000/OK |
+
+Se preservaron api-reviewed.log y analysis.json privados para las cinco GUI.
+Todos los seis logins ejecutan PRE_VERIFY_SELECT y VERIFY real aceptado.
+Las seis operaciones RSA y C_SignFinal pasan; ninguna tiene 6982/0x101.
+Las dos GUI con dos firmas tienen C_Logout OK intermedio (227) y segundo
+VERIFY real; no se adquiere otra transacción física después del primer
+login. No afirmar que BB7isQyi firmó ni asignar PDF por tiempo de lanzamiento.
+Los eventos no tienen tiempos individuales y no identifican documentos.
+
+El nuevo doc-firmado.pdf, 80462 bytes, quedó copiado/verificado privadamente
+en local/jcop3-pdf-verification-37si22cp/report.json: CAdES con certificado
+exacto LlaveDeFirma válido para revisión de 38402 bytes; sello CMS RFC3161
+e imprint SHA-512 válidos para revisión final. Original/texto/render
+preservados. No confianza/revocación/LTV. Esto verifica un PDF disponible,
+no seis PDF ni la asociación exacta con cada evento del registro.
+
+La espera es el efecto previsto de reservar acceso para la GUI. El código
+sc_lock → pcsc_lock usa SCardBeginTransaction, que PC/SC documenta como
+espera si otro cliente mantiene la transacción. Al cerrar la GUI se libera
+la reserva y el helper puede consultar. Esto respalda el aislamiento como
+prevención del fallo observado; no acredita concurrencia independiente
+ni identifica la regla interna de autorización de la tarjeta.
+
+La cabecera del helper se escribe antes de llamar a opensc-tool. Además,
+send_apdu imprime Sending antes de sc_lock, con stdout redirigido a archivo:
+el búfer de salida puede ocultar líneas hasta finalizar. Ver solo cabecera
+no prueba el punto exacto de bloqueo ni mide cuándo se envió el comando.
+No inferir que se transmitió SELECT a partir de la cabecera o de Sending;
+la respuesta 9000 es la evidencia de que se completó. No activar debug
+APDU autenticado para precisar tiempos.
+
+Se aclara la espera en la salida del helper y se agregan query_started_utc
+y query_finished_utc alrededor de la invocación de la herramienta. Miden
+el intervalo del proceso de consulta, no el instante de cada APDU ni la
+llamada PC/SC exacta. Capturas originales se conservan. Las seis regresiones
+del helper pasan, incluyendo comprobación de mensajes/fechas y privacidad;
+registro build/opensc-offline/login-lock-peer-messages-tests.log. No cambió
+el módulo ni el total de 288 comprobaciones de la suite anterior.
+
+Mantener lock_login como perfil optativo: su reserva dura hasta cerrar GUI
+en estos casos, limita compartición PKCS#11 y no sustituye diseño/validación
+de acceso concurrente. La firma consecutiva tiene respaldo API en este
+perfil; la reinserción con transacción mantenida todavía requiere una prueba.
+Próximo caso acotado: abrir firmador/jcop3-lock-login, firmar original doc.pdf
+y guardar local/jcop3-lock-hotplug-before.pdf; retirar/reinsertar tarjeta sin
+cerrar GUI ni usar otro cliente, abrir otra vez el original y firmar hacia
+local/jcop3-lock-hotplug-after.pdf. PIN únicamente cuando GUI lo solicite.
+Cerrar GUI tras terminar; detenerse al primer fallo, sin reintentar PIN.
+Revisar sustitución de token/sesiones, nueva autenticación, reserva y ambos
+PDF. Sin recompilar por cambios del helper/documentación. No repetir las
+pruebas peer ya realizadas ni cambiar por defecto el perfil normal.

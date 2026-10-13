@@ -1,48 +1,57 @@
 # libjcop3p11: contexto para continuar
 
-Estado actualizado el **12 de octubre de 2026**, después de revisar las
-GUI de **22:56 UTC** (16:56 de Costa Rica), PL8z86NE y 6xTEQpUr, OpenSC
-`3dfef6704` limpio. **Antes del PIN funciona; después del PIN hay interferencia.**
-El usuario hizo dos casos separados y cerró GUI entre ellos. El primer helper
-QGPk2Y3C seleccionó raíz antes del PIN: PRE_VERIFY_SELECT, VERIFY 9000,
-C_Login OK y RSA/firma OK. PDF local/jcop3-peer-fixed.pdf (80462 bytes)
-verificado y copiado en jcop3-pdf-verification-sa2urtvb: CAdES con certificado
-exacto LlaveDeFirma, sello CMS/imprint válidos, original/texto/render preservados.
-No confianza/revocación/LTV. Segundo helper W95JmHG0 seleccionó raíz después
-del PIN: VERIFY 9000 y login OK, pero RSA 6982/CKR_USER_NOT_LOGGED_IN.
-Ambos helpers devuelven SELECT 9000; eso no prueba conservar autorización RSA
-ajena. Copias api-reviewed.log y analysis.json preservadas, 231/289 eventos.
-Orden relativo del helper según usuario; no tiempos individuales en API.
+Estado actualizado tras revisar capturas del **13 de octubre de 2026,
+04:51–05:04 UTC** (12 de octubre, 22:51–23:04 de Costa Rica), OpenSC
+`3dfef6704`. **lock_login impide la interferencia mientras la GUI conserva
+la tarjeta; el helper termina al cerrarla.** Principal `cff289e` y submódulo
+limpios al comenzar revisión. No se modifica el driver en esta revisión.
 
-**Prueba nueva aislada, pendiente de hardware:** make firmador/jcop3-lock-login
-mantiene candidata y cachés desactivadas, agrega pkcs11 lock_login=yes,
-atomic=no. No modifica driver ni otros modos. API registra experimento.
-El módulo ya ofrece una transacción PC/SC desde login; puede bloquear otro
-cliente hasta cerrar GUI. En esta revisión SW_PIN_LOGOUT_ONLY=1 omite también
-unlock en pkcs15_logout; no prometer liberación con logout/última sesión.
-Login fallido puede conservar lock: cerrar GUI al terminar/ante error.
-La opción restringe concurrencia y OpenSC documenta una desviación de
-compartición PKCS#11; no considerarla solución definitiva sin validar.
-El estado interno exacto que pierde la tarjeta sigue sin determinarse;
+Helpers: SaxRK4iv interrumpido por Ctrl-C, solo cabecera, sin resultado;
+KQoxVMs9, 5uguHH0s y He2Iv722 esperan hasta cierre de GUI según usuario y
+terminan SELECT 9000/exit_status 0; i4wkkD0Q sin GUI termina directamente.
+Esto es la espera prevista de la reserva PC/SC, no un bloqueo permanente
+observado. Cabecera se escribe antes de ejecutar herramienta; stdout de
+opensc-tool usa búfer y Sending se imprime antes de sc_lock: no inferir
+instante de transmisión o punto exacto de espera del contenido parcial.
+
+GUI AGLImWrQ 361 eventos/2 firmas; BB7isQyi 68/ningún login; Ff9HRCSA
+207/1 firma; sKGD8Ilm 225/1 firma; 5yDObgnZ 361/2 firmas. Seis VERIFY 9000,
+logins OK y RSA/SignFinal OK; ningún 6982/CKR_USER_NOT_LOGGED_IN en las firmas.
+Copias api-reviewed.log y analysis.json privadas preservadas. Las dos GUI con
+firmas consecutivas tienen logout software intermedio y otro VERIFY real;
+no se adquiere otra transacción física tras el primer login. Sin tiempos
+por evento ni nombres de documento: no asignar cada PDF a un evento exacto.
+Nuevo doc-firmado.pdf, 80462 bytes, copiado/verificado en
+jcop3-pdf-verification-37si22cp: certificado exacto LlaveDeFirma, CAdES/sello
+CMS/imprint válidos, original/texto/render preservados. Un PDF verificado,
+no seis; no confianza/revocación/LTV. Originales/capturas siguen ignorados.
+
+make firmador/jcop3-lock-login sigue optativo: lock_login=yes, atomic=no,
+cachés desactivadas, debug 0 y candidata actual. Reserva observada hasta
+cerrar GUI; limita compartición PKCS#11, no prueba concurrencia independiente.
+SW_PIN_LOGOUT_ONLY=1 omite unlock en pkcs15_logout; no prometer liberación
+con logout/última sesión. Login fallido puede conservar lock: cerrar GUI.
+El estado interno exacto que pierde la tarjeta sin reserva sigue desconocido;
 no afirmar intención del fabricante ni que SELECT aislado sea toda la causa.
+Antecedentes: PL8z86NE ya firmó tras helper antes del PIN; 6xTEQpUr falló
+RSA 6982 tras helper después del PIN, aunque VERIFY/login fueron aceptados.
 
-Git al iniciar: principal `313b286`, submódulo `3dfef6704`, limpios.
-Cambios actuales solo en principal: lanzador, Make, helper/comentarios,
-regresiones/config checker y docs. Pasan **288 comprobaciones** sin tarjeta,
-incluido parser/cargador real de configuración sobre archivos del lanzador;
-registro build/opensc-offline/login-lock-tests.log. No hace falta recompilar
-el módulo para este cambio de configuración. Dar comandos de commit del
-principal; el agente no escribe Git ni firma/lee pass.
+Cambios actuales solo en principal: documentación y mensajes del helper,
+query_started_utc/query_finished_utc alrededor del proceso de consulta.
+Estas fechas no miden cada APDU. Seis regresiones del helper pasan; registro
+build/opensc-offline/login-lock-peer-messages-tests.log. Suite previa 288
+comprobaciones, sin cambio del total ni módulo. No hace falta recompilar.
+Dar comandos de commit del principal; el agente no escribe Git ni firma/lee pass.
 
-**Próxima intervención:** cerrar GUI anterior, abrir make firmador/jcop3-lock-login
-con original doc.pdf y repetir helper justo después del PIN desde otra terminal.
-Guardar local/jcop3-peer-locked.pdf. Si helper espera, continuar la firma en
-GUI sin esperarlo; cerrar GUI tras guardar y observar si helper termina 9000.
-Registrar si bloquea, rechaza compartición o termina inmediatamente.
-Ante error de firma, no reintentar PIN: cerrar GUI y revisar evidencias.
-Después validar PDF y decidir política de bloqueo/compatibilidad; reinserción
-y firmas consecutivas con perfil nuevo aún pendientes. No afirmar concurrencia
-independiente ni soporte completo; no reporte upstream sin master actual.
+**Próxima intervención:** probar reinserción con reserva mantenida en GUI:
+make firmador/jcop3-lock-login; firmar original doc.pdf hacia
+local/jcop3-lock-hotplug-before.pdf; retirar/reinsertar tarjeta sin cerrar
+GUI ni usar otro cliente; abrir de nuevo original doc.pdf y firmar hacia
+local/jcop3-lock-hotplug-after.pdf. PIN solo cuando GUI lo solicite.
+Cerrar al terminar; ante fallo detenerse sin reintentar PIN. Revisar cambio
+de token/sesiones, autenticación nueva y ambos PDF. No repetir pruebas peer.
+Firma consecutiva ya respaldada por API con este perfil; reinserción aquí
+sigue pendiente. No reclamar soporte completo ni reporte upstream sin master.
 
 ## Objetivo y alcance
 
@@ -144,15 +153,15 @@ pero no valida comunicación con la tarjeta.
 
 Los últimos commits guardados son:
 
-- Repositorio principal: **`313b286`**, `Test peer context recovery`.
+- Repositorio principal: **`cff289e`**, `Test login locking`.
 - Submódulo OpenSC: **`3dfef6704`**, `Select ChipDoc before VERIFY`.
 - Base upstream original: `c7a377af971df03f879c1697e91ebac1f7e28c56`.
 
-Ambos árboles estaban limpios al comenzar esta revisión. Ahora principal
-agrega un experimento optativo de lock_login, configuración validada con el
-parser real, dos comprobaciones adicionales y documentación. El submódulo
-queda intacto; no recompilarlo por este cambio. Dar comandos de commit del
-principal. No hay commits, logins o firmas ejecutados por el agente.
+Ambos árboles estaban limpios al comenzar esta revisión. Principal actualiza
+mensajes/fechas del helper, sus comprobaciones y documentación de las pruebas
+reales con lock_login. El submódulo queda intacto; no recompilar por este cambio.
+Dar comandos de commit del principal. No hay commits, logins o firmas
+ejecutados por el agente.
 
 La URL del submódulo aún es `https://github.com/OpenSC/OpenSC.git`. Los commits
 locales del driver necesitarán publicarse en un fork y actualizar esa URL
@@ -544,21 +553,24 @@ archivo **tiene prioridad sobre los pasos históricos que siguen**.
    PL8z86NE y PDF peer-fixed verificado. No repetir ese control automáticamente.
    Helper posterior al PIN en 6xTEQpUr: login OK, RSA 6982. No es rechazo local
    ni PIN incorrecto demostrado. No activar revalidación automática del PIN.
-8. **Probar reserva de tarjeta desde login.** Protocolo del encabezado:
-   make firmador/jcop3-lock-login, helper después del PIN desde otra terminal,
-   guardar peer-locked y cerrar GUI. No esperar al helper para continuar GUI.
-   Driver intacto, no recompilar. 288 regresiones pasan, incluido parser real.
-   lock_login limita compartición y puede durar hasta cerrar GUI; falta
-   confirmación del transporte y PDF en este perfil. Después repetir firma
-   consecutiva/reinserción porque cambió contexto de VERIFY y política de
-   transacción. No asumir que éxitos previos validan esta combinación.
-   Antes de upstream, preservar rama y reproducir contra master actual según
-   vendor/opensc/AGENTS.md. Si cambia driver, submódulo primero y principal
-   después. No generar llaves ni reclamar concurrencia independiente.
+8. **Reserva de tarjeta desde login observada y firmas exitosas.** Helpers
+   esperan hasta cerrar GUI y terminan 9000; control sin GUI pasa directamente.
+   Seis operaciones RSA/SignFinal OK, con dos pares consecutivos en API.
+   Nuevo doc-firmado.pdf verificado/copias en 37si22cp. No repetir estos casos.
+   lock_login sigue optativo: limita compartición y puede durar hasta cerrar
+   GUI; no prueba concurrencia independiente ni regla interna de tarjeta.
+9. **Validar reinserción con transacción mantenida.** Protocolo del encabezado:
+   GUI lock-login, original doc.pdf hacia lock-hotplug-before; retirar/reinsertar
+   sin cerrar GUI ni otro cliente; original hacia lock-hotplug-after; cerrar.
+   PIN solo al solicitarlo GUI; detenerse al primer error sin reintentar.
+   Revisar sustitución de token/sesiones, nueva autenticación y ambos PDF.
+   Driver intacto, no recompilar. 288 regresiones previas; seis del helper
+   actualizadas pasan. Antes de upstream, preservar rama y reproducir contra
+   master actual según vendor/opensc/AGENTS.md. Si cambia driver, submódulo
+   primero y principal después. No generar llaves.
 
-**La candidata ya firmó tras helper anterior al PIN; el caso posterior sigue
-fallando. Nuevo experimento lock_login preparado y verificado sin tarjeta;
-falta probarlo en hardware.**
+**El aislamiento con lock_login está respaldado por espera/liberación del
+helper y firmas exitosas. Falta validar reinserción con esta reserva.**
 
 ## PIN, privacidad e Idopte
 

@@ -54,9 +54,12 @@ task_run() {
 }
 printf 'synthetic unused stdin\n' | task_run 0
 [[ -f $task_tmp/called && $(< "$task_tmp/output.txt") == *'SELECT raíz IAS: 9000.'* ]]
+[[ $(< "$task_tmp/output.txt") == *'Consulta pendiente.'* ]]
 for task_report in "$task_tmp"/local/jcop3-peer-context-*.txt; do
     [[ $(stat -c %a "$task_report") == 600 &&
-       $(< "$task_report") != *'synthetic unused stdin'* ]]
+       $(< "$task_report") != *'synthetic unused stdin'* &&
+       $(< "$task_report") == *'query_started_utc='* &&
+       $(< "$task_report") == *'query_finished_utc='* ]]
 done
 printf 'PASS peer helper sends only public SELECT, discards stdin and overrides inherited diagnostics\n'
 export FIXTURE_PEER_EXIT=17

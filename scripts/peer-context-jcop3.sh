@@ -36,6 +36,9 @@ CONFIG
     git -C "$task_root/vendor/opensc" status --short
 } > "$task_report"
 printf 'Informe: %s\n' "$task_report"
+printf 'Consulta pendiente. Si firmador reserva la tarjeta, puede esperar hasta cerrar su GUI.\n'
+printf 'La cabecera del informe no confirma que SELECT haya terminado; continuar la firma sin esperar aquí.\n'
+printf 'query_started_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$task_report"
 task_status=0
 env -u OPENSC_API_TRACE_FILE -u OPENSC_JCOP3_SESSION_STATE \
     -u OPENSC_JCOP3_PIN_STATUS_IN_PLACE -u OPENSC_JCOP3_POST_LOGIN_STATUS \
@@ -44,7 +47,8 @@ env -u OPENSC_API_TRACE_FILE -u OPENSC_JCOP3_SESSION_STATE \
     "$task_tool" --reader "$task_reader" --card-driver default \
     --send-apdu 00A404040BF0496173456363526F6F7400 \
     </dev/null >> "$task_report" 2>&1 || task_status=$?
-printf 'exit_status=%s\n' "$task_status" >> "$task_report"
+printf 'query_finished_utc=%s\nexit_status=%s\n' \
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$task_status" >> "$task_report"
 if (( task_status != 0 )); then
     printf 'El cliente de consulta falló; detener la prueba y revisar el informe.\n' >&2
     exit "$task_status"
