@@ -1,5 +1,5 @@
-/* Observe bounded public discovery. No response or authentication data;
- * the only command-field exception is the FID of a blocked ISO SELECT EF. */
+/* Observe bounded public discovery. No response or authentication buffers;
+ * record blocked SELECT FIDs and reader control identifiers, never payloads. */
 #define _GNU_SOURCE
 #include <dlfcn.h>
 #include <fcntl.h>
@@ -9,6 +9,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <winscard.h>
+#include <reader.h>
 
 static int trace_fd = -1, stopped, selected_public_file, selected_mf, handle_set, pending_response;
 static unsigned int events;
@@ -22,7 +23,7 @@ __attribute__((constructor)) static void observer_init(void)
 	if (path)
 		trace_fd = open(path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
 	if (trace_fd >= 0)
-		dprintf(trace_fd, "format=public_discovery_headers_v3\n");
+		dprintf(trace_fd, "format=public_discovery_headers_v4\n");
 }
 
 /* Dependency lookup works when this library is loaded as a PC/SC delegate.
@@ -209,10 +210,15 @@ LONG SCardControl(SCARDHANDLE card, DWORD code, const void *send, DWORD send_len
 		void *receive, DWORD receive_len, DWORD *returned)
 {
 	/* Reader IOCTLs can perform PIN-pad authentication: none are forwarded. */
-	(void)card; (void)code; (void)send; (void)send_len; (void)receive; (void)receive_len;
+	(void)card; (void)send; (void)receive; (void)receive_len;
 	pthread_mutex_lock(&trace_mutex);
-	if (trace_fd >= 0 && !stopped)
-		dprintf(trace_fd, "blocked=reader_control\n");
+	if (trace_fd >= 0 && !stopped) {
+		/* dwControlCode identifies the reader operation, not its input buffer.
+		 * Classify the standard Part 10 query without forwarding even that query. */
+		dprintf(trace_fd, "blocked=reader_control\nblocked_control_code=%08lX\n", (unsigned long)code);
+		dprintf(trace_fd, "blocked_control_kind=%s\n", code == CM_IOCTL_GET_FEATURE_REQUEST ?
+				(send_len == 0 ? "feature_request_empty" : "feature_request_unsupported") : "unknown");
+	}
 	stopped = 1;
 	if (returned) *returned = 0;
 	pthread_mutex_unlock(&trace_mutex);

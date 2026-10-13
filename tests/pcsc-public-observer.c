@@ -240,6 +240,28 @@ int main(void)
 	assert(SCardSetAttrib(7, 0, (const unsigned char *)"SECRET_PIN", 10) != 0 && stopped && !calls);
 	check_private(file);
 	puts("PASS public observer stops on security errors and blocks reader PIN-pad control paths");
+	{
+		const DWORD codes[] = { CM_IOCTL_GET_FEATURE_REQUEST, CM_IOCTL_GET_FEATURE_REQUEST, CM_IOCTL_GET_FEATURE_REQUEST, 0x42000006 };
+		const void *inputs[] = { NULL, "SECRET_PIN", "SECRET_PIN", "SECRET_PIN" };
+		const DWORD sizes[] = { 0, 0, 10, 10 };
+		const char *kinds[] = { "feature_request_empty", "feature_request_empty", "feature_request_unsupported", "unknown" };
+		for (size_t i = 0; i < sizeof(codes) / sizeof(codes[0]); i++) {
+			char log[1024] = {0}, identifier[80];
+			unsigned char response[64]; DWORD returned = 99;
+			file = fixture_reset();
+			assert(SCardControl(7, codes[i], inputs[i], sizes[i], response, sizeof(response), &returned) != 0);
+			assert(returned == 0 && stopped && !calls);
+			assert(send_command(version, sizeof(version)) != 0 && !calls);
+			/* Later controls cannot add diagnostics after the first stop. */
+			assert(SCardControl(7, 0xDEADBEEF, NULL, 0, NULL, 0, NULL) != 0);
+			snprintf(identifier, sizeof(identifier), "blocked_control_code=%08lX", (unsigned long)codes[i]);
+			fflush(file); rewind(file);
+			assert(fread(log, 1, sizeof(log) - 1, file) < sizeof(log) - 1);
+			assert(strstr(log, identifier) && strstr(log, kinds[i]) && !strstr(log, "DEADBEEF"));
+			check_private(file);
+		}
+	}
+	puts("PASS blocked reader controls record only their identifier and bounded feature-query classification without forwarding");
 	file = fixture_reset(); events = 128;
 	assert(send_command(version, sizeof(version)) != 0 && !calls);
 	check_private(file);

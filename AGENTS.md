@@ -1,6 +1,32 @@
 # libjcop3p11: contexto para continuar
 
 **JCOP4, 13 de octubre de 2026:** último informe revisado
+`local/jcop4-idopte-discovery-qKJ16Ogh/report.txt`, **15:31:33 UTC**, principal
+`e240c20`, OpenSC `3dfef6704`, ambos Git limpios al comenzar. Inventario/ATR
+correctos, compilación del observador 0; contexto/conexión 0. Ocho APDU
+permitidas dieron transporte 0/SW 9000: GET DATA nombre/versión, SELECT
+inicial, dos SELECT EF con READ BINARY y otra consulta de versión. El formato
+v3 no registra los FIDs de SELECT permitidos, así que no asignar ambas lecturas
+a D003 ni dar por probado su contenido/ACL. **Primer bloqueo: reader_control**,
+antes del transporte. El registro no identifica su dwControlCode ni forma;
+no asumir consulta de capacidades ni PIN-pad. Segunda conexión 0 pero el
+bloqueo persiste. Idopte muestra slot vacío y sale 1, events_recorded; compatible
+con la interrupción del observador, no prueba de rechazo de tarjeta. No PIN,
+VERIFY ni firma. Observador v4 preparado: añade exclusivamente identificador
+hexadecimal del control bloqueado y clasificación feature_request_empty,
+feature_request_unsupported o unknown. CM_IOCTL_GET_FEATURE_REQUEST procede
+de reader.h (SCARD_CTL_CODE(3400)); únicamente se clasifica, **ningún control
+se transmite**. No buffers de entrada/salida, tamaños, PIN ni respuestas.
+Pasaron **17 comprobaciones del observador/constructor** con transporte
+ficticio desde nix develop --offline; redirector real comprueba control de
+capacidades vacío/con payload bloqueado sin invocar backend y sin fallback.
+Lanzador y driver intactos; las 30 comprobaciones previas del lanzador siguen
+vigentes. Siguiente intervención, misma JCOP4 y otros clientes cerrados:
+`nix develop -c make inspect/jcop4-idopte-discovery READER=0`.
+Identificar el control antes de ampliar permisos; VERIFY 6982 sigue pendiente.
+No pedir nueva firma ni PIN todavía.
+
+Informe anterior, fallo de entorno ya superado:
 `local/jcop4-idopte-discovery-4riCxCot/report.txt`, **15:28:07 UTC**, principal
 `e332630`, OpenSC `3dfef6704`, ambos Git limpios al comenzar. Inventario/ATR
 correctos; **observer_build_status=1**, pkg-config no encontró libpcsclite.
@@ -185,9 +211,15 @@ PC/SC (establecer contexto, conectar, reconectar) y resultados, con máximo
 128 registros de ciclo de vida. Además, cabeceras de cuatro bytes y transporte/SW,
 sin buffers de datos, tamaños, Lc/Le, PIN, hash ni respuestas completas.
 **Única excepción de datos de comando en formato
-v3:** identificador de dos bytes de un SELECT EF bloqueado, exclusivamente
+v3/v4:** identificador de dos bytes de un SELECT EF bloqueado, exclusivamente
 CLA 00/INS A4/P1 02/P2 00, Lc 2 y tamaño total 7/8; otras formas solo
 unsupported. No registra payloads arbitrarios ni cambia permisos por ese dato.
+El formato v4 también registra dwControlCode en hexadecimal del primer
+SCardControl bloqueado, identificador de operación del lector; clasifica
+únicamente el código estándar CM_IOCTL_GET_FEATURE_REQUEST como empty o
+unsupported según admita la forma sin entrada. Otros códigos son unknown.
+No registra buffers, longitudes reales ni respuestas, y todos los controles
+siguen bloqueados sin llamar al transporte.
 Bloquea antes del transporte todo
 lo ajeno a la lista de descubrimiento: SELECT ISO limitado al MF/AID raíz/
 aplicación observados y archivos bootstrap públicos, CA 01 16 de versión,

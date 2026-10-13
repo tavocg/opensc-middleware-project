@@ -943,6 +943,69 @@ nix develop -c make inspect/jcop4-idopte-discovery READER=0
 Sin PIN. Sigue pendiente comprobar SELECT/READ D003 y revisar el siguiente
 bloqueo; el fallo autenticado VERIFY 6982 permanece sin resolver.
 
+## Descubrimiento aceptado, control del lector bloqueado: 13 de octubre, 15:31:33 UTC
+
+Informe `local/jcop4-idopte-discovery-qKJ16Ogh/report.txt`, principal `e240c20`,
+OpenSC `3dfef6704`, ambos árboles limpios al comenzar. Inventario/ATR y
+compilación del observador correctos. Contexto/conexión PC/SC devuelven 0.
+Las ocho APDU transmitidas dieron transporte 0/SW 9000, en este orden:
+
+```text
+00 CA 01 00
+00 CA 01 16
+00 A4 00 00
+00 A4 02 00
+00 B0 00 00
+00 A4 02 00
+00 B0 00 00
+00 CA 01 16
+blocked=reader_control
+```
+
+El formato v3 no registra los FIDs de SELECT permitidos ni contenidos de
+respuesta. Por ello no atribuir ambas lecturas a D003 ni interpretar contenido
+o ACL por la cabecera sola. El primer rechazo es del observador a SCardControl,
+**antes de llamar al transporte del lector**. No existe resultado del lector
+ni código de ese control en esta captura. Una segunda conexión da 0 pero
+no rehabilita el transporte. Idopte muestra slot vacío y sale 1; compatible
+con la interrupción, no prueba de rechazo de tarjeta. No hubo PIN, VERIFY
+ni operaciones de firma.
+
+SCardControl envía operaciones al driver del lector, incluidas capacidades,
+PIN-pad y otras extensiones. La [API de PC/SC](https://pcsclite.apdu.fr/api/group__API.html)
+documenta dwControlCode como identificador de operación y los buffers de entrada/
+salida por separado. [reader.h](https://pcsclite.apdu.fr/api/reader_8h.html)
+define CM_IOCTL_GET_FEATURE_REQUEST como SCARD_CTL_CODE(3400), equivalente
+a 42000D48 en pcsc-lite. Es un candidato de identificación, **no evidencia
+de que Idopte pidiera ese control**.
+
+El observador v4 conserva todos los permisos de v3 y sigue bloqueando
+**todos** los controles. Añade solo `blocked_control_code` hexadecimal y
+`blocked_control_kind`: feature_request_empty si el código estándar usa la
+forma sin entrada, feature_request_unsupported si lleva entrada, unknown
+para otros códigos. No lee ni registra el buffer, su tamaño real o la respuesta.
+Después del bloqueo no registra más controles ni permite APDU de fallback.
+No se activa una consulta de capacidades por hipótesis.
+
+Pasaron **17 comprobaciones del observador/constructor** con transporte
+ficticio, mediante `nix develop --offline -c make test/pcsc-public-observer`.
+La nueva regresión cubre formas vacías/con entrada, códigos desconocidos,
+respuesta de bloqueo sin bytes, ausencia de contenido privado y detención
+persistente. La integración con redirector real y plugin local prueba que
+el control estándar vacío y con payload no alcanzan el backend ficticio,
+y que sus buffers sintéticos no aparecen en el registro. Lanzador sin cambios,
+sus 30 comprobaciones previas siguen vigentes. Driver/submódulo sin cambios.
+
+Siguiente intervención, misma JCOP4 y otros clientes cerrados:
+
+```bash
+nix develop -c make inspect/jcop4-idopte-discovery READER=0
+```
+
+Sin PIN. Se espera que el control siga bloqueado; la nueva captura lo
+identificará antes de decidir si admite una consulta pública acotada.
+VERIFY 6982 continúa pendiente y no se solicita otro intento autenticado.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño

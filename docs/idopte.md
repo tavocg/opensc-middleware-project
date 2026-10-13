@@ -79,6 +79,12 @@ pkg-config no encontró libpcsclite. Idopte no llegó a cargarse y no existe
 captura APDU de ese intento. Ejecutar el objetivo mediante
 `nix develop -c make inspect/jcop4-idopte-discovery READER=0` para usar las
 dependencias del flake; no interpretar este fallo como respuesta de la tarjeta.
+El nuevo intento qKJ16Ogh (15:31:33 UTC) ya compiló: ocho APDU permitidas
+devolvieron 9000, antes de **blocked=reader_control**. No identifica qué control
+pidió el módulo; el observador v4 ahora registra su código y clasificación
+limitada de consulta de capacidades. Ningún control se transmite ni se
+registra su entrada/respuesta. El slot vacío/error del módulo es compatible
+con esa interrupción, no demuestra fallo de tarjeta ni requisito de PIN-pad.
 
 `pcsc-spy` estándar registra los buffers transmitidos, que pueden incluir el
 PIN durante autenticación. No usarlo con el PIN real ni considerar un filtro

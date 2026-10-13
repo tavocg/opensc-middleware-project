@@ -72,10 +72,12 @@ identificó `D003`, usado para identificación/serie en perfiles documentados.
 Ahora se permite su selección y lectura binaria únicamente tras confirmar
 el MF, sin guardar su respuesta ni serial. Informes privados en
 `local/jcop4-idopte-discovery-*/`. Pasaron 30 comprobaciones del lanzador y
-dieciséis del observador/constructor sin tarjeta. El último intento (4riCxCot,
-15:28:07 UTC) terminó antes de cargar Idopte porque pkg-config no encontró
-libpcsclite; el comando anterior asegura el entorno de desarrollo del flake.
-La lectura de D003 en hardware está pendiente.
+diecisiete del observador/constructor sin tarjeta. El intento qKJ16Ogh
+(15:31:33 UTC) ya compiló y las ocho APDU transmitidas dieron 9000, incluidos
+dos SELECT EF y dos READ BINARY; el registro omite los FIDs permitidos y sus
+respuestas. El siguiente bloqueo es un control del lector sin identificar.
+El formato v4 registra su código/clasificación, sin buffers y manteniendo
+todos los controles bloqueados. Falta revisar ese código antes de continuar.
 No repetir el intento de PIN hasta identificar el requisito que falta.
 JCOP4 aún no está integrada en PKCS#11.
 RSA 3072 y modularidad para futuras generaciones siguen pendientes.
