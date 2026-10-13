@@ -3,6 +3,7 @@
 #include "../tools/card-public-info.c"
 #undef main
 #include <assert.h>
+#include <unistd.h>
 
 static sc_context_t fixture_ctx;
 static sc_reader_t fixture_reader;
@@ -27,6 +28,9 @@ static int cardaccess_calls, cardaccess_result, cardaccess_sw, cardaccess_len, m
 static int docp_mode, docp_calls, docp_result[2], docp_sw[2], docp_len[2];
 static int odf_mode, odf_select_calls, odf_read_calls, odf_select_result, odf_read_result, odf_select_sw, odf_read_sw;
 static size_t odf_size;
+static int file4141_mode, file4141_calls, file4141_transport, file4141_sw;
+static size_t file4141_size;
+static const unsigned char fixture_fcp[] = { 0x62, 11, 0x82, 1, 1, 0x83, 2, 0x41, 0x41, 0x80, 2, 0, 32 };
 static const unsigned char fixture_odf[] = { 0xA4, 6, 0x30, 4, 4, 2, 0x70, 5, 0xA8, 6, 0x30, 4, 4, 2, 0x41, 0x41 };
 static char fixture_atr[] = "3b:d5:18:ff:81:91:fe:1f:c3:80:73:c8:21:10:0a";
 static char fixture_aid[] = "E828BD080FA00000036364796E6964";
@@ -134,6 +138,19 @@ int sc_transmit_apdu(sc_card_t *card, sc_apdu_t *apdu)
 {
 	const unsigned char expected[] = { 0x91, 0x02, 0x28, 0x91 };
 	assert(card == &fixture_card && lock_calls == 1 && !unlock_calls);
+	if (file4141_mode) {
+		assert(select_calls == 1 && !file4141_calls && !bind_calls && !object_calls && !cert_calls && !mse_calls && !pin_calls &&
+				!odf_read_calls && apdu->cla == 0 && apdu->ins == 0xA4 && apdu->p1 == 2 && apdu->p2 == 0 &&
+				apdu->cse == SC_APDU_CASE_4_SHORT && apdu->lc == 2 && apdu->datalen == 2 &&
+				apdu->data[0] == 0x41 && apdu->data[1] == 0x41 && apdu->le == 256 && apdu->resplen == 256 &&
+				(apdu->flags & (SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP)) ==
+				(SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP));
+		file4141_calls++;
+		memcpy(apdu->resp, fixture_fcp, sizeof(fixture_fcp));
+		apdu->resplen = file4141_size;
+		apdu->sw1 = file4141_sw >> 8; apdu->sw2 = file4141_sw & 0xFF;
+		return file4141_transport;
+	}
 	if (odf_mode) {
 		assert(select_calls == 1 && !bind_calls && !object_calls && !cert_calls && !mse_calls && !pin_calls &&
 				apdu->cla == 0 && (apdu->flags & (SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP)) ==
@@ -275,6 +292,8 @@ static void reset_fixture(void)
 	docp_len[0] = docp_len[1] = 4;
 	odf_mode = odf_select_calls = odf_read_calls = odf_select_result = odf_read_result = 0;
 	odf_select_sw = odf_read_sw = 0x9000; odf_size = sizeof(fixture_odf);
+	file4141_mode = file4141_calls = file4141_transport = 0;
+	file4141_sw = 0x9000; file4141_size = sizeof(fixture_fcp);
 }
 static void setup_fixture(void)
 {
@@ -580,6 +599,74 @@ int main(void)
 			assert(print_odf_map(&fixture_ctx, padded, 0) == 1);
 		}
 		puts("PASS ODF parser accepts only bounded directory paths and uniform padding, rejecting inline objects and truncation");
+	}
+	{
+		char *args[] = { "card-public-info", "2", fixture_atr, "--file4141", fixture_aid };
+		reset_fixture(); file4141_mode = 1;
+		assert(card_public_info_main(5, args) == 0 && file4141_calls == 1 && unlock_calls == 1 &&
+				!bind_calls && !object_calls && !cert_calls && !pin_calls && !mse_calls && !odf_read_calls);
+		reset_fixture(); file4141_mode = 1; file4141_size = 0;
+		assert(card_public_info_main(5, args) == 0 && file4141_calls == 1 && unlock_calls == 1);
+		reset_fixture(); file4141_mode = 1; file4141_sw = 0x6A82;
+		assert(card_public_info_main(5, args) == 0 && file4141_calls == 1 && unlock_calls == 1);
+		puts("PASS fixed-file query sends only SELECT 4141 and treats missing control data or 6A82 as diagnostic results without READ");
+		for (int i = 0; i < 6; i++) {
+			reset_fixture(); file4141_mode = 1;
+			if (i == 0) file4141_transport = SC_ERROR_READER;
+			if (i == 1) file4141_sw = 0x6982;
+			if (i == 2) file4141_sw = 0x6101;
+			if (i == 3) file4141_sw = 0x6C10;
+			if (i == 4) file4141_size = 257;
+			if (i == 5) file4141_size = sizeof(fixture_fcp) - 1;
+			assert(card_public_info_main(5, args) == 1 && file4141_calls == 1 && unlock_calls == 1 && !bind_calls);
+		}
+		puts("PASS fixed-file query stops on security, transport, pending response, retry, bounds or malformed control data without follow-up");
+		for (int i = 0; i < 3; i++) {
+			reset_fixture(); file4141_mode = 1;
+			if (i == 0) mismatch = 1;
+			if (i == 1) fixture_app.aid.value[0] ^= 1;
+			if (i == 2) select_result = SC_ERROR_FILE_NOT_FOUND;
+			assert(card_public_info_main(5, args) == 1 && !file4141_calls && !bind_calls);
+		}
+		reset_fixture(); file4141_mode = 1; args[4] = "A001";
+		assert(card_public_info_main(5, args) == 2 && !connect_calls);
+		puts("PASS fixed-file query requires the connected ATR, announced known AID and successful application selection");
+		{
+			const unsigned char bad[][16] = {
+				{ 0x62, 4, 0x83, 2, 0x41, 0x42 },
+				{ 0x62, 3, 0x83, 1, 0x41 },
+				{ 0x62, 2, 0x82, 0 },
+				{ 0x62, 6, 0x82, 1, 1, 0x82, 1, 2 },
+				{ 0x62, 6, 0x80, 1, 1, 0x80, 1, 2 },
+				{ 0x62, 2, 0x80, 0 },
+				{ 0x62, 7, 0x80, 5, 0, 0, 0, 0, 1 },
+				{ 0x62, 4, 0x83, 2, 0x41 },
+				{ 0x62, 0, 1 },
+				{ 0x61, 0 }
+			};
+			const size_t lengths[] = { 6, 5, 4, 8, 8, 4, 9, 5, 3, 2 };
+			unsigned char fci[sizeof(fixture_fcp)];
+			memcpy(fci, fixture_fcp, sizeof(fci)); fci[0] = 0x6F;
+			assert(print_file4141_metadata(fci, sizeof(fci)) == 0);
+			for (size_t i = 0; i < sizeof(lengths) / sizeof(lengths[0]); i++)
+				assert(print_file4141_metadata(bad[i], lengths[i]) == 1);
+			puts("PASS fixed-file metadata parser accepts FCP or FCI and rejects wrong FID, contradictions, truncation or trailing data");
+		}
+		{
+			/* Synthetic proprietary/name/ACL fields must not be echoed. */
+			const unsigned char private_fields[] = { 0x62, 15, 0x84, 3, 'N', 'A', 'M', 0x85, 3, 'S', 'E', 'C', 0x8C, 3, 'A', 'C', 'L' };
+			char output[256] = {0};
+			FILE *capture = tmpfile();
+			int saved = dup(STDOUT_FILENO);
+			assert(capture && saved >= 0);
+			fflush(stdout); assert(dup2(fileno(capture), STDOUT_FILENO) >= 0);
+			assert(print_file4141_metadata(private_fields, sizeof(private_fields)) == 0);
+			fflush(stdout); rewind(capture);
+			assert(fread(output, 1, sizeof(output) - 1, capture) > 0);
+			assert(dup2(saved, STDOUT_FILENO) >= 0); close(saved); fclose(capture);
+			assert(!strcmp(output, "file4141_result=selected_metadata_only_no_read\n"));
+			puts("PASS fixed-file metadata omits names, proprietary fields, access data and raw responses");
+		}
 	}
 	return 0;
 }

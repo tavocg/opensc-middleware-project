@@ -1,6 +1,37 @@
 # libjcop3p11: contexto para continuar
 
 **JCOP4, 13 de octubre de 2026:** último informe revisado
+`local/jcop4-odf-map-eAjoi575/report.txt`, **15:58:49 UTC**, principal
+`458573f`, OpenSC `3dfef6704`, ambos Git limpios al comenzar. Inventario,
+compilación, contexto/conexión y aplicación correctos. SELECT 5031 y READ
+BINARY -> transporte 0/SW 9000. Cuatro referencias del primer bloque:
+**auth_objects=7001, private_keys=7002, public_keys=7004, certificates=7005**.
+No se siguieron rutas; unlock y proceso 0. No binding, PIN ni autenticación.
+**4141 no aparece entre esas referencias**; no demuestra ausencia global ni
+completitud general del ODF. No identificarlo como AODF/CAN/archivo público.
+Preparado **make inspect/jcop4-file4141**, diagnóstico distinto del observador:
+default driver, ATR/AID conocidos y aplicación anunciada en EF.DIR. Selecciona
+esa aplicación y envía únicamente **00 A4 02 00 02 41 41 00**, el SELECT EF
+observado, con respuesta de control de hasta 256 bytes; no READ ni binding.
+No sondeos de otros archivos ni ampliación de la lista del observador. SELECT
+solicita información de control ISO, no contenido del EF; resume solo estructura
+y tamaño de tags estándar directos de FCP/FCI, nunca nombres/ACL/campos
+propietarios/respuesta bruta. La estructura/tamaño no acredita acceso de lectura.
+9000 sin datos es diagnóstico válido, 6A82 significa no encontrado en **esta
+aplicación/contexto**, no ausencia general. Otros SW, transporte, tamaño o
+metadatos inválidos detienen sin GET RESPONSE/reintentos ni comandos posteriores.
+Sin Idopte, VERIFY, PIN, MSE, PSO ni comandos administrativos. Inventario previo
+solo EF.ATR/EF.DIR ya conocidos; stdin vacío, debug 0, informe privado
+local/jcop4-file4141-*/report.txt. Pasaron **45 comprobaciones del helper y
+35 del lanzador**, transporte ficticio; helper real compilado offline.
+Las 20 del observador anteriores siguen vigentes; su código y permisos v5
+no cambiaron. Driver/submódulo intactos. No hardware ni autenticación por el
+agente. Siguiente intervención, misma JCOP4/otros clientes cerrados:
+`nix develop -c make inspect/jcop4-file4141 READER=0`. Revisar selección y
+metadatos antes de decidir cualquier lectura; no repetir Idopte ni pedir otro
+PIN. VERIFY 6982 sigue pendiente. Dar comandos de commit solo del principal.
+
+Informe anterior de descubrimiento, antes de consultar ODF:
 `local/jcop4-idopte-discovery-OUj06FEQ/report.txt`, **15:45:03 UTC**, principal
 `86e8ba9`, OpenSC `3dfef6704`, ambos Git limpios al comenzar. Inventario/ATR,
 compilación y conexión correctos. Consulta de capacidades **42000D48 ->
@@ -253,10 +284,11 @@ Evidencia anterior ya revisada:
 La generación JCOP4 la indica el usuario, RSA 2048 sí se corroboró. No activar
 excepciones JCOP3/eOI por ATR/etiqueta; precedente ChipDoc ANS enlazado en docs.
 
-**Siguiente intervención:** `nix develop -c make inspect/jcop4-odf-map READER=0`,
-firmador y otros clientes cerrados y misma JCOP4 insertada. Lee únicamente el
-directorio público conocido 5031 para interpretar sus referencias, sin seguirlas.
-No repetir Idopte como primer paso: ahora se detiene en el archivo desconocido 4141.
+**Siguiente intervención:** `nix develop -c make inspect/jcop4-file4141 READER=0`,
+firmador y otros clientes cerrados y misma JCOP4 insertada. Solo SELECT del
+archivo observado 4141 y resumen de sus metadatos de control, sin READ.
+ODF ya revisado: cuatro rutas, ninguna 4141 en el bloque leído. El observador
+Idopte conserva ese SELECT bloqueado; no repetirlo como primer paso.
 
 **Descubrimiento Idopte conservado para investigación posterior:**
 Inventario PC/SC/ATR conocido primero, después pkcs11-tool local con

@@ -94,9 +94,15 @@ los anuncie. Falta revisar el resultado y el siguiente bloqueo, sin PIN.
 El informe OUj06FEQ (15:45:03 UTC) obtuvo control_transport=0 para la consulta
 de capacidades y 9000 en las trece APDU transmitidas. Ahora se detiene antes
 de SELECT EF 4141: no hay SW/contenido de ese archivo. No se ha identificado
-su propósito. El siguiente paso es `make inspect/jcop4-odf-map`: leer solo
-referencias del directorio público 5031 sin binding ni seguirlas, sin Idopte
-ni PIN. No ampliar permisos del observador ni repetir la misma captura aún.
+su propósito. La consulta independiente ODF eAjoi575 (15:58:49 UTC) obtuvo
+9000 en SELECT/READ de 5031: autenticación 7001, metadatos de llaves privadas
+7002, llaves públicas 7004 y certificados 7005; 4141 no figura en ese bloque.
+No se siguieron referencias ni se introdujo PIN. No demuestra ausencia global.
+El siguiente paso es `make inspect/jcop4-file4141`: SELECT exclusivamente del
+archivo observado en la aplicación conocida, sin leer contenido ni usar Idopte.
+Solo resume estructura/tamaño de metadatos estándar de control; no registra
+nombres, ACL ni respuesta bruta. 6A82 solo significa no encontrado en ese
+contexto. No ampliar permisos del observador ni repetir la misma captura aún.
 
 `pcsc-spy` estándar registra los buffers transmitidos, que pueden incluir el
 PIN durante autenticación. No usarlo con el PIN real ni considerar un filtro

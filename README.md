@@ -54,17 +54,22 @@ El primer intento autenticado devolvió **6982 en VERIFY**, sin llegar a
 firmar. La consulta pública posterior obtuvo versión `03020052` y CardAccess
 no disponible por SFI `1C` desde raíz (`6A82`). La consulta IAS/ECC de política
 del PIN devolvió `6D00` en raíz y aplicación, sin obtener datos. Idopte reconoce
-ChipDoc v3.2, anuncia PIN inicializado y límites 6–14. El siguiente paso es
-consultar las referencias del directorio público antes de permitir nuevos archivos:
+ChipDoc v3.2, anuncia PIN inicializado y límites 6–14. El directorio `5031`
+confirmó referencias a `7001` (autenticación), `7002` (metadatos de llaves
+privadas), `7004` (llaves públicas) y `7005` (certificados); no a `4141` en el
+bloque leído. El siguiente paso consulta únicamente los metadatos de control
+del archivo que intentó seleccionar Idopte:
 
 ```bash
-nix develop -c make inspect/jcop4-odf-map READER=0
+nix develop -c make inspect/jcop4-file4141 READER=0
 ```
 
 Cerrar firmador y otros clientes y mantener esta JCOP4 insertada. Compila solo
-el helper público y lee un bloque de `5031`, sin binding PKCS#15 ni seguir sus
-referencias; imprime únicamente tipos de directorio y rutas. Pasaron 40
-comprobaciones del helper y 33 del lanzador sin tarjeta. No carga Idopte.
+el helper, selecciona la aplicación conocida y envía SELECT `4141`. No lee su
+contenido ni carga Idopte; resume estructura/tamaño de FCP/FCI sin respuestas
+brutas ni binding PKCS#15. `6A82` solo indicaría ausencia en ese contexto; otros
+errores detienen sin reintentos. Pasaron 45 comprobaciones del helper y 35 del
+lanzador sin tarjeta.
 
 El descubrimiento Idopte previo (`make inspect/jcop4-idopte-discovery`) compila
 solo un observador y consulta información de módulo/slots/tokens, sin login
@@ -81,8 +86,8 @@ observador/constructor siguen vigentes. El intento OUj06FEQ (15:45:03 UTC)
 obtuvo transporte 0 en la consulta de capacidades 42000D48 y 9000 en todas
 las APDU transmitidas; el registro omite FIDs/AID permitidos y respuestas.
 El nuevo bloqueo es SELECT EF `4141`, aún sin identificar. El observador
-mantiene ese archivo bloqueado; el mapa de `5031` permitirá comprobar si
-lo referencia y con qué tipo, sin leerlo.
+mantiene ese archivo bloqueado. La consulta independiente de SELECT ayudará
+a comprobar su existencia en la aplicación conocida sin permitir su lectura.
 No repetir el intento de PIN hasta identificar el requisito que falta.
 JCOP4 aún no está integrada en PKCS#11.
 RSA 3072 y modularidad para futuras generaciones siguen pendientes.

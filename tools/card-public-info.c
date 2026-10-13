@@ -11,7 +11,7 @@
 #include "libopensc/pkcs15.h"
 #include "libopensc/asn1.h"
 
-enum inspect_mode { INSPECT_PKCS15, INSPECT_SIGN_SETUP, INSPECT_PIN_STATUS, INSPECT_SECURITY_INFO, INSPECT_PIN_POLICY, INSPECT_ODF_MAP };
+enum inspect_mode { INSPECT_PKCS15, INSPECT_SIGN_SETUP, INSPECT_PIN_STATUS, INSPECT_SECURITY_INFO, INSPECT_PIN_POLICY, INSPECT_ODF_MAP, INSPECT_FILE4141 };
 
 static void print_hex(const char *name, const unsigned char *value, size_t len)
 {
@@ -125,6 +125,84 @@ static int inspect_odf_map(sc_card_t *card, const struct sc_aid *aid)
 		return 1;
 	if (print_odf_map(card->ctx, block, apdu.resplen)) {
 		printf("odf_result=unsupported_or_incomplete_block_no_follow\n");
+		return 1;
+	}
+	return 0;
+}
+
+/* SELECT returns control information, not EF contents. Emit only structure/size;
+ * omit names, proprietary fields, access data and the raw response entirely. */
+static int print_file4141_metadata(const unsigned char *buf, size_t size)
+{
+	const unsigned char *p = buf, *value;
+	size_t len, left, file_size = 0;
+	unsigned int cla, tag, descriptor = 0;
+	int have_descriptor = 0, have_size = 0;
+	if (!size) {
+		printf("file4141_result=selected_without_metadata_no_read\n");
+		return 0;
+	}
+	if (sc_asn1_read_tag(&p, size, &cla, &tag, &len) < 0 || !p ||
+			cla != 0x60 || (tag != 2 && tag != 15) || (size_t)(p - buf) + len != size)
+		return 1;
+	left = len;
+	while (left) {
+		value = p;
+		if (sc_asn1_read_tag(&value, left, &cla, &tag, &len) < 0 || !value) return 1;
+		if ((cla | tag) == 0x83 && (len != 2 || value[0] != 0x41 || value[1] != 0x41)) return 1;
+		if ((cla | tag) == 0x82) {
+			if (!len || (have_descriptor && descriptor != value[0])) return 1;
+			descriptor = value[0]; have_descriptor = 1;
+		}
+		if ((cla | tag) == 0x80) {
+			size_t candidate = 0, i;
+			if (!len || len > 4) return 1;
+			for (i = 0; i < len; i++) candidate = (candidate << 8) | value[i];
+			if (have_size && candidate != file_size) return 1;
+			file_size = candidate; have_size = 1;
+		}
+		left -= (size_t)(value - p) + len;
+		p = value + len;
+	}
+	if (have_descriptor)
+		printf("file4141_structure=%s\n", (descriptor & 0x38) == 0x38 ? "dedicated_file" :
+				(descriptor & 0x38) > 8 ? "unknown" :
+				(descriptor & 7) == 1 ? "transparent" : (descriptor & 7) >= 2 ? "record" : "unknown");
+	if (have_size) printf("file4141_size=%zu\n", file_size);
+	printf("file4141_result=selected_metadata_only_no_read\n");
+	return 0;
+}
+
+static int inspect_file4141(sc_card_t *card, const struct sc_aid *aid)
+{
+	const unsigned char fid[] = { 0x41, 0x41 };
+	unsigned char response[256];
+	sc_apdu_t apdu;
+	int i, found = 0, rv;
+	for (i = 0; i < card->app_count; i++)
+		if (card->app[i]->aid.len == aid->len && !memcmp(card->app[i]->aid.value, aid->value, aid->len)) found = 1;
+	if (!found) {
+		printf("file4141_result=aid_not_announced_no_select\n");
+		return 1;
+	}
+	if (select_application(card, aid) < 0) return 1;
+	/* The one SELECT observed blocked in Idopte. No B0/B2 or binding follows. */
+	sc_format_apdu(card, &apdu, SC_APDU_CASE_4_SHORT, 0xA4, 2, 0);
+	apdu.cla = 0;
+	apdu.flags |= SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP;
+	apdu.data = fid; apdu.lc = apdu.datalen = sizeof(fid);
+	apdu.resp = response; apdu.le = apdu.resplen = sizeof(response);
+	rv = sc_transmit_apdu(card, &apdu);
+	print_result("file4141_select_transport", rv);
+	if (rv < 0) return 1;
+	printf("file4141_select_sw=%02X%02X\n", apdu.sw1, apdu.sw2);
+	if (apdu.sw1 == 0x6A && apdu.sw2 == 0x82) {
+		printf("file4141_result=not_found_in_known_application_no_read\n");
+		return 0;
+	}
+	if (apdu.sw1 != 0x90 || apdu.sw2 != 0 || apdu.resplen > sizeof(response)) return 1;
+	if (print_file4141_metadata(response, apdu.resplen)) {
+		printf("file4141_result=selected_metadata_unrecognized_no_read\n");
 		return 1;
 	}
 	return 0;
@@ -469,7 +547,7 @@ int main(int argc, char **argv)
 	memset(&app_aid, 0, sizeof(app_aid));
 	app_aid.len = sizeof(app_aid.value);
 	if (argc == 5 && ((strcmp(argv[3], "--pkcs15") && strcmp(argv[3], "--sign-setup") &&
-			strcmp(argv[3], "--pin-status") && strcmp(argv[3], "--security-info") && strcmp(argv[3], "--pin-policy") && strcmp(argv[3], "--odf-map")) ||
+			strcmp(argv[3], "--pin-status") && strcmp(argv[3], "--security-info") && strcmp(argv[3], "--pin-policy") && strcmp(argv[3], "--odf-map") && strcmp(argv[3], "--file4141")) ||
 			sc_hex_to_bin(argv[4], app_aid.value, &app_aid.len) < 0 || !app_aid.len))
 		return 2;
 
@@ -488,6 +566,7 @@ int main(int argc, char **argv)
 		mode = !strcmp(argv[3], "--sign-setup") ? INSPECT_SIGN_SETUP :
 			!strcmp(argv[3], "--pin-status") ? INSPECT_PIN_STATUS :
 			!strcmp(argv[3], "--odf-map") ? INSPECT_ODF_MAP :
+			!strcmp(argv[3], "--file4141") ? INSPECT_FILE4141 :
 			!strcmp(argv[3], "--pin-policy") ? INSPECT_PIN_POLICY : INSPECT_SECURITY_INFO;
 	}
 	memset(&params, 0, sizeof(params));
@@ -547,7 +626,8 @@ int main(int argc, char **argv)
 			printf("application_label=%s\n", card->app[i]->label ? card->app[i]->label : "");
 		}
 	}
-	status = argc == 5 ? (mode == INSPECT_ODF_MAP ? inspect_odf_map(card, &app_aid) :
+	status = argc == 5 ? (mode == INSPECT_FILE4141 ? inspect_file4141(card, &app_aid) :
+		mode == INSPECT_ODF_MAP ? inspect_odf_map(card, &app_aid) :
 		inspect_native_pkcs15(card, &app_aid, mode)) : 0;
 out:
 	if (locked) {

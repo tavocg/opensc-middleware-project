@@ -1135,6 +1135,71 @@ Sin PIN. Revisar si 4141 aparece como referencia tipada antes de decidir
 si corresponde alguna selección/lectura posterior. No repetir el descubrimiento
 Idopte ni intentar autenticar por inercia. VERIFY 6982 continúa pendiente.
 
+## Referencias del ODF: 13 de octubre, 15:58:49 UTC
+
+Informe privado `local/jcop4-odf-map-eAjoi575/report.txt`, principal `458573f`
+y OpenSC `3dfef6704`; ambos árboles limpios al comenzar. Inventario/ATR,
+compilación, conexión y selección de la aplicación correctos. SELECT 5031 y
+READ BINARY dieron transporte 0/SW 9000. Se decodificaron cuatro referencias:
+
+| Tipo PKCS#15 | Ruta |
+| --- | --- |
+| Objetos de autenticación | 7001 |
+| Metadatos de llaves privadas | 7002 |
+| Llaves públicas | 7004 |
+| Certificados | 7005 |
+
+No se siguieron rutas; unlock y proceso 0. No binding, PIN ni autenticación.
+7002 designa un directorio de metadatos, no bytes de llave privada. **4141
+no figura entre las referencias del bloque leído**. No demuestra ausencia
+general, completitud del ODF ni propósito del archivo. La búsqueda pública
+previa no lo identificó; no asumir AODF, CAN ni permisos de lectura.
+
+### Consulta limitada a SELECT 4141
+
+Se prepara `make inspect/jcop4-file4141` para comprobar existencia/metadatos
+de control del único EF observado bloqueado, bajo la aplicación conocida.
+El [SELECT de OpenSC ISO 7816](https://github.com/OpenSC/OpenSC/blob/master/src/libopensc/iso7816.c)
+procesa FCP/FCI como información de control del archivo; obtenerla no requiere
+READ del contenido. No se permite el archivo a Idopte ni se busca una serie
+de FIDs desconocidos. Este diagnóstico independiente:
+
+1. Mantiene default driver, comprobación del ATR conectado, inventario público
+   EF.ATR/EF.DIR y exige el AID conocido anunciado, sin binding PKCS#15.
+2. Selecciona esa aplicación y envía **00 A4 02 00 02 41 41 00**, SELECT EF con
+   respuesta de control, máximo 256 bytes. No READ BINARY/RECORD ni seguimiento
+   de rutas, no consultas de credenciales ni operaciones administrativas.
+3. Registra transporte/SW. 9000 sin metadatos es diagnóstico válido; 6A82
+   significa no encontrado **bajo esa aplicación/contexto**, sin probar ausencia
+   global ni qué contexto empleó Idopte. Otros SW, incluido 61xx/6Cxx, transporte
+   o respuesta inválida detienen sin GET RESPONSE/reintentos.
+4. Si recibe FCP/FCI válido, resume únicamente tags directos 82 (estructura)
+   y 80 (tamaño); verifica 83=4141 cuando esté presente. Omite nombres, ACL,
+   campos propietarios y respuesta bruta. No interpreta plantillas anidadas
+   como esos tags directos ni acredita acceso de lectura por selección exitosa.
+
+No Idopte, VERIFY, PIN, MSE ni firma. Debug 0, stdin vacío, configuración local
+sin cachés, informes privados en local/jcop4-file4141-*/report.txt. Código y
+permisos del observador v5 intactos; seguirá bloqueando el SELECT de 4141.
+No cambios ni recompilación del driver/submódulo.
+
+Pasaron **45 comprobaciones del helper y 35 del lanzador** con transporte
+ficticio, incluyendo bytes exactos/único SELECT, ausencia de READ/binding,
+rechazo de otros ATR/AID/contextos, SW negativos, truncamientos, contradicciones,
+omisión de campos identificables y propagación de fallos sin éxito anunciado.
+Helper real compilado contra OpenSC offline. Log C:
+`build/opensc-offline/card-public-info-tests.log`. No hardware por el agente;
+las 20 comprobaciones anteriores del observador siguen vigentes.
+
+Siguiente intervención, misma JCOP4 y firmador/otros clientes cerrados:
+
+```bash
+nix develop -c make inspect/jcop4-file4141 READER=0
+```
+
+Revisar el informe antes de decidir cualquier lectura o ampliación del
+observador. No repetir intentos de PIN; VERIFY 6982 permanece sin resolver.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño
