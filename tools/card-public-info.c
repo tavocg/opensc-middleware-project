@@ -11,7 +11,7 @@
 #include "libopensc/pkcs15.h"
 #include "libopensc/asn1.h"
 
-enum inspect_mode { INSPECT_PKCS15, INSPECT_SIGN_SETUP, INSPECT_PIN_STATUS, INSPECT_SECURITY_INFO, INSPECT_PIN_POLICY, INSPECT_ODF_MAP, INSPECT_FILE4141 };
+enum inspect_mode { INSPECT_PKCS15, INSPECT_SIGN_SETUP, INSPECT_PIN_STATUS, INSPECT_SECURITY_INFO, INSPECT_PIN_POLICY, INSPECT_ODF_MAP, INSPECT_FILE4141, INSPECT_FILE4109 };
 
 static void print_hex(const char *name, const unsigned char *value, size_t len)
 {
@@ -228,9 +228,10 @@ static void summarize_a1_metadata(const unsigned char *buf, size_t size, struct 
 
 /* SELECT returns control information, not EF contents. Emit only bounded
  * metadata summaries; omit names, raw ACLs, proprietary values and responses. */
-static int print_file4141_metadata(const unsigned char *buf, size_t size)
+static int print_file_metadata(const unsigned char *buf, size_t size, unsigned int fid)
 {
 	const unsigned char *p = buf, *value;
+	char direct_name[40], a1_name[40];
 	size_t len, left, file_size = 0;
 	unsigned int cla, tag, descriptor = 0;
 	int have_descriptor = 0, have_size = 0;
@@ -239,8 +240,11 @@ static int print_file4141_metadata(const unsigned char *buf, size_t size)
 	int compact_count = 0, a1_count = 0;
 	struct a1_metadata a1 = {0};
 	enum compact_read compact = COMPACT_ABSENT;
+	if (fid != 0x4141 && fid != 0x4109) return 1;
+	snprintf(direct_name, sizeof(direct_name), "file%04X_security_direct_tags", fid);
+	snprintf(a1_name, sizeof(a1_name), "file%04X_a1_security_tags", fid);
 	if (!size) {
-		printf("file4141_result=selected_without_metadata_no_read\n");
+		printf("file%04X_result=selected_without_metadata_no_read\n", fid);
 		return 0;
 	}
 	if (sc_asn1_read_tag(&p, size, &cla, &tag, &len) < 0 || !p ||
@@ -250,7 +254,7 @@ static int print_file4141_metadata(const unsigned char *buf, size_t size)
 	while (left) {
 		value = p;
 		if (sc_asn1_read_tag(&value, left, &cla, &tag, &len) < 0 || !value) return 1;
-		if ((cla | tag) == 0x83 && (len != 2 || value[0] != 0x41 || value[1] != 0x41)) return 1;
+		if ((cla | tag) == 0x83 && (len != 2 || value[0] != (fid >> 8) || value[1] != (fid & 0xFF))) return 1;
 		if ((cla | tag) == 0x82) {
 			if (!len || (have_descriptor && descriptor != value[0])) return 1;
 			descriptor = value[0]; have_descriptor = 1;
@@ -281,22 +285,22 @@ static int print_file4141_metadata(const unsigned char *buf, size_t size)
 		p = value + len;
 	}
 	if (have_descriptor)
-		printf("file4141_structure=%s\n", (descriptor & 0x38) == 0x38 ? "dedicated_file" :
+		printf("file%04X_structure=%s\n", fid, (descriptor & 0x38) == 0x38 ? "dedicated_file" :
 				(descriptor & 0x38) > 8 ? "unknown" :
 				(descriptor & 7) == 1 ? "transparent" : (descriptor & 7) >= 2 ? "record" : "unknown");
-	if (have_size) printf("file4141_size=%zu\n", file_size);
-	printf("file4141_security_format=%s\n", !security_forms ? "not_observed_in_direct_tags" :
+	if (have_size) printf("file%04X_size=%zu\n", fid, file_size);
+	printf("file%04X_security_format=%s\n", fid, !security_forms ? "not_observed_in_direct_tags" :
 		security_forms == 1 ? "compact" : security_forms == 2 ? "referenced_uninterpreted" :
 		security_forms == 4 ? "expanded_uninterpreted" : security_forms == 8 ? "profile_uninterpreted" :
 		security_forms == 16 ? "nested_control_uninterpreted" : "multiple_forms_uninterpreted");
-	print_security_tags("file4141_security_direct_tags", direct_tags);
+	print_security_tags(direct_name, direct_tags);
 	if (a1_count) {
-		printf("file4141_a1_structure=%s\n", a1_count != 1 ? "multiple_uninterpreted" :
+		printf("file%04X_a1_structure=%s\n", fid, a1_count != 1 ? "multiple_uninterpreted" :
 			a1.valid_tlv ? "immediate_tlv_only" : "opaque_uninterpreted");
 		if (a1_count == 1 && a1.valid_tlv) {
-			print_security_tags("file4141_a1_security_tags", a1.tags);
-			printf("file4141_a1_other_tags=%s\n", a1.other_tags ? "present_values_omitted" : "not_observed");
-			printf("file4141_a1_8c_read_encoding=%s\n", a1.compact_count == 1 && a1.compact_valid &&
+			print_security_tags(a1_name, a1.tags);
+			printf("file%04X_a1_other_tags=%s\n", fid, a1.other_tags ? "present_values_omitted" : "not_observed");
+			printf("file%04X_a1_8c_read_encoding=%s\n", fid, a1.compact_count == 1 && a1.compact_valid &&
 				have_descriptor && !(descriptor & 0x80) &&
 				((descriptor & 0x3F) == 1 || (descriptor & 0x3F) == 9) ?
 				compact_read_name(a1.compact) : "uninterpreted");
@@ -304,23 +308,30 @@ static int print_file4141_metadata(const unsigned char *buf, size_t size)
 	}
 	if (security_forms == 1 && compact_count == 1 && have_descriptor && !(descriptor & 0x80) &&
 			((descriptor & 0x3F) == 1 || (descriptor & 0x3F) == 9)) {
-		printf("file4141_standard_compact_read=%s\n", compact_read_name(compact));
+		printf("file%04X_standard_compact_read=%s\n", fid, compact_read_name(compact));
 	} else if (security_forms)
-		printf("file4141_standard_compact_read=uninterpreted\n");
-	printf("file4141_result=selected_metadata_only_no_read\n");
+		printf("file%04X_standard_compact_read=uninterpreted\n", fid);
+	printf("file%04X_result=selected_metadata_only_no_read\n", fid);
 	return 0;
 }
 
-static int inspect_file4141(sc_card_t *card, const struct sc_aid *aid)
+static int print_file4141_metadata(const unsigned char *buf, size_t size)
 {
-	const unsigned char fid[] = { 0x41, 0x41 };
+	return print_file_metadata(buf, size, 0x4141);
+}
+
+static int inspect_file_metadata(sc_card_t *card, const struct sc_aid *aid, unsigned int fid_number)
+{
+	const unsigned char fid[] = { fid_number >> 8, fid_number & 0xFF };
+	char transport_name[40];
 	unsigned char response[256];
 	sc_apdu_t apdu;
 	int i, found = 0, rv;
+	if (fid_number != 0x4141 && fid_number != 0x4109) return 1;
 	for (i = 0; i < card->app_count; i++)
 		if (card->app[i]->aid.len == aid->len && !memcmp(card->app[i]->aid.value, aid->value, aid->len)) found = 1;
 	if (!found) {
-		printf("file4141_result=aid_not_announced_no_select\n");
+		printf("file%04X_result=aid_not_announced_no_select\n", fid_number);
 		return 1;
 	}
 	if (select_application(card, aid) < 0) return 1;
@@ -331,16 +342,18 @@ static int inspect_file4141(sc_card_t *card, const struct sc_aid *aid)
 	apdu.data = fid; apdu.lc = apdu.datalen = sizeof(fid);
 	apdu.resp = response; apdu.le = apdu.resplen = sizeof(response);
 	rv = sc_transmit_apdu(card, &apdu);
-	print_result("file4141_select_transport", rv);
+	snprintf(transport_name, sizeof(transport_name), "file%04X_select_transport", fid_number);
+	print_result(transport_name, rv);
 	if (rv < 0) return 1;
-	printf("file4141_select_sw=%02X%02X\n", apdu.sw1, apdu.sw2);
+	printf("file%04X_select_sw=%02X%02X\n", fid_number, apdu.sw1, apdu.sw2);
 	if (apdu.sw1 == 0x6A && apdu.sw2 == 0x82) {
-		printf("file4141_result=not_found_in_known_application_no_read\n");
+		printf("file%04X_result=not_found_in_known_application_no_read\n", fid_number);
 		return 0;
 	}
 	if (apdu.sw1 != 0x90 || apdu.sw2 != 0 || apdu.resplen > sizeof(response)) return 1;
-	if (print_file4141_metadata(response, apdu.resplen)) {
-		printf("file4141_result=selected_metadata_unrecognized_no_read\n");
+	if (fid_number == 0x4141 ? print_file4141_metadata(response, apdu.resplen) :
+			print_file_metadata(response, apdu.resplen, fid_number)) {
+		printf("file%04X_result=selected_metadata_unrecognized_no_read\n", fid_number);
 		return 1;
 	}
 	return 0;
@@ -685,7 +698,7 @@ int main(int argc, char **argv)
 	memset(&app_aid, 0, sizeof(app_aid));
 	app_aid.len = sizeof(app_aid.value);
 	if (argc == 5 && ((strcmp(argv[3], "--pkcs15") && strcmp(argv[3], "--sign-setup") &&
-			strcmp(argv[3], "--pin-status") && strcmp(argv[3], "--security-info") && strcmp(argv[3], "--pin-policy") && strcmp(argv[3], "--odf-map") && strcmp(argv[3], "--file4141")) ||
+			strcmp(argv[3], "--pin-status") && strcmp(argv[3], "--security-info") && strcmp(argv[3], "--pin-policy") && strcmp(argv[3], "--odf-map") && strcmp(argv[3], "--file4141") && strcmp(argv[3], "--file4109")) ||
 			sc_hex_to_bin(argv[4], app_aid.value, &app_aid.len) < 0 || !app_aid.len))
 		return 2;
 
@@ -705,6 +718,7 @@ int main(int argc, char **argv)
 			!strcmp(argv[3], "--pin-status") ? INSPECT_PIN_STATUS :
 			!strcmp(argv[3], "--odf-map") ? INSPECT_ODF_MAP :
 			!strcmp(argv[3], "--file4141") ? INSPECT_FILE4141 :
+			!strcmp(argv[3], "--file4109") ? INSPECT_FILE4109 :
 			!strcmp(argv[3], "--pin-policy") ? INSPECT_PIN_POLICY : INSPECT_SECURITY_INFO;
 	}
 	memset(&params, 0, sizeof(params));
@@ -764,7 +778,8 @@ int main(int argc, char **argv)
 			printf("application_label=%s\n", card->app[i]->label ? card->app[i]->label : "");
 		}
 	}
-	status = argc == 5 ? (mode == INSPECT_FILE4141 ? inspect_file4141(card, &app_aid) :
+	status = argc == 5 ? ((mode == INSPECT_FILE4141 || mode == INSPECT_FILE4109) ?
+		inspect_file_metadata(card, &app_aid, mode == INSPECT_FILE4141 ? 0x4141 : 0x4109) :
 		mode == INSPECT_ODF_MAP ? inspect_odf_map(card, &app_aid) :
 		inspect_native_pkcs15(card, &app_aid, mode)) : 0;
 out:

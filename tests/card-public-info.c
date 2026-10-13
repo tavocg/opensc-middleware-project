@@ -28,7 +28,7 @@ static int cardaccess_calls, cardaccess_result, cardaccess_sw, cardaccess_len, m
 static int docp_mode, docp_calls, docp_result[2], docp_sw[2], docp_len[2];
 static int odf_mode, odf_select_calls, odf_read_calls, odf_select_result, odf_read_result, odf_select_sw, odf_read_sw;
 static size_t odf_size;
-static int file4141_mode, file4141_calls, file4141_transport, file4141_sw;
+static int file4141_wrongfid, file4141_mode, file4141_calls, file4141_transport, file4141_sw;
 static size_t file4141_size;
 static const unsigned char fixture_fcp[] = { 0x62, 11, 0x82, 1, 1, 0x83, 2, 0x41, 0x41, 0x80, 2, 0, 32 };
 static const unsigned char fixture_odf[] = { 0xA4, 6, 0x30, 4, 4, 2, 0x70, 5, 0xA8, 6, 0x30, 4, 4, 2, 0x41, 0x41 };
@@ -142,11 +142,12 @@ int sc_transmit_apdu(sc_card_t *card, sc_apdu_t *apdu)
 		assert(select_calls == 1 && !file4141_calls && !bind_calls && !object_calls && !cert_calls && !mse_calls && !pin_calls &&
 				!odf_read_calls && apdu->cla == 0 && apdu->ins == 0xA4 && apdu->p1 == 2 && apdu->p2 == 0 &&
 				apdu->cse == SC_APDU_CASE_4_SHORT && apdu->lc == 2 && apdu->datalen == 2 &&
-				apdu->data[0] == 0x41 && apdu->data[1] == 0x41 && apdu->le == 256 && apdu->resplen == 256 &&
+				apdu->data[0] == 0x41 && apdu->data[1] == (file4141_mode == 2 ? 0x09 : 0x41) && apdu->le == 256 && apdu->resplen == 256 &&
 				(apdu->flags & (SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP)) ==
 				(SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP));
 		file4141_calls++;
 		memcpy(apdu->resp, fixture_fcp, sizeof(fixture_fcp));
+		if (file4141_mode == 2 && !file4141_wrongfid) apdu->resp[8] = 0x09;
 		apdu->resplen = file4141_size;
 		apdu->sw1 = file4141_sw >> 8; apdu->sw2 = file4141_sw & 0xFF;
 		return file4141_transport;
@@ -292,7 +293,7 @@ static void reset_fixture(void)
 	docp_len[0] = docp_len[1] = 4;
 	odf_mode = odf_select_calls = odf_read_calls = odf_select_result = odf_read_result = 0;
 	odf_select_sw = odf_read_sw = 0x9000; odf_size = sizeof(fixture_odf);
-	file4141_mode = file4141_calls = file4141_transport = 0;
+	file4141_wrongfid = file4141_mode = file4141_calls = file4141_transport = 0;
 	file4141_sw = 0x9000; file4141_size = sizeof(fixture_fcp);
 }
 static void expect_metadata_summary(const unsigned char *buf, size_t size, const char *expected)
@@ -613,6 +614,49 @@ int main(void)
 			assert(print_odf_map(&fixture_ctx, padded, 0) == 1);
 		}
 		puts("PASS ODF parser accepts only bounded directory paths and uniform padding, rejecting inline objects and truncation");
+	}
+	{
+		char *args[] = { "card-public-info", "2", fixture_atr, "--file4109", fixture_aid };
+		reset_fixture(); file4141_mode = 2;
+		assert(card_public_info_main(5, args) == 0 && file4141_calls == 1 && unlock_calls == 1 &&
+				!bind_calls && !object_calls && !cert_calls && !pin_calls && !mse_calls && !odf_read_calls);
+		reset_fixture(); file4141_mode = 2; file4141_size = 0;
+		assert(card_public_info_main(5, args) == 0 && file4141_calls == 1 && unlock_calls == 1);
+		reset_fixture(); file4141_mode = 2; file4141_sw = 0x6A82;
+		assert(card_public_info_main(5, args) == 0 && file4141_calls == 1 && unlock_calls == 1);
+		puts("PASS SELECT-only 4109 sends its exact FID and accepts empty metadata or missing file without READ or authentication");
+		for (int i = 0; i < 7; i++) {
+			reset_fixture(); file4141_mode = 2;
+			if (i == 0) file4141_transport = SC_ERROR_READER;
+			if (i == 1) file4141_sw = 0x6982;
+			if (i == 2) file4141_sw = 0x6101;
+			if (i == 3) file4141_sw = 0x6C10;
+			if (i == 4) file4141_size = 257;
+			if (i == 5) file4141_size = sizeof(fixture_fcp) - 1;
+			if (i == 6) file4141_wrongfid = 1;
+			assert(card_public_info_main(5, args) == 1 && file4141_calls == 1 && unlock_calls == 1 && !bind_calls);
+		}
+		puts("PASS SELECT-only 4109 rejects wrong returned FID, malformed data, retry requests and transport/security errors without follow-up");
+		for (int i = 0; i < 3; i++) {
+			reset_fixture(); file4141_mode = 2;
+			if (i == 0) mismatch = 1;
+			if (i == 1) fixture_app.aid.value[0] ^= 1;
+			if (i == 2) select_result = SC_ERROR_FILE_NOT_FOUND;
+			assert(card_public_info_main(5, args) == 1 && !file4141_calls && !bind_calls);
+		}
+		reset_fixture(); file4141_mode = 2; args[4] = "A001";
+		assert(card_public_info_main(5, args) == 2 && !connect_calls);
+		puts("PASS SELECT-only 4109 requires connected ATR and announced known application; no arbitrary-file CLI accepted");
+		{
+			unsigned char fci[sizeof(fixture_fcp)];
+			memcpy(fci, fixture_fcp, sizeof(fci)); fci[0] = 0x6F; fci[8] = 0x09;
+			assert(print_file_metadata(fci, sizeof(fci), 0x4109) == 0);
+			assert(print_file_metadata(fci, sizeof(fci), 0x4141) == 1);
+			assert(print_file_metadata(fci, sizeof(fci), 0x4108) == 1);
+			reset_fixture(); args[3] = "--file4108"; args[4] = fixture_aid;
+			assert(card_public_info_main(5, args) == 2 && !connect_calls);
+		}
+		puts("PASS shared metadata parser keeps fixed-file identity distinct and refuses unsupported FIDs");
 	}
 	{
 		char *args[] = { "card-public-info", "2", fixture_atr, "--file4141", fixture_aid };

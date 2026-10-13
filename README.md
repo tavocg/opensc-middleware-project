@@ -136,6 +136,15 @@ bloqueado puede ser esperable. Detalles y comparación en docs/jcop4.md.
 Pasaron 41 comprobaciones de observador, 43 del lanzador y 6 de aislamiento
 del lanzador de firma, sin tarjeta. Driver y helper de firma intactos.
 
+La comparación ejecutada permitió dos READ de 4141 (9000) y encontró un
+SELECT posterior de **4109**, bloqueado por el guard. Su consulta independiente
+`make inspect/jcop4-file4109 READER=0` confirmó un EF transparente de **17 bytes**,
+SELECT 9000 y atributo propietario 86 sin interpretar. Solo obtiene metadatos:
+no lee 4109 ni establece autenticación. Informe privado
+local/jcop4-file4109-LKNy75nY/report.txt; 58 comprobaciones del helper y 45 del
+lanzador correctas. El agente puede ejecutar estos diagnósticos sin PIN/GUI,
+según autorización vigente en AGENTS.md. JCOP4 aún no firma con el driver libre.
+
 Capturas privadas bajo local/jcop4-idopte-spy-*/; no agregarlas a Git.
 Pasaron previamente **30 comprobaciones del observador/decoder y 40 del
 lanzador** con transporte ficticio. El diagnóstico de firma pasó además

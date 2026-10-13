@@ -14,7 +14,7 @@
 .PHONY: inspect/jcop4-security-info
 .PHONY: inspect/jcop4-pin-policy
 .PHONY: inspect/jcop4-odf-map
-.PHONY: inspect/jcop4-file4141
+.PHONY: inspect/jcop4-file4141 inspect/jcop4-file4109
 .PHONY: inspect/jcop4-idopte-compare
 .PHONY: inspect/jcop4-idopte
 .PHONY: inspect/jcop4-idopte-discovery inspect/jcop4-idopte-spy test/pcsc-public-observer
@@ -45,6 +45,7 @@ help:
 		'make inspect/jcop4-security-info Consulta metadatos de autenticación, versión y CardAccess, sin PIN.' \
 		'make inspect/jcop4-pin-policy Consulta DOCP del PIN 1 en raíz/aplicación, sin PIN ni autenticación.' \
 		'make inspect/jcop4-odf-map Lee referencias del directorio 5031 sin seguirlas ni autenticar.' \
+		'make inspect/jcop4-file4109 Consulta SELECT/metadatos del EF 4109 observado en Idopte, sin READ ni PIN.' \
 		'make inspect/jcop4-file4141 Consulta SELECT/metadatos del EF 4141, sin leer contenido ni autenticar.' \
 		'make inspect/jcop4-idopte Consulta módulo y estado público de los tokens Idopte, sin login.' \
 		'make inspect/jcop4-idopte-discovery Observa cabeceras de descubrimiento público con bloqueo de comandos ajenos.' \
@@ -105,6 +106,9 @@ inspect/jcop4-pin-policy:
 
 inspect/jcop4-odf-map:
 	@bash scripts/probe-jcop4.sh "$$READER" --odf-map
+
+inspect/jcop4-file4109:
+	@bash scripts/probe-jcop4.sh "$$READER" --file4109
 
 inspect/jcop4-file4141:
 	@bash scripts/probe-jcop4.sh "$$READER" --file4141

@@ -6,6 +6,32 @@ la tarjeta. El usuario ejecuta las operaciones que requieran PIN o GUI. Esto
 sustituye las restricciones anteriores de no ejecutar Git/hardware/Idopte por
 el agente; conservar límites de cada diagnóstico y privacidad de los registros.
 
+**Último resultado: SELECT 4109, 13 de octubre de 2026, 20:00:55 UTC.**
+El usuario creó `32616a2` para el diagnóstico anterior, Git limpio al comenzar;
+OpenSC `3dfef6704` intacto. Agente ejecutó
+`nix develop --offline -c make inspect/jcop4-file4109 READER=0`.
+Informe `local/jcop4-file4109-LKNy75nY/report.txt`: compilación/inventario,
+conexión/contexto/lock/EF.ATR/EF.DIR correctos. SELECT 4109 -> transporte
+0/**9000**, transparente/**17 bytes**, security_direct_tags=86,
+security_format=profile_uninterpreted, standard_compact_read=uninterpreted.
+Unlock/proceso 0. No READ 4109 ni binding/PIN/VERIFY/MSE/GA/PSO.
+El helper selecciona ADF conocido anunciado y 4109; no relee 4141 ni reproduce
+el estado interno entero de Idopte. Existencia/control confirmados en ese
+contexto; propósito y codificación 86 desconocidos. No inferir archivo público,
+CAN/PACE/CA/clave ni causa de 6982 por tamaño/tag/orden. Valores propietarios,
+identificadores personales y respuestas brutas omitidos.
+
+Nueva opción --file4109 y target inspect/jcop4-file4109; analizador compartido
+con --file4141, valida 83 contra el FID concreto y rechaza otros FID. No sondeo
+arbitrario, reintento/GET RESPONSE ni nueva lectura. Pasaron **58 comprobaciones
+del helper y 45 del lanzador**; compilación real. Observador/permisos y firma
+intactos; no repetir suites sin cambios. No captura Idopte adicional.
+Siguiente paso: decidir observación del proveedor después del SELECT 4109,
+con eventual READ separado/acotado a 17 bytes sin registrar contenido, si es
+necesario para una hipótesis concreta; no ampliar READ automáticamente por 9000.
+El guard Idopte todavía bloquea SELECT/READ 4109. No pedir PIN por esta consulta.
+JCOP4/RSA3072 y firma PKCS#11/PDF pendientes. Ver docs/jcop4.md.
+
 **Comparación ejecutada por el agente: 13 de octubre, 19:55:02 UTC.**
 Informe `local/jcop4-idopte-compare-ReO2RheL/report.txt`, principal `3e24829`
 con cambios del diagnóstico pendientes de commit; OpenSC `3dfef6704`, intacto.

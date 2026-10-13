@@ -2121,6 +2121,53 @@ El commit intentado por el agente falló al crear `.git/index.lock`:
 `Read-only file system`. La autorización existe; el montaje de `.git` en este
 entorno impide escribirlo. No se creó un commit ni se alteró OpenSC.
 
+## SELECT 4109 aceptado: 13 de octubre, 20:00:55 UTC
+
+El usuario registró el diagnóstico anterior en `32616a2`. El agente preparó y
+ejecutó `nix develop --offline -c make inspect/jcop4-file4109 READER=0`.
+Informe privado `local/jcop4-file4109-LKNy75nY/report.txt`, principal `32616a2`
+con este diagnóstico pendiente de commit, OpenSC `3dfef6704` sin cambios.
+
+```text
+file4109_select_transport=0
+file4109_select_sw=9000
+file4109_structure=transparent
+file4109_size=17
+file4109_security_format=profile_uninterpreted
+file4109_security_direct_tags=86
+file4109_standard_compact_read=uninterpreted
+file4109_result=selected_metadata_only_no_read
+```
+
+Inventario, compilación, conexión, lock, EF.ATR/EF.DIR, unlock y proceso correctos.
+El helper exige ATR conectado conocido y aplicación conocida anunciada; selecciona
+esa aplicación y únicamente envía `00 A4 02 00 02 41 09 00`. No reproduce las
+lecturas previas de 4141: confirma selección y control de 4109 bajo la aplicación,
+no equivalencia de todo el estado interno de Idopte. Sin READ de 4109, binding
+PKCS#15, PIN, VERIFY, MSE, GA o PSO. No se ejecutó nuevamente el inventario Idopte.
+
+El analizador de control se comparte entre los dos FID fijos, con validación de
+83 cuando aparece; no se añadió interfaz para sondear archivos arbitrarios.
+Conserva los resúmenes de seguridad existentes sin imprimir valores propietarios,
+nombres ni respuestas brutas. 86 identifica una codificación propietaria; su
+presencia y el tamaño de 17 bytes no identifican contenido, permiso público,
+CAN, clave, CardAccess ni condición faltante de VERIFY 6982. La existencia de
+4109 queda confirmada en este contexto, su propósito sigue pendiente.
+
+Pasaron **58 comprobaciones del helper y 45 del lanzador**, sin hardware;
+compilación real correcta. Las nuevas regresiones comprueban FID exacto,
+respuesta con identificador distinto, contexto/AID/ATR, errores y continuidad
+bloqueada tras 61xx/6Cxx, sin READ o autenticación. Observador y operación de
+firma intactos; no
+repetir sus suites por este cambio. Directorio 0700 e informe privado 0600.
+
+El modo Idopte conserva SELECT 4109 bloqueado. Para avanzar habrá que decidir
+una observación concreta del proveedor después de ese SELECT y, si intenta
+READ, acotarla separadamente al archivo de 17 bytes sin registrar su contenido;
+no habilitar selección/lecturas generales ni repetir PIN. La consulta de
+metadatos actual no establece la ruta de autenticación. JCOP4/RSA3072 y firma
+PKCS#11/PDF con el módulo libre siguen pendientes.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño
