@@ -1,21 +1,23 @@
 # libjcop3p11: contexto para continuar
 
 **JCOP4, 13 de octubre de 2026:** último informe revisado
-`local/jcop4-security-info-9FQ37Lk3/report.txt`, **14:00:01 UTC**, principal
-`b41f16b`, OpenSC `3dfef6704`; ambos Git limpios al comenzar. Binding y
+`local/jcop4-security-info-pveu5cDK/report.txt`, **14:03:00 UTC**, principal
+`83b2eda`, OpenSC `3dfef6704`; ambos Git limpios al comenzar. Binding y
 metadatos correctos: clase AUTH tiene Card PIN y Card Admin Key (AuthKey,
 derived=1); no objeto Card CAN en esta enumeración. No usar la llave
 administrativa ni interpretar su ausencia de ruta como permiso para leerla.
-GET DATA de versión obtuvo transporte 0/SW 9000, pero el helper exigía seis
-bytes exactos y retornó 1. El informe antiguo no registra la longitud real:
-solo se puede deducir que era distinta de seis. **No se consultó CardAccess**.
-No hubo PIN, autenticación ni rechazo de seguridad en esta consulta.
+GET DATA de versión obtuvo transporte 0/SW 9000, **cuatro bytes 03020052**.
+Coinciden exactamente con ChipDoc 3.2.0.52 en identificación pública ANSSI,
+enlazada en docs/jcop4.md; no acredita por sí solo personalización/certificación
+CR ni variante exacta de hardware. SELECT MF correcto; READ B0 9C 00 / Le 256
+de CardAccess por SFI 1C -> transporte 0/**6A82**, no disponible en esa
+consulta/contexto (no demuestra ausencia general de PACE). Unlock y proceso 0.
+No hubo PIN ni autenticación. No repetir esta consulta como primer paso.
 
-Corrección local: registrar longitud/bytes y aceptar respuestas de 0–6 bytes
-sin interpretar versión; solo una longitud superior al buffer detiene el
-flujo. Continuar con CardAccess tras 9000 aunque no use el formato eOI.
-Helper real compilado offline y 30 comprobaciones C pasadas. Repetir la
-consulta pública con la corrección; no repetir el intento autenticado.
+El informe anterior 9FQ37Lk3 (14:00:01, b41f16b) falló por exigir seis bytes
+exactos y no llegó a CardAccess. El helper corregido registra longitud/bytes
+y acepta 0–6 sin imponer formato eOI; superior al buffer detiene. Corrección
+validada en el nuevo informe. No repetir el intento autenticado.
 
 Informe autenticado anterior `local/jcop4-signature-5Dpadr1N/report.txt`,
 **13:44:00 UTC**, principal `b9c5696`: metadatos y
@@ -51,16 +53,19 @@ Evidencia anterior ya revisada:
 La generación JCOP4 la indica el usuario, RSA 2048 sí se corroboró. No activar
 excepciones JCOP3/eOI por ATR/etiqueta; precedente ChipDoc ANS enlazado en docs.
 
-**Siguiente intervención:** `make inspect/jcop4-security-info READER=0`,
+**Siguiente intervención:** `make inspect/jcop4-pin-policy READER=0`,
 desde nix develop, firmador y otros clientes cerrados y misma JCOP4 insertada.
-**Sin PIN ni autenticación**: binding nativo, metadatos de todos los objetos
-AUTH (la consulta anterior solo enumeraba AUTH_PIN), SELECT aplicación,
-GET DATA 00 CA 01 16 / Le 6, SELECT MF y una lectura B0 9C 00 / Le 256 de
-SFI 1C (CardAccess según OpenSC). No leer archivos de credenciales, CAN ni
-componentes privados; no VERIFY, MSE, PSO ni GENERAL AUTHENTICATE en este
-modo. Sin reintentos 6C/GET RESPONSE ni lecturas posteriores de CardAccess.
-Se registran longitud/bytes de versión, disponibilidad y primer bloque, sin afirmar integridad del archivo
-ni ausencia de PACE si falta. Informe privado local/jcop4-security-info-*/.
+**Sin PIN ni autenticación**: binding nativo y validación del perfil observado
+y PIN global 1 vinculado a LlaveDeFirma; SELECT MF y SELECT aplicación, cada
+uno seguido de un GET DATA 00 CB 3F FF / plantilla 4D087006BF810102A080
+(CHV 1, solo DOCP A0, Le 256). Máximo dos consultas; no barrer referencias,
+variar plantillas ni leer el valor CHV 7F41. Formato tomado de
+iasecc_sdo_get_tagged_data y usado en JCOP3; aún no comprobado en JCOP4.
+Registrar bytes sin interpretar/reutilizar políticas JCOP3 automáticamente.
+Sin VERIFY, MSE, PSO, PACE, CAN, componentes privados ni comandos administrativos.
+Sin reintentos 6C/GET RESPONSE; cualquier error de seguridad/transporte detiene
+y libera transacción. Ausencia opcional se registra, sin afirmar política.
+Informe privado local/jcop4-pin-policy-*/report.txt.
 
 El código local eoi_pin_cmd y el driver ChipDoc italiano abren PACE/CAN
 antes de VERIFY; eOI lo hace sin exigir interfaz contactless en esa condición.
@@ -68,10 +73,10 @@ Es una hipótesis para 6982, **no prueba del requisito en Costa Rica**. No
 activar eOI por ATR: AID/perfil/RSA difieren. También sigue sin resolverse
 si el orden MSE antes de VERIFY influye. La consulta nueva obtiene evidencia
 pública sin cambiar el protocolo autenticado ni el submódulo.
-Compiló el helper real offline; pasaron **30 comprobaciones del helper**.
-Las **19 del lanzador** pasaron en la preparación anterior (sin cambios ahora).
-Log C: build/opensc-offline/card-public-security-info-tests.log.
-La consulta inicial fue ejecutada; CardAccess y longitud real siguen pendientes.
+Compiló el helper real offline; pasaron **35 comprobaciones del helper**
+y **21 del lanzador**, con transporte simulado. Log C:
+build/opensc-offline/card-public-pin-policy-tests.log. Política DOCP en hardware
+pendiente. No se cambió ni recompiló el driver OpenSC.
 
 Herramienta autenticada anterior, conservada para investigación futura:
 
@@ -152,7 +157,7 @@ previa. No repetir suite por documentación. Dar comandos de commit del
 principal; el agente no escribe Git ni firma/lee pass. Mantener datos privados
 fuera de Git. No modificar el perfil normal por defecto.
 
-**Próximo trabajo:** revisar la consulta pública de seguridad JCOP4 y determinar
+**Próximo trabajo:** revisar la consulta DOCP del PIN JCOP4 y determinar
 qué condición falta para VERIFY 6982 antes de solicitar otro PIN.
 Para integrar JCOP3, revisar/separar correcciones del perfil frente
 a instrumentación y experimentos antes de integrar. Diferencia local contra

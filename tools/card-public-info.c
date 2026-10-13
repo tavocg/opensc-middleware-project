@@ -10,7 +10,7 @@
 #include "libopensc/opensc.h"
 #include "libopensc/pkcs15.h"
 
-enum inspect_mode { INSPECT_PKCS15, INSPECT_SIGN_SETUP, INSPECT_PIN_STATUS, INSPECT_SECURITY_INFO };
+enum inspect_mode { INSPECT_PKCS15, INSPECT_SIGN_SETUP, INSPECT_PIN_STATUS, INSPECT_SECURITY_INFO, INSPECT_PIN_POLICY };
 
 static void print_hex(const char *name, const unsigned char *value, size_t len)
 {
@@ -77,6 +77,50 @@ static int optional_public_status(unsigned int sw1, unsigned int sw2)
 {
 	return (sw1 == 0x6A && (sw2 == 0x81 || sw2 == 0x82 || sw2 == 0x88)) ||
 		(sw1 == 0x6D && sw2 == 0);
+}
+
+static int probe_pin_policy(sc_card_t *card, const struct sc_aid *aid)
+{
+	/* iasecc_sdo_get_tagged_data: CHV 1, DOCP A0 only, never CHV value 7F41. */
+	const unsigned char request[] = { 0x4D, 0x08, 0x70, 0x06, 0xBF, 0x81, 0x01, 0x02, 0xA0, 0x80 };
+	unsigned char response[256];
+	sc_path_t mf;
+	sc_apdu_t apdu;
+	int context, rv;
+	memset(&mf, 0, sizeof(mf));
+	mf.type = SC_PATH_TYPE_PATH;
+	mf.value[0] = 0x3F; mf.value[1] = 0;
+	mf.len = 2;
+	for (context = 0; context < 2; context++) {
+		printf("pin_policy_context=%s\n", context ? "application" : "mf");
+		rv = context ? select_application(card, aid) : sc_select_file(card, &mf, NULL);
+		print_result("pin_policy_select_result", rv);
+		if (rv < 0)
+			return 1;
+		sc_format_apdu(card, &apdu, SC_APDU_CASE_4_SHORT, 0xCB, 0x3F, 0xFF);
+		apdu.cla = 0;
+		apdu.flags |= SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP;
+		apdu.data = request;
+		apdu.lc = apdu.datalen = sizeof(request);
+		apdu.resp = response;
+		apdu.le = apdu.resplen = sizeof(response);
+		rv = sc_transmit_apdu(card, &apdu);
+		print_result("pin_policy_transport_result", rv);
+		if (rv < 0)
+			return 1;
+		printf("pin_policy_sw=%02X%02X\npin_policy_response_length=%zu\n", apdu.sw1, apdu.sw2, apdu.resplen);
+		if (apdu.sw1 == 0x90 && apdu.sw2 == 0) {
+			if (apdu.resplen > sizeof(response))
+				return 1;
+			print_hex("pin_policy_docp", response, apdu.resplen);
+			printf("pin_policy_result=bytes_uninterpreted\n");
+		} else if (optional_public_status(apdu.sw1, apdu.sw2)) {
+			printf("pin_policy_result=unavailable_in_this_query\n");
+		} else {
+			return 1;
+		}
+	}
+	return 0;
 }
 
 static int probe_security_info(sc_card_t *card, const struct sc_aid *aid)
@@ -300,12 +344,14 @@ static int inspect_native_pkcs15(sc_card_t *card, struct sc_aid *aid, enum inspe
 			printf("sign_setup_result=metadata_mismatch_no_mse\n");
 			goto out;
 		}
-		if (mode == INSPECT_PIN_STATUS) {
+		if (mode == INSPECT_PIN_STATUS || mode == INSPECT_PIN_POLICY) {
 			if (pin_matches != 1 || !pin_valid) {
-				printf("pin_status_result=metadata_mismatch_no_verify\n");
+				printf("%s\n", mode == INSPECT_PIN_POLICY ? "pin_policy_result=metadata_mismatch_no_get_data" :
+						"pin_status_result=metadata_mismatch_no_verify");
 				goto out;
 			}
-			status = probe_pin_status(card, aid, (unsigned char)pin_reference);
+			status = mode == INSPECT_PIN_POLICY ? probe_pin_policy(card, aid) :
+					probe_pin_status(card, aid, (unsigned char)pin_reference);
 		} else {
 			status = probe_sign_setup(card, aid, (unsigned char)sign_reference);
 		}
@@ -336,7 +382,7 @@ int main(int argc, char **argv)
 	memset(&app_aid, 0, sizeof(app_aid));
 	app_aid.len = sizeof(app_aid.value);
 	if (argc == 5 && ((strcmp(argv[3], "--pkcs15") && strcmp(argv[3], "--sign-setup") &&
-			strcmp(argv[3], "--pin-status") && strcmp(argv[3], "--security-info")) ||
+			strcmp(argv[3], "--pin-status") && strcmp(argv[3], "--security-info") && strcmp(argv[3], "--pin-policy")) ||
 			sc_hex_to_bin(argv[4], app_aid.value, &app_aid.len) < 0 || !app_aid.len))
 		return 2;
 
@@ -353,7 +399,8 @@ int main(int argc, char **argv)
 				app_aid.len != sizeof(known_aid) || memcmp(app_aid.value, known_aid, app_aid.len))
 			return 2;
 		mode = !strcmp(argv[3], "--sign-setup") ? INSPECT_SIGN_SETUP :
-			!strcmp(argv[3], "--pin-status") ? INSPECT_PIN_STATUS : INSPECT_SECURITY_INFO;
+			!strcmp(argv[3], "--pin-status") ? INSPECT_PIN_STATUS :
+			!strcmp(argv[3], "--pin-policy") ? INSPECT_PIN_POLICY : INSPECT_SECURITY_INFO;
 	}
 	memset(&params, 0, sizeof(params));
 	params.app_name = "card-public-info";

@@ -443,7 +443,7 @@ excluye otros objetos de autenticación, como AuthKey. Por eso la siguiente
 consulta enumera la clase AUTH completa y obtiene información pública
 acotada, antes de considerar cambios al protocolo autenticado.
 
-## Consulta pública de seguridad pendiente
+## Consulta pública de seguridad
 
 Con la misma JCOP4 insertada, firmador y otros clientes cerrados:
 
@@ -513,10 +513,66 @@ que se llega a la única lectura pública, sin VERIFY/MSE ni credenciales;
 7 bytes sigue siendo un error. Pasaron las 30 comprobaciones del helper
 y su compilación real offline. El lanzador no cambió ni se repitió su suite.
 
-Siguiente intervención: ejecutar **una vez** la misma consulta pública
+La intervención posterior fue ejecutar una vez la misma consulta pública
 `make inspect/jcop4-security-info READER=0`, con esta corrección y los otros
-clientes cerrados. La repetición responde al fallo del helper; no solicita
-un nuevo intento de PIN. VERIFY 6982 del informe autenticado sigue sin resolver.
+clientes cerrados. La repetición respondió al fallo del helper; no solicitó
+un nuevo intento de PIN. Su resultado se documenta a continuación.
+
+## Resultado de seguridad: 13 de octubre, 14:03:00 UTC
+
+Informe `local/jcop4-security-info-pveu5cDK/report.txt`, principal
+`83b2eda`, OpenSC `3dfef6704`. La corrección de longitud funcionó: GET DATA
+de versión obtuvo transporte 0, 9000 y **cuatro bytes `03 02 00 52`**.
+La sección 2.2.4 (página 8) del
+[informe ANSSI-CC-2025/03v2](https://messervices.cyber.gouv.fr/visas/ANSSI-CC-2025-03v2-rapport.pdf)
+identifica exactamente esos bytes como **ChipDoc 3.2.0.52**. Esto respalda
+la identificación de la aplicación, sin probar la personalización, certificación
+de la tarjeta CR ni su variante de plataforma. No trasladar las reglas de
+otros productos certificados al perfil costarricense.
+
+SELECT MF terminó bien; READ BINARY `00 B0 9C 00 00` devolvió transporte 0
+y **6A82**. CardAccess no estuvo disponible por SFI 1C desde MF en esta
+consulta: no se leyó el archivo ni se pueden interpretar algoritmos PACE.
+No demuestra ausencia de PACE en otros contextos. Clase AUTH sigue con
+Card PIN y Card Admin Key; no Card CAN enumerado. Unlock y proceso 0.
+No hubo PIN ni autenticación. No repetir el diagnóstico de versión/CardAccess
+como primer paso. La causa de VERIFY 6982 continúa pendiente.
+
+## Consulta de política del PIN, pendiente
+
+El siguiente dato relevante es la política pública del objeto CHV 1. Se
+preparó una comparación acotada entre MF y el AID anunciado, usando la
+plantilla GET DATA DOCP de `iasecc_sdo_get_tagged_data()` de OpenSC. El
+formato funcionó en JCOP3; su disponibilidad y semántica en JCOP4 todavía
+deben comprobarse. No se asume igualdad de políticas por compartir ChipDoc.
+
+Con la misma tarjeta y otros clientes cerrados, desde nix develop:
+
+```bash
+make inspect/jcop4-pin-policy READER=0
+```
+
+Después del binding nativo/validación del perfil y PIN global 1 vinculado,
+hace SELECT MF y GET DATA, después SELECT aplicación y el mismo GET DATA:
+`00 CB 3F FF 0A 4D 08 70 06 BF 81 01 02 A0 80 00`. Solo pide **DOCP A0**,
+metadatos de control; nunca la plantilla de valor CHV `7F41`. Registra
+contexto, transporte, SW, longitud y bytes. Máximo dos consultas, buffer/Le
+256, sin GET RESPONSE, reenvío por 6C ni variantes de referencias/plantillas.
+No pide PIN, autentica, firma, abre canales seguros ni usa la llave administrativa.
+No modifica llaves, PIN ni objetos persistentes. Informe privado
+`local/jcop4-pin-policy-*/report.txt`.
+
+Un rechazo de seguridad, transporte o longitud fuera del buffer detiene
+antes del siguiente contexto y libera la transacción. Objeto/función no
+disponible se registra como tal; un proceso 0 solo confirma consultas
+terminadas, no que se obtuviera o interpretara una política válida.
+
+Compiló el helper real offline y pasaron **35 comprobaciones C** y **21
+del lanzador**. Las nuevas cubren APDU exactas de DOCP, orden MF/aplicación,
+exclusión de VERIFY/MSE/otras plantillas, metadatos incompatibles, ausencia
+opcional, errores de seguridad/transporte/SELECT, tamaño excesivo y limpieza.
+Log: `build/opensc-offline/card-public-pin-policy-tests.log`.
+Ninguna prueba del agente usó hardware; el submódulo OpenSC no cambió.
 
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 

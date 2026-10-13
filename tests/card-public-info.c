@@ -24,6 +24,7 @@ static int select_calls, mse_calls, select_result, mse_result, mse_sw;
 static int pin_calls, pin_result, pin_sw;
 static int version_calls, version_result, version_sw, version_len;
 static int cardaccess_calls, cardaccess_result, cardaccess_sw, cardaccess_len, mf_select_result;
+static int docp_mode, docp_calls, docp_result[2], docp_sw[2], docp_len[2];
 static char fixture_atr[] = "3b:d5:18:ff:81:91:fe:1f:c3:80:73:c8:21:10:0a";
 static char fixture_aid[] = "E828BD080FA00000036364796E6964";
 
@@ -116,12 +117,12 @@ int sc_select_file(sc_card_t *card, const sc_path_t *path, sc_file_t **file)
 {
 	assert(card == &fixture_card && lock_calls == 1 && !unlock_calls && !file);
 	if (path->type == SC_PATH_TYPE_PATH) {
-		assert(select_calls == 1 && version_calls == 1 && !cardaccess_calls &&
+		assert((docp_mode ? select_calls == 0 && !version_calls : select_calls == 1 && version_calls == 1) && !cardaccess_calls &&
 				path->len == 2 && path->value[0] == 0x3F && path->value[1] == 0);
 		select_calls++;
 		return mf_select_result;
 	}
-	assert(!select_calls && path->type == SC_PATH_TYPE_DF_NAME && path->len == fixture_app.aid.len &&
+	assert(select_calls == (docp_mode ? 1 : 0) && path->type == SC_PATH_TYPE_DF_NAME && path->len == fixture_app.aid.len &&
 			!memcmp(path->value, fixture_app.aid.value, path->len));
 	select_calls++;
 	return select_result;
@@ -130,6 +131,23 @@ int sc_transmit_apdu(sc_card_t *card, sc_apdu_t *apdu)
 {
 	const unsigned char expected[] = { 0x91, 0x02, 0x28, 0x91 };
 	assert(card == &fixture_card && lock_calls == 1 && !unlock_calls);
+	if (apdu->ins == 0xCB) {
+		const unsigned char request[] = { 0x4D, 0x08, 0x70, 0x06, 0xBF, 0x81, 0x01, 0x02, 0xA0, 0x80 };
+		int index = docp_calls++;
+		assert(docp_mode && index < 2 && select_calls == index + 1 &&
+				!pin_calls && !mse_calls && !version_calls && !cardaccess_calls &&
+				apdu->cla == 0 && apdu->p1 == 0x3F && apdu->p2 == 0xFF &&
+				apdu->cse == SC_APDU_CASE_4_SHORT && apdu->lc == sizeof(request) &&
+				apdu->datalen == sizeof(request) && !memcmp(apdu->data, request, sizeof(request)) &&
+				apdu->le == 256 && apdu->resplen == 256 &&
+				(apdu->flags & (SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP)) ==
+				(SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP));
+		memset(apdu->resp, 0, 256);
+		apdu->resp[0] = 0xA0; /* Synthetic public DOCP, never a credential. */
+		apdu->resplen = docp_len[index];
+		apdu->sw1 = docp_sw[index] >> 8; apdu->sw2 = docp_sw[index] & 0xFF;
+		return docp_result[index];
+	}
 	if (apdu->ins == 0xCA || apdu->ins == 0xB0) {
 		assert(!pin_calls && !mse_calls && apdu->cla == 0 && !apdu->data && !apdu->datalen && !apdu->lc &&
 				apdu->cse == SC_APDU_CASE_2_SHORT &&
@@ -228,6 +246,9 @@ static void reset_fixture(void)
 	version_calls = version_result = cardaccess_calls = cardaccess_result = mf_select_result = 0;
 	version_sw = 0x9000; version_len = 6;
 	cardaccess_sw = 0x6282; cardaccess_len = 2;
+	docp_mode = docp_calls = docp_result[0] = docp_result[1] = 0;
+	docp_sw[0] = docp_sw[1] = 0x9000;
+	docp_len[0] = docp_len[1] = 4;
 }
 static void setup_fixture(void)
 {
@@ -258,6 +279,12 @@ static int run_fixture(void)
 {
 	char *args[] = { "card-public-info", "2", fixture_atr };
 	return card_public_info_main(3, args);
+}
+
+static void policy_fixture(void)
+{
+	pin_fixture();
+	docp_mode = 1;
 }
 int main(void)
 {
@@ -436,6 +463,43 @@ int main(void)
 		reset_fixture(); args[4] = "A001";
 		assert(card_public_info_main(5, args) == 2 && !connect_calls);
 		puts("PASS security discovery checks metadata, application selection and connected ATR before public queries");
+	}
+	{
+		char *args[] = { "card-public-info", "2", fixture_atr, "--pin-policy", fixture_aid };
+		policy_fixture();
+		assert(card_public_info_main(5, args) == 0 && docp_calls == 2 && select_calls == 2 &&
+				!cert_calls && !pin_calls && !mse_calls && unlock_calls == 1);
+		puts("PASS PIN policy sends only CHV 1 DOCP metadata queries in MF and application, without secret or component reads");
+		policy_fixture(); docp_sw[0] = 0x6A88;
+		assert(card_public_info_main(5, args) == 0 && docp_calls == 2 && unlock_calls == 1);
+		policy_fixture(); docp_sw[0] = 0x6D00; docp_sw[1] = 0x6A82;
+		assert(card_public_info_main(5, args) == 0 && docp_calls == 2);
+		puts("PASS PIN policy records optional absence and probes no other references or templates");
+		policy_fixture(); docp_sw[0] = 0x6982;
+		assert(card_public_info_main(5, args) == 1 && docp_calls == 1 && select_calls == 1 && unlock_calls == 1);
+		policy_fixture(); docp_sw[0] = 0x6C00;
+		assert(card_public_info_main(5, args) == 1 && docp_calls == 1 && select_calls == 1);
+		policy_fixture(); docp_result[0] = SC_ERROR_TRANSMIT_FAILED;
+		assert(card_public_info_main(5, args) == 1 && docp_calls == 1 && unlock_calls == 1);
+		policy_fixture(); docp_sw[1] = 0x6982;
+		assert(card_public_info_main(5, args) == 1 && docp_calls == 2 && unlock_calls == 1);
+		policy_fixture(); docp_len[0] = 257;
+		assert(card_public_info_main(5, args) == 1 && docp_calls == 1 && unlock_calls == 1);
+		puts("PASS PIN policy stops on security, retry, transport or response bounds errors and releases the transaction");
+		policy_fixture(); mf_select_result = SC_ERROR_FILE_NOT_FOUND;
+		assert(card_public_info_main(5, args) == 1 && !docp_calls && unlock_calls == 1);
+		policy_fixture(); select_result = SC_ERROR_FILE_NOT_FOUND;
+		assert(card_public_info_main(5, args) == 1 && docp_calls == 1 && unlock_calls == 1);
+		puts("PASS PIN policy stops before querying a context when its SELECT fails");
+		policy_fixture(); fixture_pin_info.attrs.pin.reference = 0x81;
+		assert(card_public_info_main(5, args) == 1 && !select_calls && !docp_calls);
+		policy_fixture(); fixture_pin_info.auth_id.value[0] ^= 1;
+		assert(card_public_info_main(5, args) == 1 && !docp_calls);
+		policy_fixture(); mismatch = 1;
+		assert(card_public_info_main(5, args) == 1 && !bind_calls && !docp_calls);
+		policy_fixture(); args[4] = "A001";
+		assert(card_public_info_main(5, args) == 2 && !connect_calls);
+		puts("PASS PIN policy requires the observed connected profile and linked global PIN metadata before GET DATA");
 	}
 	return 0;
 }
