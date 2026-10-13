@@ -91,6 +91,12 @@ Todavía bloqueado en hardware; sin respuesta del lector. El observador v5
 permite solo esa consulta con buffer de salida acotado y sin registrar sus
 capacidades. Todos los demás controles siguen bloqueados, aunque el lector
 los anuncie. Falta revisar el resultado y el siguiente bloqueo, sin PIN.
+El informe OUj06FEQ (15:45:03 UTC) obtuvo control_transport=0 para la consulta
+de capacidades y 9000 en las trece APDU transmitidas. Ahora se detiene antes
+de SELECT EF 4141: no hay SW/contenido de ese archivo. No se ha identificado
+su propósito. El siguiente paso es `make inspect/jcop4-odf-map`: leer solo
+referencias del directorio público 5031 sin binding ni seguirlas, sin Idopte
+ni PIN. No ampliar permisos del observador ni repetir la misma captura aún.
 
 `pcsc-spy` estándar registra los buffers transmitidos, que pueden incluir el
 PIN durante autenticación. No usarlo con el PIN real ni considerar un filtro

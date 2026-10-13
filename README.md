@@ -55,13 +55,18 @@ firmar. La consulta pública posterior obtuvo versión `03020052` y CardAccess
 no disponible por SFI `1C` desde raíz (`6A82`). La consulta IAS/ECC de política
 del PIN devolvió `6D00` en raíz y aplicación, sin obtener datos. Idopte reconoce
 ChipDoc v3.2, anuncia PIN inicializado y límites 6–14. El siguiente paso es
-observar su descubrimiento público con comandos limitados:
+consultar las referencias del directorio público antes de permitir nuevos archivos:
 
 ```bash
-nix develop -c make inspect/jcop4-idopte-discovery READER=0
+nix develop -c make inspect/jcop4-odf-map READER=0
 ```
 
-Cerrar firmador y otros clientes y mantener esta JCOP4 insertada. Compila
+Cerrar firmador y otros clientes y mantener esta JCOP4 insertada. Compila solo
+el helper público y lee un bloque de `5031`, sin binding PKCS#15 ni seguir sus
+referencias; imprime únicamente tipos de directorio y rutas. Pasaron 40
+comprobaciones del helper y 33 del lanzador sin tarjeta. No carga Idopte.
+
+El descubrimiento Idopte previo (`make inspect/jcop4-idopte-discovery`) compila
 solo un observador y consulta información de módulo/slots/tokens, sin login
 ni PIN. El observador guarda cabeceras/estados y bloquea comandos ajenos al
 descubrimiento permitido; **Idopte puede fallar por ese bloqueo**. No usar
@@ -71,15 +76,13 @@ Nombre/versión y selección inicial dieron `9000`; el siguiente SELECT EF
 identificó `D003`, usado para identificación/serie en perfiles documentados.
 Ahora se permite su selección y lectura binaria únicamente tras confirmar
 el MF, sin guardar su respuesta ni serial. Informes privados en
-`local/jcop4-idopte-discovery-*/`. Pasaron 31 comprobaciones del lanzador y
-veinte del observador/constructor sin tarjeta. El intento eIa1G5Gt
-(15:35:59 UTC) compiló y las ocho APDU transmitidas dieron 9000, incluidos
-dos SELECT EF y dos READ BINARY; el registro omite los FIDs permitidos y sus
-respuestas. El control bloqueado es 42000D48: consulta estándar de capacidades
-del lector sin entrada. El formato v5 permite únicamente esa consulta,
-con respuesta acotada/omitida del registro. Los controles anunciados por el
-lector siguen bloqueados. Falta comprobar su resultado y el siguiente paso
-de Idopte en hardware.
+`local/jcop4-idopte-discovery-*/`. Las veinte comprobaciones previas del
+observador/constructor siguen vigentes. El intento OUj06FEQ (15:45:03 UTC)
+obtuvo transporte 0 en la consulta de capacidades 42000D48 y 9000 en todas
+las APDU transmitidas; el registro omite FIDs/AID permitidos y respuestas.
+El nuevo bloqueo es SELECT EF `4141`, aún sin identificar. El observador
+mantiene ese archivo bloqueado; el mapa de `5031` permitirá comprobar si
+lo referencia y con qué tipo, sin leerlo.
 No repetir el intento de PIN hasta identificar el requisito que falta.
 JCOP4 aún no está integrada en PKCS#11.
 RSA 3072 y modularidad para futuras generaciones siguen pendientes.

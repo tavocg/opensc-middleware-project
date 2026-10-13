@@ -25,6 +25,9 @@ static int pin_calls, pin_result, pin_sw;
 static int version_calls, version_result, version_sw, version_len;
 static int cardaccess_calls, cardaccess_result, cardaccess_sw, cardaccess_len, mf_select_result;
 static int docp_mode, docp_calls, docp_result[2], docp_sw[2], docp_len[2];
+static int odf_mode, odf_select_calls, odf_read_calls, odf_select_result, odf_read_result, odf_select_sw, odf_read_sw;
+static size_t odf_size;
+static const unsigned char fixture_odf[] = { 0xA4, 6, 0x30, 4, 4, 2, 0x70, 5, 0xA8, 6, 0x30, 4, 4, 2, 0x41, 0x41 };
 static char fixture_atr[] = "3b:d5:18:ff:81:91:fe:1f:c3:80:73:c8:21:10:0a";
 static char fixture_aid[] = "E828BD080FA00000036364796E6964";
 
@@ -131,6 +134,26 @@ int sc_transmit_apdu(sc_card_t *card, sc_apdu_t *apdu)
 {
 	const unsigned char expected[] = { 0x91, 0x02, 0x28, 0x91 };
 	assert(card == &fixture_card && lock_calls == 1 && !unlock_calls);
+	if (odf_mode) {
+		assert(select_calls == 1 && !bind_calls && !object_calls && !cert_calls && !mse_calls && !pin_calls &&
+				apdu->cla == 0 && (apdu->flags & (SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP)) ==
+				(SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP));
+		if (apdu->ins == 0xA4) {
+			assert(!odf_select_calls && !odf_read_calls && apdu->p1 == 2 && apdu->p2 == 0x0C &&
+					apdu->cse == SC_APDU_CASE_3_SHORT && apdu->lc == 2 && apdu->datalen == 2 &&
+					apdu->data[0] == 0x50 && apdu->data[1] == 0x31 && !apdu->le && !apdu->resplen);
+			odf_select_calls++;
+			apdu->sw1 = odf_select_sw >> 8; apdu->sw2 = odf_select_sw & 0xFF;
+			return odf_select_result;
+		}
+		assert(apdu->ins == 0xB0 && odf_select_calls == 1 && !odf_read_calls && !apdu->p1 && !apdu->p2 &&
+				apdu->cse == SC_APDU_CASE_2_SHORT && !apdu->lc && !apdu->datalen && !apdu->data &&
+				apdu->le == 256 && apdu->resplen == 256);
+		odf_read_calls++;
+		memcpy(apdu->resp, fixture_odf, sizeof(fixture_odf)); apdu->resplen = odf_size;
+		apdu->sw1 = odf_read_sw >> 8; apdu->sw2 = odf_read_sw & 0xFF;
+		return odf_read_result;
+	}
 	if (apdu->ins == 0xCB) {
 		const unsigned char request[] = { 0x4D, 0x08, 0x70, 0x06, 0xBF, 0x81, 0x01, 0x02, 0xA0, 0x80 };
 		int index = docp_calls++;
@@ -200,6 +223,7 @@ static void reset_fixture(void)
 {
 	memset(&fixture_ctx, 0, sizeof(fixture_ctx));
 	memset(&fixture_card, 0, sizeof(fixture_card));
+	fixture_card.ctx = &fixture_ctx;
 	memset(&fixture_ef_atr, 0, sizeof(fixture_ef_atr));
 	memset(&fixture_app, 0, sizeof(fixture_app));
 	fixture_app.aid.len = sizeof(fixture_app.aid.value);
@@ -249,6 +273,8 @@ static void reset_fixture(void)
 	docp_mode = docp_calls = docp_result[0] = docp_result[1] = 0;
 	docp_sw[0] = docp_sw[1] = 0x9000;
 	docp_len[0] = docp_len[1] = 4;
+	odf_mode = odf_select_calls = odf_read_calls = odf_select_result = odf_read_result = 0;
+	odf_select_sw = odf_read_sw = 0x9000; odf_size = sizeof(fixture_odf);
 }
 static void setup_fixture(void)
 {
@@ -500,6 +526,60 @@ int main(void)
 		policy_fixture(); args[4] = "A001";
 		assert(card_public_info_main(5, args) == 2 && !connect_calls);
 		puts("PASS PIN policy requires the observed connected profile and linked global PIN metadata before GET DATA");
+	}
+	{
+		char *args[] = { "card-public-info", "2", fixture_atr, "--odf-map", fixture_aid };
+		reset_fixture(); odf_mode = 1;
+		assert(card_public_info_main(5, args) == 0 && odf_select_calls == 1 && odf_read_calls == 1 &&
+				!bind_calls && !object_calls && !cert_calls && !pin_calls && !mse_calls && unlock_calls == 1);
+		reset_fixture(); odf_mode = 1; odf_read_sw = 0x6282;
+		assert(card_public_info_main(5, args) == 0 && odf_read_calls == 1 && !bind_calls);
+		puts("PASS ODF map reads only fixed 5031 once without binding, following paths or authenticating");
+		for (int i = 0; i < 5; i++) {
+			reset_fixture(); odf_mode = 1;
+			if (i == 0) odf_select_result = SC_ERROR_READER;
+			if (i == 1) odf_select_sw = 0x6A82;
+			if (i == 2) odf_select_sw = 0x6101;
+			if (i == 3) select_result = SC_ERROR_FILE_NOT_FOUND;
+			if (i == 4) fixture_app.aid.value[0] ^= 1;
+			assert(card_public_info_main(5, args) == 1 && !odf_read_calls && !bind_calls && unlock_calls == 1);
+		}
+		puts("PASS ODF map stops before READ after failed selection, pending response or absent announced application");
+		for (int i = 0; i < 6; i++) {
+			reset_fixture(); odf_mode = 1;
+			if (i == 0) odf_read_result = SC_ERROR_READER;
+			if (i == 1) odf_read_sw = 0x6982;
+			if (i == 2) odf_read_sw = 0x6C10;
+			if (i == 3) odf_size = 257;
+			if (i == 4) odf_size = 0;
+			if (i == 5) odf_size = sizeof(fixture_odf) - 1;
+			assert(card_public_info_main(5, args) == 1 && odf_read_calls == 1 && !bind_calls && unlock_calls == 1);
+		}
+		puts("PASS ODF map rejects read errors, oversized and incomplete responses without retries or referenced reads");
+		reset_fixture(); odf_mode = 1; mismatch = 1;
+		assert(card_public_info_main(5, args) == 1 && !odf_select_calls && !odf_read_calls);
+		reset_fixture(); odf_mode = 1; args[4] = "A001";
+		assert(card_public_info_main(5, args) == 2 && !connect_calls);
+		puts("PASS ODF map requires the known ATR and AID before any application query");
+		{
+			const unsigned char bad[][10] = {
+				{ 0xA9, 6, 0x30, 4, 4, 2, 0x41, 0x41 },
+				{ 0xA8, 7, 0x30, 4, 4, 2, 0x41, 0x41 },
+				{ 0xA8, 6, 0xA0, 4, 4, 2, 0x41, 0x41 },
+				{ 0xA8, 5, 0x30, 3, 4, 1, 0x41 },
+				{ 0xA8, 6, 0x30, 4, 4, 2, 0x41, 0x41, 0, 1 }
+			};
+			const size_t lengths[] = { 8, 8, 8, 7, 10 };
+			unsigned char padded[32] = {0}, excessive[33 * 8];
+			memcpy(padded, fixture_odf, sizeof(fixture_odf));
+			assert(print_odf_map(&fixture_ctx, padded, sizeof(padded)) == 0);
+			for (size_t i = 0; i < sizeof(lengths) / sizeof(lengths[0]); i++)
+				assert(print_odf_map(&fixture_ctx, bad[i], lengths[i]) == 1);
+			for (size_t i = 0; i < 33; i++) memcpy(excessive + i * 8, fixture_odf + 8, 8);
+			assert(print_odf_map(&fixture_ctx, excessive, sizeof(excessive)) == 1);
+			assert(print_odf_map(&fixture_ctx, padded, 0) == 1);
+		}
+		puts("PASS ODF parser accepts only bounded directory paths and uniform padding, rejecting inline objects and truncation");
 	}
 	return 0;
 }

@@ -13,6 +13,7 @@
 .PHONY: sign/jcop4-apdu
 .PHONY: inspect/jcop4-security-info
 .PHONY: inspect/jcop4-pin-policy
+.PHONY: inspect/jcop4-odf-map
 .PHONY: inspect/jcop4-idopte
 .PHONY: inspect/jcop4-idopte-discovery test/pcsc-public-observer
 
@@ -41,6 +42,7 @@ help:
 		'make inspect/jcop4-pin-status Consulta el estado de PIN 1 con VERIFY vacío, sin introducir PIN.' \
 		'make inspect/jcop4-security-info Consulta metadatos de autenticación, versión y CardAccess, sin PIN.' \
 		'make inspect/jcop4-pin-policy Consulta DOCP del PIN 1 en raíz/aplicación, sin PIN ni autenticación.' \
+		'make inspect/jcop4-odf-map Lee referencias del directorio 5031 sin seguirlas ni autenticar.' \
 		'make inspect/jcop4-idopte Consulta módulo y estado público de los tokens Idopte, sin login.' \
 		'make inspect/jcop4-idopte-discovery Observa cabeceras de descubrimiento público con bloqueo de comandos ajenos.' \
 		'make test/pcsc-public-observer Comprueba el observador sin lector ni tarjeta.' \
@@ -94,6 +96,9 @@ inspect/jcop4-security-info:
 
 inspect/jcop4-pin-policy:
 	@bash scripts/probe-jcop4.sh "$$READER" --pin-policy
+
+inspect/jcop4-odf-map:
+	@bash scripts/probe-jcop4.sh "$$READER" --odf-map
 
 inspect/jcop4-idopte:
 	@bash scripts/probe-jcop4.sh "$$READER" --idopte

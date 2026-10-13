@@ -59,7 +59,7 @@ cat > "$FIXTURE_PROBE_ROOT/build/opensc/card-public-info" <<'HELPER'
 set -euo pipefail
 [[ ($# == 2 || $# == 4) && $1 == 2 && $2 == 3b:d5:18:ff:81:91:fe:1f:c3:80:73:c8:21:10:0a ]] || exit 97
 if (( $# == 4 )); then
-    [[ ($3 == --pkcs15 || $3 == --sign-setup || $3 == --pin-status || $3 == --security-info || $3 == --pin-policy) && $4 == E828BD080FA00000036364796E6964 ]] || exit 97
+    [[ ($3 == --pkcs15 || $3 == --sign-setup || $3 == --pin-status || $3 == --security-info || $3 == --pin-policy || $3 == --odf-map) && $4 == E828BD080FA00000036364796E6964 ]] || exit 97
 fi
 [[ ${OPENSC_DEBUG-} == 0 && ${OPENSC_API_TRACE_FILE-unset} == unset &&
    ${OPENSC_JCOP3_PIN_STATUS_IN_PLACE-unset} == unset &&
@@ -254,6 +254,19 @@ export FIXTURE_PUBLIC_EXIT=17
 task_run 17 2 --pin-policy
 [[ -f $task_tmp/public-called && $(< "$task_tmp/output.txt") != *'Consulta de política pública del PIN terminada'* ]]
 printf 'PASS JCOP4 PIN policy propagates errors without retries or success announcement\n'
+unset FIXTURE_PUBLIC_EXIT
+printf 'synthetic unused stdin\n' | task_run 0 2 --odf-map
+[[ $(wc -l < "$task_tmp/called") == 3 &&
+   $(< "$task_tmp/public-called") == '2 3b:d5:18:ff:81:91:fe:1f:c3:80:73:c8:21:10:0a --odf-map E828BD080FA00000036364796E6964' &&
+   $(< "$task_tmp/output.txt") == *'no se siguieron referencias'* ]]
+for task_dir in "$task_tmp"/local/jcop4-odf-map-*; do
+    [[ $(stat -c %a "$task_dir") == 700 && $(stat -c %a "$task_dir/report.txt") == 600 ]]
+done
+printf 'PASS JCOP4 ODF map uses the isolated public helper with empty stdin and private reports\n'
+export FIXTURE_PUBLIC_EXIT=17
+task_run 17 2 --odf-map
+[[ $(< "$task_tmp/output.txt") != *'Consulta del directorio público 5031 terminada'* ]]
+printf 'PASS JCOP4 ODF map propagates helper failure without retrying or announcing success\n'
 unset FIXTURE_PUBLIC_EXIT
 printf 'synthetic unused stdin\n' | task_run 0 2 --idopte
 [[ $(wc -l < "$task_tmp/called") == 3 && ! -e $task_tmp/public-called &&

@@ -1,6 +1,36 @@
 # libjcop3p11: contexto para continuar
 
 **JCOP4, 13 de octubre de 2026:** último informe revisado
+`local/jcop4-idopte-discovery-OUj06FEQ/report.txt`, **15:45:03 UTC**, principal
+`86e8ba9`, OpenSC `3dfef6704`, ambos Git limpios al comenzar. Inventario/ATR,
+compilación y conexión correctos. Consulta de capacidades **42000D48 ->
+control_transport=0**; respuesta omitida, no demuestra qué capacidades anunció.
+Trece APDU permitidas dieron transporte 0/SW 9000. Después del control:
+SELECT EF/READ, SELECT AID, SELECT EF/READ, **SELECT EF 4141 bloqueado antes
+de transmitir**. No SW ni contenido de 4141. Los FIDs/AID permitidos no se
+registran; no atribuir lecturas/DF concreto solo por cabeceras. Segunda conexión
+0, transporte sigue detenido; módulo 1/slot vacío/events_recorded, compatible
+con el guard. No PIN, VERIFY ni firma. Búsqueda en código local y fuentes
+públicas consultadas no identificó 4141; no asumir AODF/CAN/archivo público.
+No ampliar permisos del observador ni repetir ese descubrimiento por inercia.
+Preparado **make inspect/jcop4-odf-map**: usa helper público/default driver,
+exige ATR/AID conocidos y AID anunciado en EF.DIR, selecciona aplicación y
+únicamente **5031**; un SELECT sin respuesta FCP y un READ BINARY corto de
+hasta 256 bytes, sin GET RESPONSE/reintentos/lecturas adicionales. Acepta
+lectura 9000/6282 y valida tamaño/ASN.1; solo imprime tipos de directorio y
+rutas del primer bloque. No DER bruto, binding PKCS#15, objetos, certificados,
+referencias seguidas, 4141, PIN, MSE, firma ni Idopte. No prueba completitud
+general del archivo. Más de 32 registros, alternativas inline/extendidas,
+truncamiento o relleno no uniforme detienen sin seguir rutas. Permisos del
+observador v5 y driver/submódulo intactos. Pasaron **40 comprobaciones del
+helper y 33 del lanzador**; helper real compilado contra OpenSC offline,
+transporte ficticio, sin hardware. Las 20 del observador previas siguen
+vigentes, código sin cambios. Siguiente intervención, misma JCOP4/otros
+clientes cerrados: `nix develop -c make inspect/jcop4-odf-map READER=0`.
+Revisar si 4141 aparece como referencia tipada antes de decidir seleccionar/
+leerlo. No pedir otro intento de PIN; VERIFY 6982 sigue pendiente.
+
+Informe anterior antes de permitir la consulta de capacidades:
 `local/jcop4-idopte-discovery-eIa1G5Gt/report.txt`, **15:35:59 UTC**, principal
 `526338a`, OpenSC `3dfef6704`, ambos Git limpios al comenzar. Inventario/ATR
 y compilación correctos; contexto/conexión 0, las mismas ocho APDU 0/9000.
@@ -223,8 +253,12 @@ Evidencia anterior ya revisada:
 La generación JCOP4 la indica el usuario, RSA 2048 sí se corroboró. No activar
 excepciones JCOP3/eOI por ATR/etiqueta; precedente ChipDoc ANS enlazado en docs.
 
-**Siguiente intervención:** `make inspect/jcop4-idopte-discovery READER=0`,
-desde nix develop, firmador y otros clientes cerrados y misma JCOP4 insertada.
+**Siguiente intervención:** `nix develop -c make inspect/jcop4-odf-map READER=0`,
+firmador y otros clientes cerrados y misma JCOP4 insertada. Lee únicamente el
+directorio público conocido 5031 para interpretar sus referencias, sin seguirlas.
+No repetir Idopte como primer paso: ahora se detiene en el archivo desconocido 4141.
+
+**Descubrimiento Idopte conservado para investigación posterior:**
 Inventario PC/SC/ATR conocido primero, después pkcs11-tool local con
 --module /run/current-system/sw/lib/SCMiddleware/libidop11.so --show-info
 --list-slots. Solo información módulo/slots/tokens: sin C_OpenSession,

@@ -9,8 +9,9 @@
 #include <string.h>
 #include "libopensc/opensc.h"
 #include "libopensc/pkcs15.h"
+#include "libopensc/asn1.h"
 
-enum inspect_mode { INSPECT_PKCS15, INSPECT_SIGN_SETUP, INSPECT_PIN_STATUS, INSPECT_SECURITY_INFO, INSPECT_PIN_POLICY };
+enum inspect_mode { INSPECT_PKCS15, INSPECT_SIGN_SETUP, INSPECT_PIN_STATUS, INSPECT_SECURITY_INFO, INSPECT_PIN_POLICY, INSPECT_ODF_MAP };
 
 static void print_hex(const char *name, const unsigned char *value, size_t len)
 {
@@ -40,6 +41,92 @@ static int select_application(sc_card_t *card, const struct sc_aid *aid)
 	print_result("application_select_result", rv);
 	if (rv < 0)
 		return rv;
+	return 0;
+}
+
+/* Decode references only. Never bind PKCS#15 or follow the paths found here. */
+static int print_odf_map(sc_context_t *ctx, const unsigned char *buf, size_t size)
+{
+	const char *names[] = { "private_keys", "public_keys", "trusted_public_keys", "secret_keys",
+		"certificates", "trusted_certificates", "useful_certificates", "data_objects", "auth_objects" };
+	struct { unsigned int kind; sc_path_t path; } records[32];
+	const unsigned char *p = buf, *value, *tail;
+	size_t left = size, value_len, tail_len, n = 0, i;
+	unsigned int cla, tag;
+	while (left) {
+		if (*p == 0 || *p == 0xFF) {
+			for (i = 0; i < left; i++) if (p[i] != *p) return 1;
+			break; /* Uniform EF padding, not another record. */
+		}
+		value = p;
+		if (n == 32 || sc_asn1_read_tag(&value, left, &cla, &tag, &value_len) < 0 ||
+				!value || cla != 0xA0 || tag > 8 || !value_len)
+			return 1;
+		memset(&records[n], 0, sizeof(records[n]));
+		{
+			struct sc_asn1_entry path[] = {
+				{ "path", SC_ASN1_PATH, SC_ASN1_CONS | SC_ASN1_SEQUENCE, 0, &records[n].path, NULL },
+				{ NULL, 0, 0, 0, NULL, NULL }
+			};
+			if (sc_asn1_decode(ctx, path, value, value_len, &tail, &tail_len) < 0 || tail_len ||
+					!records[n].path.len || records[n].path.len % 2 || records[n].path.aid.len ||
+					(records[n].path.type != SC_PATH_TYPE_PATH && records[n].path.type != SC_PATH_TYPE_FILE_ID))
+				return 1;
+		}
+		records[n++].kind = tag;
+		left -= (size_t)(value - p) + value_len;
+		p = value + value_len;
+	}
+	if (!n) return 1;
+	/* Output only after all records validate; no raw DER or inline objects. */
+	printf("odf_directory_count=%zu\n", n);
+	for (i = 0; i < n; i++) {
+		printf("directory_kind=%s\n", names[records[i].kind]);
+		print_hex("directory_path", records[i].path.value, records[i].path.len);
+	}
+	printf("odf_result=paths_from_first_block_no_follow\n");
+	return 0;
+}
+
+static int inspect_odf_map(sc_card_t *card, const struct sc_aid *aid)
+{
+	const unsigned char fid[] = { 0x50, 0x31 };
+	unsigned char block[256];
+	sc_apdu_t apdu;
+	int i, found = 0, rv;
+	for (i = 0; i < card->app_count; i++)
+		if (card->app[i]->aid.len == aid->len && !memcmp(card->app[i]->aid.value, aid->value, aid->len))
+			found = 1;
+	if (!found) {
+		printf("odf_result=aid_not_announced_no_select\n");
+		return 1;
+	}
+	if (select_application(card, aid) < 0) return 1;
+	/* Fixed public bootstrap EF only, no FID obtained from untrusted metadata. */
+	sc_format_apdu(card, &apdu, SC_APDU_CASE_3_SHORT, 0xA4, 2, 0x0C);
+	apdu.cla = 0;
+	apdu.flags |= SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP;
+	apdu.data = fid; apdu.lc = apdu.datalen = sizeof(fid);
+	rv = sc_transmit_apdu(card, &apdu);
+	print_result("odf_select_transport", rv);
+	if (rv < 0) return 1;
+	printf("odf_select_sw=%02X%02X\n", apdu.sw1, apdu.sw2);
+	if (apdu.sw1 != 0x90 || apdu.sw2 != 0) return 1;
+	sc_format_apdu(card, &apdu, SC_APDU_CASE_2_SHORT, 0xB0, 0, 0);
+	apdu.cla = 0;
+	apdu.flags |= SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP;
+	apdu.resp = block; apdu.le = apdu.resplen = sizeof(block);
+	rv = sc_transmit_apdu(card, &apdu);
+	print_result("odf_read_transport", rv);
+	if (rv < 0) return 1;
+	printf("odf_read_sw=%02X%02X\n", apdu.sw1, apdu.sw2);
+	if (!((apdu.sw1 == 0x90 && apdu.sw2 == 0) || (apdu.sw1 == 0x62 && apdu.sw2 == 0x82)) ||
+			!apdu.resplen || apdu.resplen > sizeof(block))
+		return 1;
+	if (print_odf_map(card->ctx, block, apdu.resplen)) {
+		printf("odf_result=unsupported_or_incomplete_block_no_follow\n");
+		return 1;
+	}
 	return 0;
 }
 
@@ -382,7 +469,7 @@ int main(int argc, char **argv)
 	memset(&app_aid, 0, sizeof(app_aid));
 	app_aid.len = sizeof(app_aid.value);
 	if (argc == 5 && ((strcmp(argv[3], "--pkcs15") && strcmp(argv[3], "--sign-setup") &&
-			strcmp(argv[3], "--pin-status") && strcmp(argv[3], "--security-info") && strcmp(argv[3], "--pin-policy")) ||
+			strcmp(argv[3], "--pin-status") && strcmp(argv[3], "--security-info") && strcmp(argv[3], "--pin-policy") && strcmp(argv[3], "--odf-map")) ||
 			sc_hex_to_bin(argv[4], app_aid.value, &app_aid.len) < 0 || !app_aid.len))
 		return 2;
 
@@ -400,6 +487,7 @@ int main(int argc, char **argv)
 			return 2;
 		mode = !strcmp(argv[3], "--sign-setup") ? INSPECT_SIGN_SETUP :
 			!strcmp(argv[3], "--pin-status") ? INSPECT_PIN_STATUS :
+			!strcmp(argv[3], "--odf-map") ? INSPECT_ODF_MAP :
 			!strcmp(argv[3], "--pin-policy") ? INSPECT_PIN_POLICY : INSPECT_SECURITY_INFO;
 	}
 	memset(&params, 0, sizeof(params));
@@ -459,7 +547,8 @@ int main(int argc, char **argv)
 			printf("application_label=%s\n", card->app[i]->label ? card->app[i]->label : "");
 		}
 	}
-	status = argc == 5 ? inspect_native_pkcs15(card, &app_aid, mode) : 0;
+	status = argc == 5 ? (mode == INSPECT_ODF_MAP ? inspect_odf_map(card, &app_aid) :
+		inspect_native_pkcs15(card, &app_aid, mode)) : 0;
 out:
 	if (locked) {
 		rv = sc_unlock(card);

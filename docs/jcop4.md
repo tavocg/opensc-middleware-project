@@ -1067,6 +1067,74 @@ nix develop -c make inspect/jcop4-idopte-discovery READER=0
 Sin PIN. Revisar control_transport y la primera operación bloqueada antes de
 permitir cualquier otra consulta. VERIFY 6982 sigue sin resolverse.
 
+## Capacidades consultadas, EF 4141 bloqueado: 13 de octubre, 15:45:03 UTC
+
+Informe `local/jcop4-idopte-discovery-OUj06FEQ/report.txt`, principal `86e8ba9`,
+OpenSC `3dfef6704`, ambos árboles limpios al comenzar. Inventario/ATR,
+compilación y conexión correctos. La consulta estándar 42000D48 obtuvo
+**control_transport=0**; su respuesta no se registra, por lo que no permite
+afirmar qué capacidades anunció el lector.
+
+Las trece APDU transmitidas dieron transporte 0/SW 9000. Después del control
+hubo SELECT EF/READ BINARY, SELECT AID, SELECT EF/READ BINARY y el primer bloqueo:
+
+```text
+blocked_header=00A40200
+blocked_select_ef=4141
+```
+
+El SELECT de 4141 no llegó a la tarjeta; no hay SW, contenido ni ACL para
+interpretar. Los FIDs/AID permitidos se omiten, así que no atribuir lecturas
+a un archivo ni ese SELECT a una aplicación concreta solo por las cabeceras.
+Segunda conexión 0 sin rehabilitar transporte; módulo 1, slot vacío,
+events_recorded, compatible con la interrupción del guard. Sin PIN, VERIFY
+ni firma.
+
+La búsqueda en el código local y las fuentes públicas consultadas no permitió
+identificar 4141. No es evidencia de que sea privado ni de que sea público,
+AODF o CAN. Se conservan los permisos del observador v5, sin añadir ese archivo.
+El siguiente paso cambia a consultar **el directorio público conocido 5031**,
+para determinar si lo referencia y con qué tipo de directorio.
+
+`make inspect/jcop4-odf-map` compila únicamente el helper card-public-info
+contra la biblioteca OpenSC existente. Tras inventario, exige ATR/AID medidos
+y que EF.DIR anuncie ese AID. Bajo una transacción, selecciona esa aplicación
+y 5031 con SELECT EF básico/P2 0C sin solicitar FCP. Un único READ BINARY corto
+de hasta 256 bytes desde offset cero, sin SFI, GET RESPONSE ni reintentos.
+Rechazos de SELECT detienen antes de READ; solo acepta lectura 9000/6282 y
+longitud de respuesta entre 1 y 256 bytes.
+
+Usa el decodificador ASN.1 libre de OpenSC para rutas de ODF; admite hasta
+32 registros de las nueve clases de directorio PKCS#15. Solo imprime la clase
+y ruta después de validar el bloque, no DER bruto. Rechaza truncamientos,
+alternativas inline/extendidas, rutas vacías/impares y relleno no uniforme.
+El resultado se limita a las referencias del primer bloque, no prueba
+completitud general del archivo ni autoriza leer un destino.
+
+**No hace binding PKCS#15 ni enumera objetos/certificados**, y no selecciona
+ninguna referencia obtenida, incluido 4141. No Idopte, VERIFY, PIN, MSE,
+firma, componentes privados ni comandos administrativos. Mantiene la
+configuración aislada sin cachés/debug/trazas externas y stdin vacío;
+resultados privados en local/jcop4-odf-map-*/report.txt.
+
+Pasaron **40 comprobaciones del helper y 33 del lanzador**, sin hardware.
+Cinco grupos nuevos del helper cubren ODF tipado y sin lecturas referenciadas,
+selección/aplicación fallida, READ fallido o incompleto sin reintento,
+ATR/AID conocidos y ASN.1/padding/límite de registros. Dos nuevas del lanzador
+cubren entorno aislado/entrada vacía/informe privado y fallo sin anuncio de
+éxito. Helper real compilado contra OpenSC offline; no se modificó ni recompiló
+el driver ni el observador. Sus 20 comprobaciones anteriores siguen vigentes.
+
+Siguiente intervención, misma JCOP4 y otros clientes cerrados:
+
+```bash
+nix develop -c make inspect/jcop4-odf-map READER=0
+```
+
+Sin PIN. Revisar si 4141 aparece como referencia tipada antes de decidir
+si corresponde alguna selección/lectura posterior. No repetir el descubrimiento
+Idopte ni intentar autenticar por inercia. VERIFY 6982 continúa pendiente.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño
