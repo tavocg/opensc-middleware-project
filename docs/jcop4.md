@@ -1673,6 +1673,128 @@ del observador/decoder, 40 del lanzador y 54 del helper anteriores. No recompila
 OpenSC ni repetir hardware por este cambio. Dar comandos de commit al usuario;
 soporte JCOP4 y transporte RSA 3072 pendientes.
 
+## Pistas de eOI y revisión del ZIP driverfd
+
+Revisión estática posterior a wYs4iWG8, principal `4f5040f`, OpenSC `3dfef6704`.
+El usuario pidió comparar eOI y aportó `local/driverfd.zip`. Solo se leyeron
+fuentes/documentación y analizaron literales con AST; no se extrajo ni ejecutó
+el paquete, sus proxies, binarios o herramientas de captura. Archivo original
+preservado en local/, fuera de Git. No acceso de hardware o autenticación.
+
+### Aplicación, plataforma y personalización
+
+La [cible NXP](https://messervices.cyber.gouv.fr/visas/ANSSI-CC-2025-03-cible.pdf),
+secciones 1.3.1.3.1–1.3.1.3.2, distingue JCOP (JCVM/JCRE/JCAPI/GlobalPlatform)
+de ChipDoc, aplicación Java Card. Su inicialización permite varias configuraciones
+y sistemas de archivos. Esa separación explica por qué un ATR/plataforma común
+no asegura comandos, archivos, políticas o algoritmos iguales en dos tarjetas.
+
+| Elemento | Alcance de su significado |
+| --- | --- |
+| JCOP y hardware | Plataforma que ejecuta el applet; capacidades criptográficas y transporte |
+| SELECT/READ/VERIFY y tags ISO | Estructura/interfaz de comandos y respuestas normalizada |
+| ChipDoc y su versión | Implementación del protocolo y formatos propios de la aplicación |
+| Perfil/personalización | AID, archivos, referencias de claves, certificados y políticas configuradas |
+
+4141 es un identificador de archivo bajo el AID seleccionado, no un código
+universal de JCOP4. El tag 86 es ISO, pero su valor usa formato propietario;
+00FFFF requiere interpretar el perfil de la aplicación.
+
+### Qué aporta realmente eOI
+
+En el [código eOI](https://raw.githubusercontent.com/OpenSC/OpenSC/master/src/libopensc/card-eoi.c)
+revisado, `ChipDocLite` es **una constante del driver**, eoi_model local línea 48,
+devuelta por SC_CARDCTL_GET_MODEL. No es resultado de GET DATA del nombre.
+eoi_match_card solo compara ATR; eoi_init usa CA 01 16 para versión. La etiqueta
+no demuestra qué aplicación respondió en otra tarjeta con el mismo ATR.
+
+La pista de protocolo es eoi_pin_cmd (local línea 400): cuando se solicita
+VERIFY y no hay SM, abre eoi_sm_open **sin comprobar interfaz contactless**.
+Este último usa PACE con CAN y luego el VERIFY ISO viaja bajo SM. CAN y PIN de
+firma tienen papeles distintos: el primero abre ese canal y el segundo autentica
+al usuario. La condición de PKCS#15 para abrir SM antes de leer objetos sí se
+limita a contactless; no confundirla con la condición anterior a VERIFY.
+
+En [pkcs15-eoi.c](https://raw.githubusercontent.com/OpenSC/OpenSC/master/src/libopensc/pkcs15-eoi.c)
+se obtiene el blob CAN por la ruta declarada en el objeto Card CAN y se exige
+24 bytes. No hay FID 4141 fijo. eOI hereda process_fci ISO y no implementa una
+interpretación de 86=00FFFF. Su capacidad de firma es EC P-384; referencias y
+perfil difieren de la JCOP4 RSA 2048 de esta investigación. No activar eOI ni
+copiar su canal por ATR/modelo. La ausencia de Card CAN en nuestra enumeración
+no descarta otros protocolos de canal.
+
+### Pista nueva: Chip Authentication en el prototipo
+
+El ZIP contiene 53 archivos, fuentes de prototipos y proxies, pero **no las
+capturas originales ni salidas de ejecución** citadas por sus comentarios. Su
+texto atribuye los intentos al 10 de agosto de 2026/BCCR ChipDoc 3.2. La constante
+AID coincide con la aplicación conocida de nuestra JCOP4. **El usuario confirmó
+que se trataba de otra JCOP4 y que se logró firmar satisfactoriamente.** Es un
+antecedente de firma exitoso reportado para otro ejemplar; no una firma de la
+tarjeta actual ni una verificación criptográfica independiente por el agente.
+No extrapolar ATR/AID/versión/algoritmo o personalización del ejemplar anterior
+solo por compartir generación. Se preservan las discrepancias estáticas del
+prototipo: confirmar una firma no identifica por sí solo qué código la produjo.
+
+El ZIP contiene varias rutas de firma, por lo que se preguntó cuál se utilizó:
+
+| Ruta encontrada | Módulo/protocolo que usa |
+| --- | --- |
+| src/signer/cli_sign.py | PKCS#11 mediante libidop11.so |
+| sign_llavefirma.py | APDU directos; VERIFY sin SM en esa función |
+| driverfd/signer.py | Prototipo propio de preparación ECDH y firma bajo SM |
+
+No se ejecutó ninguna ruta. Un resultado con Idopte confirma funcionamiento del
+proveedor, pero no valida el CA/SM reproducido. Si se usó la ruta APDU directa,
+es necesario identificar su secuencia concreta antes de comparar contextos.
+No pedir repetir la firma; primero recuperar el comando/script histórico.
+
+El prototipo propone SELECT de la aplicación, SELECT/READ D004, MSE SET AT,
+GENERAL AUTHENTICATE con ECDH P-521 y posteriormente VERIFY bajo SM. El nombre
+EF.CardAccess de D004 y su supuesto contenido no están corroborados en los
+informes de esta investigación. No se encontraron referencias 4141 en las
+fuentes revisadas; no identifica su función o política.
+
+La revisión del MSE literal en chipdoc/constants.py:25, repetido en otros dos
+archivos, aporta una diferencia comprobable respecto a sus nombres:
+
+- Son 18 bytes: cabecera/Lc, **12 bytes de datos**, y un byte restante **02**.
+  Tiene una interpretación válida como APDU corto caso-4 con Le=02; no afirmar
+  malformación por ese byte restante ni cambiarlo automáticamente.
+- El tag 80 declara y contiene 10 bytes de OID dentro de esos 12 datos.
+  Decodifica **0.4.0.127.0.7.2.2.3.2.2**, correspondiente a
+  **id-CA-ECDH-AES-CBC-CMAC-128** en las
+  [definiciones primarias de OpenPACE](https://frankmorgner.github.io/openpace/_static/doxygen/objects_8h_source.html).
+  Pertenece a Chip Authentication, distinto de PACE. El nombre de función/
+  comentario lo llama 3DES, mientras sus helpers también usan 3DES.
+- La constante OID separada contiene 11 bytes y un arco .2 adicional; no
+  coincide con el OID delimitado por el TLV del comando. No asumir cuál refleja
+  la captura original ni reparar el prototipo y ejecutarlo por esa discrepancia.
+
+Otra limitación: probe_sm_with_pubkey devuelve True si SW1=90 y falta el formato
+esperado, antes de validar MAC. Un mensaje SM establecido en esa rama no acredita
+acuerdo de claves ni firma. La CLI también cita una clave de una sesión anterior
+como fallback y una extracción dinámica externa; esos archivos no están en el
+ZIP. No usar claves de otra sesión, extraer secretos o ejecutar estos scripts
+como próximo paso. Los comentarios de cinco pasos 9000 son antecedentes sin
+captura que permita comprobarlos; no invalidan ni sustituyen los informes actuales.
+
+La hipótesis ahora es más específica: **un canal CA/ECDH antes de VERIFY** puede
+ser una alternativa al PACE/CAN de eOI. Aún no se demuestra que sea la ruta de
+esta tarjeta. OpenSC ya tiene perform_chip_authentication_ex en sm-eac.c y
+[OpenPACE implementa CA versión 2](https://frankmorgner.github.io/openpace/_static/doxygen/ca_8h.html).
+No es integración automática: deben coincidir formato de clave, respuesta,
+KDF, tokens/MAC y variante CA. El prototipo comenta 7C00 vacío, mientras el helper
+existente deriva las claves con nonce/token; compatibilidad pendiente.
+
+Próximo paso: identificar el comando/script de la firma exitosa en la otra
+JCOP4 y revisar evidencia original saneada de su preparación, sin PIN, llaves
+de sesión ni respuesta identificable, antes de adaptar protocolo o proponer
+hardware. La consulta actual no observó
+esos comandos porque se detiene antes en READ 4141. **No habilitar READ 4141 o
+D004, ni MSE/GA/VERIFY/SM por el ZIP**. No nueva prueba de PIN. La investigación
+estática/documental no requiere recompilar driver ni repetir regresiones.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño

@@ -85,6 +85,16 @@ ChipDoc de 4141/86 y del contexto requerido antes de VERIFY, mediante el User
 Guide Manual ref. 678510 o documentación del perfil BCCR. READ sigue bloqueado.
 La pregunta sobre acceso a esa documentación está pendiente de respuesta.
 
+La revisión estática posterior del ZIP `local/driverfd.zip` aportado por el
+usuario añade una hipótesis de **Chip Authentication/ECDH antes de VERIFY**.
+Su MSE contiene un OID CA/AES-128 aunque el prototipo lo llama 3DES; no incluye
+las capturas originales que permitan corroborarlo. eOI usa PACE/CAN antes de
+VERIFY incluso por contacto, pero su etiqueta ChipDocLite es una constante del
+driver y no identifica por sí sola el perfil CR. El usuario confirmó una firma
+exitosa en **otra JCOP4**; falta identificar si se hizo por Idopte o por el
+prototipo APDU y revisar esa ruta antes de adaptar el canal de la tarjeta actual.
+No se ejecutó el ZIP ni cambió el driver; detalles en docs/jcop4.md.
+
 Capturas privadas bajo local/jcop4-idopte-spy-*/; no agregarlas a Git.
 Pasaron previamente **30 comprobaciones del observador/decoder y 40 del
 lanzador** con transporte ficticio. Esta revisión solo actualiza documentación;

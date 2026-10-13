@@ -1,5 +1,50 @@
 # libjcop3p11: contexto para continuar
 
+**Investigación estática posterior: eOI y ZIP aportado por el usuario.**
+Principal `4f5040f` / OpenSC `3dfef6704` al comenzar; driver/submódulo sin cambios.
+`ChipDocLite` es constante eoi_model (card-eoi.c:48), devuelta por GET_MODEL;
+no lectura del nombre real del applet. eoi_match_card solo compara ATR;
+eoi_init consulta CA 01 16. eoi_pin_cmd:400 abre SM/PACE con CAN antes de
+VERIFY sin exigir contactless. pkcs15-eoi.c:76 obtiene CAN por ruta del objeto
+Card CAN y espera blob de 24 bytes. No referencia fija 4141 ni parser propio
+para tag 86; hereda process_fci ISO. Pista de canal previo, no prueba CR.
+
+Usuario añadió **local/driverfd.zip**, 53 archivos: revisión de texto/AST sin
+extraer/importar/ejecutar scripts o binarios. No copiar implementación privativa.
+Código dice investigación 2026-08-10/BCCR ChipDoc 3.2 y usa el AID JCOP4 conocido;
+no incluye capturas originales/outputs ni evidencia de firma verificada. **Nueva
+hipótesis: Chip Authentication ECDH + SM**, distinta de PACE/CAN de eOI.
+Llama D004 EF.CardAccess y supone clave P-521; nombre/función aún no corroborados.
+No menciona 4141 en fuentes revisadas; no identifica su propósito/ACL.
+
+Hallazgo determinista: MSE SET AT constante del ZIP, interpretado como caso-4
+corto (Lc 12 + datos 12 + Le 02), contiene tag80/OID
+**0.4.0.127.0.7.2.2.3.2.2 = id-CA-ECDH-AES-CBC-CMAC-128**, según OpenPACE.
+No es PACE ni el 3DES del nombre del prototipo. La constante OID separada añade
+otro arco .2 (11 bytes), inconsistente con los 10 bytes del TLV del comando.
+**No afirmar APDU malformado por el byte restante: puede ser Le.** Helpers
+criptográficos usan 3DES; no implementar ese protocolo por los comentarios.
+probe_sm_with_pubkey acepta True si solo SW1=90 y formato inesperado sin validar
+MAC; por tanto el mensaje SM establecido no prueba acuerdo de claves. Capturas
+citadas y clave pública fallback están ausentes en ZIP; no buscar/usar secretos.
+
+**Confirmación del usuario:** los intentos correspondían a **otra JCOP4** y
+sí se logró firmar satisfactoriamente. Registrar como antecedente exitoso de
+otro ejemplar; no como firma de la tarjeta actual ni verificación independiente
+por el agente. No extrapolar ATR/AID/versión/RSA/personalización no aportados.
+Ruta exacta aún pendiente: ZIP incluye src/signer/cli_sign.py usando Idopte,
+sign_llavefirma.py con APDU/VERIFY directo, y driverfd/signer.py con SM propio.
+Una firma por Idopte no valida la reproducción Python de CA/SM; una firma directa
+sin SM sería un antecedente distinto. No atribuir éxito a ninguna por inercia.
+Preguntado qué script/comando produjo esa firma, sin solicitar repetirla.
+Próximo trabajo: identificar la ruta exitosa y después corroborar MSE/preparación
+con evidencia original saneada sin PIN/llaves de sesión antes de adaptar CA.
+OpenSC sm-eac tiene perform_chip_authentication_ex/CA v2, pero hay que comprobar
+compatibilidad: el prototipo comenta respuesta 7C00 vacía y no prueba tokens/MAC.
+Mantener bloqueados READ 4141/D004 nuevo, VERIFY/MSE/GA/SM; no nuevos comandos ni
+PIN por esa pista. Documento técnico actualizado, sin nuevas pruebas del driver
+ni hardware/Git por el agente. Ver docs/jcop4.md; dar commit del principal.
+
 **JCOP4, última revisión del 13 de octubre de 2026:**
 `local/jcop4-idopte-spy-wYs4iWG8/report.txt`, **17:33:49 UTC**, principal
 `4058fdf`, OpenSC `3dfef6704`; ambos Git limpios al comenzar. Compilación,
