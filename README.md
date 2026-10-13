@@ -44,25 +44,24 @@ siguen pendientes. No hay soporte completo ni cambios publicados upstream.
 Consultar [AGENTS.md](AGENTS.md) para continuar desde las capturas recientes.
 No repetir pruebas de firma/reinserción ya verificadas como primer paso.
 
-Hay una JCOP4 con certificados RSA 2048, según el usuario, para investigación
-en este repositorio. Su ATR coincide con eOI, pero su AID anunciado es distinto:
-`E828BD080FA00000036364796E6964`, etiqueta `ChipDoc Generic`. EF.ATR y EF.DIR
-ya se leyeron. La siguiente consulta obtiene certificados y metadatos PKCS#15
-mediante el driver genérico, sin emulación:
+La JCOP4 disponible tiene dos certificados **RSA 2048**, corroborados con
+OpenSSL. Se leyeron PKCS#15 y certificados sin PIN: LlaveDeFirma referencia
+`0x91`, autenticación `0x90`, PIN global 1. Su AID ChipDoc
+`E828BD080FA00000036364796E6964` y referencias difieren de JCOP3.
+La siguiente consulta prueba una selección temporal RSA/SHA-256:
 
 ```bash
-make inspect/jcop4-pkcs15 READER=0
+make inspect/jcop4-sign-setup READER=0
 ```
 
-Cerrar firmador antes de consultar y mantener la misma JCOP4 insertada.
-No pide PIN ni ejecuta PACE. Compila una herramienta pequeña contra la
-biblioteca existente, sin recompilar OpenSC. Pasaron trece comprobaciones del
-lanzador y quince de la consulta pública con API simuladas. Los informes con
-certificados identificables quedan privados en `local/jcop4-pkcs15-*/`.
-El diseño deberá permitir RSA 3072 y futuras
-generaciones, con perfiles separados del tamaño RSA; ese soporte está pendiente.
-La consulta inicial sigue disponible como `make probe/jcop4`. Los pasos siguientes están
-en [docs/jcop4.md](docs/jcop4.md).
+Cerrar firmador y otros clientes antes de consultar y mantener la misma
+JCOP4 insertada. Compila una herramienta pequeña contra OpenSC existente.
+Lee metadatos públicos y envía un MSE basado en un precedente ChipDoc;
+no solicita PIN ni firma. Aceptarlo no demuestra todavía la operación RSA.
+Pasaron 15 comprobaciones del lanzador y 20 del helper con API simuladas.
+Informes privados bajo `local/`. El soporte RSA 3072 y la modularidad para
+futuras generaciones siguen pendientes; se deben separar perfil y tamaño RSA.
+La evidencia y el protocolo propuesto están en [docs/jcop4.md](docs/jcop4.md).
 
 ## Historial de desarrollo y comandos de diagnóstico
 

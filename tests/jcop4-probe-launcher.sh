@@ -16,7 +16,7 @@ cat > "$FIXTURE_PROBE_ROOT/build/opensc/card-public-info" <<'HELPER'
 set -euo pipefail
 [[ ($# == 2 || $# == 4) && $1 == 2 && $2 == 3b:d5:18:ff:81:91:fe:1f:c3:80:73:c8:21:10:0a ]] || exit 97
 if (( $# == 4 )); then
-    [[ $3 == --pkcs15 && $4 == E828BD080FA00000036364796E6964 ]] || exit 97
+    [[ ($3 == --pkcs15 || $3 == --sign-setup) && $4 == E828BD080FA00000036364796E6964 ]] || exit 97
 fi
 [[ ${OPENSC_DEBUG-} == 0 && ${OPENSC_API_TRACE_FILE-unset} == unset &&
    ${OPENSC_JCOP3_PIN_STATUS_IN_PLACE-unset} == unset &&
@@ -159,6 +159,16 @@ export FIXTURE_PUBLIC_EXIT=17
 task_run 17 2 --pkcs15
 [[ -f $task_tmp/public-called && $(< "$task_tmp/output.txt") != *'Consulta PKCS#15 pública terminada'* ]]
 printf 'PASS JCOP4 PKCS15 discovery propagates failure without authentication or retries\n'
+unset FIXTURE_PUBLIC_EXIT
+printf 'synthetic unused stdin\n' | task_run 0 2 --sign-setup
+[[ $(wc -l < "$task_tmp/called") == 3 &&
+   $(< "$task_tmp/public-called") == '2 3b:d5:18:ff:81:91:fe:1f:c3:80:73:c8:21:10:0a --sign-setup E828BD080FA00000036364796E6964' &&
+   $(< "$task_tmp/output.txt") == *'Selección temporal MSE aceptada'* ]]
+printf 'PASS JCOP4 sign setup uses only the bounded helper with isolated configuration and empty stdin\n'
+export FIXTURE_PUBLIC_EXIT=17
+task_run 17 2 --sign-setup
+[[ -f $task_tmp/public-called && $(< "$task_tmp/output.txt") != *'Selección temporal MSE aceptada'* ]]
+printf 'PASS JCOP4 sign setup does not announce success or retry after helper failure\n'
 mv "$task_tmp/build/opensc/src/tools/opensc-tool" "$task_tmp/saved-tool"
 task_run 1
 [[ ! -e $task_tmp/called && $(< "$task_tmp/output.txt") == *'make build/opensc'* ]]

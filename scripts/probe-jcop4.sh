@@ -6,8 +6,8 @@ umask 077
 task_reader=${1:-${READER:-0}}
 task_mode=${2:---probe}
 if (( $# > 2 )) || [[ ! $task_reader =~ ^[0-9]+$ ]] ||
-        [[ $task_mode != --probe && $task_mode != --aids && $task_mode != --files && $task_mode != --pkcs15 ]]; then
-    printf 'Uso: bash scripts/probe-jcop4.sh [índice numérico de lector] [--probe|--aids|--files|--pkcs15]\n' >&2
+        [[ $task_mode != --probe && $task_mode != --aids && $task_mode != --files && $task_mode != --pkcs15 && $task_mode != --sign-setup ]]; then
+    printf 'Uso: bash scripts/probe-jcop4.sh [índice numérico de lector] [--probe|--aids|--files|--pkcs15|--sign-setup]\n' >&2
     exit 2
 fi
 task_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
@@ -24,6 +24,8 @@ elif [[ $task_mode == --files ]]; then
     task_dir=$(mktemp -d "$task_root/local/jcop4-files-XXXXXXXX")
 elif [[ $task_mode == --pkcs15 ]]; then
     task_dir=$(mktemp -d "$task_root/local/jcop4-pkcs15-XXXXXXXX")
+elif [[ $task_mode == --sign-setup ]]; then
+    task_dir=$(mktemp -d "$task_root/local/jcop4-sign-setup-XXXXXXXX")
 else
     task_dir=$(mktemp -d "$task_root/local/jcop4-probe-XXXXXXXX")
 fi
@@ -99,7 +101,7 @@ if [[ $task_atr_ok != yes ]]; then
     exit 1
 fi
 
-if [[ $task_mode == --files || $task_mode == --pkcs15 ]]; then
+if [[ $task_mode == --files || $task_mode == --pkcs15 || $task_mode == --sign-setup ]]; then
     # Compile only this discovery helper against the existing OpenSC library.
     task_build_status=0
     bash "$task_root/scripts/build-card-public-info.sh" >> "$task_report" 2>&1 || task_build_status=$?
@@ -108,12 +110,16 @@ if [[ $task_mode == --files || $task_mode == --pkcs15 ]]; then
         printf 'Falló la compilación de la herramienta pública; revisar el informe.\n' >&2
         exit "$task_build_status"
     fi
-    if [[ $task_mode == --pkcs15 ]]; then
+    if [[ $task_mode == --pkcs15 || $task_mode == --sign-setup ]]; then
         # Advertised in EF.DIR in jcop4-files-DORk47gE, not inferred from ATR.
         task_aid=E828BD080FA00000036364796E6964
         printf 'pkcs15_aid=%s\n' "$task_aid" >> "$task_report"
-        task_record_tool "$task_root/build/opensc/card-public-info" "$task_reader" "$task_expected_atr" --pkcs15 "$task_aid"
-        printf 'Consulta PKCS#15 pública terminada; revisar certificados y metadatos del informe.\n'
+        task_record_tool "$task_root/build/opensc/card-public-info" "$task_reader" "$task_expected_atr" "$task_mode" "$task_aid"
+        if [[ $task_mode == --sign-setup ]]; then
+            printf 'Selección temporal MSE aceptada; no se introdujo PIN ni se produjo una firma. Revisar el informe.\n'
+        else
+            printf 'Consulta PKCS#15 pública terminada; revisar certificados y metadatos del informe.\n'
+        fi
     else
         task_record_tool "$task_root/build/opensc/card-public-info" "$task_reader" "$task_expected_atr"
         printf 'Consulta de EF.ATR/EF.DIR terminada; revisar resultados y aplicaciones del informe.\n'
