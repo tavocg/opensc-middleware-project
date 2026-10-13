@@ -239,6 +239,13 @@ identifica su ACL ni cuál certificado sirve para firma. Pasaron **152
 comprobaciones** del helper/lanzador modificados. El próximo contraste es
 SELECT-only B001; el observador conserva su bloqueo de ese archivo.
 
+`make inspect/jcop4-fileb001 READER=0` consulta únicamente el control de B001.
+La prueba real obtuvo **9000, transparente, 3000 bytes**, con seguridad86 sin
+interpretar. No leyó el certificado ni pidió PIN; el tamaño anunciado es del EF,
+no necesariamente del DER. Pasaron **156 comprobaciones** del helper/lanzador.
+El próximo contraste es observar la lectura acotada de B001 solicitada por
+Idopte; sus permisos actuales siguen bloqueando SELECT/READ de ese archivo.
+
 Capturas privadas bajo local/jcop4-idopte-spy-*/; no agregarlas a Git.
 Pasaron previamente **30 comprobaciones del observador/decoder y 40 del
 lanzador** con transporte ficticio. El diagnóstico de firma pasó además

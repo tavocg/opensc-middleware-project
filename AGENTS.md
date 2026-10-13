@@ -6,7 +6,38 @@ la tarjeta. El usuario ejecuta las operaciones que requieran PIN o GUI. Esto
 sustituye las restricciones anteriores de no ejecutar Git/hardware/Idopte por
 el agente; conservar límites de cada diagnóstico y privacidad de los registros.
 
-**Último resultado: CDF7005 declara certificados en B001 y B002.**
+**Último resultado: SELECT-only B001 aceptado, transparente/3000 bytes.**
+Usuario registró `2cff02e`; principal y OpenSC `3dfef6704` limpios al comenzar.
+Nuevo `make inspect/jcop4-fileb001 READER=0` / --fileb001: reutiliza helper
+SELECT-only con default driver, ATR/AID conocidos y anunciados en EF.DIR.
+Tras seleccionar ADF conocido, envía únicamente 00 A4 02 00 02 B0 01 00,
+respuesta de control de hasta 256 bytes. Sin READ, binding, PIN, VERIFY, MSE,
+PSO, escritura o Idopte. Resume FID validado/estructura/tamaño/formas de
+seguridad, omite valores propietarios/raw/nombres/ACL. Errores/61xx/tamaño
+inválido detienen sin GET RESPONSE/reintentos; 6A82 solo ausencia en contexto.
+
+Pasaron **77 comprobaciones del helper y 79 del lanzador (156)**, APIs falsas;
+helper real compilado offline. Observador 99/lanzador firma 6/operación 12
+previos intactos, no repetir sin cambios. Agente ejecutó una vez sin PIN/GUI:
+`nix develop --offline -c make inspect/jcop4-fileb001 READER=0`.
+Informe privado `local/jcop4-fileb001-8OxZ9U7P/report.txt`, **22:39:39 UTC**:
+inventario/build/conexión/aplicación/unlock/proceso 0. **SELECT B001 -> 0/9000,
+transparente/3000 bytes**, security_direct_tags=86,
+security_format=profile_uninterpreted, standard_compact_read=uninterpreted.
+No READ ni autenticación; CDF previo declara B001/B002 como X.509/private=0,
+pero no identifica DER real, longitud DER, certificado de firma o ACL.
+
+**Próximo contraste:** preparar un modo Idopte separado que permita el SELECT
+B001 observado y una lectura acotada por su tamaño de EF (3000 bytes), con
+contexto ATR/ADF/padres comprobados, APDU sin modificar, presupuestos/rangos
+limitados, respuesta solo al cliente y sin log de contenido. No interpretar 86
+ni private=0 como política; no habilitar PIN/auth/MSE/PSO ni otros certificados
+por inercia. Guard actual todavía bloquea SELECT/READ B001. No repetir este
+SELECT/helper o inventario idéntico sin nueva información. Driver/submódulo
+intactos; JCOP4/RSA3072 pendientes. Informes local/0700/0600 fuera de Git/chat.
+Git autorizado, .git de solo lectura aún impide commits si persiste; no eludirlo.
+
+**Resultado anterior: CDF7005 declara certificados en B001 y B002.**
 Usuario registró `2a30496`, principal y OpenSC `3dfef6704` limpios al comenzar.
 Nuevo `make inspect/jcop4-certificate-paths READER=0` / --certificate-paths:
 helper default driver con ATR/AID conocidos y anunciados, binding PKCS#15

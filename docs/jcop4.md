@@ -3000,6 +3000,59 @@ por private=0 ni política por coincidencia con el perfil uruguayo. No repetir
 el CDF o inventario Idopte idénticos por inercia. Archivos privados0700/0600
 fuera de Git; driver intacto y firma JCOP4/RSA3072 pendientes.
 
+## SELECT-only B001 aceptado: 13 de octubre, 22:39:39 UTC
+
+El usuario registró `2cff02e`, principal y OpenSC `3dfef6704` limpios antes de
+esta revisión. Después de confirmar que CDF7005 referencia B001 como X.509,
+se agregó `make inspect/jcop4-fileb001 READER=0`. Reutiliza el helper SELECT-only
+con default driver y exige ATR/AID conocidos y AID anunciado en EF.DIR. Tras
+seleccionar ese AID, transmite **00 A4 02 00 02 B0 01 00**, sin binding ni READ.
+La respuesta de hasta 256 bytes es información de control, no contenido del EF.
+El analizador valida 83=B001 si está presente y resume estructura/tamaño/formas
+de seguridad; no imprime valores propietarios, ACL, nombres o respuesta bruta.
+
+Pasaron **77 comprobaciones del helper y 79 del lanzador (156)**, APIs falsas.
+Incluyen FID enviado/devuelto, ATR, ausencia de binding/READ/PIN, 6A82 como
+resultado contextual y fallos de transporte, SW, 61xx y metadatos truncados sin
+comandos posteriores. Helper real compilado offline. Observador 99, lanzador de
+firma 6 y operación 12 previos intactos; no se repitieron sus suites.
+
+El agente ejecutó una vez, sin PIN ni GUI:
+
+```sh
+nix develop --offline -c make inspect/jcop4-fileb001 READER=0
+```
+
+Informe privado `local/jcop4-fileb001-8OxZ9U7P/report.txt`,
+**2026-10-13T22:39:39Z**. Inventario, compilación y conexión correctos;
+selección de aplicación, unlock y proceso correctos. Resumen permitido:
+
+```text
+fileB001_select_transport=0
+fileB001_select_sw=9000
+fileB001_structure=transparent
+fileB001_size=3000
+fileB001_security_format=profile_uninterpreted
+fileB001_security_direct_tags=86
+fileB001_standard_compact_read=uninterpreted
+fileB001_result=selected_metadata_only_no_read
+```
+
+El archivo existe y su control anuncia 3000 bytes. Ese tamaño corresponde al
+EF, **no acredita la longitud DER del certificado**, que podría ocupar solo una
+parte. Su referencia X.509 en CDF7005, private=0 y SELECT9000 no especifican la
+ACL de lectura ni identifican cuál certificado se usa para firma. Tag86 sigue
+sin interpretación aplicable; no extrapolar política de otros perfiles.
+
+No se leyó B001 ni se ejecutó Idopte, PIN, VERIFY, MSE, PSO o escritura. El guard
+Idopte sigue bloqueando SELECT/READ B001. Siguiente contraste: preparar un modo
+separado de observación Idopte con SELECT B001 observado y lectura limitada al
+tamaño de este EF, rangos/presupuesto/contexto controlados y datos únicamente
+al cliente. No reescribir APDU ni habilitar autenticación u otros archivos por
+inercia. No repetir el SELECT o inventario idénticos sin nueva información.
+Informes privados0700/0600 fuera de Git; driver/submódulo intactos. Firma JCOP4,
+VERIFY6982 y RSA3072 continúan pendientes.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño

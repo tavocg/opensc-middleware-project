@@ -14,7 +14,7 @@
 .PHONY: inspect/jcop4-security-info
 .PHONY: inspect/jcop4-pin-policy
 .PHONY: inspect/jcop4-odf-map
-.PHONY: inspect/jcop4-file4141 inspect/jcop4-file4109 inspect/jcop4-file7001 inspect/jcop4-file7002 inspect/jcop4-file7004 inspect/jcop4-file7005 inspect/jcop4-filedf0f inspect/jcop4-public-keys inspect/jcop4-certificate-paths
+.PHONY: inspect/jcop4-file4141 inspect/jcop4-file4109 inspect/jcop4-file7001 inspect/jcop4-file7002 inspect/jcop4-file7004 inspect/jcop4-file7005 inspect/jcop4-filedf0f inspect/jcop4-fileb001 inspect/jcop4-public-keys inspect/jcop4-certificate-paths
 .PHONY: inspect/jcop4-idopte-compare inspect/jcop4-idopte-read4109 inspect/jcop4-idopte-aodf inspect/jcop4-idopte-prkdf inspect/jcop4-idopte-pukdf inspect/jcop4-idopte-cdf inspect/jcop4-idopte-pin-status inspect/jcop4-idopte-df0f inspect/jcop4-idopte-read-df0f
 .PHONY: inspect/jcop4-idopte
 .PHONY: inspect/jcop4-idopte-discovery inspect/jcop4-idopte-spy test/pcsc-public-observer
@@ -45,6 +45,7 @@ help:
 		'make inspect/jcop4-security-info Consulta metadatos de autenticación, versión y CardAccess, sin PIN.' \
 		'make inspect/jcop4-pin-policy Consulta DOCP del PIN 1 en raíz/aplicación, sin PIN ni autenticación.' \
 		'make inspect/jcop4-odf-map Lee referencias del directorio 5031 sin seguirlas ni autenticar.' \
+		'make inspect/jcop4-fileb001 Consulta control del EF B001 referenciado por CDF7005, sin READ ni PIN.' \
 		'make inspect/jcop4-filedf0f Consulta control de DF0F en el AID observado, sin READ ni PIN.' \
 		'make inspect/jcop4-file7005 Consulta control del directorio CDF7005, sin READ ni PIN.' \
 		'make inspect/jcop4-file7004 Consulta control del directorio PuKDF7004, sin READ ni PIN.' \
@@ -121,6 +122,9 @@ inspect/jcop4-pin-policy:
 
 inspect/jcop4-odf-map:
 	@bash scripts/probe-jcop4.sh "$$READER" --odf-map
+
+inspect/jcop4-fileb001:
+	@bash scripts/probe-jcop4.sh "$$READER" --fileb001
 
 inspect/jcop4-filedf0f:
 	@bash scripts/probe-jcop4.sh "$$READER" --filedf0f
