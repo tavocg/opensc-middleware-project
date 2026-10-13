@@ -40,6 +40,11 @@ if [[ ${FIXTURE_READ4109_MODE:-0} == 1 ]]; then
 else
     [[ ${JCOP4_DIAGNOSTIC_READ4109-unset} == unset ]] || exit 96
 fi
+if [[ ${FIXTURE_AODF_MODE:-0} == 1 ]]; then
+    [[ ${JCOP4_DIAGNOSTIC_AODF-} == 1 ]] || exit 96
+else
+    [[ ${JCOP4_DIAGNOSTIC_AODF-unset} == unset ]] || exit 96
+fi
 if [[ ${JCOP4_PUBLIC_DISCOVERY_TRACE-unset} != unset ]]; then
     [[ ${LD_PRELOAD-unset} == unset &&
        ${LIBPCSCLITE_DELEGATE-} == "$FIXTURE_PROBE_ROOT/build/diagnostics/pcsc-public-observer.so" &&
@@ -72,7 +77,7 @@ cat > "$FIXTURE_PROBE_ROOT/build/opensc/card-public-info" <<'HELPER'
 set -euo pipefail
 [[ ($# == 2 || $# == 4) && $1 == 2 && $2 == 3b:d5:18:ff:81:91:fe:1f:c3:80:73:c8:21:10:0a ]] || exit 97
 if (( $# == 4 )); then
-    [[ ($3 == --pkcs15 || $3 == --sign-setup || $3 == --pin-status || $3 == --security-info || $3 == --pin-policy || $3 == --odf-map || $3 == --file4141 || $3 == --file4109) && $4 == E828BD080FA00000036364796E6964 ]] || exit 97
+    [[ ($3 == --pkcs15 || $3 == --sign-setup || $3 == --pin-status || $3 == --security-info || $3 == --pin-policy || $3 == --odf-map || $3 == --file4141 || $3 == --file4109 || $3 == --file7001) && $4 == E828BD080FA00000036364796E6964 ]] || exit 97
 fi
 [[ ${OPENSC_DEBUG-} == 0 && ${OPENSC_API_TRACE_FILE-unset} == unset &&
    ${OPENSC_JCOP3_PIN_STATUS_IN_PLACE-unset} == unset &&
@@ -107,7 +112,7 @@ esac
    ${OPENSC_DEEPBIND-unset} == unset &&
    ${LD_PRELOAD-unset} == unset && ${LIBPCSCLITE_DELEGATE-unset} == unset &&
    ${LIBPCSCLITE_SPY_DELEGATE-unset} == unset && ${JCOP4_PUBLIC_SELECT_SPY_TRACE-unset} == unset &&
-   ${JCOP4_DIAGNOSTIC_READ4141-unset} == unset && ${JCOP4_DIAGNOSTIC_READ4109-unset} == unset &&
+   ${JCOP4_DIAGNOSTIC_READ4141-unset} == unset && ${JCOP4_DIAGNOSTIC_READ4109-unset} == unset && ${JCOP4_DIAGNOSTIC_AODF-unset} == unset &&
    ${OPENSC_API_TRACE_FILE-unset} == unset &&
    ${OPENSC_JCOP3_SESSION_STATE-unset} == unset &&
    ${OPENSC_JCOP3_PIN_STATUS_IN_PLACE-unset} == unset &&
@@ -156,6 +161,7 @@ chmod +x "$task_tmp/bin/pcsc-spy"
 export JCOP4_PUBLIC_SELECT_SPY_TRACE=/should/not/be/used
 export JCOP4_DIAGNOSTIC_READ4141=1
 export JCOP4_DIAGNOSTIC_READ4109=1
+export JCOP4_DIAGNOSTIC_AODF=1
 export OPENSC_DEBUG=99 OPENSC_DEBUG_FILE=/should/not/be/used
 export OPENSC_CONF=/should/not/be/used OPENSC_API_TRACE_FILE=/should/not/be/used
 export OPENSC_DEEPBIND=1
@@ -323,6 +329,19 @@ task_run 17 2 --file4109
 [[ $(< "$task_tmp/output.txt") != *'Consulta SELECT/metadatos de 4109 terminada'* ]]
 printf 'PASS JCOP4 4109 SELECT stops on helper failure without retries or announcing success\n'
 unset FIXTURE_PUBLIC_EXIT
+printf 'synthetic unused stdin\n' | task_run 0 2 --file7001
+[[ $(wc -l < "$task_tmp/called") == 3 &&
+   $(< "$task_tmp/public-called") == '2 3b:d5:18:ff:81:91:fe:1f:c3:80:73:c8:21:10:0a --file7001 E828BD080FA00000036364796E6964' &&
+   $(< "$task_tmp/output.txt") == *'sin lectura de contenido ni PIN'* ]]
+for task_dir in "$task_tmp"/local/jcop4-file7001-*; do
+    [[ $(stat -c %a "$task_dir") == 700 && $(stat -c %a "$task_dir/report.txt") == 600 ]]
+done
+printf 'PASS JCOP4 7001 SELECT uses the isolated helper with empty stdin and private reports\n'
+export FIXTURE_PUBLIC_EXIT=17
+task_run 17 2 --file7001
+[[ $(< "$task_tmp/output.txt") != *'Consulta SELECT/metadatos de 7001 terminada'* ]]
+printf 'PASS JCOP4 7001 SELECT stops on helper failure without retries or announcing success\n'
+unset FIXTURE_PUBLIC_EXIT
 printf 'synthetic unused stdin\n' | task_run 0 2 --idopte
 [[ $(wc -l < "$task_tmp/called") == 3 && ! -e $task_tmp/public-called &&
    -f $task_tmp/idopte-called &&
@@ -411,6 +430,18 @@ task_run 17 2 --idopte-read4109
 [[ $(< "$task_tmp/output.txt") != *'Consulta pública de Idopte terminada'* ]]
 printf 'PASS READ4109 mode propagates blocked provider failure without retrying or fallback\n'
 unset FIXTURE_IDOPTE_EXIT FIXTURE_COMPARE_MODE FIXTURE_READ4109_MODE
+export FIXTURE_COMPARE_MODE=1 FIXTURE_READ4109_MODE=1 FIXTURE_AODF_MODE=1
+task_run 0 2 --idopte-aodf
+task_aodf_report=$(sed -n 's/^Informe: //p' "$task_tmp/output.txt")
+[[ $task_aodf_report == */jcop4-idopte-aodf-*/report.txt &&
+   $(< "$task_aodf_report") == *'comparison_scope=read4141_max400_read4109_once17_aodf7001_max300_no_recording_no_authentication'* &&
+   $(stat -c %a "$task_aodf_report") == 600 ]]
+printf 'PASS AODF mode introduces all three flags exclusively into guarded inventory with private reports\n'
+export FIXTURE_IDOPTE_EXIT=17
+task_run 17 2 --idopte-aodf
+[[ $(< "$task_tmp/output.txt") != *'Consulta pública de Idopte terminada'* ]]
+printf 'PASS AODF mode preserves blocked provider failure without retry or authentication fallback\n'
+unset FIXTURE_IDOPTE_EXIT FIXTURE_COMPARE_MODE FIXTURE_READ4109_MODE FIXTURE_AODF_MODE
 task_run 0 2 --idopte-spy
 task_spy_report=$(sed -n 's/^Informe: //p' "$task_tmp/output.txt")
 [[ $(< "$task_spy_report") == *'spy_result=select4141_control_data_only'* &&

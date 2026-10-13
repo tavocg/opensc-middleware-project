@@ -74,9 +74,17 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *pci,
 			assert((size == 7 && cmd[2] == 0 && fid == 0x3F00) ||
 					(size == 7 && cmd[2] == 2 && fid == 0xD003 && selected_file == 0x3F00) ||
 					(size == 8 && cmd[7] == 0 && cmd[2] == 2 && fid == 0x4141 && selected_file == 0xFFFF) ||
-					(size == 8 && cmd[7] == 0 && cmd[2] == 2 && fid == 0x4109 && selected_file == 0x4141));
+					(size == 8 && cmd[7] == 0 && cmd[2] == 2 && fid == 0x4109 && selected_file == 0x4141) ||
+					(size == 8 && cmd[7] == 0 && cmd[2] == 2 && fid == 0x7001 && selected_file == 0x4109));
 			selected_file = fid;
 		}
+	} else if (cmd[1] == 0xB0 && selected_file == 0x7001) {
+		assert(size == 7 && cmd[2] == 0 && cmd[3] == 0 && cmd[4] == 0 && cmd[5] == 1 && cmd[6] == 0x2C);
+		assert(getenv("JCOP4_DIAGNOSTIC_AODF") && *len == 302);
+		calls++;
+		memset(response, 'X', 300); memcpy(response, "PRIVATE_AODF_INFO", 17);
+		response[300] = 0x90; response[301] = 0; *len = 302;
+		return SCARD_S_SUCCESS;
 	} else {
 		assert(size == 5 && cmd[1] == 0xB0 && cmd[2] == 0 && cmd[3] == 0 &&
 				(selected_file == 0xD003 || (selected_file == 0x4109 && cmd[4] == 17 && getenv("JCOP4_DIAGNOSTIC_READ4109")) || (selected_file == 0x4141 && getenv("JCOP4_DIAGNOSTIC_READ4141") &&

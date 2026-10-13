@@ -6,7 +6,42 @@ la tarjeta. El usuario ejecuta las operaciones que requieran PIN o GUI. Esto
 sustituye las restricciones anteriores de no ejecutar Git/hardware/Idopte por
 el agente; conservar límites de cada diagnóstico y privacidad de los registros.
 
-**Último resultado: READ4109 -> SELECT7001 bloqueado, 20:12:16 UTC.**
+**Último resultado: READ7001 -> SELECT7002 bloqueado, 20:18:15 UTC.**
+Usuario registró `8dbd7da`, OpenSC `3dfef6704`, ambos limpios al comenzar.
+Agente ejecutó dos diagnósticos sin PIN/GUI. Primero SELECT-only7001:
+`local/jcop4-file7001-3dyC89fA/report.txt`, **20:15:53 UTC**, SELECT0/9000,
+transparente/**300 bytes**, tag86/profile_uninterpreted/read_uninterpreted;
+inventario/compilación/contexto/EF.ATR/EF.DIR/unlock/proceso correctos, sin READ.
+Segundo `nix develop --offline -c make inspect/jcop4-idopte-aodf READER=0`:
+`local/jcop4-idopte-aodf-CUeTL3Na/report.txt`, **20:18:15 UTC**, ATR conectado
+conocido, 23 APDU transmitidas0/9000. SELECT7001 y dos READ BINARY (00B00000,
+luego00B000DF) correctos; contenido/longitudes omitidos, no afirmar lectura
+completa por cabeceras. **SELECT EF7002 bloqueado antes de transmitir**, sin SW
+de tarjeta a ese comando. Módulo1/events_recorded por guard, no rechazo de READ
+ni nuevo VERIFY6982. Sin PIN/VERIFY/MSE/GA/SM/PSO/escritura/firmas.
+
+ODF del mismo AID ya identifica 7001=auth_objects, 7002=private_keys. Inventario
+nativo previo obtuvo metadatos PIN y referencias RSA nativas sin login. PrKDF
+no significa exportar llaves; lo observado es enumeración, todavía no canal de
+autenticación. No atribuir función a 4141/4109 ni política a86 por estos pasos.
+Nuevo SELECT-only --file7001/target inspect/jcop4-file7001; parser compartido,
+valida FID83 concreto, no arbitrario. Nuevo modo --idopte-aodf/target
+inspect/jcop4-idopte-aodf, opt-in JCOP4_DIAGNOSTIC_AODF=1 requiere READ4109 y
+READ4141 dentro del proceso Idopte inventario/slots/empty stdin. Previo
+READ4109 y ADF/ATR confirmados permiten SELECT7001 exacto básico y READ7001
+hasta300bytes/2solicitudes contiguas. No reposición por SELECT, no relecturas,
+GET RESPONSE/reintento/continuación/otras formas. SW9000/6282, bufferLe+2;
+fallo de log/transporte/tamaño/SW detiene. Contenidos solo al cliente.
+Modos anteriores bloquean7001. Launcher inventario/firma limpia nuevo opt-in.
+Pasaron **59 helper, 57 observador/constructor/decoder, 51 lanzador y 6 lanzador
+firma**, fake transporte/redirector real; biblioteca/helper compilados. Driver
+y operación firma intactos, suite12 previa vigente, no repetir por documentos.
+Siguiente paso: comparar acceso PrKDF7002 con metadatos nativos ya obtenidos,
+sin escanear archivos ajenos ni pedir PIN. Consulta actual ya respondió el
+siguiente comando; no repetir idéntica. JCOP4/RSA3072 pendientes. Git autorizado
+pero montaje.git solo lectura sigue impidiendo crear commits si persiste.
+
+**Resultado anterior: READ4109 -> SELECT7001 bloqueado, 20:12:16 UTC.**
 Usuario hizo commit `e37cff1`, principal limpio al comenzar; OpenSC `3dfef6704`
 intacto. Agente preparó/ejecutó modo independiente sin PIN/GUI
 `nix develop --offline -c make inspect/jcop4-idopte-read4109 READER=0`.

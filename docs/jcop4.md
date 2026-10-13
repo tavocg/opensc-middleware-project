@@ -2292,6 +2292,90 @@ escanear nuevos FID ni extender lectura por el solo orden de archivos. La
 consulta actual ya respondió qué intenta Idopte después: no repetir idéntica.
 La ruta de canal/VERIFY permanece pendiente, JCOP4 y RSA3072 no están resueltos.
 
+## AODF7001 leído; SELECT7002 bloqueado: 13 de octubre, 20:18:15 UTC
+
+Principal `8dbd7da`, OpenSC `3dfef6704`, ambos limpios al comenzar; usuario hizo
+commit anterior. Se contrastó el próximo FID con el ODF de esta tarjeta:
+7001=`auth_objects`. El helper nativo ya obtuvo metadatos de autenticación
+sin login en consultas previas, por lo que no se traslada una función de otro
+perfil ni se interpreta el tag 86 como permiso público.
+
+Primera consulta independiente SELECT-only, realizada por el agente:
+`nix develop --offline -c make inspect/jcop4-file7001 READER=0`. Informe privado
+`local/jcop4-file7001-3dyC89fA/report.txt`, **20:15:53 UTC**:
+
+```text
+file7001_select_transport=0
+file7001_select_sw=9000
+file7001_structure=transparent
+file7001_size=300
+file7001_security_format=profile_uninterpreted
+file7001_security_direct_tags=86
+file7001_standard_compact_read=uninterpreted
+```
+
+Compilación, inventario, conexión, lock, EF.ATR/EF.DIR, unlock y proceso correctos;
+no READ7001 en esa consulta. Reutiliza el analizador de control y valida 83
+contra el FID fijo; CLI no acepta archivos arbitrarios. No binding o PIN.
+
+Con ese tamaño confirmado y el precedente ODF/PKCS#15, se añadió el modo
+independiente `inspect/jcop4-idopte-aodf`, opt-in `JCOP4_DIAGNOSTIC_AODF=1` solo
+junto a los dos opt-ins de lectura anteriores dentro de Idopte inventario.
+Requiere ATR validado/ADF conocido, READ4109 previo y SELECT7001 básico exacto
+00/A4/02/00/Lc2/FID7001 de 7 u 8 bytes. Solo SW9000 conserva ADF para lectura.
+READ BINARY caso-2 básico, sin SFI/payload/SM; máximo dos solicitudes contiguas
+y 300 bytes solicitados por proceso. Cursor avanza según datos devueltos;
+SELECT no repone presupuesto. Buffer temporal Le+2, SW9000/6282 únicamente;
+otro SW/transporte/tamaño/log fallido detiene, sin GET RESPONSE/reintento.
+La reconexión no permite continuar. Contenido devuelto a Idopte, no registrado.
+
+El agente ejecutó una vez
+`nix develop --offline -c make inspect/jcop4-idopte-aodf READER=0`, informe
+`local/jcop4-idopte-aodf-CUeTL3Na/report.txt`, **20:18:15 UTC**:
+
+```text
+comparison_atr=known_jcop4
+public_select=known_aodf7001_bounded_read_comparison
+transport=0
+sw=9000
+diagnostic_read=known_7001_contents_omitted
+public_header=00B00000
+transport=0
+sw=9000
+diagnostic_read=known_7001_contents_omitted
+public_header=00B000DF
+transport=0
+sw=9000
+blocked_header=00A40200
+blocked_select_ef=7002
+module_exit_status=1
+observer_result=events_recorded
+```
+
+Las **23 APDU transmitidas** dieron transporte0/SW9000; inventario/compilación
+correctos. Dos READ7001 aceptados, segundo offsetDF; la traza no guarda Le ni
+longitudes devueltas, así que no afirmar lectura completa por las cabeceras.
+**SELECT7002 no se transmitió**: no existe SW de tarjeta a ese comando. Error
+de módulo/Make por bloqueo propio, no nuevo rechazo de tarjeta. No PIN, VERIFY,
+MSE, GA, SM, PSO o escrituras. Los modos anteriores mantienen SELECT/READ7001
+bloqueados; lanzadores de inventario/firma limpian el nuevo opt-in externo.
+
+El ODF previo identifica 7002=`private_keys`; es el directorio de metadatos
+PKCS#15 del perfil observado. El helper ya obtuvo referencias RSA nativas de
+ese inventario sin exportar llaves. Que Idopte avance por AODF/PrKDF muestra
+su enumeración de objetos; no explica por sí solo el canal previo a C_Login
+ni resuelve VERIFY6982. No solicitar PIN a partir de esta prueba. El siguiente
+paso debe usar ese precedente de metadatos concretos, no sondear archivos
+ajenos o asumir reglas de 86. No repetir esta consulta idéntica.
+
+Pasaron **59 pruebas del helper, 57 del observador/constructor/decoder, 51 del
+lanzador y 6 del lanzador de firma**, simulación sin tarjeta; biblioteca y helper
+reales compilados. Nuevas regresiones cubren identidad del FID, contexto/ATR,
+300 bytes no renovables, continuidad, respuesta excesiva/69xx/61xx y opt-ins
+independientes; redirector real devuelve AODF sintético solo al cliente y bloquea
+VERIFY. Helper de firma/driver intactos, suite12 previa vigente. Archivos privados
+0700/0600 bajo local/, no incorporar capturas o inventarios completos a Git.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño

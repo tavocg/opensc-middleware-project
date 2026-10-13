@@ -64,7 +64,7 @@ static FILE *fixture_reset(void)
 	control_size = 16; control_result = 0;
 	fixture_sw = 0x9000;
 	fixture_payload = 16; fixture_overrun = 0;
-	compare_read4109 = read4109_calls = compare_read4141 = read4141_budget = read4141_offset = read4141_calls = 0;
+	compare_aodf = read7001_budget = read7001_offset = read7001_calls = compare_read4109 = read4109_calls = compare_read4141 = read4141_budget = read4141_offset = read4141_calls = 0;
 	comparison_atr_ok = 1; /* Unit fixture simulates a validated connection. */
 	return file;
 }
@@ -118,6 +118,60 @@ int main(void)
 			send_command(version, sizeof(version)) == 0 && calls == 5);
 	check_private(file);
 	puts("PASS public observer forwards only allowed discovery and logs no payloads or lengths");
+	{
+		const unsigned char source[] = { 0, 0xA4, 2, 0, 2, 0x41, 0x41, 0 };
+		const unsigned char smallfile[] = { 0, 0xA4, 2, 0, 2, 0x41, 0x09, 0 };
+		const unsigned char smallread[] = { 0, 0xB0, 0, 0, 17 };
+		const unsigned char target[] = { 0, 0xA4, 2, 0, 2, 0x70, 1, 0 };
+		const unsigned char full[] = { 0, 0xB0, 0, 0, 0, 1, 0x2C };
+		const unsigned char rest[] = { 0, 0xB0, 1, 0, 44 };
+		for (int i = 0; i < 12; i++) {
+			unsigned char bad[sizeof(full)]; memcpy(bad, full, sizeof(bad));
+			file = fixture_reset(); compare_read4141 = compare_read4109 = compare_aodf = 1;
+			assert(send_command(app, sizeof(app)) == 0 && send_command(source, sizeof(source)) == 0);
+			assert(send_large(read, sizeof(read)) == 0 && send_command(smallfile, sizeof(smallfile)) == 0);
+			fixture_payload = 17;
+			assert(send_large(smallread, sizeof(smallread)) == 0);
+			if (i == 10) compare_aodf = 0;
+			if (i == 11) {
+				assert(send_command(root, sizeof(root)) == 0);
+			}
+			if (i >= 10) {
+				int before = calls;
+				assert(send_command(target, sizeof(target)) != 0 && calls == before);
+				check_private(file); continue;
+			}
+			assert(send_command(target, sizeof(target)) == 0 && selected_public_file == 5 && selected_app);
+			if (i == 0) {
+				fixture_payload = 256;
+				assert(send_large(read, sizeof(read)) == 0);
+				fixture_payload = 44;
+				assert(send_large(rest, sizeof(rest)) == 0 && read7001_offset == 300 && read7001_budget == 300);
+			} else if (i == 1) {
+				fixture_payload = 300;
+				assert(send_large(full, sizeof(full)) == 0 && read7001_offset == 300);
+				fixture_payload = 16;
+				assert(send_command(target, sizeof(target)) == 0 && read7001_budget == 300);
+			} else {
+				if (i == 2) bad[0] = 1;
+				if (i == 3) bad[2] = 0x80;
+				if (i == 4) bad[3] = 1;
+				if (i == 5) bad[6]++;
+				if (i == 6) fixture_sw = 0x6982;
+				if (i == 7) fixture_sw = 0x6101;
+				if (i == 8) fixture_overrun = 1;
+				if (i == 9) comparison_atr_ok = 0;
+				int before = calls;
+				assert(send_large(bad, sizeof(bad)) != 0 && stopped);
+				assert(calls == before + (i >= 6 && i <= 8));
+			}
+			int before = calls;
+			assert(send_large(read, sizeof(read)) != 0 && send_command(pin, sizeof(pin)) != 0 && calls == before);
+			check_private(file);
+		}
+		puts("PASS AODF opt-in enforces known context and 300-byte nonrenewable contiguous budget in at most two reads, without authentication or payload logs");
+		puts("PASS AODF rejects channels, SFI, offsets, oversized requests/responses and 69xx/61xx before continuation");
+	}
 	{
 		const unsigned char source[] = { 0, 0xA4, 2, 0, 2, 0x41, 0x41, 0 };
 		const unsigned char target[] = { 0, 0xA4, 2, 0, 2, 0x41, 0x09, 0 };

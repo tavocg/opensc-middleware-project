@@ -160,6 +160,16 @@ antes de transporte. El ODF observado identifica 7001 como directorio de
 objetos de autenticación; aún no explica VERIFY6982. Pasaron 52 comprobaciones
 del observador, 47 del lanzador y 6 de aislamiento del lanzador de firma.
 
+Se agregó `make inspect/jcop4-file7001` para metadatos SELECT-only (9000,
+transparente, 300 bytes, seguridad 86 sin interpretar) y el modo separado
+`make inspect/jcop4-idopte-aodf READER=0` para observar la lectura de ese
+directorio PKCS#15, con máximo dos READ contiguos/300 bytes y sin guardar
+contenido. Idopte obtuvo 9000 en ambos READ y luego intentó SELECT7002, que
+el guard bloqueó. El ODF identifica 7002 como directorio de metadatos de
+llaves privadas; todavía no se observó la ruta de autenticación del proveedor.
+Pasaron 59 comprobaciones del helper, 57 del observador, 51 del lanzador y 6
+de aislamiento del lanzador de firma. OpenSC/driver intactos.
+
 Capturas privadas bajo local/jcop4-idopte-spy-*/; no agregarlas a Git.
 Pasaron previamente **30 comprobaciones del observador/decoder y 40 del
 lanzador** con transporte ficticio. El diagnóstico de firma pasó además
