@@ -6,7 +6,8 @@ con los certificados públicos. También requiere que el diseño permita
 modelos RSA 3072 y futuras generaciones, sin duplicar un driver por modelo.
 Se investiga en este repositorio y con el mismo submódulo OpenSC, conservando
 las capturas y pruebas de JCOP3. Ya se obtuvo el ATR; todavía no hay evidencia
-de compatibilidad de su aplicación ni se han leído sus certificados.
+de firma con su aplicación ni se han leído sus certificados. EF.DIR ya
+anunció el AID y etiqueta de su aplicación, registrados abajo.
 La etiqueta JCOP4 la aporta el usuario; el ATR por sí solo no demuestra la
 generación de hardware ni que la aplicación sea idéntica a la JCOP3.
 
@@ -137,6 +138,56 @@ Depuración 0, stdin vacío, configuración propia y permisos privados. Un valor
 no admita APDU extendidas. Una enumeración de aplicaciones con salida de
 proceso 0 tampoco demuestra que los certificados o la firma funcionen.
 
+## Resultado EF.ATR/EF.DIR: 13 de octubre, 07:39:47 UTC
+
+Informe `local/jcop4-files-DORk47gE/report.txt`, OpenSC `3dfef6704`.
+Helper compilado, conexión/ATR/reserva correctos; ambos parsers devuelven 0,
+una aplicación enumerada y transacción liberada. No hubo autenticación.
+
+| Metadato público | Resultado |
+| --- | --- |
+| AID raíz en EF.ATR | `A0000000003F00` |
+| Pre-issuing en EF.ATR | `0400ECC2`, sin interpretación adicional |
+| Máximos APDU extraídos | 0/0: no se obtuvo ese dato |
+| AID en EF.DIR | `E828BD080FA00000036364796E6964` |
+| Etiqueta en EF.DIR | `ChipDoc Generic` |
+
+Ambos AID difieren de los probados antes. El AID de aplicación tampoco
+aparece en la tabla `apps[]` de `dir.c`, ni en las condiciones de las
+adaptaciones JCOP3. La coincidencia de etiqueta ChipDoc no demuestra un
+protocolo idéntico ni autoriza a ampliar esas excepciones.
+Esto explica que los cuatro candidatos previos no se seleccionaran;
+ya no corresponde repetirlos ni activar eOI solamente por el ATR.
+
+## Consulta PKCS#15 nativa sin PIN
+
+Con la misma JCOP4 insertada y firmador cerrado:
+
+```bash
+make inspect/jcop4-pkcs15 READER=0
+```
+
+Compila solamente el helper contra OpenSC existente. Mantiene la comprobación
+del ATR y la consulta de EF.ATR/EF.DIR en una transacción. El helper recibe
+el AID descubierto y exige que siga anunciado antes de hacer el binding.
+Usa `sc_pkcs15_bind_internal()`, sin emulación ni driver específico.
+Desactiva cachés de archivos/PIN explícitamente en el objeto PKCS#15.
+
+Consulta tres directorios de metadatos: certificados X.509, llaves privadas
+y objetos PIN. Lee DER únicamente de certificados públicos; omite objetos
+marcados privados. De las llaves obtiene tipo, ID, referencia, uso, ruta y
+tamaño RSA declarado, sin leer componentes de la llave privada. De los PIN
+obtiene referencia, flags, ruta y límites declarados en AODF; no consulta
+su estado físico ni su valor. No hay VERIFY, login, MSE, CAN/PACE o firma.
+Los errores detienen el flujo y liberan la transacción, sin reintentos.
+
+El informe privado `local/jcop4-pkcs15-*/report.txt` contendrá certificados
+identificables en hexadecimal: mantenerlo fuera de Git y no pegarlo completo
+en el chat. Se contrastarán los DER con OpenSSL sin tarjeta para corroborar
+RSA 2048 y vincular los certificados a las referencias PKCS#15. Los tamaños
+y referencias de esta consulta no se fijan a 2048 ni a la llave 3 de JCOP3.
+Una lectura exitosa no demuestra que la firma o el driver específico funcionen.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño
@@ -182,10 +233,12 @@ Se decidirá cómo reutilizar iasecc/eOI cuando se conozca el perfil real.
 
 Se mantienen las restricciones de privacidad y de operaciones sobre tarjetas
 emitidas de [AGENTS.md](../AGENTS.md). NFC, CAN/PACE y algoritmos poscuánticos
-siguen fuera de estas pruebas. Pasaron once comprobaciones del lanzador en
-`tests/jcop4-probe-launcher.sh` y ocho del flujo de consulta pública en
+siguen fuera de estas pruebas. Pasaron trece comprobaciones del lanzador en
+`tests/jcop4-probe-launcher.sh` y quince del flujo de consulta pública en
 `tests/card-public-info.c`. Esta última se compila contra OpenSC pero simula
 las API de conexión/lectura, sin PC/SC ni lector. También compiló la herramienta
 real contra `build/opensc-offline`. Resultados C en
-`build/opensc-offline/card-public-info-tests.log`. No prueban hardware ni se
+`build/opensc-offline/card-public-pkcs15-tests.log`. Las simulaciones incluyen
+metadatos RSA 3072 con referencia distinta, sin validar RSA ni transporte.
+No prueban hardware ni se
 repitió toda la suite JCOP3.

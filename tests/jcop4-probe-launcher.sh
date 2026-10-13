@@ -14,12 +14,15 @@ if [[ ${FIXTURE_PUBLIC_BUILD_EXIT:-0} != 0 ]]; then exit "$FIXTURE_PUBLIC_BUILD_
 cat > "$FIXTURE_PROBE_ROOT/build/opensc/card-public-info" <<'HELPER'
 #!/usr/bin/env bash
 set -euo pipefail
-[[ $# == 2 && $1 == 2 && $2 == 3b:d5:18:ff:81:91:fe:1f:c3:80:73:c8:21:10:0a ]] || exit 97
+[[ ($# == 2 || $# == 4) && $1 == 2 && $2 == 3b:d5:18:ff:81:91:fe:1f:c3:80:73:c8:21:10:0a ]] || exit 97
+if (( $# == 4 )); then
+    [[ $3 == --pkcs15 && $4 == E828BD080FA00000036364796E6964 ]] || exit 97
+fi
 [[ ${OPENSC_DEBUG-} == 0 && ${OPENSC_API_TRACE_FILE-unset} == unset &&
    ${OPENSC_JCOP3_PIN_STATUS_IN_PLACE-unset} == unset &&
    $(stat -c %a "$OPENSC_CONF") == 600 ]] || exit 98
 if IFS= read -r task_input; then exit 99; fi
-printf 'public-files\n' > "$FIXTURE_PROBE_ROOT/public-called"
+printf '%s\n' "$*" > "$FIXTURE_PROBE_ROOT/public-called"
 printf 'ef_atr_result=0\nef_dir_result=0\napplication_count=1\n'
 exit "${FIXTURE_PUBLIC_EXIT:-0}"
 HELPER
@@ -146,6 +149,16 @@ export FIXTURE_PUBLIC_BUILD_EXIT=19
 task_run 19 2 --files
 [[ ! -e $task_tmp/public-called && $(wc -l < "$task_tmp/called") == 3 ]]
 printf 'PASS JCOP4 file discovery stops before helper execution if compilation fails\n'
+unset FIXTURE_PUBLIC_EXIT FIXTURE_PUBLIC_BUILD_EXIT
+printf 'synthetic unused stdin\n' | task_run 0 2 --pkcs15
+[[ $(wc -l < "$task_tmp/called") == 3 &&
+   $(< "$task_tmp/public-called") == '2 3b:d5:18:ff:81:91:fe:1f:c3:80:73:c8:21:10:0a --pkcs15 E828BD080FA00000036364796E6964' &&
+   $(< "$task_tmp/output.txt") == *'Consulta PKCS#15 pública terminada'* ]]
+printf 'PASS JCOP4 PKCS15 discovery binds only the observed AID through the isolated public helper\n'
+export FIXTURE_PUBLIC_EXIT=17
+task_run 17 2 --pkcs15
+[[ -f $task_tmp/public-called && $(< "$task_tmp/output.txt") != *'Consulta PKCS#15 pública terminada'* ]]
+printf 'PASS JCOP4 PKCS15 discovery propagates failure without authentication or retries\n'
 mv "$task_tmp/build/opensc/src/tools/opensc-tool" "$task_tmp/saved-tool"
 task_run 1
 [[ ! -e $task_tmp/called && $(< "$task_tmp/output.txt") == *'make build/opensc'* ]]

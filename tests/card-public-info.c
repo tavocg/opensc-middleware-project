@@ -9,9 +9,18 @@ static sc_reader_t fixture_reader;
 static sc_card_t fixture_card;
 static struct sc_ef_atr fixture_ef_atr;
 static sc_app_info_t fixture_app;
+static sc_pkcs15_card_t fixture_p15;
+static sc_pkcs15_object_t fixture_cert_obj, fixture_key_obj, fixture_pin_obj;
+static sc_pkcs15_cert_info_t fixture_cert_info;
+static sc_pkcs15_prkey_info_t fixture_key_info;
+static sc_pkcs15_auth_info_t fixture_pin_info;
+static sc_pkcs15_cert_t fixture_cert;
 static int atr_calls, dir_calls, lock_calls, unlock_calls, connect_calls, release_calls;
 static int atr_result, dir_result, lock_result, driver_result, mismatch;
+static int bind_calls, object_calls, cert_calls, p15_frees, cert_frees;
+static int bind_result, objects_result, cert_result;
 static char fixture_atr[] = "3b:d5:18:ff:81:91:fe:1f:c3:80:73:c8:21:10:0a";
+static char fixture_aid[] = "E828BD080FA00000036364796E6964";
 
 int sc_context_create(sc_context_t **ctx, const sc_context_param_t *params)
 {
@@ -55,21 +64,77 @@ int sc_enum_apps(sc_card_t *card)
 {
 	assert(card == &fixture_card && lock_calls == 1 && unlock_calls == 0);
 	dir_calls++;
+	if (dir_result < 0) { card->app_count = 0; return dir_result; }
 	card->app_count = 1;
 	card->app[0] = &fixture_app;
 	return dir_result;
 }
+sc_pkcs15_card_t *sc_pkcs15_card_new(void) { return &fixture_p15; }
+void sc_pkcs15_card_free(sc_pkcs15_card_t *p15) { assert(p15 == &fixture_p15); p15_frees++; }
+int sc_pkcs15_bind_internal(sc_pkcs15_card_t *p15, struct sc_aid *aid)
+{
+	assert(p15 == &fixture_p15 && p15->card == &fixture_card &&
+			!p15->opts.use_file_cache && !p15->opts.use_pin_cache &&
+			p15->opts.pin_protected_certificate == SC_PKCS15_CARD_OPTS_PRIV_CERT_PROTECT &&
+			aid->len == fixture_app.aid.len);
+	assert(lock_calls == 1 && unlock_calls == 0);
+	bind_calls++;
+	return bind_result;
+}
+int sc_pkcs15_get_objects(sc_pkcs15_card_t *p15, unsigned int type, sc_pkcs15_object_t **ret, size_t count)
+{
+	assert(p15 == &fixture_p15 && count == 32);
+	object_calls++;
+	if (objects_result < 0) return objects_result;
+	switch (type) {
+	case SC_PKCS15_TYPE_CERT_X509: ret[0] = &fixture_cert_obj; break;
+	case SC_PKCS15_TYPE_PRKEY: ret[0] = &fixture_key_obj; break;
+	case SC_PKCS15_TYPE_AUTH_PIN: ret[0] = &fixture_pin_obj; break;
+	default: assert(0);
+	}
+	return 1;
+}
+int sc_pkcs15_read_certificate(sc_pkcs15_card_t *p15, const sc_pkcs15_cert_info_t *info,
+		int private_obj, sc_pkcs15_cert_t **cert)
+{
+	assert(p15 == &fixture_p15 && info == &fixture_cert_info && private_obj == 0);
+	cert_calls++;
+	if (cert_result < 0) return cert_result;
+	*cert = &fixture_cert;
+	return 0;
+}
+void sc_pkcs15_free_certificate(sc_pkcs15_cert_t *cert) { assert(cert == &fixture_cert); cert_frees++; }
 static void reset_fixture(void)
 {
 	memset(&fixture_ctx, 0, sizeof(fixture_ctx));
 	memset(&fixture_card, 0, sizeof(fixture_card));
 	memset(&fixture_ef_atr, 0, sizeof(fixture_ef_atr));
 	memset(&fixture_app, 0, sizeof(fixture_app));
-	fixture_app.aid.value[0] = 0xA0;
-	fixture_app.aid.len = 1;
+	fixture_app.aid.len = sizeof(fixture_app.aid.value);
+	assert(sc_hex_to_bin(fixture_aid, fixture_app.aid.value, &fixture_app.aid.len) == 0);
 	fixture_app.label = "fixture";
+	memset(&fixture_p15, 0, sizeof(fixture_p15));
+	memset(&fixture_cert_obj, 0, sizeof(fixture_cert_obj));
+	memset(&fixture_key_obj, 0, sizeof(fixture_key_obj));
+	memset(&fixture_pin_obj, 0, sizeof(fixture_pin_obj));
+	memset(&fixture_cert_info, 0, sizeof(fixture_cert_info));
+	memset(&fixture_key_info, 0, sizeof(fixture_key_info));
+	memset(&fixture_pin_info, 0, sizeof(fixture_pin_info));
+	memset(&fixture_cert, 0, sizeof(fixture_cert));
+	fixture_cert_obj.type = SC_PKCS15_TYPE_CERT_X509;
+	fixture_cert_obj.data = &fixture_cert_info;
+	fixture_key_obj.type = SC_PKCS15_TYPE_PRKEY_RSA;
+	fixture_key_obj.data = &fixture_key_info;
+	fixture_key_info.modulus_length = 3072;
+	fixture_key_info.key_reference = 7;
+	fixture_pin_obj.type = SC_PKCS15_TYPE_AUTH_PIN;
+	fixture_pin_obj.data = &fixture_pin_info;
+	fixture_cert.data.value = (unsigned char *)"fixture DER";
+	fixture_cert.data.len = 11;
 	atr_calls = dir_calls = lock_calls = unlock_calls = connect_calls = release_calls = 0;
 	atr_result = dir_result = lock_result = driver_result = mismatch = 0;
+	bind_calls = object_calls = cert_calls = p15_frees = cert_frees = 0;
+	bind_result = objects_result = cert_result = 0;
 }
 static int run_fixture(void)
 {
@@ -107,5 +172,31 @@ int main(void)
 	reset_fixture(); driver_result = SC_ERROR_NOT_SUPPORTED;
 	assert(run_fixture() == 1 && !connect_calls && !atr_calls && !dir_calls && release_calls == 1);
 	puts("PASS public discovery stops if the default driver cannot be selected");
+	{
+		char *args[] = { "card-public-info", "2", fixture_atr, "--pkcs15", fixture_aid };
+		reset_fixture();
+		assert(card_public_info_main(5, args) == 0 && bind_calls == 1 && object_calls == 3 &&
+				cert_calls == 1 && cert_frees == 1 && p15_frees == 1 && unlock_calls == 1);
+		puts("PASS native discovery reads public certificate DER and metadata without a fixed RSA size or key reference");
+		reset_fixture(); args[4] = "A001";
+		assert(card_public_info_main(5, args) == 1 && !bind_calls && !object_calls && unlock_calls == 1);
+		puts("PASS native discovery rejects an AID not announced in EF.DIR before binding");
+		reset_fixture(); args[4] = fixture_aid; bind_result = SC_ERROR_INVALID_ASN1_OBJECT;
+		assert(card_public_info_main(5, args) == 1 && bind_calls == 1 && !object_calls && p15_frees == 1);
+		puts("PASS native discovery stops on binding error without emulation fallback");
+		reset_fixture(); fixture_cert_obj.flags = SC_PKCS15_CO_FLAG_PRIVATE;
+		assert(card_public_info_main(5, args) == 0 && object_calls == 3 && !cert_calls && p15_frees == 1);
+		puts("PASS native discovery skips private certificates without attempting authentication");
+		reset_fixture(); cert_result = SC_ERROR_SECURITY_STATUS_NOT_SATISFIED;
+		assert(card_public_info_main(5, args) == 1 && cert_calls == 1 && object_calls == 1 &&
+				p15_frees == 1 && unlock_calls == 1);
+		puts("PASS native discovery stops on certificate security rejection without retry");
+		reset_fixture(); objects_result = SC_ERROR_SECURITY_STATUS_NOT_SATISFIED;
+		assert(card_public_info_main(5, args) == 1 && object_calls == 1 && !cert_calls && p15_frees == 1);
+		puts("PASS native discovery stops on metadata security rejection without reading other directories");
+		reset_fixture(); args[3] = "--login";
+		assert(card_public_info_main(5, args) == 2 && !connect_calls && !bind_calls);
+		puts("PASS native discovery accepts only its public PKCS15 operation");
+	}
 	return 0;
 }

@@ -6,7 +6,7 @@ OMNIKEY 3x21, lector 0, presente, tres consultas con estado 0. ATR
 `3b:d5:18:ff:81:91:fe:1f:c3:80:73:c8:21:10:0a`: coincide con contacto eOI,
 difiere de la JCOP3 y no está en la tabla de iasecc. No prueba igual aplicación.
 OpenPACE está deshabilitado en la compilación y eOI devuelve NULL; no activar
-ni ampliar detección solo por ATR. Principal guardado `b1f405c`, ambos Git
+ni ampliar detección solo por ATR. Principal guardado `775ad54`, ambos Git
 limpios al comenzar; no hubo cambios de driver ni firmas en esta revisión.
 
 SELECT revisados: `local/jcop4-aids-qixa9ZwC/report.txt`, 07:28:12 UTC,
@@ -17,19 +17,29 @@ RSA 3072 y generaciones futuras. Registrar ese tamaño como información del
 usuario hasta leer el certificado. Las adaptaciones JCOP3 siguen limitadas
 a Amos/ChipDoc/llave 3/RSA 2048; no afirmar que ya sean genéricas.
 
-**Siguiente intervención de hardware:** `make inspect/jcop4-files READER=0`,
+**EF.ATR/EF.DIR revisados:** `local/jcop4-files-DORk47gE/report.txt`,
+07:39:47 UTC, ambos parsers devuelven 0 y reserva liberada. AID raíz
+`A0000000003F00`, pre-issuing `0400ECC2` sin interpretar, máximos APDU 0/0
+desconocidos. Una aplicación: AID `E828BD080FA00000036364796E6964`, etiqueta
+`ChipDoc Generic`; diferente de JCOP3/eOI y no está en apps[] de dir.c.
+No activar excepciones JCOP3 ni eOI por etiqueta/ATR. No repetir candidatos.
+
+**Siguiente intervención de hardware:** `make inspect/jcop4-pkcs15 READER=0`,
 firmador cerrado y misma JCOP4 insertada. Compila únicamente el helper
 `tools/card-public-info.c` contra el OpenSC existente. Driver default, ATR
-revisado otra vez en la conexión, transacción durante `sc_parse_ef_atr()` y
-`sc_enum_apps()`: solo archivos públicos 3F00/2F01 y 3F00/2F00, sin PIN,
-CAN/PACE, MSE, firma ni operaciones administrativas. Si EF.ATR no existe,
-consulta EF.DIR; otros errores paran, sin autenticar ni reintentar. Informes
-`local/jcop4-files-*/`, debug 0, stdin vacío y banderas JCOP3 desactivadas.
-Leer resultados/AID antes de cambiar detección/perfil o consultar certificados.
-`make probe/jcop4` y `inspect/jcop4-aids` siguen disponibles; no repetirlos.
+comprobado en conexión y AID anunciado exigido antes de binding nativo
+`sc_pkcs15_bind_internal()`, sin emuladores y con cachés desactivadas.
+Lee certificados públicos DER y metadatos PrKDF/AODF; certificados privados
+se omiten. No componentes de llaves privadas, estado físico del PIN, login,
+CAN/PACE, MSE ni firma. Error detiene y libera transacción, sin reintentos.
+Informe `local/jcop4-pkcs15-*/` contiene DER identificables en hexadecimal;
+mantener privado, no volcar completo al chat. Debug 0, stdin vacío y banderas
+JCOP3 desactivadas. Contrastar DER con OpenSSL sin tarjeta antes de cambios
+de driver o login. Los tamaños y referencias se leen, sin fijarlos a 2048/3.
+Consulta de inventario/archivos sigue disponible; no repetirla como primer paso.
 Ver `docs/jcop4.md`: separar plataforma/perfil/tamaño RSA, centralizar reglas
 y revisar transporte de 384 bytes para RSA 3072; todavía no implementado.
-Pasaron once comprobaciones del lanzador y ocho de la herramienta con API
+Pasaron trece comprobaciones del lanzador y quince de la herramienta con API
 simuladas. La herramienta real compiló contra OpenSC offline. No se repitieron
 las 288 anteriores de JCOP3. Evidencia JCOP3 y submódulo intactos. Dar comandos
 de commit solo del principal.
@@ -78,7 +88,7 @@ previa. No repetir suite por documentación. Dar comandos de commit del
 principal; el agente no escribe Git ni firma/lee pass. Mantener datos privados
 fuera de Git. No modificar el perfil normal por defecto.
 
-**Próximo trabajo:** revisar EF.ATR/EF.DIR de JCOP4 cuando estén disponibles.
+**Próximo trabajo:** revisar PKCS#15/certificados de JCOP4 cuando estén disponibles.
 Para integrar JCOP3, revisar/separar correcciones del perfil frente
 a instrumentación y experimentos antes de integrar. Diferencia local contra
 base original: 21 commits, 20 archivos, +736/-77 líneas; no equivale a revisión
@@ -149,8 +159,8 @@ Directorio de trabajo: `/home/tavo/Projects/middleware-project`.
 | `vendor/opensc/` | Submódulo, rama local `cr-jcop3` |
 | `scripts/build-opensc.sh` | Compilación fuera del árbol con PC/SC |
 | `scripts/probe-jcop3.sh` | Consultas e informes sin introducir PIN |
-| `scripts/probe-jcop4.sh` | Inventario, SELECT de AID y modo `--files`: metadatos públicos con driver default |
-| `scripts/build-card-public-info.sh`, `tools/card-public-info.c` | Compilación y lectura de EF.ATR/EF.DIR contra OpenSC existente, sin autenticación |
+| `scripts/probe-jcop4.sh` | Inventario, SELECT, archivos y PKCS#15 público con driver default |
+| `scripts/build-card-public-info.sh`, `tools/card-public-info.c` | EF.ATR/EF.DIR y binding PKCS#15 nativo; certificados públicos/metadatos, sin autenticación |
 | `scripts/sign-jcop3.sh` | Firma interactiva de texto y verificación OpenSSL |
 | `scripts/sha256-digestinfo.sh` | Prepara DigestInfo SHA-256 DER para `RSA-PKCS`, sin PIN |
 | `scripts/firmador-jcop3.sh` | Abre firmador con módulo local y configuración PKCS#15, sin depuración APDU |
@@ -193,12 +203,12 @@ pero no valida comunicación con la tarjeta.
 
 Los últimos commits guardados son:
 
-- Repositorio principal: **`b1f405c`**, `Probe known JCOP4 application IDs`.
+- Repositorio principal: **`775ad54`**, `Inspect public card application metadata`.
 - Submódulo OpenSC: **`3dfef6704`**, `Select ChipDoc before VERIFY`.
 - Base upstream original: `c7a377af971df03f879c1697e91ebac1f7e28c56`.
 
 Ambos árboles estaban limpios al comenzar esta revisión. Principal agrega
-la consulta pública JCOP4 y documenta su alcance/modularidad requerida. El
+el binding nativo público JCOP4 y documenta su alcance/modularidad requerida. El
 submódulo queda intacto; no recompilar por este cambio. Dar comandos de commit
 del principal. No hay commits, logins o firmas ejecutados por el agente.
 
@@ -321,13 +331,15 @@ sin PC/SC, registrada en `build/opensc-offline/pin-application-build.log`.
 Las últimas regresiones están en `build/opensc-offline/login-lock-tests.log`.
 El checker de configuración se ejecuta desde los casos del lanzador.
 Esto no sustituye pruebas de firma en hardware.
-Se agregaron once comprobaciones de `tests/jcop4-probe-launcher.sh`, que
+Se agregaron trece comprobaciones de `tests/jcop4-probe-launcher.sh`, que
 pasaron por separado sin lector: comandos limitados a inventario/SELECT,
 aislamiento de configuración/stdin, validación de ATR/SW, errores sin
 reintentos, argumentos y compilación local.
-Hay además ocho comprobaciones de `tests/card-public-info.c`, con API
+Hay además quince comprobaciones de `tests/card-public-info.c`, con API
 simuladas, que verifican perfil default, ATR, secuencia, rechazo sin login,
-errores y liberación de transacción. El runner `scripts/test-iasecc.sh`
+errores y liberación de transacción, binding nativo sin emuladores, certificados
+privados omitidos y metadatos RSA 3072/referencia distinta sin prueba de RSA.
+El runner `scripts/test-iasecc.sh`
 incluye ambas; no se repitieron las 288
 anteriores al agregar esta consulta pública.
 El lanzador de firmador, en modos normal, diagnóstico y experimento de sesión,

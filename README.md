@@ -45,19 +45,21 @@ Consultar [AGENTS.md](AGENTS.md) para continuar desde las capturas recientes.
 No repetir pruebas de firma/reinserción ya verificadas como primer paso.
 
 Hay una JCOP4 con certificados RSA 2048, según el usuario, para investigación
-en este repositorio. Su ATR coincide con eOI, pero los cuatro AID conocidos
-consultados devolvieron 6A82. Todavía falta identificar su aplicación. La
-siguiente consulta obtiene metadatos públicos de EF.ATR y EF.DIR:
+en este repositorio. Su ATR coincide con eOI, pero su AID anunciado es distinto:
+`E828BD080FA00000036364796E6964`, etiqueta `ChipDoc Generic`. EF.ATR y EF.DIR
+ya se leyeron. La siguiente consulta obtiene certificados y metadatos PKCS#15
+mediante el driver genérico, sin emulación:
 
 ```bash
-make inspect/jcop4-files READER=0
+make inspect/jcop4-pkcs15 READER=0
 ```
 
 Cerrar firmador antes de consultar y mantener la misma JCOP4 insertada.
 No pide PIN ni ejecuta PACE. Compila una herramienta pequeña contra la
-biblioteca existente, sin recompilar OpenSC. Pasaron once comprobaciones del
-lanzador y ocho de la consulta pública con API simuladas. Los informes quedan
-aparte en `local/jcop4-files-*/`. El diseño deberá permitir RSA 3072 y futuras
+biblioteca existente, sin recompilar OpenSC. Pasaron trece comprobaciones del
+lanzador y quince de la consulta pública con API simuladas. Los informes con
+certificados identificables quedan privados en `local/jcop4-pkcs15-*/`.
+El diseño deberá permitir RSA 3072 y futuras
 generaciones, con perfiles separados del tamaño RSA; ese soporte está pendiente.
 La consulta inicial sigue disponible como `make probe/jcop4`. Los pasos siguientes están
 en [docs/jcop4.md](docs/jcop4.md).
