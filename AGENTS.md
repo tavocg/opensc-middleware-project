@@ -6,7 +6,47 @@ la tarjeta. El usuario ejecuta las operaciones que requieran PIN o GUI. Esto
 sustituye las restricciones anteriores de no ejecutar Git/hardware/Idopte por
 el agente; conservar límites de cada diagnóstico y privacidad de los registros.
 
-**Último resultado: Idopte SELECT DF0F -> READ bloqueado, 22:03:13 UTC.**
+**Último resultado: Idopte READ DF0F aceptado; SELECT B001 bloqueado.**
+Usuario registró `442c70e`, principal y OpenSC `3dfef6704` limpios al comenzar.
+Nuevo modo separado `inspect/jcop4-idopte-read-df0f`, flag
+`JCOP4_DIAGNOSTIC_READ_DF0F=1` dependiente de SELECT_DF0F y sus padres, solo
+para inventario Idopte con stdin vacío. Conserva permisos de modos anteriores.
+Tras SELECT DF0F exacto/9000 y ATR/ADF/estado vacío MF comprobados, permite
+**una sola READ BINARY caso 2 básica, offset 0, Le exactamente 150** (corta o
+extendida). No reescribe APDU ni permite Le mayor/otro offset/SFI/SM/canal.
+Buffer temporal Le+2, únicamente SW9000/6282; datos solo al cliente, no a logs.
+Errores/oversize/log fallido detienen antes de cualquier fallback; sin GET
+RESPONSE/reintentos. Nueva flag eliminada del inventario previo, otros modos y
+firma. PIN con datos, MSE/GA/SM/PSO/escrituras siguen bloqueados.
+
+Pasaron **99 comprobaciones del observador/constructor/decoder, 75 del lanzador
+público y 6 del lanzador de firma (180)**, transporte ficticio/redirector real;
+biblioteca real compilada. Helper 68 y operación de firma 12 intactos, pruebas
+previas vigentes. Agente ejecutó una vez, sin PIN/GUI:
+`nix develop --offline -c make inspect/jcop4-idopte-read-df0f READER=0`.
+Informe `local/jcop4-idopte-read-df0f-BeXtNUJ3/report.txt`, **22:21:37 UTC**:
+build/inventario correctos, ATR conectado conocido. **73 APDU: 72 SW9000 y un
+63C7 de estado vacío**, transporte correcto. SELECT DF0F y READ offset0 ->
+0/9000; luego SELECT MF y ADF conocidos -> 0/9000; **SELECT EF B001 bloqueado
+antes de transmitir**, sin respuesta/control/contenido de B001. Módulo 0,
+token_info_result=CKR_TOKEN_NOT_PRESENT, diagnóstico 1/token_info_unavailable,
+observer_result=events_recorded. No confundir bloqueo local con rechazo de la
+tarjeta ni con VERIFY6982 autenticado anterior. No PIN/login/firma nuevos.
+
+DF0F leído exitosamente por el proveedor sin autenticación solicitada en este
+proceso; contenido omitido, propósito/política siguen sin identificar. No
+atribuirle licencia/CA/PACE ni copiarlo al driver por inercia. B001 aparece como
+certificado de firma en `vendor/opensc/src/libopensc/pkcs15-cedulauy.c`, pero ese
+perfil uruguayo usa otro AID/PIN/llave: **no prueba qué contiene B001 en CR**.
+Búsqueda estática de fuentes/textos del ZIP no encontró B001; no ejecutar ZIP.
+**Próximo contraste:** confirmar si CDF7005 de este AID referencia B001 como
+certificado, con un resumen de rutas de metadatos sin IDs/nombres/contenidos,
+antes de ampliar SELECT/READ. B001 sigue bloqueado. No repetir captura idéntica
+ni pedir PIN por inercia. JCOP4/RSA3072 pendientes; driver/submódulo intactos.
+Capturas privadas local/0700/0600 fuera de Git/chat. Git autorizado; montaje
+.git de solo lectura aún puede impedir el commit; no eludirlo.
+
+**Resultado anterior: Idopte SELECT DF0F -> READ bloqueado, 22:03:13 UTC.**
 Usuario registró `3fbd854`, OpenSC `3dfef6704`, ambos limpios antes de preparar
 cambios. Turno interrumpido tras editar cuatro archivos; retomado con pruebas,
 no había hardware de esta versión antes de verificarlas. Agente ejecutó una vez

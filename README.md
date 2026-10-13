@@ -211,7 +211,8 @@ DF0F sigue de propósito desconocido. Pasaron66 comprobaciones del helper,
 bajo el AID conocido. Resultado: SELECT9000, transparente,150bytes, seguridad86
 sin interpretar. Sin READ, binding o PIN; esto no identifica contenido ni permiso
 de lectura. Pasaron68 comprobaciones del helper y71 del lanzador. El guard
-Idopte sigue bloqueando SELECT/READ DF0F; driver y protocolo de firma intactos.
+El modo de descubrimiento original bloquea SELECT/READ DF0F; las excepciones
+optativas se describen a continuación. Driver y protocolo de firma intactos.
 
 Nuevo modo `make inspect/jcop4-idopte-df0f READER=0`: permite solo un SELECT
 DF0F tras estado vacío satisfactorio en MF y selección del AID conocido.
@@ -221,11 +222,20 @@ CKR_TOKEN_NOT_PRESENT por el bloqueo del diagnóstico. Pasaron90 comprobaciones
 del observador,73 del lanzador y6 del lanzador de firma. Modos anteriores
 mantienen DF0F bloqueado; el driver libre aún no firma con esta JCOP4.
 
+`make inspect/jcop4-idopte-read-df0f READER=0` agrega una excepción separada
+para una única lectura de DF0F, offset0/Le150, con contenido solo al cliente y
+sin PIN ni login. La prueba real obtuvo SELECT y READ9000; después Idopte
+seleccionó MF/ADF e intentó SELECT B001, bloqueado antes de transmitir.
+C_GetTokenInfo sigue con CKR_TOKEN_NOT_PRESENT por el bloqueo. B001 aún no está
+identificado para este perfil; el próximo contraste es su posible referencia
+en CDF7005. Pasaron **180 comprobaciones** de los componentes modificados.
+El driver libre sigue pendiente de firma JCOP4; no se cambió OpenSC.
+
 Capturas privadas bajo local/jcop4-idopte-spy-*/; no agregarlas a Git.
 Pasaron previamente **30 comprobaciones del observador/decoder y 40 del
 lanzador** con transporte ficticio. El diagnóstico de firma pasó además
 **12 comprobaciones de operación y 6 de lanzador**, y su helper compiló offline.
-Sin hardware por el agente; OpenSC/driver intactos. Evidencia y fuentes en
+Esas regresiones usan transporte ficticio; OpenSC/driver intactos. Evidencia y fuentes en
 [docs/jcop4.md](docs/jcop4.md).
 
 El descubrimiento Idopte previo (`make inspect/jcop4-idopte-discovery`) compila

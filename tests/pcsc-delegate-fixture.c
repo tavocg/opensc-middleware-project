@@ -88,6 +88,13 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *pci,
 					(size == 8 && cmd[7] == 0 && cmd[2] == 2 && fid == 0xDF0F && selected_file == 0xFFFF));
 			selected_file = fid;
 		}
+	} else if (cmd[1] == 0xB0 && selected_file == 0xDF0F) {
+		assert(size == 5 && !memcmp(cmd, "\x00\xB0\x00\x00\x96", 5));
+		assert(getenv("JCOP4_DIAGNOSTIC_READ_DF0F") && *len == 152);
+		calls++;
+		memset(response, 'X', 150); memcpy(response, "PRIVATE_DF0F_INFO", 17);
+		response[150] = 0x90; response[151] = 0; *len = 152;
+		return SCARD_S_SUCCESS;
 	} else if (cmd[1] == 0xB0 && selected_file == 0x7005) {
 		assert(size == 5 && cmd[2] == 0 && cmd[3] == 0 && cmd[4] == 0);
 		assert(getenv("JCOP4_DIAGNOSTIC_CDF") && *len == 258);

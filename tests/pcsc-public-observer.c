@@ -64,7 +64,7 @@ static FILE *fixture_reset(void)
 	control_size = 16; control_result = 0;
 	fixture_sw = 0x9000;
 	fixture_payload = 16; fixture_overrun = 0;
-	compare_select_df0f = select_df0f_calls = pin_status_result_valid = compare_pin_status = pin_status_calls = compare_cdf = read7005_budget = read7005_offset = read7005_calls = compare_pukdf = read7004_budget = read7004_offset = read7004_calls = compare_prkdf = read7002_budget = read7002_offset = read7002_calls = compare_aodf = read7001_budget = read7001_offset = read7001_calls = compare_read4109 = read4109_calls = compare_read4141 = read4141_budget = read4141_offset = read4141_calls = 0;
+	compare_read_df0f = read_df0f_calls = compare_select_df0f = select_df0f_calls = pin_status_result_valid = compare_pin_status = pin_status_calls = compare_cdf = read7005_budget = read7005_offset = read7005_calls = compare_pukdf = read7004_budget = read7004_offset = read7004_calls = compare_prkdf = read7002_budget = read7002_offset = read7002_calls = compare_aodf = read7001_budget = read7001_offset = read7001_calls = compare_read4109 = read4109_calls = compare_read4141 = read4141_budget = read4141_offset = read4141_calls = 0;
 	comparison_atr_ok = 1; /* Unit fixture simulates a validated connection. */
 	return file;
 }
@@ -209,6 +209,67 @@ int main(void)
 		int before = calls; assert(send_command(target, sizeof(target)) != 0 && calls == before);
 		close(trace_fd); trace_fd = saved; check_private(file);
 		puts("PASS DF0F SELECT stops before transport when its private marker cannot be recorded");
+	}
+	{
+		const unsigned char target[] = { 0, 0xA4, 2, 0, 2, 0xDF, 0x0F, 0 };
+		const unsigned char small[] = { 0, 0xB0, 0, 0, 150 };
+		const unsigned char extended[] = { 0, 0xB0, 0, 0, 0, 0, 150 };
+		for (int i = 0; i < 2; i++) {
+			file = fixture_df0f(); compare_read_df0f = 1;
+			assert(send_command(target, sizeof(target)) == 0 && selected_public_file == 9);
+			fixture_payload = 150; fixture_sw = i ? 0x6282 : 0x9000;
+			unsigned char response[152]; DWORD size = sizeof(response); int before = calls;
+			assert(SCardTransmit(7, NULL, i ? extended : small, i ? sizeof(extended) : sizeof(small),
+					NULL, response, &size) == 0 && size == 152 && calls == before + 1 &&
+					!memcmp(response, "PRIVATE_RESPONSE", 16) && read_df0f_calls == 1);
+			assert(send_large(small, sizeof(small)) != 0 && calls == before + 1);
+			check_private(file);
+		}
+		puts("PASS bounded DF0F opt-in returns a single unchanged 150-byte short/extended READ only to caller, including 6282, and blocks repeats");
+		for (int i = 0; i < 10; i++) {
+			unsigned char bad[sizeof(small) + 1]; memcpy(bad, small, sizeof(small)); bad[5] = 0;
+			file = fixture_df0f(); compare_read_df0f = 1;
+			assert(send_command(target, sizeof(target)) == 0); int before = calls;
+			if (i == 0) compare_read_df0f = 0;
+			if (i == 1) comparison_atr_ok = 0;
+			if (i == 2) selected_app = 0;
+			if (i == 3) bad[0] = 1;
+			if (i == 4) bad[0] = 0x0C;
+			if (i == 5) bad[2] = 0x80;
+			if (i == 6) bad[3] = 1;
+			if (i == 7) bad[4] = 0;
+			if (i == 8) bad[4] = 149;
+			assert(send_large(bad, sizeof(small) + (i == 9)) != 0 && calls == before);
+			check_private(file);
+		}
+		puts("PASS DF0F READ rejects absent opt-in/ATR/ADF, other channels, SM, SFI, offsets, other Le and payload without transport");
+		for (int i = 0; i < 4; i++) {
+			file = fixture_df0f(); compare_read_df0f = 1;
+			assert(send_command(target, sizeof(target)) == 0); int before = calls;
+			fixture_payload = 150; fixture_sw = i == 0 ? 0x6982 : i == 1 ? 0x6101 : 0x9000;
+			if (i == 2) fixture_overrun = 1;
+			assert((i == 3 ? send_command(small, sizeof(small)) : send_large(small, sizeof(small))) != 0 && stopped &&
+					calls == before + (i != 3));
+			assert(send_command(get_response, sizeof(get_response)) != 0 && send_command(pin, sizeof(pin)) != 0);
+			check_private(file);
+		}
+		puts("PASS DF0F READ response errors/oversize and short output buffers stop without leaking data, GET RESPONSE or PIN");
+		file = fixture_df0f(); compare_read_df0f = 1;
+		assert(send_command(target, sizeof(target)) == 0); int before = calls;
+		int saved = trace_fd; trace_fd = open("/dev/full", O_WRONLY); assert(trace_fd >= 0);
+		assert(send_large(small, sizeof(small)) != 0 && calls == before);
+		close(trace_fd); trace_fd = saved; check_private(file);
+		puts("PASS DF0F READ requires a written private marker before card transport");
+		file = fixture_df0f(); compare_read_df0f = 1;
+		assert(send_command(target, sizeof(target)) == 0 && send_command(pin, sizeof(pin)) != 0);
+		check_private(file);
+		puts("PASS enabling bounded DF0F READ does not enable credential-bearing VERIFY");
+		file = fixture_df0f(); compare_read_df0f = 1;
+		assert(send_command(target, sizeof(target)) == 0 && send_large(small, sizeof(small)) == 0);
+		before = calls; drop_card_context();
+		assert(stopped && send_large(small, sizeof(small)) != 0 && calls == before);
+		check_private(file);
+		puts("PASS context loss after DF0F READ cannot replenish the per-process allowance");
 	}
 	{
 		const unsigned char empty[] = { 0, 0x20, 0, 1 };

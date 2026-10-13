@@ -19,8 +19,8 @@
 
 static int trace_fd = -1, stopped, selected_public_file, selected_mf, selected_app, handle_set, pending_response;
 static int select_spy_fd = -1;
-static int compare_read4141, compare_read4109, compare_aodf, compare_prkdf, compare_pukdf, compare_cdf, compare_pin_status, compare_select_df0f;
-static unsigned int select_df0f_calls;
+static int compare_read4141, compare_read4109, compare_aodf, compare_prkdf, compare_pukdf, compare_cdf, compare_pin_status, compare_select_df0f, compare_read_df0f;
+static unsigned int select_df0f_calls, read_df0f_calls;
 static int pin_status_result_valid;
 static unsigned int pin_status_calls;
 static int comparison_atr_ok;
@@ -102,7 +102,16 @@ __attribute__((constructor)) static void observer_init(void)
 		if (strcmp(path, "1") || !compare_pin_status || trace_fd < 0) stopped = 1;
 		else {
 			compare_select_df0f = 1;
-			if (dprintf(trace_fd, "comparison_df0f=select_only_no_read\n") < 0) stopped = 1;
+			if (dprintf(trace_fd, "comparison_df0f=%s\n", getenv("JCOP4_DIAGNOSTIC_READ_DF0F") ?
+					"select_once_separate_read_opt_in" : "select_only_no_read") < 0) stopped = 1;
+		}
+	}
+	path = getenv("JCOP4_DIAGNOSTIC_READ_DF0F");
+	if (path) {
+		if (strcmp(path, "1") || !compare_select_df0f || trace_fd < 0) stopped = 1;
+		else {
+			compare_read_df0f = 1;
+			if (dprintf(trace_fd, "comparison_df0f_read=once150_contents_omitted\n") < 0) stopped = 1;
 		}
 	}
 	path = getenv("JCOP4_PUBLIC_SELECT_SPY_TRACE");
@@ -328,12 +337,12 @@ static int allowed_command(const unsigned char *cmd, DWORD len, int *next_file, 
 			}
 			if (fid == 0xDF0F) {
 				/* Observed after the successful MF no-data PIN status and
-				 * reselecting this ADF. Never grant content READ permission. */
+				 * reselecting this ADF. Content READ requires a separate opt-in. */
 				if (!compare_select_df0f || !comparison_atr_ok || !selected_app ||
 						!pin_status_result_valid || select_df0f_calls ||
 						cmd[0] != 0 || cmd[2] != 2 || cmd[3] != 0 || lc != 2)
 					return 0;
-				*next_file = 0;
+				*next_file = compare_read_df0f ? 9 : 0;
 				*next_mf = 0;
 				*next_app = 1;
 				return 1;
@@ -412,6 +421,11 @@ static int allowed_command(const unsigned char *cmd, DWORD len, int *next_file, 
 				offset == read7005_offset && offset <= 2368 && size <= 2368 - offset &&
 				read7005_budget <= 2368 - size && read7005_calls < 11;
 	}
+	if (cmd[1] == 0xB0 && selected_public_file == 9)
+		/* One unchanged request, bounded by the independently observed EF size.
+		 * A larger Le is blocked, never silently rewritten. */
+		return compare_read_df0f && comparison_atr_ok && selected_app && !read_df0f_calls &&
+				read4141_size(cmd, len) == 150 && cmd[2] == 0 && cmd[3] == 0;
 	if (cmd[1] == 0xB0)
 		return selected_public_file && len == 5 && !(cmd[2] & 0x80) &&
 				(selected_public_file != 2 || cmd[0] == 0);
@@ -481,17 +495,19 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
 		stopped = 1;
 		goto out;
 	}
-	diagnostic_read = (selected_public_file >= 3 && selected_public_file <= 8) && cmd[1] == 0xB0;
+	diagnostic_read = (selected_public_file >= 3 && selected_public_file <= 9) && cmd[1] == 0xB0;
 	if (diagnostic_read) {
 		read_size = read4141_size(cmd, len);
-		read_fid = selected_public_file == 8 ? 0x7005 : selected_public_file == 7 ? 0x7004 : selected_public_file == 6 ? 0x7002 : selected_public_file == 5 ? 0x7001 : selected_public_file == 4 ? 0x4109 : 0x4141;
+		read_fid = selected_public_file == 9 ? 0xDF0F : selected_public_file == 8 ? 0x7005 : selected_public_file == 7 ? 0x7004 : selected_public_file == 6 ? 0x7002 : selected_public_file == 5 ? 0x7001 : selected_public_file == 4 ? 0x4109 : 0x4141;
 		if (!response || !response_len || capacity < read_size + 2) {
 			dprintf(trace_fd, "blocked=read%04X_output_buffer\n", read_fid);
 			stopped = 1;
 			goto out;
 		}
 		bounded_size = read_size + 2;
-		if (read_fid == 0x4141) {
+		if (read_fid == 0xDF0F)
+			read_df0f_calls++;
+		else if (read_fid == 0x4141) {
 			read4141_budget += read_size;
 			read4141_calls++;
 		} else if (read_fid == 0x4109)
@@ -518,7 +534,8 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
 			cmd[5] == 0xDF && cmd[6] == 0x0F;
 	if (diagnostic_select_df0f) {
 		select_df0f_calls++;
-		if (dprintf(trace_fd, "public_select=known_df0f_metadata_only\n") < 0) {
+		if (dprintf(trace_fd, "public_select=%s\n", compare_read_df0f ?
+				"known_df0f_bounded_read_comparison" : "known_df0f_metadata_only") < 0) {
 			stopped = 1; goto out;
 		}
 	}

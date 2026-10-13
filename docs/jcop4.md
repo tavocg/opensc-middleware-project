@@ -2843,6 +2843,87 @@ público68/operación de firma12 previos intactos, no repetir suites sin cambios
 Driver/submódulo intactos. Informes privados0700/0600 bajo local/, no publicar
 inventarios completos ni agregar capturas a Git. JCOP4/RSA3072 siguen pendientes.
 
+## Idopte READ DF0F aceptado; SELECT B001 bloqueado: 22:21:37 UTC
+
+El usuario registró `442c70e`; principal y OpenSC `3dfef6704` limpios antes de
+esta revisión. El nuevo modo `make inspect/jcop4-idopte-read-df0f READER=0`
+usa el inventario habitual de Idopte, con stdin vacío y una excepción separada:
+`JCOP4_DIAGNOSTIC_READ_DF0F=1`, dependiente del permiso SELECT_DF0F y todos sus
+padres. Los modos previos conservan su bloqueo de READ DF0F.
+
+La excepción exige ATR conectado conocido, ADF seleccionado, estado vacío MF
+aceptado y SELECT DF0F exacto con SW9000. Permite una sola READ BINARY caso 2,
+CLA00, sin SFI, offset0 y Le **exactamente 150**, corto o extendido. Ese tamaño
+proviene del control observado por separado; no interpreta tag86 como política
+de lectura. No modifica la APDU ni reduce un Le mayor. Reserva 152 bytes para
+respuesta y SW, acepta únicamente 9000/6282 y devuelve datos solo a Idopte.
+No guarda contenido en traza, informe o spy. Errores de buffer, tamaño, SW,
+transporte o escritura del marker detienen el proceso sin GET RESPONSE,
+reintentos ni rehabilitación por SELECT/reconexión. El lanzador elimina la
+variable externa en inventario previo, todos los otros modos y firma.
+
+Tras las pruebas, el agente ejecutó una vez:
+
+```sh
+nix develop --offline -c make inspect/jcop4-idopte-read-df0f READER=0
+```
+
+Informe privado `local/jcop4-idopte-read-df0f-BeXtNUJ3/report.txt`,
+**2026-10-13T22:21:37Z**. Compilación e inventario correctos, ATR de la conexión
+con Idopte conocido. Se transmitieron **73 APDU**, con transporte correcto:
+72 SW9000 y un estado vacío63C7. Últimos pasos observados:
+
+```text
+public_select=known_df0f_bounded_read_comparison
+public_header=00A40200
+transport=0
+sw=9000
+diagnostic_read=known_DF0F_contents_omitted
+public_header=00B00000
+transport=0
+sw=9000
+public_header=00A40000
+public_select=known_master_file
+transport=0
+sw=9000
+public_header=00A4040C
+public_select=known_chipdoc_application
+transport=0
+sw=9000
+blocked_header=00A40200
+blocked_select_ef=B001
+```
+
+El guard bloqueó SELECT B001 **antes de transmitir**: no hay SW, control ni
+contenido de ese archivo. `module_exit_status=0`, pero
+`token_info_result=CKR_TOKEN_NOT_PRESENT` y
+`diagnostic_result=token_info_unavailable` hacen terminar el diagnóstico con 1;
+`observer_result=events_recorded`. No es un rechazo de READ DF0F por la tarjeta
+ni un nuevo VERIFY6982. No se introdujo PIN ni se solicitó login, MSE, GA,
+secure messaging, PSO, escritura o firma. Hubo la única consulta de estado
+VERIFY sin datos ya permitida; no equivale a autenticación con credencial.
+
+Esta observación demuestra que Idopte pudo leer DF0F en esta secuencia, sin
+solicitar autenticación en el proceso. No identifica el contenido, su política
+general ni su necesidad para el driver libre; tampoco demuestra licencia,
+PACE o chip authentication. Mantener los datos privados, sin copiarlos a Git.
+
+El código local `pkcs15-cedulauy.c` llama B001 al certificado de firma de la
+cédula uruguaya, con AID, PIN y llave distintos. Esa coincidencia de FID es una
+pista **de otro perfil**, no evidencia del contenido de B001 en esta tarjeta.
+La revisión estática de textos/fuentes del ZIP no encontró B001. El siguiente
+contraste es obtener un resumen de las rutas de certificados de CDF7005 bajo
+el AID conocido y comprobar si referencia B001; omitir IDs, nombres y datos.
+No ampliar SELECT/READ B001 todavía ni repetir inventario o PIN por inercia.
+
+Pasaron **99 comprobaciones del observador/constructor/decoder**, **75 del
+lanzador público** y **6 del lanzador de firma**: 180. Incluyen respuesta solo
+al cliente, SELECT-only anterior, límite de una READ, formas inválidas,
+credenciales bloqueadas, SW/tamaños inválidos, log fallido, pérdida de contexto,
+constructor sin padre/inválido y delegación PC/SC real con backend ficticio.
+Biblioteca real compilada. Helper 68 y operación de firma 12 previos intactos;
+no se repitieron sus suites. Driver/submódulo intactos. JCOP4/RSA3072 pendientes.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño
