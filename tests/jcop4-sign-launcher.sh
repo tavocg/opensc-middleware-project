@@ -44,7 +44,7 @@ fi
     ${LIBPCSCLITE_DELEGATE-unset} == unset && ${LIBPCSCLITE_SPY_DELEGATE-unset} == unset &&
     ${LD_PRELOAD-unset} == unset && ${OPENSC_DEEPBIND-unset} == unset &&
     ${JCOP4_PUBLIC_DISCOVERY_TRACE-unset} == unset && ${JCOP4_PUBLIC_SELECT_SPY_TRACE-unset} == unset &&
-    ${JCOP4_DIAGNOSTIC_READ4141-unset} == unset && ${JCOP4_DIAGNOSTIC_READ4109-unset} == unset && ${JCOP4_DIAGNOSTIC_AODF-unset} == unset &&
+    ${JCOP4_DIAGNOSTIC_READ4141-unset} == unset && ${JCOP4_DIAGNOSTIC_READ4109-unset} == unset && ${JCOP4_DIAGNOSTIC_AODF-unset} == unset && ${JCOP4_DIAGNOSTIC_PRKDF-unset} == unset &&
     ${OPENSC_DEBUG-} == 0 && $(stat -c %a "$2") == 700 && $(stat -c %a "$OPENSC_CONF") == 600 ]] || exit 94
 printf 'helper\n' >> "$FIXTURE_SIGN_ROOT/called"
 if [[ ${FIXTURE_HELPER_FAILURE:-0} != 0 ]]; then exit "$FIXTURE_HELPER_FAILURE"; fi
@@ -61,6 +61,7 @@ export LD_PRELOAD= OPENSC_DEEPBIND=1 JCOP4_PUBLIC_DISCOVERY_TRACE=/should/not/be
 export JCOP4_DIAGNOSTIC_READ4141=1
 export JCOP4_DIAGNOSTIC_READ4109=1
 export JCOP4_DIAGNOSTIC_AODF=1
+export JCOP4_DIAGNOSTIC_PRKDF=1
 printf -v task_command 'bash %q' "$task_tmp/scripts/sign-jcop4.sh"
 task_run() {
     local task_expected=$1 task_rc=0

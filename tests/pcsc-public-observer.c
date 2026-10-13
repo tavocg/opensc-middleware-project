@@ -64,7 +64,7 @@ static FILE *fixture_reset(void)
 	control_size = 16; control_result = 0;
 	fixture_sw = 0x9000;
 	fixture_payload = 16; fixture_overrun = 0;
-	compare_aodf = read7001_budget = read7001_offset = read7001_calls = compare_read4109 = read4109_calls = compare_read4141 = read4141_budget = read4141_offset = read4141_calls = 0;
+	compare_prkdf = read7002_budget = read7002_offset = read7002_calls = compare_aodf = read7001_budget = read7001_offset = read7001_calls = compare_read4109 = read4109_calls = compare_read4141 = read4141_budget = read4141_offset = read4141_calls = 0;
 	comparison_atr_ok = 1; /* Unit fixture simulates a validated connection. */
 	return file;
 }
@@ -90,6 +90,25 @@ static void check_private(FILE *file)
 	assert(!strstr(log, "PRIVATE_RESPONSE") && !strstr(log, "SECRET_PIN") &&
 			!strstr(log, "length") && !strstr(log, "len=") && !strstr(log, "data="));
 	fclose(file); trace_fd = -1;
+}
+static FILE *fixture_prkdf(void)
+{
+	const unsigned char app[] = { 0, 0xA4, 4, 0x0C, 15, 0xE8, 0x28, 0xBD, 8, 0x0F, 0xA0, 0, 0, 3, 0x63, 0x64, 0x79, 0x6E, 0x69, 0x64 };
+	const unsigned char source[] = { 0, 0xA4, 2, 0, 2, 0x41, 0x41, 0 };
+	const unsigned char small[] = { 0, 0xA4, 2, 0, 2, 0x41, 0x09, 0 };
+	const unsigned char aodf[] = { 0, 0xA4, 2, 0, 2, 0x70, 1, 0 };
+	const unsigned char target[] = { 0, 0xA4, 2, 0, 2, 0x70, 2, 0 };
+	const unsigned char read[] = { 0, 0xB0, 0, 0, 0 };
+	const unsigned char smallread[] = { 0, 0xB0, 0, 0, 17 };
+	FILE *file = fixture_reset();
+	compare_read4141 = compare_read4109 = compare_aodf = compare_prkdf = 1;
+	assert(send_command(app, sizeof(app)) == 0 && send_command(source, sizeof(source)) == 0);
+	assert(send_large(read, sizeof(read)) == 0 && send_command(small, sizeof(small)) == 0);
+	fixture_payload = 17;
+	assert(send_large(smallread, sizeof(smallread)) == 0 && send_command(aodf, sizeof(aodf)) == 0);
+	fixture_payload = 16;
+	assert(send_large(read, sizeof(read)) == 0 && send_command(target, sizeof(target)) == 0 && selected_public_file == 6);
+	return file;
 }
 int main(void)
 {
@@ -118,6 +137,55 @@ int main(void)
 			send_command(version, sizeof(version)) == 0 && calls == 5);
 	check_private(file);
 	puts("PASS public observer forwards only allowed discovery and logs no payloads or lengths");
+	{
+		const unsigned char target[] = { 0, 0xA4, 2, 0, 2, 0x70, 2, 0 };
+		unsigned char chunk[] = { 0, 0xB0, 0, 0, 0 };
+		file = fixture_prkdf(); fixture_payload = 256;
+		for (unsigned int i = 0; i < 8; i++) {
+			chunk[2] = i; chunk[3] = 0;
+			assert(send_large(chunk, sizeof(chunk)) == 0);
+		}
+		assert(read7002_budget == 2048 && read7002_offset == 2048 && read7002_calls == 8);
+		fixture_payload = 16; assert(send_command(target, sizeof(target)) == 0);
+		chunk[2] = 0;
+		int before = calls;
+		assert(send_large(chunk, sizeof(chunk)) != 0 && calls == before);
+		check_private(file);
+		puts("PASS PrKDF reads at most 2048 contiguous bytes and does not renew offset or budget on reselect");
+		file = fixture_prkdf(); chunk[2] = 0; chunk[4] = 16; fixture_payload = 16;
+		for (unsigned int i = 0; i < 10; i++) {
+			chunk[3] = i * 16;
+			assert(send_large(chunk, sizeof(chunk)) == 0);
+		}
+		chunk[3] = 160; before = calls;
+		assert(send_large(chunk, sizeof(chunk)) != 0 && calls == before && read7002_calls == 10);
+		check_private(file);
+		puts("PASS PrKDF has an independent ten-call process limit even if its byte budget remains");
+		for (int i = 0; i < 9; i++) {
+			unsigned char bad[] = { 0, 0xB0, 0, 0, 0 };
+			file = fixture_prkdf(); before = calls;
+			if (i == 0) bad[0] = 1;
+			if (i == 1) bad[0] = 0x0C;
+			if (i == 2) bad[2] = 0x80;
+			if (i == 3) bad[3] = 1;
+			if (i == 4) compare_prkdf = 0;
+			if (i == 5) comparison_atr_ok = 0;
+			if (i == 6) fixture_sw = 0x6982;
+			if (i == 7) fixture_sw = 0x6101;
+			if (i == 8) fixture_overrun = 1;
+			assert(send_large(bad, sizeof(bad)) != 0 && stopped && calls == before + (i >= 6));
+			assert(send_large(get_response, sizeof(get_response)) != 0 && send_command(pin, sizeof(pin)) != 0);
+			check_private(file);
+		}
+		puts("PASS PrKDF rejects altered context/form and stops on security, continuation or overrun without GET RESPONSE or PIN");
+		file = fixture_prkdf(); compare_prkdf = 0; before = calls;
+		assert(send_command(target, sizeof(target)) != 0 && calls == before);
+		check_private(file);
+		file = fixture_prkdf(); read7001_calls = 0; before = calls;
+		assert(send_command(target, sizeof(target)) != 0 && calls == before);
+		check_private(file);
+		puts("PASS PrKDF selection requires its separate opt-in and prior AODF read in the known ADF");
+	}
 	{
 		const unsigned char source[] = { 0, 0xA4, 2, 0, 2, 0x41, 0x41, 0 };
 		const unsigned char smallfile[] = { 0, 0xA4, 2, 0, 2, 0x41, 0x09, 0 };

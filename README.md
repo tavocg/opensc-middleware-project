@@ -170,6 +170,16 @@ llaves privadas; todavía no se observó la ruta de autenticación del proveedor
 Pasaron 59 comprobaciones del helper, 57 del observador, 51 del lanzador y 6
 de aislamiento del lanzador de firma. OpenSC/driver intactos.
 
+`make inspect/jcop4-file7002` confirmó SELECT9000 y un directorio transparente
+de 2048 **bytes**; ese tamaño no es una longitud de llave RSA. El modo separado
+`make inspect/jcop4-idopte-prkdf READER=0` permite leer sus metadatos hasta
+2048 bytes en diez solicitudes contiguas de hasta256 bytes, sin registrar el
+contenido ni autenticar. La ejecución obtuvo 9000 en diez READ y encontró
+SELECT7004, bloqueado antes del transporte. ODF7004 es el directorio de llaves
+públicas; sus algoritmos todavía no se contrastaron con esta observación.
+Pasaron 60 comprobaciones del helper, 64 del observador, 55 del lanzador y 6
+del lanzador de firma. El driver libre todavía no firma con esta JCOP4.
+
 Capturas privadas bajo local/jcop4-idopte-spy-*/; no agregarlas a Git.
 Pasaron previamente **30 comprobaciones del observador/decoder y 40 del
 lanzador** con transporte ficticio. El diagnóstico de firma pasó además

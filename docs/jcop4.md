@@ -2376,6 +2376,83 @@ independientes; redirector real devuelve AODF sintético solo al cliente y bloqu
 VERIFY. Helper de firma/driver intactos, suite12 previa vigente. Archivos privados
 0700/0600 bajo local/, no incorporar capturas o inventarios completos a Git.
 
+## PrKDF7002 leído; SELECT7004 bloqueado: 13 de octubre, 20:33:01 UTC
+
+Principal `c61fdd7`, OpenSC `3dfef6704`, limpios al comenzar. El usuario hizo
+commit anterior. Se contrastó el FID con el ODF actual: 7002=`private_keys`.
+El inventario nativo previo ya obtuvo referencias de llaves RSA con atributo
+native=1 sin login; la nueva observación examina acceso al directorio de
+metadatos, no una extracción de material privado de esas llaves.
+
+El agente preparó y ejecutó SELECT-only de ese FID:
+`nix develop --offline -c make inspect/jcop4-file7002 READER=0`. Informe privado
+`local/jcop4-file7002-832gXk0r/report.txt`, **20:30:16 UTC**:
+
+```text
+file7002_select_transport=0
+file7002_select_sw=9000
+file7002_structure=transparent
+file7002_size=2048
+file7002_security_format=profile_uninterpreted
+file7002_security_direct_tags=86
+file7002_standard_compact_read=uninterpreted
+```
+
+Inventario, compilación, conexión, lock, EF.ATR/EF.DIR, unlock y proceso correctos.
+No READ7002 en esa consulta, binding o PIN. **2048 es el tamaño del archivo en
+bytes**, no bits de una llave. No interpretar el tag86 como política pública.
+La nueva opción fija reutiliza el analizador de control y exige FID83 correcto.
+
+Se añadió después el modo separado `inspect/jcop4-idopte-prkdf`, opt-in
+`JCOP4_DIAGNOSTIC_PRKDF=1` solo junto a los tres anteriores dentro del proceso
+Idopte de inventario. No cambia los modos existentes. SELECT7002 requiere ATR
+validado, ADF conocido/9000, READ7001 previo y forma básica exacta A4/02/00/Lc2,
+total7 u8. Solo la selección aceptada permite READ BINARY caso-2 básico, sin
+SFI/datos de entrada/SM. Se preserva la solicitud del proveedor: **hasta256 bytes
+por petición, hasta2048 bytes solicitados totales, máximo diez solicitudes**,
+offset inicial0 y siguientes contiguos a los datos realmente devueltos.
+SELECT no repone presupuesto/cursor. Buffer temporal Le+2 (máximo258);
+transporte correcto, tamaño2..Le+2 y SW9000/6282 exclusivamente. Fallos detienen,
+sin GET RESPONSE/reintento. Todos los contenidos siguen omitidos de las trazas;
+la reconexión no reinicia ningún permiso. Lanzadores de inventario y firma
+limpian el opt-in externo. PIN/MSE/GA/SM/PSO/escrituras siguen bloqueados.
+
+Ejecución por el agente una vez:
+`nix develop --offline -c make inspect/jcop4-idopte-prkdf READER=0`, informe
+`local/jcop4-idopte-prkdf-2LKKNfZB/report.txt`, **20:33:01 UTC**. Inventario y
+compilación correctos, comparison_atr=known_jcop4. **34 APDU transmitidas**, todas
+transporte0/SW9000. SELECT7002 y diez READ aceptados, cabeceras de offset:
+0000, 00DF, 01BE, 029D, 037C, 045B, 053A, 0619, 06F8 y 07D7. El registro no
+conserva Le ni longitud devuelta final: no afirmar lectura completa por la
+secuencia de cabeceras. Contenido entregado exclusivamente al proceso Idopte.
+
+```text
+blocked_header=00A40200
+blocked_select_ef=7004
+module_exit_status=1
+observer_result=events_recorded
+```
+
+El siguiente SELECT7004 fue bloqueado **antes de transmitir**, sin SW de tarjeta
+ni contenido de7004. El error del módulo/Make corresponde al guard, no a un
+rechazo de READ7002 ni al VERIFY6982 previo. No hubo PIN, autenticación o firma.
+El ODF ya identifica 7004=`public_keys`; el siguiente contraste útil es el
+inventario de algoritmos/referencias de ese directorio en la misma aplicación.
+Su nombre por sí solo no identifica una clave de Chip Authentication, ni prueba
+que la ruta ECDH del ZIP corresponda a esta tarjeta. No descartar CA/PACE por
+una enumeración de slots; no pedir otra prueba de PIN por este resultado.
+
+Pasaron **60 comprobaciones del helper, 64 del observador/constructor/decoder,
+55 del lanzador y 6 del lanzador de firma**, transporte simulado. Las pruebas
+nuevas verifican presupuesto2048 no renovable, límite independiente de diez
+llamadas, contexto/ATR/secuencia, continuidad, SW/overrun, aislamiento y
+constructor inválido/sin modo padre. Redirector real retorna PrKDF sintético
+únicamente al cliente y bloquea VERIFY. Compilación real del helper y biblioteca.
+Operación de firma y driver intactos; sus pruebas previas siguen vigentes.
+Informes privados0700/0600; no volcar inventarios completos/IDs o respuestas a
+Git/chat. Próximo paso concreto: examinar metadatos PuKDF7004 con el precedente
+ODF actual. No repetir esta consulta idéntica. JCOP4/RSA3072 siguen pendientes.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño

@@ -2,7 +2,7 @@
  * An opt-in pcsc-spy stream captures only permitted SELECT 4141 control
  * information; never authentication buffers or that EF's contents.
  * Separate opt-ins permit bounded READ 4141, one 17-byte READ 4109 and
- * bounded AODF7001 reads to Idopte only, without recording contents or
+ * bounded AODF7001/PrKDF7002 reads to Idopte only, without recording contents or
  * forwarding authentication. */
 #define _GNU_SOURCE
 #include <dlfcn.h>
@@ -18,10 +18,11 @@
 
 static int trace_fd = -1, stopped, selected_public_file, selected_mf, selected_app, handle_set, pending_response;
 static int select_spy_fd = -1;
-static int compare_read4141, compare_read4109, compare_aodf;
+static int compare_read4141, compare_read4109, compare_aodf, compare_prkdf;
 static int comparison_atr_ok;
 static unsigned int read4141_budget, read4141_offset, read4141_calls, read4109_calls;
 static unsigned int read7001_budget, read7001_offset, read7001_calls;
+static unsigned int read7002_budget, read7002_offset, read7002_calls;
 static unsigned int events;
 static unsigned int lifecycle_events;
 static SCARDHANDLE trace_handle;
@@ -56,6 +57,14 @@ __attribute__((constructor)) static void observer_init(void)
 		else {
 			compare_aodf = 1;
 			if (dprintf(trace_fd, "comparison_directory=bounded_aodf7001_contents_omitted\n") < 0) stopped = 1;
+		}
+	}
+	path = getenv("JCOP4_DIAGNOSTIC_PRKDF");
+	if (path) {
+		if (strcmp(path, "1") || !compare_aodf || trace_fd < 0) stopped = 1;
+		else {
+			compare_prkdf = 1;
+			if (dprintf(trace_fd, "comparison_keys=bounded_prkdf7002_contents_omitted\n") < 0) stopped = 1;
 		}
 	}
 	path = getenv("JCOP4_PUBLIC_SELECT_SPY_TRACE");
@@ -246,6 +255,17 @@ static int allowed_command(const unsigned char *cmd, DWORD len, int *next_file, 
 				*next_app = 1;
 				return 1;
 			}
+			if (fid == 0x7002) {
+				/* Native PKCS#15 key metadata referenced by this ODF;
+				 * transparent/2048 bytes independently confirmed. */
+				if (!compare_prkdf || !comparison_atr_ok || !selected_app ||
+						!read7001_calls || cmd[0] != 0 || cmd[2] != 2 || cmd[3] != 0 || lc != 2)
+					return 0;
+				*next_file = 6;
+				*next_mf = 0;
+				*next_app = 1;
+				return 1;
+			}
 			if (fid == 0xD003) {
 				/* EF.SN precedent: ANS CPS4 section 3.1.2. Only the observed
 				 * SELECT EF form under a confirmed MF; never record its data. */
@@ -292,6 +312,13 @@ static int allowed_command(const unsigned char *cmd, DWORD len, int *next_file, 
 		return compare_aodf && comparison_atr_ok && selected_app && size && size <= 300 &&
 				offset == read7001_offset && offset <= 300 && size <= 300 - offset &&
 				read7001_budget <= 300 - size && read7001_calls < 2;
+	}
+	if (cmd[1] == 0xB0 && selected_public_file == 6) {
+		unsigned int size = read4141_size(cmd, len);
+		unsigned int offset = ((unsigned int)cmd[2] << 8) | cmd[3];
+		return compare_prkdf && comparison_atr_ok && selected_app && size && size <= 256 &&
+				offset == read7002_offset && offset <= 2048 && size <= 2048 - offset &&
+				read7002_budget <= 2048 - size && read7002_calls < 10;
 	}
 	if (cmd[1] == 0xB0)
 		return selected_public_file && len == 5 && !(cmd[2] & 0x80) &&
@@ -357,10 +384,10 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
 		stopped = 1;
 		goto out;
 	}
-	diagnostic_read = (selected_public_file >= 3 && selected_public_file <= 5) && cmd[1] == 0xB0;
+	diagnostic_read = (selected_public_file >= 3 && selected_public_file <= 6) && cmd[1] == 0xB0;
 	if (diagnostic_read) {
 		read_size = read4141_size(cmd, len);
-		read_fid = selected_public_file == 5 ? 0x7001 : selected_public_file == 4 ? 0x4109 : 0x4141;
+		read_fid = selected_public_file == 6 ? 0x7002 : selected_public_file == 5 ? 0x7001 : selected_public_file == 4 ? 0x4109 : 0x4141;
 		if (!response || !response_len || capacity < read_size + 2) {
 			dprintf(trace_fd, "blocked=read%04X_output_buffer\n", read_fid);
 			stopped = 1;
@@ -372,9 +399,12 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
 			read4141_calls++;
 		} else if (read_fid == 0x4109)
 			read4109_calls++;
-		else {
+		else if (read_fid == 0x7001) {
 			read7001_budget += read_size;
 			read7001_calls++;
+		} else {
+			read7002_budget += read_size;
+			read7002_calls++;
 		}
 		if (dprintf(trace_fd, "diagnostic_read=known_%04X_contents_omitted\n", read_fid) < 0) {
 			stopped = 1;
@@ -393,6 +423,8 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
 				"known_4109_bounded_read_comparison" : "known_4109_metadata_only");
 	if (cmd[1] == 0xA4 && cmd[2] == 2 && cmd[4] == 2 && cmd[5] == 0x70 && cmd[6] == 0x01)
 		dprintf(trace_fd, "public_select=known_aodf7001_bounded_read_comparison\n");
+	if (cmd[1] == 0xA4 && cmd[2] == 2 && cmd[4] == 2 && cmd[5] == 0x70 && cmd[6] == 0x02)
+		dprintf(trace_fd, "public_select=known_prkdf7002_bounded_read_comparison\n");
 	if (cmd[0] != 0) selected_app = 0;
 	/* A failed/warning SELECT may still change card context: drop old permission. */
 	if (next_file >= 0)
@@ -411,6 +443,7 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
 				*response_len = bounded_size;
 				if (read_fid == 0x4141) read4141_offset += bounded_size - 2;
 				if (read_fid == 0x7001) read7001_offset += bounded_size - 2;
+				if (read_fid == 0x7002) read7002_offset += bounded_size - 2;
 			} else {
 				dprintf(trace_fd, "read%04X_transport=%ld\nread%04X_sw=%04X\nblocked=read%04X_status\n",
 						read_fid, (long)rv, read_fid, sw, read_fid);

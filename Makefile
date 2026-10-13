@@ -14,8 +14,8 @@
 .PHONY: inspect/jcop4-security-info
 .PHONY: inspect/jcop4-pin-policy
 .PHONY: inspect/jcop4-odf-map
-.PHONY: inspect/jcop4-file4141 inspect/jcop4-file4109 inspect/jcop4-file7001
-.PHONY: inspect/jcop4-idopte-compare inspect/jcop4-idopte-read4109 inspect/jcop4-idopte-aodf
+.PHONY: inspect/jcop4-file4141 inspect/jcop4-file4109 inspect/jcop4-file7001 inspect/jcop4-file7002
+.PHONY: inspect/jcop4-idopte-compare inspect/jcop4-idopte-read4109 inspect/jcop4-idopte-aodf inspect/jcop4-idopte-prkdf
 .PHONY: inspect/jcop4-idopte
 .PHONY: inspect/jcop4-idopte-discovery inspect/jcop4-idopte-spy test/pcsc-public-observer
 
@@ -45,6 +45,7 @@ help:
 		'make inspect/jcop4-security-info Consulta metadatos de autenticación, versión y CardAccess, sin PIN.' \
 		'make inspect/jcop4-pin-policy Consulta DOCP del PIN 1 en raíz/aplicación, sin PIN ni autenticación.' \
 		'make inspect/jcop4-odf-map Lee referencias del directorio 5031 sin seguirlas ni autenticar.' \
+		'make inspect/jcop4-file7002 Consulta control del directorio PrKDF7002 observado, sin READ ni PIN.' \
 		'make inspect/jcop4-file7001 Consulta control del directorio AODF 7001 observado, sin READ ni PIN.' \
 		'make inspect/jcop4-file4109 Consulta SELECT/metadatos del EF 4109 observado en Idopte, sin READ ni PIN.' \
 		'make inspect/jcop4-file4141 Consulta SELECT/metadatos del EF 4141, sin leer contenido ni autenticar.' \
@@ -54,6 +55,7 @@ help:
 		'make inspect/jcop4-idopte-compare READ 4141 hasta 400 bytes y SELECT 4109, sin leer 4109, guardar contenido ni autenticar.' \
 		'make inspect/jcop4-idopte-read4109 Compara siguiente paso Idopte tras READ 4109 único de 17 bytes, sin PIN.' \
 		'make inspect/jcop4-idopte-aodf Observa Idopte tras lectura acotada del directorio AODF7001, sin PIN.' \
+		'make inspect/jcop4-idopte-prkdf Observa Idopte tras lectura acotada de metadatos PrKDF7002, sin PIN.' \
 		'make test/pcsc-public-observer Comprueba el observador sin lector ni tarjeta.' \
 		'make sign/jcop4-apdu      Firma experimental RSA SHA-256 por APDU y verifica, un intento de PIN.' \
 		'make sign/jcop4-verify-first Mismo diagnóstico, verifica PIN antes de MSE; un intento y verificación OpenSSL.' \
@@ -110,6 +112,9 @@ inspect/jcop4-pin-policy:
 inspect/jcop4-odf-map:
 	@bash scripts/probe-jcop4.sh "$$READER" --odf-map
 
+inspect/jcop4-file7002:
+	@bash scripts/probe-jcop4.sh "$$READER" --file7002
+
 inspect/jcop4-file7001:
 	@bash scripts/probe-jcop4.sh "$$READER" --file7001
 
@@ -118,6 +123,9 @@ inspect/jcop4-file4109:
 
 inspect/jcop4-file4141:
 	@bash scripts/probe-jcop4.sh "$$READER" --file4141
+
+inspect/jcop4-idopte-prkdf:
+	@bash scripts/probe-jcop4.sh "$$READER" --idopte-prkdf
 
 inspect/jcop4-idopte-aodf:
 	@bash scripts/probe-jcop4.sh "$$READER" --idopte-aodf

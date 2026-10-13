@@ -6,7 +6,44 @@ la tarjeta. El usuario ejecuta las operaciones que requieran PIN o GUI. Esto
 sustituye las restricciones anteriores de no ejecutar Git/hardware/Idopte por
 el agente; conservar límites de cada diagnóstico y privacidad de los registros.
 
-**Último resultado: READ7001 -> SELECT7002 bloqueado, 20:18:15 UTC.**
+**Último resultado: READ7002 -> SELECT7004 bloqueado, 20:33:01 UTC.**
+Usuario hizo commit `c61fdd7`, OpenSC `3dfef6704`, limpios al comenzar.
+Agente ejecutó SELECT-only7002, `local/jcop4-file7002-832gXk0r/report.txt`,
+**20:30:16 UTC**: SELECT0/9000, transparente/**2048 bytes**, tag86/
+profile_uninterpreted/read_uninterpreted; compilación/inventario/contexto/
+EF.ATR/EF.DIR/unlock/proceso correctos, sin READ/binding/PIN. Ese tamaño es
+bytes del directorio, no bits de RSA. FID7002 confirmado en ODF=private_keys;
+inventario nativo previo obtuvo referencias RSA native=1, no extracción de clave.
+
+Después nuevo `make inspect/jcop4-idopte-prkdf READER=0`, agente sin PIN/GUI:
+`local/jcop4-idopte-prkdf-2LKKNfZB/report.txt`, **20:33:01 UTC**. Compilación/
+inventario correctos, ATR conectado conocido; 34 APDU transmitidas0/9000.
+SELECT7002 y diez READ aceptados, offsets0000/00DF/01BE/029D/037C/045B/053A/
+0619/06F8/07D7. Contenido/Le/longitud final omitidos, no afirmar lectura completa
+por cabeceras. **SELECT EF7004 bloqueado antes de transmitir**, sin SW de
+tarjeta, módulo1/events_recorded por guard. Sin PIN/VERIFY/MSE/GA/SM/PSO/firma.
+ODF7004=public_keys; siguiente contraste útil es su inventario de algoritmos/
+referencias, no asumir clave CA/Chip Authentication por nombre ni trasladar ZIP.
+VERIFY6982 y canal de autenticación siguen pendientes.
+
+Nuevo --file7002/target SELECT-only fijo, parser compartido valida83 y omite
+valores. --idopte-prkdf/target nuevo, opt-in JCOP4_DIAGNOSTIC_PRKDF=1 requiere
+AODF/READ4109/READ4141 dentro de Idopte inventario/slots/empty stdin. Modos
+anteriores mantienen SELECT/READ7002 bloqueados. Exige ADF/ATR/READ7001 previo,
+SELECT7002 básico exacto/9000. READ caso2 corto/extendido básico sin SFI ni datos,
+hasta256bytes/solicitud, presupuesto2048 y máximo10calls por proceso,
+continuidad con offset real y sin reposición por SELECT. BufferLe+2 máximo258,
+SW9000/6282, fallos/continuación/transporte/tamaño/log detienen; no GET RESPONSE
+ni reintentos. Solo contenidos al cliente. Lanzadores inventario/firma limpian
+opt-in externo. Registros privados0700/0600, no agregar local/ a Git.
+Pasaron **60 helper, 64 observador/constructor/decoder, 55 lanzador y 6 lanzador
+firma**, fake transporte/redirector real; helper/biblioteca compilados. Driver
+y operación firma intactos, pruebas12 previas vigentes, no repetir sin cambios.
+No repetir consulta idéntica ni pedir PIN; estudiar PuKDF7004 del mismo AID
+con precedente ODF. JCOP4/RSA3072 pendientes. Git autorizado pero montaje.git
+solo lectura sigue impidiendo commits si persiste.
+
+**Resultado anterior: READ7001 -> SELECT7002 bloqueado, 20:18:15 UTC.**
 Usuario registró `8dbd7da`, OpenSC `3dfef6704`, ambos limpios al comenzar.
 Agente ejecutó dos diagnósticos sin PIN/GUI. Primero SELECT-only7001:
 `local/jcop4-file7001-3dyC89fA/report.txt`, **20:15:53 UTC**, SELECT0/9000,
