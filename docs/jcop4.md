@@ -1373,7 +1373,7 @@ ni de soporte. **READ 4141 sigue bloqueado en el observador v6**. El error
 Idopte mEpNvPwv corresponde a ese bloqueo antes de transporte; el rechazo
 VERIFY autenticado de 5Dpadr1N es evidencia distinta y anterior.
 
-La siguiente intervención es confirmar si **esta misma JCOP4 ya produjo una
+En esa revisión se pidió confirmar si **esta misma JCOP4 ya produjo una
 firma válida con el Idopte instalado**, recordando una prueba anterior. No se
 solicita otra firma, PIN ni captura autenticada. La consulta pública Idopte
 6aaJ5sIO confirmó reconocimiento de ChipDoc v3.2/PIN inicializado, pero no
@@ -1392,6 +1392,65 @@ driver ni submódulo. Las 49/25/35 comprobaciones anteriores siguen vigentes y
 no se repitieron por estos cambios. No hardware ni commits por el agente.
 No repetir SELECT/descubrimiento como primer paso. JCOP4 aún no firma con
 OpenSC; RSA 3072 y la arquitectura final siguen pendientes.
+
+## Firma previa con Idopte y resumen estructural ampliado
+
+El usuario confirmó que **esta misma JCOP4 ya firmó satisfactoriamente con
+Idopte instalado**. Esa prueba previa establece una referencia de funcionamiento
+según su testimonio. No se ejecutó ni verificó otra firma/PDF por el agente.
+No demuestra qué protocolo usa Idopte, qué condición faltó en VERIFY 6982 ni
+que el intento OpenSC hubiera usado el PIN correcto. No solicitar otra firma
+para confirmar este dato ni leer 4141 por esa sola confirmación.
+
+El resumen anterior agrupa 86/A1/9C y no permite distinguir la estructura.
+El código iasecc existente busca 8C dentro de A1 antes de buscar una 8C directa
+([implementación local](../vendor/opensc/src/libopensc/card-iasecc.c)). Eso es
+un precedente de organización de TLV, **no prueba de que JCOP4 CR use ese
+perfil ni sus reglas**. Se amplía solo el diagnóstico --file4141, manteniendo
+exactamente su inventario y SELECT; no READ, binding ni autenticación:
+
+- `file4141_security_direct_tags`: presencia de tags con nombres fijos
+  8C/8B/AB/86/A1/9C/62/6F, sin valores ni tags arbitrarios.
+- `file4141_a1_structure`: un único A1 con TLV inmediatos válidos,
+  opaque_uninterpreted o multiple_uninterpreted. Si es opaco/malformado se
+  descarta toda evidencia parcial de sus hijos; no se exploran niveles siguientes.
+- `file4141_a1_security_tags`: los mismos nombres fijos presentes como hijos
+  inmediatos; `file4141_a1_other_tags` informa solo presencia de otros tags,
+  sin sus identificadores, referencias, valores ni tamaños.
+- `file4141_a1_8c_read_encoding`: resumen de la **codificación** de una sola
+  8C inmediata para descriptor transparente ordinario. Usa los grupos compactos
+  estándar ya documentados arriba; no resuelve condiciones no nulas. Duplicados,
+  datos inválidos o descriptor distinto quedan uninterpreted. No identifica
+  una ACL de contacto ni una política de lectura del perfil.
+
+Se conservan security_format y standard_compact_read anteriores. Una 8C
+anidada **no** se convierte en atributo directo ni cambia esos resultados.
+Incluso read_encoding=always describe solo bytes de ese atributo: sin conocer
+su papel en el perfil y el propósito de 4141 no concede READ. No se exponen
+buffers, ACL, SCB, PIN, longitudes reales de credenciales o campos propietarios.
+Ningún comando nuevo, bucle APDU, permiso del observador o driver se agrega.
+
+Pasaron **54 comprobaciones del helper** con transporte ficticio y compilación
+real contra build/opensc-offline. Las nuevas regresiones cubren distinción de
+tags, codificación anidada sin política global, privacidad de valores, A1
+malformado/duplicado, compactos inválidos/duplicados, ausencia de descriptor y
+contenedores más profundos sin interpretar. Log privado de pruebas:
+`build/opensc-offline/card-public-info-tests.log`. Observador v6 y lanzador
+sin cambios; sus 25/35 comprobaciones anteriores siguen vigentes, sin repetirlas.
+OpenSC/submódulo intactos; no hardware, Idopte, PIN ni commits por el agente.
+Principal c244218 al comenzar; OpenSC 3dfef6704.
+
+Se requiere una nueva selección para recoger la estructura que el informe
+anterior no conservó, con la misma JCOP4 y otros clientes cerrados:
+
+```bash
+nix develop -c make inspect/jcop4-file4141 READER=0
+```
+
+Sin PIN. Compila únicamente el helper. Revisar los campos nuevos antes de
+decidir el siguiente paso. **READ 4141 permanece bloqueado**; no repetir
+captura Idopte ni intentar autenticación todavía. VERIFY 6982, propósito del
+archivo, integración JCOP4 y transporte RSA 3072 siguen pendientes.
 
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 

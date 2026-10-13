@@ -678,7 +678,7 @@ int main(void)
 			fflush(stdout); rewind(capture);
 			assert(fread(output, 1, sizeof(output) - 1, capture) > 0);
 			assert(dup2(saved, STDOUT_FILENO) >= 0); close(saved); fclose(capture);
-			assert(!strcmp(output, "file4141_security_format=compact\nfile4141_standard_compact_read=uninterpreted\nfile4141_result=selected_metadata_only_no_read\n"));
+			assert(!strcmp(output, "file4141_security_format=compact\nfile4141_security_direct_tags=8C\nfile4141_standard_compact_read=uninterpreted\nfile4141_result=selected_metadata_only_no_read\n"));
 			puts("PASS fixed-file metadata omits names, proprietary fields, access data and raw responses");
 		}
 		{
@@ -735,6 +735,53 @@ int main(void)
 				expect_metadata_summary(opaque, sizeof(opaque), "file4141_standard_compact_read=always\n");
 			}
 			puts("PASS READ summaries require an ordinary transparent EF and omit unrelated names, proprietary values and security bytes");
+		}
+		{
+			const unsigned char direct86[] = { 0x62, 2, 0x86, 0 };
+			const unsigned char direct9c[] = { 0x62, 2, 0x9C, 0 };
+			const unsigned char nested[] = { 0x62, 14, 0x82, 1, 1, 0xA1, 9, 0x8C, 3, 3, 0x10, 0, 0x9C, 2, 1, 0xFF };
+			expect_metadata_summary(direct86, sizeof(direct86), "file4141_security_direct_tags=86\n");
+			expect_metadata_summary(direct9c, sizeof(direct9c), "file4141_security_direct_tags=9C\n");
+			expect_metadata_summary(nested, sizeof(nested), "file4141_security_direct_tags=A1\n");
+			expect_metadata_summary(nested, sizeof(nested), "file4141_a1_security_tags=8C,9C\n");
+			expect_metadata_summary(nested, sizeof(nested), "file4141_a1_8c_read_encoding=always\n");
+			expect_metadata_summary(nested, sizeof(nested), "file4141_standard_compact_read=uninterpreted\n");
+			puts("PASS profile tags are distinguished and nested compact encoding never becomes a direct or global READ policy");
+			{
+				const unsigned char private_nested[] = { 0x62, 17, 0x82, 1, 1, 0xA1, 12, 0x8C, 2, 1, 0x42, 0x85, 6, 'S', 'E', 'C', 'R', 'E', 'T' };
+				expect_metadata_summary(private_nested, sizeof(private_nested), "file4141_a1_other_tags=present_values_omitted\n");
+				expect_metadata_summary(private_nested, sizeof(private_nested), "file4141_a1_8c_read_encoding=nonzero_uninterpreted\n");
+				puts("PASS nested proprietary values and condition references are omitted from the report");
+			}
+			{
+				const unsigned char opaque[] = { 0x62, 9, 0x82, 1, 1, 0xA1, 4, 0x8C, 2, 1, 0xA1 };
+				unsigned char malformed[sizeof(opaque)];
+				const unsigned char multiple[] = { 0x62, 11, 0x82, 1, 1, 0xA1, 2, 0x8C, 0, 0xA1, 2, 0x9C, 0 };
+				memcpy(malformed, opaque, sizeof(malformed));
+				/* Valid outer A1, but its nested TLV runs past the container. */
+				malformed[8] = 3;
+				expect_metadata_summary(malformed, sizeof(malformed), "file4141_a1_structure=opaque_uninterpreted\n");
+				expect_metadata_summary(multiple, sizeof(multiple), "file4141_a1_structure=multiple_uninterpreted\n");
+				puts("PASS malformed and repeated A1 containers do not expose partial tag or condition evidence");
+			}
+			{
+				const unsigned char malformed_compact[] = { 0x62, 8, 0x82, 1, 1, 0xA1, 3, 0x8C, 1, 1 };
+				const unsigned char repeated[] = { 0x62, 13, 0x82, 1, 1, 0xA1, 8, 0x8C, 2, 1, 0, 0x8C, 2, 1, 0 };
+				const unsigned char recursive[] = { 0x62, 11, 0x82, 1, 1, 0xA1, 6, 0xA1, 4, 0x8C, 2, 1, 0 };
+				expect_metadata_summary(malformed_compact, sizeof(malformed_compact), "file4141_a1_8c_read_encoding=uninterpreted\n");
+				expect_metadata_summary(repeated, sizeof(repeated), "file4141_a1_8c_read_encoding=uninterpreted\n");
+				expect_metadata_summary(recursive, sizeof(recursive), "file4141_a1_security_tags=A1\n");
+				expect_metadata_summary(recursive, sizeof(recursive), "file4141_a1_8c_read_encoding=uninterpreted\n");
+				puts("PASS malformed or repeated compact data and deeper containers stay uninterpreted");
+			}
+			{
+				unsigned char record[sizeof(nested)];
+				const unsigned char no_descriptor[] = { 0x62, 6, 0xA1, 4, 0x8C, 2, 1, 0 };
+				memcpy(record, nested, sizeof(record)); record[4] = 2;
+				expect_metadata_summary(record, sizeof(record), "file4141_a1_8c_read_encoding=uninterpreted\n");
+				expect_metadata_summary(no_descriptor, sizeof(no_descriptor), "file4141_a1_8c_read_encoding=uninterpreted\n");
+				puts("PASS nested READ encoding also requires an ordinary transparent descriptor");
+			}
 		}
 	}
 	return 0;

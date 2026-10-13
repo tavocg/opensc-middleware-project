@@ -65,14 +65,24 @@ La consulta de seguridad posterior terminó correctamente y produjo
 `profile_uninterpreted`: el helper reconoció atributos dependientes del perfil,
 sin resolver su política de lectura. No prueba que requiera PACE ni que el
 archivo sea público. Se mantiene el bloqueo de READ; no repetir estas consultas
-como siguiente paso.
+sin el resumen ampliado.
 
-Está pendiente confirmar si **esta misma JCOP4 ya firmó con Idopte instalado**,
-recordando una prueba anterior; no se solicita otra firma ni PIN. La
-identificación del token por sí sola no acredita funcionamiento de firma.
-Los diagnósticos y sus límites están documentados en [docs/jcop4.md](docs/jcop4.md).
-Las 49 comprobaciones del helper, 25 del observador y 35 del lanzador anteriores
-siguen vigentes; esta revisión solo actualiza documentación.
+El usuario confirmó que **esta misma JCOP4 ya firmó satisfactoriamente con
+Idopte instalado**, en una prueba previa. No se ejecutó otra firma para
+comprobarlo ni se identificó todavía el protocolo de autenticación.
+Se amplía el resumen del helper para distinguir tags directos y los TLV
+inmediatos de A1, sin valores ni lectura de contenido. Su codificación compacta,
+si puede resumirse, no se usa como política global ni permiso READ.
+Con la misma tarjeta y otros clientes cerrados, siguiente consulta sin PIN:
+
+```bash
+nix develop -c make inspect/jcop4-file4141 READER=0
+```
+
+Compila solo el helper; no recompila OpenSC ni carga Idopte. Pasaron **54
+comprobaciones del helper** y su compilación offline. Observador/lanzador
+intactos; sus 25/35 comprobaciones anteriores siguen vigentes. Los diagnósticos
+y sus límites están documentados en [docs/jcop4.md](docs/jcop4.md).
 
 El descubrimiento Idopte previo (`make inspect/jcop4-idopte-discovery`) compila
 solo un observador y consulta información de módulo/slots/tokens, sin login

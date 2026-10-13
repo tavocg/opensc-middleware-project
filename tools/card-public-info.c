@@ -158,6 +158,74 @@ static int summarize_compact_read(const unsigned char *buf, size_t size, enum co
 	return 0;
 }
 
+static const char *compact_read_name(enum compact_read summary)
+{
+	const char *names[] = { "not_declared", "always", "nonzero_uninterpreted", "alternatives_uninterpreted", "proprietary_uninterpreted" };
+	return names[summary];
+}
+
+/* Only these fixed tag names may be reported. No arbitrary identifiers,
+ * values, lengths, reference numbers or security-condition bytes escape. */
+static unsigned int security_tag_bit(unsigned int tag)
+{
+	switch (tag) {
+	case 0x8C: return 1;
+	case 0x8B: return 2;
+	case 0xAB: return 4;
+	case 0x86: return 8;
+	case 0xA1: return 16;
+	case 0x9C: return 32;
+	case 0x62: return 64;
+	case 0x6F: return 128;
+	default: return 0;
+	}
+}
+
+static void print_security_tags(const char *key, unsigned int tags)
+{
+	const char *names[] = { "8C", "8B", "AB", "86", "A1", "9C", "62", "6F" };
+	unsigned int i;
+	int first = 1;
+	printf("%s=", key);
+	for (i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
+		if (!(tags & (1U << i))) continue;
+		printf("%s%s", first ? "" : ",", names[i]); first = 0;
+	}
+	printf("%s\n", first ? "none_recognized" : "");
+}
+
+struct a1_metadata {
+	unsigned int tags;
+	int valid_tlv, other_tags, compact_count, compact_valid;
+	enum compact_read compact;
+};
+
+/* A1 is constructed in BER. Inspect only its immediate TLVs; its role in
+ * this personalization is unknown. A nested 8C gets an encoding summary,
+ * never the JCOP3 designation 'contact ACL' or a global READ policy. */
+static void summarize_a1_metadata(const unsigned char *buf, size_t size, struct a1_metadata *out)
+{
+	const unsigned char *p = buf, *value;
+	size_t left = size, len;
+	unsigned int cla, tag, bit;
+	memset(out, 0, sizeof(*out));
+	out->valid_tlv = 1;
+	while (left) {
+		value = p;
+		if (sc_asn1_read_tag(&value, left, &cla, &tag, &len) < 0 || !value) {
+			/* Discard partial evidence if the container is opaque/malformed. */
+			memset(out, 0, sizeof(*out)); return;
+		}
+		bit = security_tag_bit(cla | tag);
+		out->tags |= bit;
+		if (!bit) out->other_tags = 1;
+		if ((cla | tag) == 0x8C && ++out->compact_count == 1)
+			out->compact_valid = !summarize_compact_read(value, len, &out->compact);
+		left -= (size_t)(value - p) + len;
+		p = value + len;
+	}
+}
+
 /* SELECT returns control information, not EF contents. Emit only bounded
  * metadata summaries; omit names, raw ACLs, proprietary values and responses. */
 static int print_file4141_metadata(const unsigned char *buf, size_t size)
@@ -167,7 +235,9 @@ static int print_file4141_metadata(const unsigned char *buf, size_t size)
 	unsigned int cla, tag, descriptor = 0;
 	int have_descriptor = 0, have_size = 0;
 	unsigned int security_forms = 0;
-	int compact_count = 0;
+	unsigned int direct_tags = 0;
+	int compact_count = 0, a1_count = 0;
+	struct a1_metadata a1 = {0};
 	enum compact_read compact = COMPACT_ABSENT;
 	if (!size) {
 		printf("file4141_result=selected_without_metadata_no_read\n");
@@ -192,6 +262,9 @@ static int print_file4141_metadata(const unsigned char *buf, size_t size)
 			if (have_size && candidate != file_size) return 1;
 			file_size = candidate; have_size = 1;
 		}
+		direct_tags |= security_tag_bit(cla | tag);
+		if ((cla | tag) == 0xA1 && ++a1_count == 1)
+			summarize_a1_metadata(value, len, &a1);
 		switch (cla | tag) {
 		case 0x8C:
 			security_forms |= 1;
@@ -216,10 +289,22 @@ static int print_file4141_metadata(const unsigned char *buf, size_t size)
 		security_forms == 1 ? "compact" : security_forms == 2 ? "referenced_uninterpreted" :
 		security_forms == 4 ? "expanded_uninterpreted" : security_forms == 8 ? "profile_uninterpreted" :
 		security_forms == 16 ? "nested_control_uninterpreted" : "multiple_forms_uninterpreted");
+	print_security_tags("file4141_security_direct_tags", direct_tags);
+	if (a1_count) {
+		printf("file4141_a1_structure=%s\n", a1_count != 1 ? "multiple_uninterpreted" :
+			a1.valid_tlv ? "immediate_tlv_only" : "opaque_uninterpreted");
+		if (a1_count == 1 && a1.valid_tlv) {
+			print_security_tags("file4141_a1_security_tags", a1.tags);
+			printf("file4141_a1_other_tags=%s\n", a1.other_tags ? "present_values_omitted" : "not_observed");
+			printf("file4141_a1_8c_read_encoding=%s\n", a1.compact_count == 1 && a1.compact_valid &&
+				have_descriptor && !(descriptor & 0x80) &&
+				((descriptor & 0x3F) == 1 || (descriptor & 0x3F) == 9) ?
+				compact_read_name(a1.compact) : "uninterpreted");
+		}
+	}
 	if (security_forms == 1 && compact_count == 1 && have_descriptor && !(descriptor & 0x80) &&
 			((descriptor & 0x3F) == 1 || (descriptor & 0x3F) == 9)) {
-		const char *conditions[] = { "not_declared", "always", "nonzero_uninterpreted", "alternatives_uninterpreted", "proprietary_uninterpreted" };
-		printf("file4141_standard_compact_read=%s\n", conditions[compact]);
+		printf("file4141_standard_compact_read=%s\n", compact_read_name(compact));
 	} else if (security_forms)
 		printf("file4141_standard_compact_read=uninterpreted\n");
 	printf("file4141_result=selected_metadata_only_no_read\n");

@@ -126,9 +126,19 @@ El informe o5gvxntR (16:38:38 UTC, principal 3f894c6) obtuvo SELECT 4141
 El helper agrupa tags 86/A1/9C y no identifica cuál está presente ni interpreta
 la política global; no inferir PACE obligatorio, contenido público ni condición
 que causó VERIFY 6982. No habilitar READ ni repetir el diagnóstico por inercia.
-Falta confirmar si esta misma JCOP4 ya firmó correctamente con Idopte, sin
-solicitar una prueba nueva ni PIN. Reconocimiento de token no prueba firma.
-Esta revisión solo actualiza documentación; código y comprobaciones intactos.
+El usuario confirmó después que **esta misma JCOP4 ya firmó satisfactoriamente
+con Idopte instalado**. Es una prueba previa informada por él, sin nueva firma
+ni verificación de PDF por el agente; no revela el protocolo ni prueba que
+el intento OpenSC empleara el PIN correcto. No repetir firma para confirmarlo.
+El helper SELECT-only ahora distingue los tags de seguridad directos y TLV
+inmediatos de un único A1, con nombres fijos y sin valores, referencias ni
+contenido del EF. Resume la codificación de una única 8C anidada cuando es
+válida para EF transparente, **sin atribuirle el significado de ACL de contacto
+ni convertirla en política global**. Las otras formas/condiciones quedan
+sin interpretar. READ 4141 sigue bloqueado. Siguiente consulta:
+`nix develop -c make inspect/jcop4-file4141 READER=0`, misma tarjeta y otros
+clientes cerrados, sin PIN. Pasaron 54 comprobaciones del helper y su
+compilación real offline. Observador/lanzador/driver/submódulo sin cambios.
 
 `pcsc-spy` estándar registra los buffers transmitidos, que pueden incluir el
 PIN durante autenticación. No usarlo con el PIN real ni considerar un filtro

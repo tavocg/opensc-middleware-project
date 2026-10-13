@@ -17,20 +17,43 @@ no equivale a ausencia de documentación/soporte. **Se mantiene el bloqueo READ
 4141 del observador v6**. No repetir los dos últimos diagnósticos por inercia.
 El error Idopte mEpNvPwv ya se explicó por READ bloqueado antes de transmitir;
 separarlo del único VERIFY autenticado 6982 de 5Dpadr1N.
-Se pidió confirmar si **esta misma JCOP4 ya produjo una firma válida con el
-Idopte instalado**, recordando una prueba anterior, sin solicitar firma nueva
-ni PIN. Esa información de funcionamiento real sigue pendiente; reconocer
-ChipDoc/listar token no acredita firma. Es la siguiente intervención del usuario,
-no ejecutar otro Make ni pedir PIN como primer paso. Con confirmación positiva,
-continuar buscando identificación documentada del archivo/perfil y diseñar una
-observación que proteja credenciales; no tratarla como permiso para READ/PIN.
-Si no existe prueba previa o falló, revisar ese alcance antes de atribuir el
-problema al driver libre. No contactar fabricantes/terceros sin instrucción
-expresa ni capturar APDU autenticadas con pcsc-spy estándar.
-Cambios actuales **solo documentación**, sin modificar helper, observador,
-lanzador, driver ni submódulo y sin hardware/Git por el agente. Sus 49/25/35
-comprobaciones previas siguen vigentes; no repetir suites por documentación.
-Dar comandos de commit del principal. El soporte JCOP4 y RSA 3072 sigue pendiente.
+**El usuario confirmó que esta misma JCOP4 ya firmó satisfactoriamente con
+Idopte instalado.** Es testimonio de una prueba previa; no se ejecutó ni
+verificó otra firma/PDF por el agente. La tarjeta tiene una ruta de firma
+funcional con Idopte, pero eso no identifica el protocolo ni prueba el PIN
+usado en 5Dpadr1N. No pedir una nueva firma para confirmar este dato.
+
+Preparado resumen estructural más preciso para **la misma consulta --file4141**,
+sin nuevos APDU: conserva security_format/standard_compact_read y añade
+security_direct_tags con exclusivamente nombres fijos 8C/8B/AB/86/A1/9C/62/6F.
+Si hay un único A1, valida sus TLV inmediatos y resume los mismos tags conocidos;
+los demás solo como other_tags=present_values_omitted, sin identificadores,
+valores, referencias, tamaños de atributos ni buffers. No recursión ni selección
+adicional. A1 opaco/malformado descarta evidencia parcial; duplicado no se
+interpreta. Una única 8C inmediata, con descriptor transparente ordinario,
+permite resumir exclusivamente su **codificación** READ (always/nonzero/
+alternativas/propietaria/no declarada), no su función en este perfil ni política
+global. Datos compactos inválidos o duplicados quedan uninterpreted. Nunca
+identificar A1 como ACL de contacto ni 9C como contactless para JCOP4. Incluso
+always en ese resumen no identifica contenido público ni autoriza READ.
+
+Cambios actuales en principal: helper, regresiones y documentación; driver,
+submódulo, observador v6 y lanzador intactos. Principal al comenzar c244218,
+OpenSC 3dfef6704. Pasaron **54 comprobaciones del helper** y su compilación real
+contra OpenSC offline. Las 25/35 del observador/lanzador anteriores siguen
+vigentes, sin repetir suites sin cambios. Sin hardware, Idopte, PIN ni Git por
+el agente. Soporte JCOP4 y RSA 3072 aún pendientes.
+
+**Siguiente intervención:** misma JCOP4, firmador/otros clientes cerrados:
+`nix develop -c make inspect/jcop4-file4141 READER=0`.
+Se necesita SELECT otra vez porque la captura anterior omitió/distinguió
+insuficientemente esta estructura; no reintento autenticado ni nueva variante
+APDU. Revisar los nuevos campos antes de decidir lecturas o autenticación.
+**Mantener READ 4141 bloqueado**; no repetir descubrimiento Idopte todavía.
+La confirmación de firma no autoriza READ desconocido, otro PIN, CAN/PACE ni
+observación autenticada. No contactar fabricantes/terceros sin instrucción
+expresa ni capturar APDU autenticadas con pcsc-spy estándar. Dar comandos de
+commit del principal; el agente no escribe Git.
 
 Informe anterior de Idopte, antes de revisar los metadatos de seguridad:
 `local/jcop4-idopte-discovery-mEpNvPwv/report.txt`, **16:30:07 UTC**, principal
