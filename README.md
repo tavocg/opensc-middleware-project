@@ -53,19 +53,21 @@ La selección temporal RSA/SHA-256 obtuvo `9000`; VERIFY vacío devolvió
 El primer intento autenticado devolvió **6982 en VERIFY**, sin llegar a
 firmar. La consulta pública posterior obtuvo versión `03020052` y CardAccess
 no disponible por SFI `1C` desde raíz (`6A82`). La consulta IAS/ECC de política
-del PIN devolvió `6D00` en raíz y aplicación, sin obtener datos. El siguiente
-paso es revisar el reconocimiento y estado público que anuncia Idopte:
+del PIN devolvió `6D00` en raíz y aplicación, sin obtener datos. Idopte reconoce
+ChipDoc v3.2, anuncia PIN inicializado y límites 6–14. El siguiente paso es
+observar su descubrimiento público con comandos limitados:
 
 ```bash
 nix develop
-make inspect/jcop4-idopte READER=0
+make inspect/jcop4-idopte-discovery READER=0
 ```
 
-Cerrar firmador y otros clientes y mantener esta JCOP4 insertada. Consulta
-únicamente información del módulo instalado, slots y tokens. No recompila,
-abre sesiones, solicita PIN ni firma. Informes privados en
-`local/jcop4-idopte-*/`, con etiquetas/seriales identificables. Pasaron
-25 comprobaciones del lanzador con herramientas simuladas.
+Cerrar firmador y otros clientes y mantener esta JCOP4 insertada. Compila
+solo un observador y consulta información de módulo/slots/tokens, sin login
+ni PIN. El observador guarda cabeceras/estados y bloquea comandos ajenos al
+descubrimiento permitido; **Idopte puede fallar por ese bloqueo**. No usar
+el observador para firmar. Informes privados en `local/jcop4-idopte-discovery-*/`.
+Pasaron 29 comprobaciones del lanzador y siete del observador sin tarjeta.
 No repetir el intento de PIN hasta identificar el requisito que falta.
 JCOP4 aún no está integrada en PKCS#11.
 RSA 3072 y modularidad para futuras generaciones siguen pendientes.

@@ -49,6 +49,13 @@ stdin vacío, trazas desactivadas e informe privado bajo `local/`. No solicita
 sesión/login/PIN, acceso a objetos ni firma; permite revisar el reconocimiento
 y flags anunciados del token. Detalles en [jcop4.md](jcop4.md).
 
+`make inspect/jcop4-idopte-discovery READER=0` repite solo ese descubrimiento
+público bajo un observador de cabeceras PC/SC. Bloquea comandos fuera de una
+lista pública acotada; puede causar un error deliberado del módulo. No captura
+datos ni permite VERIFY, login/firma o controles del lector. Usar exclusivamente
+ese objetivo; no precargarlo en firmador. El diagnóstico normal ya confirmó
+NXP/ChipDoc v3.2 y PIN inicializado en la JCOP4 (13 de octubre, 14:17:31 UTC).
+
 No se ha capturado una firma ni una sesión autenticada de Idopte. OpenSC ya
 enumera los objetos y produjo una firma RSA SHA-256 verificada con OpenSSL.
 La integración pendiente se prueba con `make firmador/jcop3`: fija

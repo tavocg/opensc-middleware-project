@@ -34,3 +34,4 @@ bash "$task_root/tests/firmador-launcher.sh" "$task_build/pkcs11-login-config-re
 bash "$task_root/tests/peer-context-launcher.sh"
 bash "$task_root/tests/jcop4-probe-launcher.sh"
 bash "$task_root/tests/jcop4-sign-launcher.sh"
+bash "$task_root/tests/pcsc-public-observer.sh"

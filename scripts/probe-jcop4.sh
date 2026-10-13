@@ -6,8 +6,8 @@ umask 077
 task_reader=${1:-${READER:-0}}
 task_mode=${2:---probe}
 if (( $# > 2 )) || [[ ! $task_reader =~ ^[0-9]+$ ]] ||
-        [[ $task_mode != --probe && $task_mode != --aids && $task_mode != --files && $task_mode != --pkcs15 && $task_mode != --sign-setup && $task_mode != --pin-status && $task_mode != --security-info && $task_mode != --pin-policy && $task_mode != --idopte ]]; then
-    printf 'Uso: bash scripts/probe-jcop4.sh [índice numérico de lector] [--probe|--aids|--files|--pkcs15|--sign-setup|--pin-status|--security-info|--pin-policy|--idopte]\n' >&2
+        [[ $task_mode != --probe && $task_mode != --aids && $task_mode != --files && $task_mode != --pkcs15 && $task_mode != --sign-setup && $task_mode != --pin-status && $task_mode != --security-info && $task_mode != --pin-policy && $task_mode != --idopte && $task_mode != --idopte-discovery ]]; then
+    printf 'Uso: bash scripts/probe-jcop4.sh [índice numérico de lector] [--probe|--aids|--files|--pkcs15|--sign-setup|--pin-status|--security-info|--pin-policy|--idopte|--idopte-discovery]\n' >&2
     exit 2
 fi
 task_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
@@ -32,6 +32,8 @@ elif [[ $task_mode == --pin-policy ]]; then
     task_dir=$(mktemp -d "$task_root/local/jcop4-pin-policy-XXXXXXXX")
 elif [[ $task_mode == --idopte ]]; then
     task_dir=$(mktemp -d "$task_root/local/jcop4-idopte-XXXXXXXX")
+elif [[ $task_mode == --idopte-discovery ]]; then
+    task_dir=$(mktemp -d "$task_root/local/jcop4-idopte-discovery-XXXXXXXX")
 elif [[ $task_mode == --security-info ]]; then
     task_dir=$(mktemp -d "$task_root/local/jcop4-security-info-XXXXXXXX")
 else
@@ -64,6 +66,8 @@ CONFIG
 } > "$task_report" 2>&1
 printf 'Informe: %s\n' "$task_report"
 task_query_index=0
+task_command_env=()
+task_allow_diagnostic_failure=no
 
 task_record_tool() {
     local task_binary=$1 task_status=0
@@ -73,14 +77,17 @@ task_record_tool() {
     printf '\n$ %q' "${task_binary##*/}" >> "$task_report"
     printf ' %q' "$@" >> "$task_report"
     printf '\n' >> "$task_report"
-    env -u OPENSC_API_TRACE_FILE -u OPENSC_DEBUG_FILE \
+    env -u OPENSC_API_TRACE_FILE -u OPENSC_DEBUG_FILE -u LD_PRELOAD -u JCOP4_PUBLIC_DISCOVERY_TRACE \
         -u OPENSC_JCOP3_SESSION_STATE -u OPENSC_JCOP3_PIN_STATUS_IN_PLACE \
         -u OPENSC_JCOP3_POST_LOGIN_STATUS -u OPENSC_JCOP3_POST_LOGIN_SELECT \
-        OPENSC_DEBUG=0 OPENSC_CONF="$task_config" \
+        OPENSC_DEBUG=0 OPENSC_CONF="$task_config" "${task_command_env[@]}" \
         "$task_binary" "$@" </dev/null > "$task_last_output" 2>&1 || task_status=$?
     cat "$task_last_output" >> "$task_report"
     printf 'exit_status=%s\n' "$task_status" >> "$task_report"
     if (( task_status != 0 )); then
+        if [[ $task_allow_diagnostic_failure == yes ]]; then
+            return "$task_status"
+        fi
         printf 'Consulta fallida; revisar el informe antes de continuar.\n' >&2
         exit "$task_status"
     fi
@@ -109,13 +116,45 @@ if [[ $task_atr_ok != yes ]]; then
     exit 1
 fi
 
-if [[ $task_mode == --idopte ]]; then
+if [[ $task_mode == --idopte || $task_mode == --idopte-discovery ]]; then
     task_pkcs11_tool="$task_root/build/opensc/src/tools/pkcs11-tool"
     task_idopte_module=/run/current-system/sw/lib/SCMiddleware/libidop11.so
     if [[ ! -x $task_pkcs11_tool || ! -f $task_idopte_module ]]; then
         printf 'Falta pkcs11-tool compilado o el módulo Idopte instalado; revisar las rutas del informe.\n' >&2
         printf 'pkcs11_tool=%s\nidopte_module=%s\n' "$task_pkcs11_tool" "$task_idopte_module" >> "$task_report"
         exit 1
+    fi
+    if [[ $task_mode == --idopte-discovery ]]; then
+        task_build_status=0
+        bash "$task_root/scripts/build-pcsc-public-observer.sh" >> "$task_report" 2>&1 || task_build_status=$?
+        printf 'observer_build_status=%s\n' "$task_build_status" >> "$task_report"
+        if (( task_build_status != 0 )); then
+            printf 'Falló la compilación del observador público; revisar el informe.\n' >&2
+            exit "$task_build_status"
+        fi
+        task_trace="$task_dir/public-headers.txt"
+        task_command_env=("LD_PRELOAD=$task_root/build/diagnostics/pcsc-public-observer.so" "JCOP4_PUBLIC_DISCOVERY_TRACE=$task_trace")
+        task_allow_diagnostic_failure=yes
+        task_status=0
+        task_record_tool "$task_pkcs11_tool" --module "$task_idopte_module" --show-info --list-slots || task_status=$?
+        task_events_observed=no
+        if [[ -f $task_trace ]]; then
+            while IFS= read -r task_line; do
+                case $task_line in
+                    public_header=*|blocked_header=*|blocked=*) task_events_observed=yes ;;
+                esac
+            done < "$task_trace"
+        fi
+        if [[ $task_events_observed != yes ]]; then
+            printf 'observer_result=no_pcsc_event_observed\n' >> "$task_report"
+            printf 'No se observaron llamadas PC/SC; revisar el informe.\n' >&2
+            exit 1
+        fi
+        printf '\nobserver_headers:\n' >> "$task_report"
+        cat "$task_trace" >> "$task_report"
+        printf 'observer_result=events_recorded\nmodule_exit_status=%s\n' "$task_status" >> "$task_report"
+        printf 'Descubrimiento público observado. El guard puede bloquear comandos y provocar error de Idopte; revisar el informe antes de continuar.\n'
+        exit "$task_status"
     fi
     # Module/slot/token information only: no session, C_Login or object access.
     task_record_tool "$task_pkcs11_tool" --module "$task_idopte_module" --show-info --list-slots

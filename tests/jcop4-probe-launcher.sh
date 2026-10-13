@@ -12,6 +12,15 @@ task_fixture_script=$(< "$task_tmp/scripts/probe-jcop4.sh")
 task_fixture_script=${task_fixture_script/'task_idopte_module=/run/current-system/sw/lib/SCMiddleware/libidop11.so'/'task_idopte_module="$task_root/fixture-idopte.so"'}
 printf '%s\n' "$task_fixture_script" > "$task_tmp/scripts/probe-jcop4.sh"
 touch "$task_tmp/fixture-idopte.so"
+cat > "$task_tmp/scripts/build-pcsc-public-observer.sh" <<'OBSERVER'
+#!/usr/bin/env bash
+set -euo pipefail
+exit_status=${FIXTURE_OBSERVER_BUILD_EXIT:-0}
+if (( exit_status )); then exit "$exit_status"; fi
+mkdir -p "$FIXTURE_PROBE_ROOT/build/diagnostics"
+# The loader ignores this empty fixture; the tool mock below simulates events.
+touch "$FIXTURE_PROBE_ROOT/build/diagnostics/pcsc-public-observer.so"
+OBSERVER
 cat > "$task_tmp/build/opensc/src/tools/pkcs11-tool" <<'PKCS11'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -20,6 +29,13 @@ set -euo pipefail
 [[ ${OPENSC_DEBUG-} == 0 && ${OPENSC_API_TRACE_FILE-unset} == unset &&
    ${OPENSC_DEBUG_FILE-unset} == unset && $(stat -c %a "$OPENSC_CONF") == 600 ]] || exit 98
 if IFS= read -r task_input; then exit 99; fi
+if [[ ${JCOP4_PUBLIC_DISCOVERY_TRACE-unset} != unset ]]; then
+    [[ ${LD_PRELOAD-} == "$FIXTURE_PROBE_ROOT/build/diagnostics/pcsc-public-observer.so" ]] || exit 96
+    printf 'format=public_discovery_headers_v1\n' > "$JCOP4_PUBLIC_DISCOVERY_TRACE"
+    if [[ ${FIXTURE_OBSERVER_NO_EVENTS:-0} == 0 ]]; then
+        printf 'public_header=00A40400\nsw=9000\nblocked_header=00CA0100\n' >> "$JCOP4_PUBLIC_DISCOVERY_TRACE"
+    fi
+fi
 printf '%s\n' "$*" > "$FIXTURE_PROBE_ROOT/idopte-called"
 printf 'Idopte fixture\n  token flags: PIN initialized\n'
 exit "${FIXTURE_IDOPTE_EXIT:-0}"
@@ -245,6 +261,29 @@ task_run 1 2 --idopte
 [[ ! -e $task_tmp/idopte-called && $(wc -l < "$task_tmp/called") == 3 ]]
 printf 'PASS JCOP4 Idopte query checks the observed ATR before loading the proprietary module\n'
 export FIXTURE_PROBE_ATR=3b:d5:18:ff:81:91:fe:1f:c3:80:73:c8:21:10:0a
+task_run 0 2 --idopte-discovery
+[[ -f $task_tmp/idopte-called && ! -e $task_tmp/public-called &&
+   $(< "$task_tmp/output.txt") == *'Descubrimiento público observado'* ]]
+for task_dir in "$task_tmp"/local/jcop4-idopte-discovery-*; do
+    [[ $(stat -c %a "$task_dir") == 700 && $(stat -c %a "$task_dir/public-headers.txt") == 600 &&
+       $(< "$task_dir/report.txt") == *'observer_result=events_recorded'* ]]
+done
+printf 'PASS JCOP4 discovery enables the guard only for public Idopte inventory and records private header events\n'
+export FIXTURE_IDOPTE_EXIT=17
+task_run 17 2 --idopte-discovery
+[[ $(< "$task_tmp/output.txt") == *'Descubrimiento público observado'* ]]
+printf 'PASS JCOP4 discovery preserves header evidence and module failure without retrying\n'
+unset FIXTURE_IDOPTE_EXIT
+export FIXTURE_OBSERVER_NO_EVENTS=1
+task_run 1 2 --idopte-discovery
+[[ $(< "$task_tmp/output.txt") == *'No se observaron llamadas PC/SC'* ]]
+printf 'PASS JCOP4 discovery reports absent interposition events instead of claiming success\n'
+unset FIXTURE_OBSERVER_NO_EVENTS
+export FIXTURE_OBSERVER_BUILD_EXIT=19
+task_run 19 2 --idopte-discovery
+[[ ! -e $task_tmp/idopte-called && $(wc -l < "$task_tmp/called") == 3 ]]
+printf 'PASS JCOP4 discovery stops before Idopte if observer compilation fails\n'
+unset FIXTURE_OBSERVER_BUILD_EXIT
 mv "$task_tmp/fixture-idopte.so" "$task_tmp/saved-idopte.so"
 task_run 1 2 --idopte
 [[ ! -e $task_tmp/idopte-called && ! -e $task_tmp/public-called ]]

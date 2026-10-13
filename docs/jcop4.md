@@ -601,7 +601,7 @@ Es un marco de investigación, no prueba de que este perfil requiera PACE
 ni explicación suficiente de 6982. La ausencia de Card CAN y el 6A82 de
 CardAccess tampoco descartan todas las formas de canal seguro.
 
-## Información pública de Idopte, pendiente
+## Información pública de Idopte
 
 Antes de nuevas APDU hipotéticas, revisar qué perfil y estado anuncia el
 módulo instalado. Se pidió al usuario confirmar si esta JCOP4 había firmado
@@ -639,6 +639,66 @@ comando acotado y datos privados, stdin/configuración, propagación de errores,
 ATR distinto y herramientas/módulo ausentes. Las herramientas se simulan;
 no se cargó Idopte ni utilizó lector en estas pruebas. No se repitieron las
 regresiones C/JCOP3 ni se modificó el submódulo.
+
+## Idopte reconoce ChipDoc v3.2: 13 de octubre, 14:17:31 UTC
+
+Informe `local/jcop4-idopte-6aaJ5sIO/report.txt`, principal `697eb0e`, OpenSC
+`3dfef6704`. Módulo Idopte 6.23/Cryptoki 2.40, slot 0 presente, fabricante
+NXP, modelo **ChipDoc v3.2**, límites públicos PIN 6/14. Flags anunciados:
+login required, rng, token initialized, PIN initialized. No flags de bloqueo,
+último intento o cambio pendiente. Proceso 0; no sesión/login/objetos/firma
+solicitados. Etiqueta, serial y URI se conservan solo en el informe privado.
+
+Coincide con identificación de versión/PKCS#15, pero no prueba el PIN, su
+contador exacto o una firma con Idopte. La confirmación de uso previo de esta
+JCOP4 con Idopte solicitada al usuario continúa pendiente. No repetir la
+consulta normal como primer paso ni atribuir 6982 a un cambio de PIN sin evidencia.
+
+## Descubrimiento público observado, pendiente
+
+Preparado `tools/pcsc-public-observer.c`, precarga PC/SC para **este único
+diagnóstico sin login**, sin modificar OpenSC ni Idopte. Objetivo: identificar
+el primer paso de descubrimiento que requiere un protocolo aún no estudiado.
+No usar la precarga con firmador ni con ninguna operación autenticada.
+
+Desde nix develop, misma tarjeta y otros clientes cerrados:
+
+```bash
+make inspect/jcop4-idopte-discovery READER=0
+```
+
+Compila solo la biblioteca de diagnóstico con headers PC/SC del flake. Tras
+inventario/ATR se activa exclusivamente para el mismo `--show-info --list-slots`
+de Idopte. El observador permite SELECT ISO de MF/AIDs observados y archivos
+bootstrap públicos (sin DFs intermedios desconocidos), GET DATA de versión CA 01 16,
+READ BINARY/RECORD de archivos bootstrap públicos 2F00/2F01/5031/5032 tras
+selección explícita y GET RESPONSE tras 61xx de una operación permitida.
+**Bloquea antes de transmitir** otros archivos/GET DATA/CLA, todos los VERIFY,
+MSE, PSO, autenticación, escritura y controles del lector (incluido PIN pad).
+Solo se transmite al primer handle, máximo 128 comandos; después del primer
+bloqueo/error de transporte o 69xx, no transmite más comandos de fallback.
+
+Guarda cabecera de cuatro bytes y transporte/SW, **nunca datos de comando/
+respuesta, AID/FID del payload, tamaños, Lc/Le, PIN ni hash**. Requiere crear
+log nuevo con O_EXCL/NOFOLLOW y modo 0600; si falla la creación, no transmite.
+La precarga externa se elimina del inventario, y esta se habilita solo en el
+proceso de diagnóstico. No autentica ni firma y no reenvía comandos bloqueados.
+
+Informe privado en `local/jcop4-idopte-discovery-*/report.txt`, cabeceras en
+`public-headers.txt`. El informe del módulo puede identificar al titular;
+no publicar su etiqueta/serial/URI. **Idopte puede devolver error por el bloqueo**;
+el lanzador conserva cabeceras y estado real del módulo. Examinar el primer
+`blocked_header`/control antes de concluir fallo de tarjeta. Un comando bloqueado
+no es evidencia de cómo respondería la tarjeta: no llegó al transporte.
+Ausencia de eventos PC/SC se reporta como fallo de observación, no éxito.
+
+Pasaron **29 comprobaciones del lanzador** y **7 del observador**. Incluyen
+VERIFY/PIN sintético bloqueado, lectura de otros archivos/componentes y CLA
+protegida bloqueadas, respuesta privada sintética omitida, ausencia de longitudes,
+limpieza/fallback sin transmisión, controles del lector, límites/errores y
+precarga ELF real contra transporte falso. Biblioteca real compilada, sin
+Idopte ni PC/SC real en pruebas. Repetibles con `make test/pcsc-public-observer`
+e incluidas en `test/iasecc`; no se repitió la suite completa JCOP3.
 
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 

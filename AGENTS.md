@@ -1,8 +1,17 @@
 # libjcop3p11: contexto para continuar
 
 **JCOP4, 13 de octubre de 2026:** último informe revisado
-`local/jcop4-pin-policy-pMGzFYNL/report.txt`, **14:10:23 UTC**, principal
-`292c6b4`, OpenSC `3dfef6704`; ambos Git limpios al comenzar. Binding y
+`local/jcop4-idopte-6aaJ5sIO/report.txt`, **14:17:31 UTC**, principal
+`697eb0e`, OpenSC `3dfef6704`; ambos Git limpios al comenzar. Idopte 6.23,
+Cryptoki 2.40 reconoce **NXP / ChipDoc v3.2**, slot 0, PIN 6/14. Flags:
+login required, rng, token initialized, PIN initialized; no bloqueo, último
+intento ni cambio pendiente anunciados. No prueba PIN correcto, contador
+exacto ni firma; solo información pública, proceso 0. Mantener etiqueta,
+serial y URI privados, no copiarlos a documentación/chat. No repetir esta
+consulta normal como primer paso.
+
+Informe anterior `local/jcop4-pin-policy-pMGzFYNL/report.txt`, **14:10:23 UTC**,
+principal `292c6b4`: binding y
 metadatos correctos. SELECT MF y aplicación correctos; ambos GET DATA
 00 CB 3F FF / CHV 1 DOCP A0 -> transporte 0/**6D00**, sin datos. Esta
 consulta IAS/ECC no está soportada en los contextos probados; no se obtuvo
@@ -62,20 +71,38 @@ Evidencia anterior ya revisada:
 La generación JCOP4 la indica el usuario, RSA 2048 sí se corroboró. No activar
 excepciones JCOP3/eOI por ATR/etiqueta; precedente ChipDoc ANS enlazado en docs.
 
-**Siguiente intervención:** `make inspect/jcop4-idopte READER=0`,
+**Siguiente intervención:** `make inspect/jcop4-idopte-discovery READER=0`,
 desde nix develop, firmador y otros clientes cerrados y misma JCOP4 insertada.
 Inventario PC/SC/ATR conocido primero, después pkcs11-tool local con
 --module /run/current-system/sw/lib/SCMiddleware/libidop11.so --show-info
 --list-slots. Solo información módulo/slots/tokens: sin C_OpenSession,
-C_Login, objetos, PIN ni firma solicitados por la herramienta. No usa trazas
-APDU, flags experimentales JCOP3 ni helper de autenticación. Stdin vacío,
-debug OpenSC 0, configuración aislada, sin reintentos. No recompila nada.
+C_Login, objetos, PIN ni firma solicitados por la herramienta. Compila solo
+tools/pcsc-public-observer.c (biblioteca de diagnóstico, no driver) y precarga
+en este proceso con LD_PRELOAD. **Nunca usar con firmador/login/firma**.
+Registra solo cabeceras de cuatro bytes, transporte/SW, sin datos, tamaños,
+Lc/Le, PIN, hash ni respuestas completas. Bloquea antes del transporte todo
+lo ajeno a la lista de descubrimiento: SELECT ISO limitado al MF/AID raíz/
+aplicación observados y archivos bootstrap públicos, CA 01 16 de versión,
+READ BINARY/RECORD solo tras SELECT de 2F00/2F01/5031/5032 y GET RESPONSE
+solo tras 61xx de una operación permitida. Otros archivos, GET DATA, CLA
+protegida/propietaria, VERIFY (incluso vacío), MSE, PSO, autenticación,
+escrituras y todos los controles del lector se bloquean. Tras primer bloqueo,
+error de transporte/69xx, otro handle o más de 128 APDU, no transmite más.
+Log privado O_EXCL/NOFOLLOW/0600 requerido; sin log no transmite.
+No usa flags JCOP3 ni helper autenticado. Stdin vacío y debug OpenSC 0.
+Config y precarga aisladas: env externo LD_PRELOAD/trace se elimina antes
+del inventario y el observador se activa solo en pkcs11-tool/Idopte.
 Faltas de herramienta/módulo o error terminan sin fallback. Informe privado
-local/jcop4-idopte-*/report.txt; contiene etiquetas/seriales identificables,
+local/jcop4-idopte-discovery-*/report.txt y public-headers.txt; el informe
+contiene etiquetas/seriales identificables,
 mantener fuera de Git y no volcarlo completo al chat. Idopte enumera todos
 sus slots, que pueden ser varios por lector; no asumir que índice PC/SC
 selecciona el slot PKCS#11. Se revisará reconocimiento del perfil y flags
 de PIN sin tomar lo anunciado como prueba de autenticación/firma.
+Un error de Idopte puede ser provocado por el bloqueo del observador: revisar
+primera cabecera bloqueada antes de concluir fallo del módulo o tarjeta. No
+reintentar login ni ampliar permisos del observador sin interpretar ese comando.
+Si no hay eventos PC/SC el lanzador falla y no reclama que la observación funcionó.
 
 Se pidió al usuario confirmar si esta JCOP4 ya había firmado con Idopte,
 sin solicitar una nueva prueba de PIN. Confirmación pendiente en esta revisión.
@@ -92,9 +119,12 @@ La documentación pública NXP de ChipDoc 3.2 contempla PACE con PIN/CAN/MRZ
 y canales de confianza, sin resolver aún el requisito de la personalización CR.
 No copiar implementación privativa ni intentar autenticación administrativa.
 Las **35 comprobaciones del helper** pasaron en la preparación previa.
-Ahora pasaron **25 del lanzador** con herramientas simuladas, incluyendo
-consulta Idopte, stdin/permisos, ATR, errores y ausencia de módulos/herramientas.
-Sin cambios ni recompilación del driver OpenSC; consulta Idopte en hardware pendiente.
+Ahora pasaron **29 del lanzador** y **7 del observador**, incluyendo
+bloqueo anterior a transporte, privacidad y precarga ELF real contra transporte
+falso. make test/pcsc-public-observer y test/iasecc incluyen este último conjunto.
+Biblioteca real compilada; no se cargó Idopte ni usó tarjeta por el agente.
+Sin cambios ni recompilación del driver OpenSC; descubrimiento observado en
+hardware pendiente. Reconocimiento normal Idopte ya comprobado.
 
 Herramienta autenticada anterior, conservada para investigación futura:
 
@@ -175,7 +205,7 @@ previa. No repetir suite por documentación. Dar comandos de commit del
 principal; el agente no escribe Git ni firma/lee pass. Mantener datos privados
 fuera de Git. No modificar el perfil normal por defecto.
 
-**Próximo trabajo:** revisar reconocimiento/flags públicos Idopte para JCOP4 y determinar
+**Próximo trabajo:** revisar primeras cabeceras de descubrimiento Idopte y determinar
 qué condición falta para VERIFY 6982 antes de solicitar otro PIN.
 Para integrar JCOP3, revisar/separar correcciones del perfil frente
 a instrumentación y experimentos antes de integrar. Diferencia local contra
