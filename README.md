@@ -59,18 +59,21 @@ confirmó referencias a `7001` (autenticación), `7002` (metadatos de llaves
 privadas), `7004` (llaves públicas) y `7005` (certificados); no a `4141` en el
 bloque leído. SELECT `4141` obtuvo `9000`: es un archivo transparente de
 400 bytes en la aplicación conocida. Su propósito y contenido siguen sin
-identificarse; no se leyó. El siguiente paso observa el comando que intenta
-Idopte después de seleccionarlo:
+identificarse; no se leyó. Idopte también lo seleccionó con `9000` y después
+intentó READ BINARY: **el observador lo bloqueó antes de transmitirlo**.
+El siguiente paso resume los atributos de seguridad devueltos por SELECT:
 
 ```bash
-nix develop -c make inspect/jcop4-idopte-discovery READER=0
+nix develop -c make inspect/jcop4-file4141 READER=0
 ```
 
-Cerrar firmador y otros clientes y mantener esta JCOP4 insertada. El observador
-v6 permite solo el SELECT de `4141` bajo la aplicación conocida confirmada;
-**su lectura permanece bloqueada**. No introduce PIN. Idopte puede fallar al
-intentar una lectura; revisar el primer bloqueo antes de continuar. Pasaron 25
-comprobaciones del observador/constructor y 35 del lanzador sin tarjeta.
+Cerrar firmador y otros clientes y mantener esta JCOP4 insertada. El helper
+ampliado envía el mismo SELECT, sin READ, Idopte ni PIN. Resume el formato de
+seguridad y solo interpreta condiciones compactas estándar directas que pueda
+validar, sin guardar bytes de ACL, referencias ni valores propietarios. El
+resumen no identifica el contenido ni autoriza su lectura. Pasaron 49
+comprobaciones del helper; las 25 del observador y 35 del lanzador anteriores
+siguen vigentes, sin cambios en estos últimos.
 
 El descubrimiento Idopte previo (`make inspect/jcop4-idopte-discovery`) compila
 solo un observador y consulta información de módulo/slots/tokens, sin login
@@ -92,6 +95,9 @@ v6 permite su SELECT acotado, tras el diagnóstico independiente Kzi6aI8S
 (16:12:31 UTC), y registra etiquetas fijas de raíz/aplicación/selección de
 metadatos para aclarar el contexto. No registra respuestas ni datos arbitrarios
 y no concede acceso a READ de ese archivo.
+La captura mEpNvPwv (16:30:07 UTC) confirmó selección de aplicación/4141 con
+9000 y bloqueo del siguiente READ BINARY. No hay SW de tarjeta a ese READ
+porque no se transmitió. No repetir esa captura como siguiente paso.
 No repetir el intento de PIN hasta identificar el requisito que falta.
 JCOP4 aún no está integrada en PKCS#11.
 RSA 3072 y modularidad para futuras generaciones siguen pendientes.

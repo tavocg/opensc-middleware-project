@@ -110,6 +110,17 @@ indican el intento, no su éxito; revisar transporte/SW y primer bloqueo.
 Un error de Idopte al intentar READ es esperable, no rechazo de tarjeta a un
 comando bloqueado. Pasaron 25 comprobaciones del observador/constructor y 35
 del lanzador con transporte ficticio; driver/submódulo intactos. Sin PIN.
+La captura mEpNvPwv (16:30:07 UTC, principal e30c61e) confirma contexto/aplicación
+conocida y SELECT 4141 -> 0/9000. El siguiente READ BINARY 00 B0 00 00 se
+bloquea antes de transmitir: no hay rechazo de tarjeta ni datos de archivo.
+Catorce APDU permitidas dieron 9000 y capacidades transporte 0. Módulo 1 y
+events_recorded; segunda conexión no rehabilitó transporte. No hubo PIN.
+No repetir la captura ni permitir lectura todavía. El siguiente paso es el
+helper SELECT-only `make inspect/jcop4-file4141`, ampliado para resumir formas
+de seguridad del FCP y condiciones compactas estándar directas cuando pueda
+validarlas, sin bytes de ACL/valores propietarios. Un resumen always no prueba
+contenido público ni autoriza READ. Pasaron 49 comprobaciones del helper;
+observador/lanzador intactos. El requisito de VERIFY 6982 sigue sin resolver.
 
 `pcsc-spy` estándar registra los buffers transmitidos, que pueden incluir el
 PIN durante autenticación. No usarlo con el PIN real ni considerar un filtro

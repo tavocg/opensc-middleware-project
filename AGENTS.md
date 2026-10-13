@@ -1,6 +1,42 @@
 # libjcop3p11: contexto para continuar
 
 **JCOP4, 13 de octubre de 2026:** último informe revisado
+`local/jcop4-idopte-discovery-mEpNvPwv/report.txt`, **16:30:07 UTC**, principal
+`e30c61e`, OpenSC `3dfef6704`, ambos Git limpios al comenzar. Inventario,
+compilación y contexto/conexión correctos. Observador v6: **SELECT AID conocido
+known_chipdoc_application -> 0/9000**, SELECT EF/READ bootstrap permitidos
+-> 0/9000, **SELECT 4141 known_4141_metadata_only -> 0/9000**, luego
+**READ BINARY 00 B0 00 00 bloqueado antes de transmitir**. Catorce APDU
+permitidas 0/9000; control de capacidades 42000D48 -> 0, respuestas omitidas.
+Segunda conexión 0, sin rehabilitar transporte. Módulo 1, events_recorded.
+El guard impidió leer el archivo; no hay respuesta de tarjeta a ese READ,
+ni su contenido. No PIN/VERIFY/MSE/PSO. No es el rechazo autenticado 6982.
+No repetir esta captura ni permitir lectura de 4141 por inercia.
+El helper SELECT-only se amplía para revisar **metadatos de seguridad del FCP**,
+no contenido de archivo. Mantiene exactamente la consulta --file4141 anterior,
+ATR/AID/conexión/aplicación comprobados, sin READ, binding, Idopte o autenticación.
+Resume formas directas compacta 8C, referenciada 8B, expandida AB y variantes
+no interpretadas 86/A1/9C/plantillas de control anidadas. Ningún buffer/ACL/SCB/
+referencia/valor propietario se registra. Para una única 8C directa y descriptor
+EF transparente ordinario, interpreta solo grupos ISO AM/SC no propietarios:
+READ siempre con SC 00, nonzero_uninterpreted para cualquier otro SC,
+not_declared, alternatives_uninterpreted o proprietary_uninterpreted.
+No interpreta PIN/CAN/SE ni asume perfil UICC/JCOP3 para CR. Grupos vacíos/
+truncados detienen; múltiples atributos/formas o descriptor distinto impiden
+interpretar READ. **Siempre es un resumen del atributo, no una política global
+ni permiso de lectura**: ni siquiera always identifica contenido público.
+Precedente público ETSI TS 102 221 9.2.4–9.2.5 enlazado en docs/jcop4.md.
+Pasaron **49 comprobaciones del helper**, compilación real offline; no hardware.
+Lanzador y observador v6 sin cambios: sus 35/25 comprobaciones anteriores
+siguen vigentes. Driver/submódulo intactos. Siguiente intervención, misma JCOP4,
+firmador/otros clientes cerrados: `nix develop -c make inspect/jcop4-file4141 READER=0`.
+Se repite SELECT para obtener un resumen de atributos omitidos en el informe
+previo, no por una nueva variante ni reintento de error. No READ ni PIN.
+Revisar security_format/standard_compact_read antes de decidir otros pasos;
+propósito de 4141 y condición faltante de VERIFY 6982 siguen pendientes.
+Dar comandos de commit del principal; no escribir Git por el agente.
+
+Informe anterior de SELECT directo, antes de observar el READ bloqueado:
 `local/jcop4-file4141-Kzi6aI8S/report.txt`, **16:12:31 UTC**, principal
 `e4c5d1e`, OpenSC `3dfef6704`, ambos Git limpios al comenzar. Inventario,
 compilación, conexión y aplicación correctos. **SELECT 4141 -> transporte
@@ -317,11 +353,11 @@ Evidencia anterior ya revisada:
 La generación JCOP4 la indica el usuario, RSA 2048 sí se corroboró. No activar
 excepciones JCOP3/eOI por ATR/etiqueta; precedente ChipDoc ANS enlazado en docs.
 
-**Siguiente intervención:** `nix develop -c make inspect/jcop4-idopte-discovery READER=0`,
-firmador y otros clientes cerrados y misma JCOP4 insertada, sin PIN. Observador
-v6: SELECT 4141 limitado a aplicación conocida confirmada, **sin READ**.
-ODF y SELECT directo ya revisados; no repetirlos como primer paso. Revisar
-primer bloqueo y contexto en las etiquetas fijas antes de ampliar permisos.
+**Siguiente intervención:** `nix develop -c make inspect/jcop4-file4141 READER=0`,
+firmador y otros clientes cerrados y misma JCOP4 insertada, sin PIN. Helper
+ampliado resume atributos de seguridad de SELECT sin leer contenido de 4141.
+Descubrimiento Idopte v6 ya revisado: bloquea READ BINARY de 4141 antes del
+transporte. No repetirlo ni conceder READ por inercia.
 
 **Descubrimiento Idopte conservado para investigación posterior:**
 Inventario PC/SC/ATR conocido primero, después pkcs11-tool local con

@@ -1264,6 +1264,81 @@ Sin PIN. Un error de Idopte si intenta READ de 4141 es esperable. Revisar
 etiquetas, transporte/SW y primer bloqueo; no conceder lectura ni reintentar
 PIN por inercia. VERIFY 6982 sigue sin resolver.
 
+## Idopte intenta leer 4141: 13 de octubre, 16:30:07 UTC
+
+Informe privado `local/jcop4-idopte-discovery-mEpNvPwv/report.txt`, principal
+`e30c61e`, OpenSC `3dfef6704`; ambos árboles limpios al comenzar. Inventario,
+compilación y contexto/conexión correctos. El observador v6 confirmó:
+
+```text
+public_header=00A4040C
+public_select=known_chipdoc_application
+transport=0
+sw=9000
+# SELECT/READ bootstrap permitidos: transporte 0/SW 9000
+public_header=00A40200
+public_select=known_4141_metadata_only
+transport=0
+sw=9000
+blocked_header=00B00000
+```
+
+En total, catorce APDU permitidas dieron 0/9000 y la consulta de capacidades
+42000D48 dio transporte 0. Respuestas y FIDs bootstrap omitidos; no atribuir
+la lectura bootstrap a un archivo específico. El **READ BINARY de 4141 no
+llegó a la tarjeta**; no hay SW ni contenido de esa operación. La segunda
+conexión obtuvo 0 pero el transporte siguió detenido. Idopte salió 1 y se
+conservaron events_recorded. Es compatible con el bloqueo deliberado; no es
+el rechazo VERIFY 6982 ni una prueba de cómo autentica Idopte. No PIN,
+VERIFY, MSE ni PSO. No repetir esta captura ni conceder READ por inercia.
+
+### Resumen de seguridad de los metadatos SELECT
+
+Se amplía el helper de `make inspect/jcop4-file4141`, sin cambiar sus comandos:
+mismo inventario EF.ATR/EF.DIR, aplicación conocida y SELECT 4141, sin lectura
+de contenido, binding, Idopte ni autenticación. El informe previo omitió estos
+atributos; repetir SELECT obtiene ahora un resumen nuevo, no una variante del
+protocolo ni un reintento tras rechazo. Solo emite:
+
+- `file4141_security_format`: forma compacta directa, referenciada, expandida,
+  dependiente del perfil, control anidado, combinación o ninguna reconocida
+  entre los tags directos. No afirmar ausencia general por este último caso.
+- `file4141_standard_compact_read`: para una única 8C directa y descriptor de
+  EF transparente ordinario, reconoce `always` únicamente si los grupos ISO
+  estándar anuncian SC 00 para READ. Otros valores se resumen como
+  `nonzero_uninterpreted`; ausencia de READ, alternativas diferentes y AM
+  propietario permanecen explícitos y sin resolver. Múltiples atributos/formas,
+  descriptor distinto o anidamiento dejan la condición sin interpretar.
+
+El precedente de [ETSI TS 102 221, secciones 9.2.4–9.2.5](https://www.etsi.org/deliver/etsi_ts/102200_102299/102221/16.05.00_60/ts_102221v160500p.pdf)
+describe los tags 8C/8B/AB y grupos compactos de AM/SC según ISO 7816-4;
+READ ocupa el bit inferior del AM para un EF. Es referencia de formato,
+**no demuestra que la personalización CR adopte el perfil UICC**. No trasladar
+interpretaciones de PIN, CAN, SE ni A1/9C de JCOP3. Los grupos compactos
+estándar vacíos/truncados detienen sin imprimir una condición. No se guardan
+ACL, SCB, referencias, nombres, valores propietarios ni respuestas brutas.
+
+El resultado es un **resumen de un atributo, no la política global del archivo**.
+Incluso `always` no identifica el contenido como público ni concede acceso de
+lectura; el observador conserva el bloqueo de READ 4141. No aplica políticas a
+OpenSC ni modifica el driver.
+
+Pasaron **49 comprobaciones del helper** con transporte ficticio, incluida
+la ausencia de READ/binding/autenticación, múltiples grupos/alternativas,
+truncamientos, descriptores diferentes y omisión de datos. Helper real compilado
+contra OpenSC offline; log `build/opensc-offline/card-public-info-tests.log`.
+Lanzador y observador sin cambios; sus 35/25 comprobaciones previas siguen
+vigentes. No hardware por el agente, driver/submódulo intactos.
+
+Siguiente intervención, misma JCOP4 y firmador/otros clientes cerrados:
+
+```bash
+nix develop -c make inspect/jcop4-file4141 READER=0
+```
+
+Sin PIN ni READ del archivo. Revisar el resumen antes de decidir nuevos pasos.
+Propósito de 4141 y requisito pendiente de VERIFY 6982 siguen sin resolverse.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño

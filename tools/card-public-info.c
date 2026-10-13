@@ -130,14 +130,45 @@ static int inspect_odf_map(sc_card_t *card, const struct sc_aid *aid)
 	return 0;
 }
 
-/* SELECT returns control information, not EF contents. Emit only structure/size;
- * omit names, proprietary fields, access data and the raw response entirely. */
+/* ETSI TS 102 221 9.2.5 describes the ISO compact groups: AM followed
+ * by one SC per set bit, high to low; bit 1 is READ for an EF. This is
+ * diagnostic metadata, never a grant to read an unidentified file. */
+enum compact_read { COMPACT_ABSENT, COMPACT_ALWAYS, COMPACT_OTHER, COMPACT_ALTERNATIVES, COMPACT_UNSUPPORTED };
+static int summarize_compact_read(const unsigned char *buf, size_t size, enum compact_read *summary)
+{
+	size_t pos = 0;
+	int seen = 0, condition = 0, alternatives = 0;
+	if (!size) return 1;
+	while (pos < size) {
+		unsigned int am = buf[pos++], mask;
+		if (am & 0x80) { *summary = COMPACT_UNSUPPORTED; return 0; }
+		if (!am) return 1;
+		for (mask = 0x40; mask; mask >>= 1) {
+			if (!(am & mask)) continue;
+			if (pos == size) return 1;
+			if (mask == 1) {
+				if (seen && condition != buf[pos]) alternatives = 1;
+				condition = buf[pos]; seen = 1;
+			}
+			pos++;
+		}
+	}
+	*summary = alternatives ? COMPACT_ALTERNATIVES : !seen ? COMPACT_ABSENT :
+		condition ? COMPACT_OTHER : COMPACT_ALWAYS;
+	return 0;
+}
+
+/* SELECT returns control information, not EF contents. Emit only bounded
+ * metadata summaries; omit names, raw ACLs, proprietary values and responses. */
 static int print_file4141_metadata(const unsigned char *buf, size_t size)
 {
 	const unsigned char *p = buf, *value;
 	size_t len, left, file_size = 0;
 	unsigned int cla, tag, descriptor = 0;
 	int have_descriptor = 0, have_size = 0;
+	unsigned int security_forms = 0;
+	int compact_count = 0;
+	enum compact_read compact = COMPACT_ABSENT;
 	if (!size) {
 		printf("file4141_result=selected_without_metadata_no_read\n");
 		return 0;
@@ -161,6 +192,18 @@ static int print_file4141_metadata(const unsigned char *buf, size_t size)
 			if (have_size && candidate != file_size) return 1;
 			file_size = candidate; have_size = 1;
 		}
+		switch (cla | tag) {
+		case 0x8C:
+			security_forms |= 1;
+			if (++compact_count == 1 && summarize_compact_read(value, len, &compact)) return 1;
+			break;
+		case 0x8B: security_forms |= 2; break;
+		case 0xAB: security_forms |= 4; break;
+		/* Profile-dependent forms are only reported as uninterpreted.
+		 * Do not import the JCOP3 meaning of A1/9C into this profile. */
+		case 0x86: case 0xA1: case 0x9C: security_forms |= 8; break;
+		case 0x62: case 0x6F: security_forms |= 16; break;
+		}
 		left -= (size_t)(value - p) + len;
 		p = value + len;
 	}
@@ -169,6 +212,16 @@ static int print_file4141_metadata(const unsigned char *buf, size_t size)
 				(descriptor & 0x38) > 8 ? "unknown" :
 				(descriptor & 7) == 1 ? "transparent" : (descriptor & 7) >= 2 ? "record" : "unknown");
 	if (have_size) printf("file4141_size=%zu\n", file_size);
+	printf("file4141_security_format=%s\n", !security_forms ? "not_observed_in_direct_tags" :
+		security_forms == 1 ? "compact" : security_forms == 2 ? "referenced_uninterpreted" :
+		security_forms == 4 ? "expanded_uninterpreted" : security_forms == 8 ? "profile_uninterpreted" :
+		security_forms == 16 ? "nested_control_uninterpreted" : "multiple_forms_uninterpreted");
+	if (security_forms == 1 && compact_count == 1 && have_descriptor && !(descriptor & 0x80) &&
+			((descriptor & 0x3F) == 1 || (descriptor & 0x3F) == 9)) {
+		const char *conditions[] = { "not_declared", "always", "nonzero_uninterpreted", "alternatives_uninterpreted", "proprietary_uninterpreted" };
+		printf("file4141_standard_compact_read=%s\n", conditions[compact]);
+	} else if (security_forms)
+		printf("file4141_standard_compact_read=uninterpreted\n");
 	printf("file4141_result=selected_metadata_only_no_read\n");
 	return 0;
 }

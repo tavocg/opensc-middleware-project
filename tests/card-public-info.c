@@ -295,6 +295,20 @@ static void reset_fixture(void)
 	file4141_mode = file4141_calls = file4141_transport = 0;
 	file4141_sw = 0x9000; file4141_size = sizeof(fixture_fcp);
 }
+static void expect_metadata_summary(const unsigned char *buf, size_t size, const char *expected)
+{
+	char output[1024] = {0};
+	FILE *capture = tmpfile();
+	int saved = dup(STDOUT_FILENO);
+	assert(capture && saved >= 0);
+	fflush(stdout); assert(dup2(fileno(capture), STDOUT_FILENO) >= 0);
+	assert(print_file4141_metadata(buf, size) == 0);
+	fflush(stdout); rewind(capture);
+	assert(fread(output, 1, sizeof(output) - 1, capture) > 0);
+	assert(dup2(saved, STDOUT_FILENO) >= 0); close(saved); fclose(capture);
+	assert(strstr(output, expected));
+	assert(!strstr(output, "SECRET") && !strstr(output, "NAME") && !strstr(output, "ACL="));
+}
 static void setup_fixture(void)
 {
 	reset_fixture();
@@ -664,8 +678,63 @@ int main(void)
 			fflush(stdout); rewind(capture);
 			assert(fread(output, 1, sizeof(output) - 1, capture) > 0);
 			assert(dup2(saved, STDOUT_FILENO) >= 0); close(saved); fclose(capture);
-			assert(!strcmp(output, "file4141_result=selected_metadata_only_no_read\n"));
+			assert(!strcmp(output, "file4141_security_format=compact\nfile4141_standard_compact_read=uninterpreted\nfile4141_result=selected_metadata_only_no_read\n"));
 			puts("PASS fixed-file metadata omits names, proprietary fields, access data and raw responses");
+		}
+		{
+			enum compact_read summary;
+			const unsigned char read[] = { 1, 0 }, update_read[] = { 3, 0x10, 0 };
+			const unsigned char later[] = { 2, 0x10, 1, 0 }, duplicate[] = { 1, 0, 1, 0 };
+			const unsigned char nonzero[] = { 1, 0xFF }, alternatives[] = { 1, 0x10, 1, 0 };
+			const unsigned char proprietary[] = { 0x81, 0 }, absent[] = { 2, 0 };
+			assert(!summarize_compact_read(read, sizeof(read), &summary) && summary == COMPACT_ALWAYS);
+			assert(!summarize_compact_read(update_read, sizeof(update_read), &summary) && summary == COMPACT_ALWAYS);
+			assert(!summarize_compact_read(later, sizeof(later), &summary) && summary == COMPACT_ALWAYS);
+			assert(!summarize_compact_read(duplicate, sizeof(duplicate), &summary) && summary == COMPACT_ALWAYS);
+			assert(!summarize_compact_read(nonzero, sizeof(nonzero), &summary) && summary == COMPACT_OTHER);
+			assert(!summarize_compact_read(alternatives, sizeof(alternatives), &summary) && summary == COMPACT_ALTERNATIVES);
+			assert(!summarize_compact_read(proprietary, sizeof(proprietary), &summary) && summary == COMPACT_UNSUPPORTED);
+			assert(!summarize_compact_read(absent, sizeof(absent), &summary) && summary == COMPACT_ABSENT);
+			puts("PASS compact security summary locates READ in all standard groups and does not resolve alternative or proprietary conditions");
+			{
+				const unsigned char truncated[] = { 3, 0x10 }, zero[] = { 0 };
+				const unsigned char malformed_fcp[] = { 0x62, 6, 0x82, 1, 1, 0x8C, 1, 1 };
+				assert(summarize_compact_read(read, 0, &summary));
+				assert(summarize_compact_read(read, 1, &summary));
+				assert(summarize_compact_read(truncated, sizeof(truncated), &summary));
+				assert(summarize_compact_read(zero, sizeof(zero), &summary));
+				assert(print_file4141_metadata(malformed_fcp, sizeof(malformed_fcp)) == 1);
+			}
+			puts("PASS compact security summary rejects empty or truncated standard groups before emitting a condition");
+		}
+		{
+			const unsigned char compact_fcp[] = { 0x62, 8, 0x82, 1, 1, 0x8C, 3, 3, 0x10, 0 };
+			const unsigned char other[][16] = {
+				{ 0x62, 4, 0x8B, 2, 0x12, 0x34 },
+				{ 0x62, 3, 0xAB, 1, 0 },
+				{ 0x62, 4, 0xA1, 2, 0x12, 0x34 },
+				{ 0x62, 11, 0x82, 1, 1, 0x8C, 2, 1, 0, 0x9C, 2, 1, 0 },
+				{ 0x6F, 9, 0x62, 7, 0x82, 1, 1, 0x8C, 2, 1, 0 },
+				{ 0x62, 11, 0x82, 1, 1, 0x8C, 2, 1, 0, 0x8C, 2, 1, 0 }
+			};
+			const size_t sizes[] = { 6, 5, 6, 13, 11, 13 };
+			expect_metadata_summary(compact_fcp, sizeof(compact_fcp), "file4141_standard_compact_read=always\n");
+			for (size_t i = 0; i < sizeof(sizes) / sizeof(sizes[0]); i++)
+				expect_metadata_summary(other[i], sizes[i], "file4141_standard_compact_read=uninterpreted\n");
+			puts("PASS control metadata distinguishes direct standard compact security from referenced, expanded, profile, nested or multiple forms");
+			{
+				unsigned char descriptor[sizeof(compact_fcp)];
+				const unsigned char variants[] = { 0x38, 0x21, 0x81, 2 };
+				for (size_t i = 0; i < sizeof(variants); i++) {
+					memcpy(descriptor, compact_fcp, sizeof(descriptor)); descriptor[4] = variants[i];
+					expect_metadata_summary(descriptor, sizeof(descriptor), "file4141_standard_compact_read=uninterpreted\n");
+				}
+				const unsigned char no_descriptor[] = { 0x62, 4, 0x8C, 2, 1, 0 };
+				const unsigned char opaque[] = { 0x62, 17, 0x82, 1, 1, 0x8C, 2, 1, 0, 0x85, 6, 'S','E','C','R','E','T', 0x84, 0 };
+				expect_metadata_summary(no_descriptor, sizeof(no_descriptor), "file4141_standard_compact_read=uninterpreted\n");
+				expect_metadata_summary(opaque, sizeof(opaque), "file4141_standard_compact_read=always\n");
+			}
+			puts("PASS READ summaries require an ordinary transparent EF and omit unrelated names, proprietary values and security bytes");
 		}
 	}
 	return 0;
