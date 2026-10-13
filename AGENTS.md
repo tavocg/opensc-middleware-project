@@ -1,6 +1,38 @@
 # libjcop3p11: contexto para continuar
 
 **JCOP4, 13 de octubre de 2026:** último informe revisado
+`local/jcop4-file4141-o5gvxntR/report.txt`, **16:38:38 UTC**, principal
+`3f894c6`, OpenSC `3dfef6704`, ambos Git limpios al comenzar. Inventario,
+compilación, conexión y aplicación correctos. SELECT 4141 -> 0/9000,
+transparente/400 bytes, **security_format=profile_uninterpreted,
+standard_compact_read=uninterpreted**, unlock y proceso 0. No READ/binding/
+PIN/autenticación. No hubo un nuevo rechazo de tarjeta ni intento de PIN.
+El resumen agrupa **86/A1/9C**: acredita al menos uno de esos tags directos,
+no cuál, su número/estructura/valores ni el contenido/política del archivo.
+No identificar A1 como hecho, no asignar política JCOP3 ni inferir READ siempre,
+protección de archivo, PACE/CAN obligatorio o causa de VERIFY 6982. Puede haber
+codificaciones estándar anidadas que esta consulta no interpreta.
+Búsquedas públicas y de nombres del módulo instalado no identificaron 4141;
+no equivale a ausencia de documentación/soporte. **Se mantiene el bloqueo READ
+4141 del observador v6**. No repetir los dos últimos diagnósticos por inercia.
+El error Idopte mEpNvPwv ya se explicó por READ bloqueado antes de transmitir;
+separarlo del único VERIFY autenticado 6982 de 5Dpadr1N.
+Se pidió confirmar si **esta misma JCOP4 ya produjo una firma válida con el
+Idopte instalado**, recordando una prueba anterior, sin solicitar firma nueva
+ni PIN. Esa información de funcionamiento real sigue pendiente; reconocer
+ChipDoc/listar token no acredita firma. Es la siguiente intervención del usuario,
+no ejecutar otro Make ni pedir PIN como primer paso. Con confirmación positiva,
+continuar buscando identificación documentada del archivo/perfil y diseñar una
+observación que proteja credenciales; no tratarla como permiso para READ/PIN.
+Si no existe prueba previa o falló, revisar ese alcance antes de atribuir el
+problema al driver libre. No contactar fabricantes/terceros sin instrucción
+expresa ni capturar APDU autenticadas con pcsc-spy estándar.
+Cambios actuales **solo documentación**, sin modificar helper, observador,
+lanzador, driver ni submódulo y sin hardware/Git por el agente. Sus 49/25/35
+comprobaciones previas siguen vigentes; no repetir suites por documentación.
+Dar comandos de commit del principal. El soporte JCOP4 y RSA 3072 sigue pendiente.
+
+Informe anterior de Idopte, antes de revisar los metadatos de seguridad:
 `local/jcop4-idopte-discovery-mEpNvPwv/report.txt`, **16:30:07 UTC**, principal
 `e30c61e`, OpenSC `3dfef6704`, ambos Git limpios al comenzar. Inventario,
 compilación y contexto/conexión correctos. Observador v6: **SELECT AID conocido
@@ -353,11 +385,10 @@ Evidencia anterior ya revisada:
 La generación JCOP4 la indica el usuario, RSA 2048 sí se corroboró. No activar
 excepciones JCOP3/eOI por ATR/etiqueta; precedente ChipDoc ANS enlazado en docs.
 
-**Siguiente intervención:** `nix develop -c make inspect/jcop4-file4141 READER=0`,
-firmador y otros clientes cerrados y misma JCOP4 insertada, sin PIN. Helper
-ampliado resume atributos de seguridad de SELECT sin leer contenido de 4141.
-Descubrimiento Idopte v6 ya revisado: bloquea READ BINARY de 4141 antes del
-transporte. No repetirlo ni conceder READ por inercia.
+**Siguiente intervención:** confirmar si esta misma JCOP4 ya firmó con el
+Idopte instalado, sin pedir otra prueba ni PIN. SELECT/FCP y descubrimiento v6
+ya revisados; lectura/política de 4141 sin identificar. No repetir consultas
+ni habilitar READ para superar el bloqueo por inercia.
 
 **Descubrimiento Idopte conservado para investigación posterior:**
 Inventario PC/SC/ATR conocido primero, después pkcs11-tool local con

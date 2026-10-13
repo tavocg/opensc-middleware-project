@@ -61,19 +61,18 @@ bloque leído. SELECT `4141` obtuvo `9000`: es un archivo transparente de
 400 bytes en la aplicación conocida. Su propósito y contenido siguen sin
 identificarse; no se leyó. Idopte también lo seleccionó con `9000` y después
 intentó READ BINARY: **el observador lo bloqueó antes de transmitirlo**.
-El siguiente paso resume los atributos de seguridad devueltos por SELECT:
+La consulta de seguridad posterior terminó correctamente y produjo
+`profile_uninterpreted`: el helper reconoció atributos dependientes del perfil,
+sin resolver su política de lectura. No prueba que requiera PACE ni que el
+archivo sea público. Se mantiene el bloqueo de READ; no repetir estas consultas
+como siguiente paso.
 
-```bash
-nix develop -c make inspect/jcop4-file4141 READER=0
-```
-
-Cerrar firmador y otros clientes y mantener esta JCOP4 insertada. El helper
-ampliado envía el mismo SELECT, sin READ, Idopte ni PIN. Resume el formato de
-seguridad y solo interpreta condiciones compactas estándar directas que pueda
-validar, sin guardar bytes de ACL, referencias ni valores propietarios. El
-resumen no identifica el contenido ni autoriza su lectura. Pasaron 49
-comprobaciones del helper; las 25 del observador y 35 del lanzador anteriores
-siguen vigentes, sin cambios en estos últimos.
+Está pendiente confirmar si **esta misma JCOP4 ya firmó con Idopte instalado**,
+recordando una prueba anterior; no se solicita otra firma ni PIN. La
+identificación del token por sí sola no acredita funcionamiento de firma.
+Los diagnósticos y sus límites están documentados en [docs/jcop4.md](docs/jcop4.md).
+Las 49 comprobaciones del helper, 25 del observador y 35 del lanzador anteriores
+siguen vigentes; esta revisión solo actualiza documentación.
 
 El descubrimiento Idopte previo (`make inspect/jcop4-idopte-discovery`) compila
 solo un observador y consulta información de módulo/slots/tokens, sin login

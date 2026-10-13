@@ -121,6 +121,14 @@ de seguridad del FCP y condiciones compactas estándar directas cuando pueda
 validarlas, sin bytes de ACL/valores propietarios. Un resumen always no prueba
 contenido público ni autoriza READ. Pasaron 49 comprobaciones del helper;
 observador/lanzador intactos. El requisito de VERIFY 6982 sigue sin resolver.
+El informe o5gvxntR (16:38:38 UTC, principal 3f894c6) obtuvo SELECT 4141
+0/9000 y resumen profile_uninterpreted/READ uninterpreted, sin leer contenido.
+El helper agrupa tags 86/A1/9C y no identifica cuál está presente ni interpreta
+la política global; no inferir PACE obligatorio, contenido público ni condición
+que causó VERIFY 6982. No habilitar READ ni repetir el diagnóstico por inercia.
+Falta confirmar si esta misma JCOP4 ya firmó correctamente con Idopte, sin
+solicitar una prueba nueva ni PIN. Reconocimiento de token no prueba firma.
+Esta revisión solo actualiza documentación; código y comprobaciones intactos.
 
 `pcsc-spy` estándar registra los buffers transmitidos, que pueden incluir el
 PIN durante autenticación. No usarlo con el PIN real ni considerar un filtro

@@ -1339,6 +1339,60 @@ nix develop -c make inspect/jcop4-file4141 READER=0
 Sin PIN ni READ del archivo. Revisar el resumen antes de decidir nuevos pasos.
 Propósito de 4141 y requisito pendiente de VERIFY 6982 siguen sin resolverse.
 
+## Seguridad de 4141 sin interpretar: 13 de octubre, 16:38:38 UTC
+
+Informe privado `local/jcop4-file4141-o5gvxntR/report.txt`, principal `3f894c6`
+y OpenSC `3dfef6704`; ambos árboles limpios al comenzar. Inventario, compilación,
+contexto/conexión y aplicación correctos. Resultado:
+
+```text
+file4141_select_transport=0
+file4141_select_sw=9000
+file4141_structure=transparent
+file4141_size=400
+file4141_security_format=profile_uninterpreted
+file4141_standard_compact_read=uninterpreted
+file4141_result=selected_metadata_only_no_read
+unlock_result=0
+exit_status=0
+```
+
+La consulta terminó correctamente; no es un nuevo rechazo de tarjeta. No hubo
+READ, binding, PIN ni autenticación. **No se obtuvo una condición READ
+interpretable**. El helper agrupa los tags directos 86/A1/9C bajo la misma
+etiqueta: acredita presencia de al menos uno, sin distinguir cuál, su número,
+estructura ni valores. No afirmar que se observó A1 específicamente. Algunas
+estructuras podrían contener codificaciones estándar anidadas que este resumen
+no interpreta; no se concluye que todos sus atributos sean propietarios.
+
+El resultado no demuestra protección del archivo ni acceso libre, y tampoco
+acredita PACE/CAN obligatorio o la causa del VERIFY 6982. No aplicar la política
+JCOP3. Las búsquedas nuevas en documentación pública y nombres del módulo
+instalado no identificaron el archivo; no es prueba de ausencia de documentación
+ni de soporte. **READ 4141 sigue bloqueado en el observador v6**. El error
+Idopte mEpNvPwv corresponde a ese bloqueo antes de transporte; el rechazo
+VERIFY autenticado de 5Dpadr1N es evidencia distinta y anterior.
+
+La siguiente intervención es confirmar si **esta misma JCOP4 ya produjo una
+firma válida con el Idopte instalado**, recordando una prueba anterior. No se
+solicita otra firma, PIN ni captura autenticada. La consulta pública Idopte
+6aaJ5sIO confirmó reconocimiento de ChipDoc v3.2/PIN inicializado, pero no
+firma. Esa confirmación permite delimitar el diagnóstico de funcionamiento
+antes de modificar autenticación o atribuir un fallo al driver libre.
+
+Si ya funcionó, la investigación debe identificar el archivo/perfil o preparar
+una observación que proteja credenciales; la confirmación no autoriza por sí
+sola READ de archivos desconocidos ni nuevos intentos de PIN. Si no hay prueba
+previa o falló, revisar esa situación y su evidencia antes de decidir el
+protocolo siguiente. No contactar terceros ni capturar APDU autenticadas con
+pcsc-spy estándar sin un alcance autorizado y protección del PIN.
+
+Esta revisión modifica solo documentación; no helper, observador, lanzador,
+driver ni submódulo. Las 49/25/35 comprobaciones anteriores siguen vigentes y
+no se repitieron por estos cambios. No hardware ni commits por el agente.
+No repetir SELECT/descubrimiento como primer paso. JCOP4 aún no firma con
+OpenSC; RSA 3072 y la arquitectura final siguen pendientes.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño
