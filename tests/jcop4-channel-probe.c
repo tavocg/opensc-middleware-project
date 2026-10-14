@@ -52,9 +52,11 @@ static int context_reply(sc_apdu_t *a)
 		assert(!memcmp(plain, "\x3f\0\x80", 3)); for (int i = 3; i < 16; i++) assert(!plain[i]);
 	}
 	if (test_state.context_fail == (query ? 4 : 1)) { EVP_CIPHER_CTX_free(cipher); return -7; }
-	if (query && test_state.context_fail == 6) {
+	if (query && (test_state.context_fail == 6 || test_state.context_fail == 12)) {
 		/* Correctly authenticated unexpected query data must remain unlogged/rejected. */
-		memset(plain, 0, sizeof(plain)); memcpy(plain, "PRIVATE_QUERY", 13); plain[13] = 0x80; ssc[15] = 6;
+		memset(plain, 0, sizeof(plain)); memcpy(plain, "PRIVATE_QUERY", 13);
+		if (test_state.context_fail == 6) plain[13] = 0x80;
+		ssc[15] = 6;
 		assert(EVP_EncryptInit_ex(cipher, EVP_aes_128_ecb(), NULL, test_flow.derived.keys.encryption, NULL) == 1);
 		assert(EVP_CIPHER_CTX_set_padding(cipher, 0) == 1 && EVP_EncryptUpdate(cipher, iv, &count, ssc, 16) == 1);
 		assert(EVP_EncryptFinal_ex(cipher, iv + count, &final) == 1 && count + final == 16);
@@ -70,6 +72,15 @@ static int context_reply(sc_apdu_t *a)
 	cmac(test_flow.derived.keys.mac, auth, auth_size, tag);
 	if (test_state.context_fail == (query ? 5 : 2)) tag[0] ^= 1;
 	reply[body_size++] = 0x8E; reply[body_size++] = 8; memcpy(reply + body_size, tag, 8); body_size += 8;
+	if (query) {
+		if (test_state.context_fail == 11) { assert(body_size >= 9); reply[body_size - 9] = 7; }
+		if (test_state.context_fail == 7 || test_state.context_fail == 8) {
+			body_size = 0; a->sw1 = test_state.context_fail == 7 ? 0x69 : 0x90;
+			a->sw2 = test_state.context_fail == 7 ? 0x82 : 0;
+		}
+		if (test_state.context_fail == 9) reply[0] = 0x85;
+		if (test_state.context_fail == 10) reply[1] = 3;
+	}
 	assert(a->resplen >= body_size); memcpy(a->resp, reply, body_size); a->resplen = body_size;
 	EVP_CIPHER_CTX_free(cipher); OPENSSL_cleanse(iv, sizeof(iv)); OPENSSL_cleanse(plain, sizeof(plain));
 	OPENSSL_cleanse(tag, sizeof(tag)); return 0;
@@ -356,6 +367,27 @@ int main(void)
 	defaults(); test_state.query_sw = 0x9000; assert(invoke_mode(1) == 0 && strstr(output, "pin_query_result=status_9000_no_pin_supplied"));
 	defaults(); test_state.query_sw = 0x63CF; assert(invoke_mode(1) == 0 && strstr(output, "pin_query_result=available_unverified"));
 	puts("PASS context transport/MAC/SW/unexpected data failures stop; counter zero/block/unknown SW fail and no maximum or reset is inferred");
+	{
+		const char *reasons[] = {"outer_sw_not_9000", "response_size_invalid", "status_object_invalid_or_unsupported",
+			"status_object_invalid_or_unsupported", "mac_object_invalid_or_trailing_data", "padding_invalid"};
+		for (int fail = 7; fail <= 12; fail++) {
+			char expected[128]; defaults(); test_state.context_fail = fail;
+			assert(invoke_mode(1) == 1 && test_state.followups == 2 && test_state.resets == 2);
+			assert(test_state.unlocks == 1 && test_state.disconnects == 1 && !strstr(output, "pin_query_sw="));
+			snprintf(expected, sizeof(expected), "pin_query_decode_result=%s", reasons[fail - 7]);
+			assert(strstr(output, expected) && strstr(output, "pin_query_response=invalid_stop"));
+			assert(strstr(output, fail == 12 ? "pin_query_mac_check=verified" : "pin_query_mac_check=not_checked"));
+			assert(!strstr(output, "PRIVATE_QUERY") && !strstr(output, "pin_context_result=status_observed"));
+			if (fail == 7) assert(strstr(output, "pin_query_outer_sw=6982") && strstr(output, "pin_query_response_size=2"));
+			if (fail == 9) assert(strstr(output, "pin_query_leading_object=unsupported85"));
+		}
+		defaults(); test_state.context_fail = 5; assert(invoke_mode(1) == 1);
+		assert(strstr(output, "pin_query_decode_result=mac_verification_failed") && strstr(output, "pin_query_mac_check=failed"));
+		assert(!strstr(output, "pin_query_sw="));
+		defaults(); assert(invoke_mode(1) == 0);
+		assert(strstr(output, "pin_query_decode_result=accepted") && strstr(output, "pin_query_mac_check=verified"));
+		puts("PASS bounded envelope/reason metadata distinguishes rejected query responses without inner SW/data, retries or extra APDUs");
+	}
 	defaults(); test_flow.mode = BAD_MAC; assert(invoke_mode(1) == 1 && !test_state.followups && test_state.resets == 2);
 	defaults(); test_flow.mode = WRONG_CONTENT; assert(invoke_mode(1) == 1 && !test_state.followups);
 	defaults(); assert(invoke() == 0 && !test_state.followups && !strstr(output, "pin_query_"));

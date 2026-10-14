@@ -50,6 +50,13 @@ static void rejected(const unsigned char *response, size_t size, size_t capacity
 	assert(jcop4_sm_open(&channel, response, size, plain, capacity, &written, &sw) == 1);
 	assert(!written && !sw); invalid(&channel);
 	for (size_t i = 0; i < sizeof(plain); i++) assert(plain[i] == 0xAA);
+	{
+		struct jcop4_sm_decode_report report;
+		waiting(&channel);
+		assert(jcop4_sm_open_report(&channel, response, size, plain, capacity, &written, &sw, &report) == 1);
+		assert(!written && !sw && report.result != JCOP4_SM_DECODE_OK); invalid(&channel);
+		for (size_t i = 0; i < sizeof(plain); i++) assert(plain[i] == 0xAA);
+	}
 	assert(jcop4_sm_seal(&channel, empty_header, NULL, 0, 0, 0, header, body, sizeof(body), &written) == 1);
 }
 
@@ -105,6 +112,48 @@ int main(void)
 		puts("PASS independent long-body hashes cover canonical81/82 lengths and the local3584-byte data limit");
 	}
 	response_size = hex(response, "8711019ed6592dc829d148dbd14a1c59540f5d990290008e08547a8f908b0f4c679000");
+	{
+		/* Fixed reason metadata must never publish DO99/plaintext on failure.
+		 * Check each response also against the pre-existing no-report API. */
+		const struct {
+			const char *wire; enum jcop4_sm_decode_result reason; enum jcop4_sm_mac_result mac;
+		} cases[] = {
+			{"", JCOP4_SM_DECODE_SIZE, JCOP4_SM_MAC_NOT_CHECKED},
+			{"90", JCOP4_SM_DECODE_SIZE, JCOP4_SM_MAC_NOT_CHECKED},
+			{"9000", JCOP4_SM_DECODE_SIZE, JCOP4_SM_MAC_NOT_CHECKED},
+			{"6982", JCOP4_SM_DECODE_OUTER_SW, JCOP4_SM_MAC_NOT_CHECKED},
+			{"63c7", JCOP4_SM_DECODE_OUTER_SW, JCOP4_SM_MAC_NOT_CHECKED},
+			{"8711009ed6592dc829d148dbd14a1c59540f5d990290008e08547a8f908b0f4c679000", JCOP4_SM_DECODE_CIPHER_TLV, JCOP4_SM_MAC_NOT_CHECKED},
+			{"99810290008e0834a63af6815184259000", JCOP4_SM_DECODE_STATUS_TLV, JCOP4_SM_MAC_NOT_CHECKED},
+			{"850100990290008e0834a63af6815184259000", JCOP4_SM_DECODE_STATUS_TLV, JCOP4_SM_MAC_NOT_CHECKED},
+			{"990290008e0734a63af6815184259000", JCOP4_SM_DECODE_MAC_TLV, JCOP4_SM_MAC_NOT_CHECKED},
+			{"990290008e0834a63af68151842500009000", JCOP4_SM_DECODE_MAC_TLV, JCOP4_SM_MAC_NOT_CHECKED},
+			{"8711019ed6592dc829d148dbd14a1c59540f5d990290008e08557a8f908b0f4c679000", JCOP4_SM_DECODE_MAC, JCOP4_SM_MAC_FAILED},
+			{"871101e3c1f4c496796d62d17b573c668e7754990290008e081fd5616e56e24f499000", JCOP4_SM_DECODE_PADDING, JCOP4_SM_MAC_VERIFIED}
+		};
+		struct jcop4_sm_decode_report report;
+		for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+			size_t size = hex(altered, cases[i].wire); waiting(&channel); memset(plain, 0xAA, sizeof(plain));
+			assert(jcop4_sm_open_report(&channel, altered, size, plain, sizeof(plain), &written, &sw, &report) == 1);
+			assert(report.result == cases[i].reason && report.mac == cases[i].mac && !written && !sw); invalid(&channel);
+			for (size_t j = 0; j < sizeof(plain); j++) assert(plain[j] == 0xAA);
+			rejected(altered, size, 64);
+		}
+		waiting(&channel);
+		assert(jcop4_sm_open_report(&channel, response, response_size, plain, 13, &written, &sw, &report) == 1);
+		assert(report.result == JCOP4_SM_DECODE_CAPACITY && report.mac == JCOP4_SM_MAC_VERIFIED && !written && !sw); invalid(&channel);
+		waiting(&channel); memset(channel.keys.ssc, 0xFF, 16);
+		assert(jcop4_sm_open_report(&channel, response, response_size, plain, sizeof(plain), &written, &sw, &report) == 1);
+		assert(report.result == JCOP4_SM_DECODE_SSC && report.mac == JCOP4_SM_MAC_NOT_CHECKED); invalid(&channel);
+		assert(jcop4_sm_open_report(&channel, response, response_size, plain, sizeof(plain), &written, &sw, &report) == 1);
+		assert(report.result == JCOP4_SM_DECODE_ARGUMENT && report.mac == JCOP4_SM_MAC_NOT_CHECKED);
+		waiting(&channel);
+		assert(jcop4_sm_open_report(&channel, response, response_size, plain, sizeof(plain), &written, &sw, &report) == 0);
+		assert(report.result == JCOP4_SM_DECODE_OK && report.mac == JCOP4_SM_MAC_VERIFIED && sw == 0x9000 && written == 14);
+		assert(!strcmp(jcop4_sm_decode_name(report.result), "accepted"));
+		assert(!strcmp(jcop4_sm_decode_name((enum jcop4_sm_decode_result)-1), "unknown_local_result"));
+		puts("PASS fixed response reasons distinguish outer SW/structure/MAC/padding/capacity/state without publishing rejected plaintext or inner status");
+	}
 	{
 		waiting(&channel); memset(plain, 0xAA, sizeof(plain));
 		assert(jcop4_sm_open(&channel, response, response_size, plain, sizeof(plain), &written, &sw) == 0);

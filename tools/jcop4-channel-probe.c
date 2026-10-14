@@ -173,7 +173,19 @@ static int probe_pin_context(sc_card_t *card, struct jcop4_sm_channel *channel)
 		OPENSSL_cleanse(probe_guard.expected, sizeof(probe_guard.expected)); probe_guard.expected_size = 0;
 		printf("%s_transport=%d\n", label, rv); if (rv) goto out;
 		plain_size = 0; sw = 0;
-		if (received > sizeof(response) || jcop4_sm_open(channel, response, received, plain, sizeof(plain), &plain_size, &sw)) {
+		if (received > sizeof(response)) { printf("%s_response=invalid_stop\n", label); goto out; }
+		/* Bounded envelope metadata, explicitly unauthenticated. Never log
+		 * unknown tag values, DO99 status or payload before successful decode. */
+		printf("%s_response_size=%zu\n", label, received);
+		if (received >= 2) printf("%s_outer_sw=%04X\n", label,
+			(unsigned int)response[received - 2] * 256 + response[received - 1]);
+		printf("%s_leading_object=%s\n", label, received <= 2 ? "absent" : response[0] == 0x87 ? "encrypted87" :
+			response[0] == 0x85 ? "unsupported85" : response[0] == 0x99 ? "status99" : "other_uninterpreted");
+		struct jcop4_sm_decode_report decoded;
+		rv = jcop4_sm_open_report(channel, response, received, plain, sizeof(plain), &plain_size, &sw, &decoded);
+		printf("%s_decode_result=%s\n%s_mac_check=%s\n", label, jcop4_sm_decode_name(decoded.result), label,
+			decoded.mac == JCOP4_SM_MAC_VERIFIED ? "verified" : decoded.mac == JCOP4_SM_MAC_FAILED ? "failed" : "not_checked");
+		if (rv) {
 			printf("%s_response=invalid_stop\n", label); goto out;
 		}
 		printf("%s_response=authenticated\n%s_sw=%04X\n", label, label, sw);

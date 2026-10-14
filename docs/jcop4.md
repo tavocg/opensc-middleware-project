@@ -5040,6 +5040,60 @@ anterior. Revisar primero MF/query autenticados y cierre antes de preparar
 VERIFY con credencial. Tipo exacto Idopte/formato de PIN, login/firma JCOP4,
 causa del antiguo6982 y soporte RSA3072 siguen pendientes.
 
+### Resultado real y precisión del diagnóstico de respuesta
+
+Principal `c3f2bf7`, OpenSC `3dfef6704`, limpios al comenzar. Informe privado
+`local/jcop4-channel-pin-context-VoAbbMum/report.txt`,2026-10-14T06:19:03Z
+(14Oct00:19CR), ejecutado por el usuario. Canal confirmado con D004137 idéntico;
+**SELECT MF bajo SM devolvió una respuesta autenticada9000**. Confirma el
+comando con datos cifradosDO87 y la continuación SSC3/4 en esta tarjeta.
+La consulta vacía posterior tuvo transporte0 pero response=invalid_stop.
+Final reset/unlock/disconnect0; guard_blocked0,10 comandos, helper1. No PIN.
+
+El informe no guardó tamaño, SW exterior, estructura ni motivo del decoder.
+Ese resultado agrupa fallos de formato/MAC/descifrado/padding entre otros:
+no prueba que la tarjeta devolviera6982, que se perdiera el canal o que el
+PIN/contador cambiara. El antiguo VERIFY6982 con credencial es otra evidencia.
+Los buffers ya borrados impiden determinar ahora qué condición falló.
+
+La revisión estática del mismo libt_ias/hash muestra que240f15 transmite y
+240f21 llama al slot40 de respuesta;2437db..2437e9 distingue85/87 y
+2437fe..243812 exige99/2. No identifica el pipe activo ni la respuesta real.
+Nuestro codec mantiene su subconjunto87/99/8E: no se amplía85 ni se permite
+respuesta plaintext a partir de esa observación estática.
+
+Se instrumenta `jcop4_sm_open_report` con motivos fijos y estado de MAC
+not_checked/failed/verified. `jcop4_sm_open` sigue usando el mismo decoder,
+sin cambiar aceptación, publicación de datos/SW ni borrado. Los motivos
+distinguen argumento/estado, tamaño, SW exterior, SSC, estructura87/99/8E,
+MAC, descifrado, padding y capacidad. MAC verificado con padding/capacidad
+fallido **no publica plaintext ni estado interno ni permite continuación**.
+
+El helper añade para MF/query response_size, outer_sw, leading_object,
+decode_result y mac_check. Tamaño acotado258; leading_object solo etiquetas
+absent/encrypted87/unsupported85/status99/other_uninterpreted, sin valores
+de tags desconocidos. SW exterior y estructura son observaciones **sin
+autenticación**; no equivalen a DO99 interno. DO99/SW interno solo se publica
+tras aceptación completa. No bytes/raw/control/cipher/plain/MAC/claves/hashes.
+Los comandos, fase, límites, guard, cierre y permisos no cambian.
+
+Pasaron11 grupos de codec,21 de probe (nativos12+bootstrap real con lector
+simulado3+wrapper6),7 de confirmation y6 de session por dependencia del codec.
+Casos distinguen estados exteriores6982/63C7 sin MAC,9000 corto,85/TLV
+malformado, MAC fallido y padding inválido con MAC válido; comparan rechazo
+con API anterior y comprueban borrado/salida intacta y cierre sin reintentos.
+ASan/UBSan26 grupos codec/nativo/bootstrap,detect_leaks0; no prueba de fugas
+ni instrumentación de bibliotecas precompiladas. Helper real compilado.
+Fallo inicial del fixture fue advertencia de posible underflow en índice al
+alterar longitud MAC después de vaciar respuesta; corregido orden/assert.
+Sin PCSC/lector/tarjeta/Idopte/PIN/GUI por el agente; driver/submódulo intactos.
+
+**Siguiente intervención:** una ejecución del mismo target sin PIN, misma
+JCOP4/otros clientes cerrados. Se repite para obtener metadatos omitidos de
+la respuesta fallida, sin variantes APDU ni reconfirmación por inercia.
+Revisar query outer_sw/size/leading_object/decode_result/mac_check y cierre
+antes de otro comando o credencial. No se habilita firma JCOP4 ni RSA3072.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño

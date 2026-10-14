@@ -9,7 +9,58 @@ transporte simulado. PIN/GUI también los ejecuta el usuario. Esto sustituye
 la autorización anterior de hardware por el agente; conservar límites de
 cada diagnóstico y privacidad. Git sigue autorizado pero .git solo lectura.
 
-**Última revisión: consulta MF/PIN vacío bajo canal preparada, aún sin hardware.**
+**Última revisión: MF protegido confirmado; respuesta de PIN vacío aún sin validar.**
+Principal `c3f2bf7`, OpenSC `3dfef6704`, limpios al comenzar. Informe del usuario
+`local/jcop4-channel-pin-context-VoAbbMum/report.txt`,2026-10-14T06:19:03Z
+(14Oct00:19CR): build/context/driver/connect/lock/reset inicial0, ATR/T1/límites
+correctos; D004/control/READ y canal íntegro confirmado. SELECT MF cifrado
+SSC3/4 devolvió respuesta autenticada9000. Es evidencia real de comandoDO87,
+además del READ protegido anterior. Query vacío1 transporte0, response=
+invalid_stop, pin_context_result=not_confirmed_stop; no SW interno/forma/
+MAC/causa disponibles. Finalreset/unlock/disconnect0, guard_blocked0,
+command_count10/helper1. **No atribuir6982, PIN incorrecto, decremento,
+pérdida de canal ni rechazo de tarjeta a ese marcador agregado**. Sin PIN
+suministrado; el viejo VERIFY6982 con credencial es evidencia distinta.
+
+Instrumentación de diagnóstico únicamente: open_report en codec devuelve
+enum de argumento/estado, tamaño, SW exterior, SSC, TLV87/99/8E, MAC,
+descifrado, padding, capacidad o aceptación, y MAC not_checked/failed/verified.
+API open anterior conserva aceptación/limpieza. MAC verificado no equivale
+a respuesta aceptada si falla padding/capacidad. Helper agrega para MF/query
+response_size<=258, outer_sw, leading_object (absent/encrypted87/unsupported85/
+status99/other_uninterpreted), decode_result/mac_check. Exterior/estructura
+**no autenticados**, no presentar outer_sw como estado interno. No valores
+de tags desconocidos, DO99 sin validación, raw/plain/cipher/MAC/keys/hash.
+Mantiene mismos APDU/CLA/Le/P1/P2/ref/fases/budget/reset/guard/permisos;
+85 y respuesta plaintext siguen rechazados. Sin fallback ni nuevo login.
+
+Revisión estática mismo libt_ias/hash:240f15 transporte seguido de slot40
+en240f21; decoder2437db..2437e9 admite85/87 y exige99 en2437fe..243812.
+No demuestra rama runtime ni forma de respuesta actual: **no habilitar85 ni
+ignorar MAC por esa lectura estática**. Buffer real anterior fue borrado;
+no se puede recuperar causa desde reporte ni justificar variante por intuición.
+
+Pasaron **11 grupos codec**, **21 probe** (12 nativos+3 OpenSC bootstrap
+simulado+6 wrapper), **7 confirmation** y **6 session** por dependencia del
+codec modificado. Fixtures distinguen SW exterior6982/63C7 sin MAC, respuesta
+corta9000,85, TLV malformado, MAC malo y padding malo con MAC válido; ningún
+SW interno/plaintext en fallos, mismas paradas/cierre y cero APDU adicionales.
+Fallo inicial de compilación fue advertencia de underflow en fixture al alterar
+longitud MAC después de vaciar respuesta; corregido orden/assert, no hardware.
+Helper real compilado. ASan/UBSan26 grupos codec/nativos/bootstrap pasaron
+detect_leaks0; bibliotecas precompiladas sin instrumentar/no prueba de fugas.
+Driver/submódulo/observador/flake/lock intactos; otras suites no repetidas.
+
+**Siguiente intervención:** misma JCOP4, otros clientes/firmador cerrados,
+`nix develop -c make inspect/jcop4-channel-pin-context READER=0`, una sola vez,
+sin PIN. Repetición para recuperar metadatos omitidos de la respuesta fallida,
+no para reconfirmar D004/MF ni ensayar variantes. Revisar query outer_sw/size/
+leading_object/decode_result/mac_check/response y cierre antes de otro comando.
+Login/firma JCOP4/RSA3072/VERIFY6982 siguen pendientes. Git solo lectura:
+commit de tools2/tests2/AGENTS/README/docs, ningún archivo nuevo/captura/build.
+Ningún comando PCSC/hardware/Idopte/PIN/GUI por el agente.
+
+**Revisión anterior: consulta MF/PIN vacío bajo canal preparada, aún sin hardware.**
 Principal `81d68ae`, OpenSC `3dfef6704`, limpios al comenzar. Última evidencia
 de tarjeta sigue27daTsCp/READ137 íntegro/cierre0. No repetir ese diagnóstico.
 Sin PCSC/hardware/GUI/PIN/Idopte ejecutado por el agente; análisis estático y
