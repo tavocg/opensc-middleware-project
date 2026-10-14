@@ -9,7 +9,66 @@ transporte simulado. PIN/GUI también los ejecuta el usuario. Esto sustituye
 la autorización anterior de hardware por el agente; conservar límites de
 cada diagnóstico y privacidad. Git sigue autorizado pero .git solo lectura.
 
-**Última revisión: timeout de login antes de PIN; corregido grupo de terminal del lanzador.**
+**Última revisión: login JCOP4 confirmado; recolector de respuesta larga probado offline.**
+Principal `b8800b2`, OpenSC `3dfef6704`, limpios al comenzar. Informe usuario
+`local/jcop4-channel-login-hSQwNDBj/report.txt`,2026-10-14T07:01:57Z
+(14Oct01:01CR): canal/MF/query63C7 autenticados, login transporte0/decoder
+accepted/MACverified/inner9000, attempted1/pin_verified_no_signature. Cierre
+reset/unlock/disconnect0, guard0/11APDU/interrupted0/helper0. **Primer login
+con credencial bajo SM acreditado, ninguna firma RSA aún.** Formato candidato
+ASCII sin padding de credencial aceptado en este test; no longitud/valor
+guardados. SM padding sigue framing. ContextoMF+SM difiere del fallo antiguo
+6982: no aislar SM como única causa por este resultado. No repetir login/
+estado/D004/canal ni pedir PIN por inercia, no máximo7/reset por firma probado.
+
+Nuevo trabajo estático mismo libt_ias:36f540..36f57b arma PSO002A9E9A con
+datos/Le256 en una rama, no prueba despacho runtime/MSE/entrada RSA actual.
+SM24483c..2448a0 sigue exterior256 o Le+35 según flag. Transport22d950
+ensambla61xx por GET RESPONSE antes del decoder SM240f21/2436a0:22dab4..
+22db69 armaC0/00/00/LeSW2 (0=>256), acumula datos y reemplaza SW intermedio.
+CLA segúncard+49:1->00,0->original(22dbe0 llama227760). Constructor22de3a..
+22de45 inicializa49/4A a0; no asumir valor/cadena activos por constructor.
+Rama6C reenvía en22dbf0..22dc56 y rama sinLe transforma61 a9000 en22dbb9:
+**no copiar esos comportamientos ni probar CLA alternativas sobre hardware**.
+No Idopte ejecutado ni nuevas capturas/autenticación. EF.ATR público anterior
+DORk47gE dio0/0límites noobtenidos, no habilita extended por conjetura.
+
+Nuevo tools/jcop4-response-collector.h, aislado sinPCSC/PIN/canal/driver:
+recibe fragmento inicial yaenviado/callback, políticaCLA00/0C explícita sin
+default/fallback, límites293/421bytes (candidatos DO87 cifrado/payload256/384),
+máximo3GET adicionales. Solo61xx habilita cinco bytesCLA C00000Le; SW2=0
+significa256. Capacidad antes de enviar, cada respuesta<=Le/258/progreso,
+terminación9000, min14bytes cuerpo. Nunca reenvía PSO/6C, escribe/admin,
+seal/SSC/VERIFY ni autentica fragmentos. Éxito **COMPLETE_UNAUTHENTICATED**:
+devuelve bytes opacos, no firma/SW interno/éxitoSM. Dueño exige MAC/semántica
+una vez tras ensamblado, conserva lock/conexión/estadoWAITING; error obliga
+invalidarSM/cerrar. Salida intacta/written0 en fallo; temporales limpiados.
+No conectado a helper real: guard actual sigue bloqueandoC0/PSO/MSEfirma.
+421 solo límite sintético, no soporteRSA3072 ni DO97/Le384 implementados.
+
+Nuevo make test/jcop4-response-collector pasó **5 grupos**: dos políticas/
+293/421/data inicial+61/frame completo, errores/transporte/no progreso/6C/
+truncación/oversize/budget/argumentos/capacidad sin fallback ni salida parcial.
+Fixture293 independiente OpenSSL CLI (payload00..FF **no firma RSA**), recolecta
+con dosGET sin avanzarSSC; codec final validaMAC/SSC2/plain256. Alterar cada
+uno de291bytes de cuerpo rechaza antes de plaintext/SW. ASan/UBSan5pasaron
+detect_leaks0; libcrypto precompilada sin instrumentar/no prueba de fugas.
+Suitesanteriores sin cambios vigentes/no repetidas; bashsyntax/diffcheck0.
+Solo Makefile/collector/tests/script/docs, helperC/driver/submódulo/observador/
+flake/lock intactos. Ningún comando PCSC/lector/tarjeta/PIN real/GUI por agente.
+
+**Siguiente trabajo del agente:** terminar ruta MSE/RSA/PSO y justificar
+CLA de continuación; preparar adaptador acotado de firma con misma conexión/
+lock/loginSSC8, retornoMSE/PSO conMAC, verificación RSA/SHA256 con certificado
+público vinculado antes de persistir resultado. Hay certificados privados
+en local/jcop4-signature-5Dpadr1N/certificate.der y otras pruebas anteriores;
+solo se enumeraron rutas, no se volcó contenido/identidad ni compararon todavía.
+No usar4FGWOtpI por error humano conocido. No transformar firma de256en éxito
+sin verificar; noGET real/PIN solicitado aún. FirmaJCOP4/RSA3072/driverpendientes.
+Git sololectura: commit docs3/Makefile y **nuevos3** collector.h/test.c/script;
+no capturas/build ni eludir.git. No intervención de hardware necesaria ahora.
+
+**Revisión anterior: timeout de login antes de PIN; corregido grupo de terminal del lanzador.**
 Principal `3d91123`, OpenSC `3dfef6704`, limpios al comenzar. Informe usuario
 `local/jcop4-channel-login-m6tjqsjj/report.txt`,2026-10-14T06:54:44Z
 (14Oct00:54CR): canal/MF/query autenticados9000/63C7, luego input rechazado,

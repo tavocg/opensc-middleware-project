@@ -354,11 +354,12 @@ y estado63C7; acepta ASCII imprimible6..14, sin eco ni registro de credencial.
 Un fallo puede consumir intento: usar el PIN correcto y detenerse si falla.
 Pasaron12 grupos login con PIN/transporte ficticios y22 de regresión del probe.
 [Protocolo y límites](docs/jcop4.md#login-experimental-de-un-único-intento-bajo-sm).
-La primera ejecución de login terminó124 antes del PIN, con login_attempted0
-y cierre completo. Se corrigió el launcher con `timeout --foreground` solo
-para login; una regresión con timeout GNU real y PTY reproduce el bloqueo
-anterior y comprueba prompt, Ctrl+C y restauración de eco. Pasaron13 grupos
-login y22 probe. Reinsertar tras timeout antes de una única nueva ejecución.
+Después de corregir el grupo de terminal (`timeout --foreground`), la prueba
+hSQwNDBj confirmó **PIN verificado con MAC válido/9000**, un único VERIFY y
+cierre completo. No repetir login por inercia. La firma aún necesita respuesta
+RSA/SHA-256 verificada: se preparó un recolector de respuesta larga aislado,
+con cinco grupos de pruebas simuladas, sin habilitar GET RESPONSE en tarjeta.
+[Estado y siguiente trabajo](docs/jcop4.md#login-confirmado-y-respuesta-rsa-protegida).
 El driver aún no firma con JCOP4.
 [Evidencia y límites](docs/jcop4.md#canal-confirmado-en-jcop4-sin-pin).
 

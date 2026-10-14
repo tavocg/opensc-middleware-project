@@ -5268,6 +5268,67 @@ Una ejecución de login/jcop4-channel, PIN correcto solo cuando aparezca prompt.
 Revisar login_attempted/MAC/innerSW/result/helper/cierre antes de otro intento
 o firma. No repetir por inercia ni interpretar124 como fallo de PIN.
 
+### Login confirmado y respuesta RSA protegida
+
+Principal `b8800b2`, OpenSC `3dfef6704`, limpios al comenzar. Informe privado
+`local/jcop4-channel-login-hSQwNDBj/report.txt`,2026-10-14T07:01:57Z
+(14Oct01:01CR), ejecución del usuario. Canal/D004/MF/query63C7 autenticados;
+VERIFY transporte0/decoderaccepted/MACverified/inner9000, attempted1 y
+pin_verified_no_signature. Resetfinal/unlock/disconnect0/guard0/11APDU/
+interrupted0/helper0. **Login con PIN correcto acreditado, no firma RSA**.
+No PIN/longitud registrados; formato candidato ASCII sin padding de credencial
+aceptado en este caso. El padding SM es framing. ContextoMF ySM cambiaron
+respecto al antiguo6982: no prueba cuál fue su única causa. No repetir canal/
+estado/login por inercia ni concluir contador máximo7/reset por firma.
+
+Antes de conectar PSO hay que resolver su respuesta protegida. Con DO87/01,
+AES/padding método2, datos256 producen272bytes de cipher/273 de valor87,
+277 de objeto87,4 de99,10 de8E y2 deSW exterior: **293bytes**. Para datos384
+son421bytes. Son tamaños del subconjunto candidato, no formato observado de
+respuesta de firma real; no habilitan extended ni soporte3072. EF.ATR anterior
+DORk47gE no proporcionó límites (0/0), no prueba ausencia ni presencia deextended.
+
+Revisión estática del mismo módulo instalado:36f540..36f57b construye
+PSO002A9E9A con datos/Le256 en una rama, sin acreditar despacho runtime ni
+formatoMSE/entrada RSA. SM24483c..2448a0 mantiene exterior256 oLe+35 segúnflag
+ya documentado. El transporte22d950 está antes del decoderSM:22dab4..22db69
+ensambla61xx con GET RESPONSE C0/00/00/LeSW2,0=>256, acumulando datos y
+reemplazandoSW intermedio. card+49 decide CLA00 u original;22dbe0 consulta
+227760 si vale0. Constructor22de3a..22de45 lo inicia0, lo cual no identifica
+cadena/valor activos. No elegir/barrer CLA por conjetura. Rama6C reenvía y otra
+rama sinLe transforma61a9000: no se copian esos comportamientos. No ejecutar
+Idopte/captura autenticada ni nuevas APDU para investigar esta lectura estática.
+
+`tools/jcop4-response-collector.h` es una pieza candidata aislada por callback,
+sinPCSC/PIN/canal/driver. Recibe la respuesta inicial ya transmitida, política
+CLA00/0C explícita sin default/fallback, límite293/421 y máximo3 continuaciones.
+Solo61xx habilita frame cinco bytesCLA C00000Le; capacidad anunciada comprobada
+antes de enviar. Cada fragmento<=Le/258bytes; progreso requerido tras primer
+GET, termina solo9000/min14bytes de cuerpo. No reenvía el comando original ni
+6C, no cifra/seal/modificaSSC/VERIFY/PSO/admin. Fallo deja salida intacta y
+written0; temporales limpiados. Éxito devuelve **COMPLETE_UNAUTHENTICATED**:
+bytes opacos, nunca publicación de firma niSW interno. Dueño conserva lock/
+conexión/SMWAITING, verifica MAC/semántica una sola vez al terminar; en fallo
+invalida canal/cierra. No se conectó a hardware ni amplió guard actual.
+
+`make test/jcop4-response-collector` pasó5grupos: políticas00/0C y límites
+293/421 sintéticos, datos iniciales/61/framecompleto, transporte/oversize/
+truncación/6C/no progreso/budget/argumentos/capacidad sin fallback ni salida
+parcial. Fixture293 construido independientemente con OpenSSL CLI y payload
+00..FF **que no es una firma RSA**: dosGET sin avanzarSSC, codec final verifica
+MAC/SSC2 y recupera256bytes. Alterar cada byte del cuerpo291 rechaza antes de
+plaintext/SW. ASan/UBSan5pasaron detect_leaks0; libcrypto precompilada sin
+instrumentar/no prueba de fugas. Suites anteriores sin cambios vigentes,
+no repetidas. No PCSC/lector/tarjeta/PIN real/GUI/Idopte por agente; helpers
+de tarjeta/driver/submódulo/observador/flake/lock intactos.
+
+**Siguiente trabajo:** resolver MSE/RSA/PSO y CLA de continuación, preparar
+adaptador acotado que retenga loginSSC8 dentro de la misma conexión/lock y
+verifique RSA/SHA256 con certificado público vinculado antes de guardar una
+firma. Existen certificados en informes previos (5Dpadr1N y otros), todavía
+sin comparar en esta revisión; no usar4FGWOtpI por el error humano documentado.
+No GET/PIN real solicitado por este cambio, no prueba3072, no driver listo.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño
