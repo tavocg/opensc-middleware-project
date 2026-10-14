@@ -4136,6 +4136,96 @@ cambios; firma libre JCOP4/RSA3072 y causa VERIFY6982 siguen pendientes.
 Se intentó git add con los archivos concretos: .git sigue montado solo lectura
 y no permitió crear index.lock. Commit pendiente con los tres archivos nuevos.
 
+## Primitivas AES/CMAC/SSC y revisión del transporte
+
+Principal `e6eaee7`, OpenSC `3dfef6704`, limpios al comenzar. Sin hardware,
+Idopte ejecutado, PIN, GUI o captura autenticada en esta revisión. El punto
+D004 válido de LbbFD51N sigue siendo la última evidencia de tarjeta; no se
+repitió la lectura ni estados/inventarios. Se continuó la revisión estática
+del mismo libt_ias.so/hash.
+
+### Variante de mensajes protegidos examinada
+
+La instalación384820 crea la clase AES por240ae0/2435b0 e inserta su objeto
+en la cadena de pipes con228aa0. La vtable AES tiene preparación de comandos
+243e60 y procesamiento de respuesta2436a0. Ambos incrementan el SSC de
+16 bytes como entero big-endian **antes de su mensaje**, con acarreo desde
+el último byte. El comando marca CLA con0C y construye tags87/97/8E; la
+respuesta revisada analiza85/87,99 y8E. Esto no es aún un decoder completo
+ni una política para aceptar todas esas alternativas en el perfil actual.
+
+En la rama cifrada del comando,244083 asigna16 ceros y pasa ese buffer como
+IV a245720 ->23ec10: **CBC con IV cero** en la ruta examinada, sin una
+transformación visible del SSC en ese IV. SSC y padding participan en la
+entrada del MAC; no asumir que el IV sea AES(SSC) como en otra variante.
+El MAC246370 genera subclaves por245900, desplazamiento y reducción87,
+compatible con **AES-CMAC**;246ba0 entrega el resultado y la configuración
+actual pide8 bytes. Se identifica la construcción por sus operaciones, no
+solo por cadenas de texto o por el nombre del ZIP. El padding247190 añade80
+y ceros hasta bloque16. Falta cerrar la revisión de la entrada exacta del MAC,
+respuesta/cifrado y el comportamiento completo del perfil durante login.
+
+Se encontró también una capa de fragmentación (`2a09a0`): si Lc cabe, delega
+la solicitud intacta; si no, marca los fragmentos intermedios con CLA|10 y
+reconstruye el último con la CLA original. **Esta capa no demuestra que la
+CLA10 del constructor GA se normalice a00**. Su activación y la siguiente capa
+final de serialización siguen pendientes. No convertir la cabecera interna
+en una APDU de prueba sin resolver el transporte/Le/fragmentación.
+
+### Componentes locales con vectores públicos
+
+Nuevo `tools/jcop4-channel-primitives.h`, aislado de PC/SC, Idopte, PIN y APDU:
+
+- SSC siguiente de128 bits, con acarreo y rechazo de overflow sin volver a cero.
+- Padding método2 y comprobación del relleno final; conserva80/ceros que sean
+  datos originales. **Quitar padding no autentica el mensaje**.
+- AES128-CBC con IV explícito y padding OpenSSL desactivado; entrada no vacía,
+  múltiplo16 y máximo4096. Resultado solo se copia tras éxito completo;
+  error deja el buffer del llamador intacto, sin publicar un resultado parcial.
+- AES-CMAC de16 bytes y comparación del prefijo8 mediante CRYPTO_memcmp.
+  Un MAC no válido devuelve error; no fallback ni aceptación por SW.
+
+Las primitivas no gestionan un canal, no generan APDU ni conectan la
+verificación MAC con una respuesta de tarjeta. **La función CBC no debe usarse
+para aceptar plaintext de tarjeta antes de verificar el MAC sobre el mensaje
+protegido correcto**. La autenticación completa y el vínculo con TLV/SSC se
+implementarán en la capa superior; no están acreditados por estas pruebas.
+No clave de sesión real, PIN ni texto de usuario en registros. Fallo de
+primitiva requiere descartar el resultado; un buffer intacto no es salida válida.
+No cambios de helper hardware, observador, driver o submódulo.
+
+Nuevo `make test/jcop4-channel-primitives`, ejecutado por el agente con
+**7 grupos correctos**. Fuente de resultados esperados:
+[NIST SP800-38A F.2.1/F.2.2](https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-38a.pdf)
+para CBC y
+[ejemplos NIST AES-CMAC](https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Standards-and-Guidelines/documents/examples/AES_CMAC.pdf)
+para mensajes de0/16/20/64 bytes. Los vectores verifican la primitiva, **no la
+seguridad/compatibilidad del protocolo con IV cero ni una sesión BCCR**.
+CBC con IV cero en el primer bloque se compara con el ejemplo ECB del mismo
+NIST; la API permite probar separadamente IV estándar y cero, no los confunde.
+Uso de CMAC acorde a
+[EVP_MAC-CMAC](https://docs.openssl.org/3.5/man7/EVP_MAC-CMAC/), sin implementar
+manualmente las operaciones de subclaves en el código libre.
+
+Pruebas incluyen cifrado/descifrado de cuatro bloques, operación in-place,
+capacidades/tamaños/punteros/modos malos sin salida parcial, frontera4096
+válida paraCBC/CMAC, todos los64 bits
+del MAC truncado alterados y modificación del mensaje, contador con acarreo/
+overflow y padding para longitudes0..4095, marcador incrustado y relleno
+malformado. Límite4096 es interno de la primitiva, no permiso/tamaño APDU de
+una tarjeta ni soporte RSA3072 probado. Todos los datos son NIST o sintéticos;
+salida solo PASS. Constructor enlaza libcrypto ya declarado, sin instalar nada.
+KDF5/helper92/lanzador95/observador162/firma6/operación12 previos intactos,
+suites vigentes, no repetidas sin cambios.
+
+**Próximo paso:** completar el constructor/verificador de mensajes protegidos
+con TLV/SSC y respuesta autenticada antes de descifrar/aceptar SW; terminar
+serialización de GA en la capa final. No repetir D004 ni pedir PIN, ni enviar
+MSE/GA/SM todavía. Punto válido/KDF/primitivas no demuestran canal establecido
+ni ruta runtime durante C_Login. JCOP4/RSA3072/VERIFY6982 siguen pendientes.
+Git add de los archivos concretos falló por .git montado solo lectura; commit
+pendiente, incluyendo los tres archivos nuevos de primitivas/pruebas/lanzador.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño

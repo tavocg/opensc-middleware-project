@@ -6,6 +6,47 @@ la tarjeta. El usuario ejecuta las operaciones que requieran PIN o GUI. Esto
 sustituye las restricciones anteriores de no ejecutar Git/hardware/Idopte por
 el agente; conservar límites de cada diagnóstico y privacidad de los registros.
 
+**Última revisión: primitivas AES/CMAC/padding/SSC probadas offline.**
+Principal `e6eaee7`, OpenSC `3dfef6704`, limpios al comenzar. Última tarjeta:
+LbbFD51N/02:22:26Z, punto D004 válido; **no repetir D004 ni estados/inventario**.
+Esta revisión sin hardware, Idopte ejecutado, GUI, PIN o captura autenticada.
+
+Mismo libt_ias.so/hash, revisión estática:384820 instala AES por240ae0/2435b0
+con pipe228aa0. VtableAES preparación243e60/respuesta2436a0: SSC16 incrementado
+BE antes de cada mensaje. ComandoCLA|0C y87/97/8E; respuesta85/87,99/8E en ruta
+revisada, no decoder/política universal. **244083 IV16ceros ->245720 ->23ec10**,
+CBC sin transformación visible SSC->IV en esta rama. MAC246370/245900 usa
+subclaves/desplazamiento/Rb87 (CMAC), configuraciónMAC8; padding24719080+ceros.
+Entrada MAC/respuesta/protocolo runtime aún sin completar, no asumir variante
+moderna AES(SSC) como IV. Fragmentador2a09a0 delega intacto si cabeLc, o marca
+intermediosCLA|10 y últimoCLAoriginal. **No prueba normalizar GA CLA10 a00**;
+pipeactivo/serialización/Le final pendientes. No mandar GA por copiar cabecera.
+
+Nuevo **tools/jcop4-channel-primitives.h**, sin PC/SC/Idopte/PIN/APDU/canal:
+SSC128 next con overflow rechazado sinreset, método2padding/unpad, AES128CBC
+IVexplícito/sin padding OpenSSL, CMAC16 y verificaciónprefijo8 CRYPTO_memcmp.
+CBCsize1..4096 múltiplo16/capacidadcomprobada, resultado solo tras éxito completo;
+fallo deja output intacto (debe descartarse). CMAC borra output en fallo.
+**CBC/unpad no autentican**: futura capa debe verificarMAC sobreTLV/SSC correctos
+antes de plaintext/SW, no está conectada todavía. No otras curvas/algoritmos,
+no clave/session/PIN real. Helper hardware/observador/driver/submódulo intactos.
+
+Nuevo **make test/jcop4-channel-primitives** pasó **7 grupos**, CBC/CMAC
+vectores primarios NIST, IVestándar vs0 primerbloqueECB, in-place/negativebuffers,
+64bitsMACalterados/mensajealterado, frontera4096 válida paraCBC/CMAC,
+SSCcarry/overflow y padding0..4095/incrustado/
+malformado. Límite4096 local no soporte APDU/RSA3072 probado. libcrypto ya enflake,
+sin lock/inputs/sistema. KDF5/helper92/lanzador95/observador162/firma6/operación12
+intactos, suites vigentes/no repetidas. Fuentes y límites en docs/jcop4.md.
+
+**Siguiente trabajo:** constructor/verificador de mensajes protegidos y respuesta
+MACcomprobada antes de descifrado/aceptaciónSW; terminar serializaciónGA final.
+No D004 repetido ni nuevo PIN/MSE/GA/SM de tarjeta todavía. Identidad/política/
+ruta C_Login y tipo interno siguen pendientes; JCOP4/RSA3072/VERIFY6982 no resueltos.
+Git autorizado: el intento de añadir los archivos falló por .git montado
+solo lectura; no eludirlo. **Agregar explícitamente los nuevos3 archivos de
+primitivas/pruebas/lanzador**, git add -u no los incluye.
+
 **Último resultado: punto D004 validado; KDF candidata CA/AES128 comprobada offline.**
 Principal `c85aa16`, OpenSC `3dfef6704`, limpios al comenzar. Informe usuario
 `local/jcop4-dh-parameters-LbbFD51N/report.txt`, **2026-10-14T02:22:26Z (13 CR)**:

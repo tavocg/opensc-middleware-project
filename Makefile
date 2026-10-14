@@ -17,7 +17,7 @@
 .PHONY: inspect/jcop4-file4141 inspect/jcop4-file4109 inspect/jcop4-file7001 inspect/jcop4-file7002 inspect/jcop4-file7004 inspect/jcop4-file7005 inspect/jcop4-filedf0f inspect/jcop4-fileb001 inspect/jcop4-fileb002 inspect/jcop4-filed004 inspect/jcop4-dh-parameters inspect/jcop4-public-keys inspect/jcop4-certificate-paths
 .PHONY: inspect/jcop4-idopte-compare inspect/jcop4-idopte-read4109 inspect/jcop4-idopte-aodf inspect/jcop4-idopte-prkdf inspect/jcop4-idopte-pukdf inspect/jcop4-idopte-cdf inspect/jcop4-idopte-pin-status inspect/jcop4-idopte-df0f inspect/jcop4-idopte-read-df0f inspect/jcop4-idopte-b001 inspect/jcop4-idopte-b002 inspect/jcop4-idopte-second-mf inspect/jcop4-idopte-auth-status inspect/jcop4-idopte-post-auth-mf
 .PHONY: inspect/jcop4-idopte
-.PHONY: inspect/jcop4-idopte-discovery inspect/jcop4-idopte-spy test/pcsc-public-observer test/jcop4-channel-kdf
+.PHONY: inspect/jcop4-idopte-discovery inspect/jcop4-idopte-spy test/pcsc-public-observer test/jcop4-channel-kdf test/jcop4-channel-primitives
 
 PDF_INPUT ?= doc.pdf
 PDF_OUTPUT ?= local/jcop3-cli.pdf
@@ -75,6 +75,7 @@ help:
 		'make inspect/jcop4-idopte-b001 Observa lectura acotada de B001 por Idopte, sin registrar contenido ni permitir PIN.' \
 		'make inspect/jcop4-idopte-read-df0f Lee DF0F una vez, hasta 150 bytes, solo dentro de Idopte y sin registrar contenido.' \
 		'make inspect/jcop4-idopte-df0f Permite SELECT DF0F en inventario Idopte, sin leer DF0F ni usar PIN.' \
+		'make test/jcop4-channel-primitives Prueba AES/CMAC/padding/SSC sin tarjeta ni PIN.' \
 		'make test/jcop4-channel-kdf Prueba la derivación candidata AES128 con datos sintéticos, sin tarjeta ni PIN.' \
 		'make test/pcsc-public-observer Comprueba el observador sin lector ni tarjeta.' \
 		'make sign/jcop4-apdu      Firma experimental RSA SHA-256 por APDU y verifica, un intento de PIN.' \
@@ -299,3 +300,6 @@ firmador/jcop3-cli:
 
 test/jcop4-channel-kdf:
 	@bash scripts/test-jcop4-channel-kdf.sh
+
+test/jcop4-channel-primitives:
+	@bash scripts/test-jcop4-channel-primitives.sh
