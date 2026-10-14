@@ -5616,3 +5616,103 @@ MSE, PSO, MAC, verificación RSA y cierre antes de otro comando. No repetir
 baseline ni barrer variantes/ref/hash. Tras timeout/reset final ausente o
 fallido, reinsertar antes de otra operación. El estado1 sigue siendo fallo,
 no una indicación para volver a introducir el PIN por inercia.
+
+### PSO6500 sin MAC y capacidades del lector
+
+Principal `642c1e6`, OpenSC `3dfef6704`, limpios al comenzar. Informe privado
+`local/jcop4-channel-signature-application-olZZ5giU/report.txt`,
+2026-10-14T08:32:09Z (14Oct02:32CR), ejecución del usuario. Canal/MF/query,
+login, selección protegida del AID y MSE pasaron con MAC válido e inner9000.
+PSO devolvió transporte0, **solo2bytes/exterior6500**, sin objeto protegido,
+MAC ni estado interno autenticado. CollectorSTATUS3, GET0, guard0,
+14APDU, helper1, interrupted0 y reset final/unlock/disconnect0.
+No firma/artefactos. La selección de contexto cambió la observación de PSO,
+pero no prueba qué causa6500 ni si sobrevivió el login. No atribuir daño de
+memoria, error de PIN o una operación RSA efectuada a ese SW desnudo.
+No autenticar6500 sintéticamente, convertirlo en9000 ni continuar usando
+un canal después del fallo. No repetir firmas para confirmar ese resultado.
+
+La revisión estática del mismo Idopte/hash encontró una decisión que faltaba
+en la descripción anterior del codec candidato: DO97 no siempre es de un
+byte cuando Le256.2442dd compara Le contra255; para valores menores usa97/1.
+Para Le>255,244948..24499b examina descriptor+0C. Si0 usa97/1/value00;
+si1 escribe97/2/valorBE16: **Le256 ->97020100**. El MAC también cubre ese
+byte adicional. PSO con digest32 pasa de body64 a65 en esa rama.
+
+El mismo flag cambia además el Le exterior:24483c..24486c calcula Le+27+MACsize
+cuando es1 (256+35=291 con MAC8), salvo el caso65536; con0 fija256.
+No es una diferencia aislada de contenido ni una prueba de ruta efectiva.
+36828f..3682bc calcula flag=NOT(feature06_disponible OR ReaderNames.bit1).
+DisablePinPad0 en el archivo instalado no acredita ausencia/presencia del
+feature06 ni la compatibilidad efectiva del lector. ReaderNames es una
+tabla de configuración, no un dato deducible del ATR o nombre comercial.
+Los ejemplos de PSO65 del ZIP coinciden en tamaño, pero contienen conjeturas
+y no sustituyen una observación runtime validada. No alternar DO97/Le/forma
+corta o extendida en tarjeta para salir de dudas. Codec/firmas sin cambios.
+
+Se prepara `make inspect/jcop4-reader-features READER=0`, un diagnóstico
+independiente de OpenSC/Idopte. Usa PC/SC directamente, contextoSYSTEM,
+lista de lectores privada con límite4096 y conexión **SCARD_SHARE_DIRECT/0**;
+no pide protocolo de tarjeta. No llama SCardTransmit, SCardReconnect,
+SCardStatus, reset, SELECT, VERIFY, MSE, GA, GET RESPONSE o firma.
+
+Hace una solicitud de funciones del lector, CM_IOCTL_GET_FEATURE_REQUEST
+(Linux42000D48), sin datos de entrada. El
+[header primario de pcsc-lite](https://github.com/LudovicRousseau/PCSC/blob/master/src/PCSC/reader.h)
+define los registros Part10 de6bytes, valor de controlBE32 y los tags06
+(VERIFY_PIN_DIRECT) y12 (GET_TLV_PROPERTIES). Solo registra si se anuncian:
+**el control de PIN no se ejecuta**. Exige longitud4 y rechaza duplicados,
+truncados, códigos0 y alias hacia los controles de consulta.
+
+Si existe tag12, solo acepta el código **42330012** definido para CCID por
+[ccid_ifdhandler.h](https://github.com/LudovicRousseau/CCID/blob/master/src/ccid_ifdhandler.h).
+Un código distinto, incluso uno de PIN mal etiquetado, detiene antes de una
+segunda consulta; no se ejecuta un IOCTL arbitrario devuelto por el lector.
+La segunda consulta opcional también tiene entrada vacía y límite1024.
+El [backend CCID](https://github.com/LudovicRousseau/CCID/blob/master/src/ifdhandler.c)
+documenta las propiedades como TLV y el máximo de datos APDU en tag10,
+longitud4 y little endian. El helper publica exclusivamente ese dato:
+0 se etiqueta short_only_advertised;257..65536, advertised_not_tested.
+Ausencia de la propiedad permanece not_advertised, sin default inventado.
+Duplicados, truncados o rangos distintos detienen sin publicar valores
+parciales. Descripciones de firmware, fabricante y lector no se registran.
+
+**Capacidad declarada del lector no prueba APDU extendida de la tarjeta,
+el perfil efectivo de Idopte ni soporte RSA3072.** El diagnóstico no habilita
+ninguna variante de DO97/transporte y no establece un canal de tarjeta.
+Su propósito es obtener los requisitos de lector que faltan antes de
+preparar la siguiente operación. SCardControl puede consultar al driver o
+al dispositivo lector; el programa no envía APDU a la tarjeta.
+
+Cierra con SCardDisconnect/LEAVE y ReleaseContext en toda salida tras
+conexión/contexto. Error de cierre impide éxito. Lanzador stdin vacío,
+precargas/delegados/trazas retirados, core dumps desactivados, timeout20s
+TERM+5sKILL, una ejecución y sin reintentos. Timeout no acredita cierre.
+Reporte privado `local/jcop4-reader-features-*/report.txt`, directorio0700,
+archivo0600. Solo fecha/índice/resultados PCSC/booleanos/límite publicitado;
+no nombre de lector, ATR, serial, firmware, código de PIN, raw o credencial.
+
+`make test/jcop4-reader-features` pasó6grupos (4nativosPCSCmock+2lanzador).
+Comprueba DIRECT/0, máximo2 controles de consulta, LEAVE/release, tag06
+reportado nunca llamado, whitelist y aliasPIN/arbitrario/endian/longitudes/
+duplicados/truncados/propiedades/buffers/erroresAPI/cierre/índice/trazas y
+ausencia de nombres/firmware en salida. Lanzador preserva0/1/124 con una
+invocación, stdin cerrado, permisos y timeout simulado; buildfail no ejecuta
+helper y argumentos inválidos no compilan. Mock no enlaza pcsc-lite y no
+tiene símbolos SCard indefinidos; helper real importa solo Establish/List/
+Connect/Control/Disconnect/Release, sin Transmit/Reset. ASan/UBSan4nativos
+pasaron detect_leaks0, sin prueba de fugas. Real compilado sin ejecutarlo;
+bashsyntax/diffcheck0. Las suites de firma/crypto no cambiaron y no se
+repitieron. Driver/submódulo/observador/flake/lock intactos. Agente sin
+PCSC/lector/tarjeta/PIN real/GUI/Idopte ejecutado.
+
+Siguiente intervención, mismo lector0 y otros clientes cerrados:
+
+```sh
+nix develop -c make inspect/jcop4-reader-features READER=0
+```
+
+Una sola vez, sin PIN ni firma. No necesita tarjeta para esta consulta del
+lector, puede mantenerse insertada. Revisar features/properties/max_apdu_data,
+extended_apdu y cierre/helper antes de elegir transporte. No repetir firmas
+baseline/aplicación ni solicitar otro PIN por este hallazgo.

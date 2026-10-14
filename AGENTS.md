@@ -9,7 +9,66 @@ transporte simulado. PIN/GUI también los ejecuta el usuario. Esto sustituye
 la autorización anterior de hardware por el agente; conservar límites de
 cada diagnóstico y privacidad. Git sigue autorizado pero .git solo lectura.
 
-**Última revisión: PSO6A82 autenticado; variante de contexto de aplicación preparada.**
+**Última revisión: SELECT/MSE9000 autenticados; PSO6500 desnudo, consulta del lector preparada.**
+Principal `642c1e6`, OpenSC `3dfef6704`, limpios al comenzar. Informe usuario
+`local/jcop4-channel-signature-application-olZZ5giU/report.txt`,
+2026-10-14T08:32:09Z (14Oct02:32CR): canal/MF/query/login9000 confirmados;
+SELECT AID protegido/MSE transporte0/decoderaccepted/MACverified/inner9000.
+PSO transporte0/**2bytes/exterior6500/sin objetos protegidos ni MAC**;
+collectorSTATUS3/GET0. No estado interno autenticado de PSO ni prueba de
+conservación/pérdida de login o daño de memoria. Guard0/14APDU/helper1,
+interrupted0/resetfinal/unlock/disconnect0, sin firma/artefactos.
+Contexto cambió el resultado, no identifica causa. **No repetir firma/PIN.**
+
+Nuevo hallazgo estático mismo Idopte/hash:2442dd comparaLe contra255;
+<=255 usaDO97/1. ParaLe>255,244948 revisa descriptor+0C:0 ->DO97/1/value00;
+1 ->244960..244997 DO97/2/valorBE16 (**Le256 ->97020100**).
+Mismo flag también elige Leexterior:24483c..24486c flag1/Le256/MAC8 ->291;
+flag0 ->256. No basta cambiar un byte ni afirmar ruta runtime efectiva.
+36828f..3682bc calcula flag=NOT(feature06_disponible OR ReaderNames.bit1).
+Antes solo estaba descrito como función de esos campos, faltaba explicitar
+inversión/DO97>255. DisablePinPad0 en /etc/idoss.conf no pruebafeature06
+ni ReaderNames.bit1 efectivo. Nombres/ATR no autorizan inferirlo. ZIPPSO65
+compatible en tamaño con DO97/2, pero sus comentarios/APDU no son una traza
+runtime validada. No cambiar DO97/Le/extended por barrido. SM codec intacto.
+
+Nuevo **make inspect/jcop4-reader-features READER=0**, helper independiente
+deOpenSC/Idopte/driver. PCSC SYSTEM/lista<=4096 privada, DIRECT/0; una consulta
+CM_IOCTL_GET_FEATURE_REQUEST(42000D48), opcional otra exclusivamente si
+tag12 anuncia **CCID42330012**. No SCardTransmit/Reset/Status/PIN/binding/
+APDU/canal/GETRESP/firmas. ListafeatureTLV6/len4/BE32 limitada256, duplicados/
+truncados/códigos0/alias inválidos detienen; codePIN/arbitrario nunca llamado.
+Propiedades<=1024/TLV/tag10len4/LE32, max0 o257..65536, ausente desconocido;
+duplicados/truncados/rangos erróneos no publican parcial. Reporte solo booleans
+feature06/12, maxAPDU anunciado y estados; sin nombre/serial/firmware/ATR/raw.
+No determina Idoptepolicy efectiva ni extensión de tarjeta/firmas3072.
+SCardDisconnectLEAVE/ReleaseContext en salidas; errorcierre impide éxito.
+Lanzadorstdin vacío/debug noOpenSC/precargas/trazas/delegados borrados/core0,
+timeout20sTERM+5KILL/una llamada/no retries; dir0700/report0600. Timeout no
+acredita cierre; no insistir por inercia. SinNix/flake/lock/cambiosSistema.
+
+Pasaron **6grupos** nuevos (4nativosPCSCmock+2lanzador): contaje<=2controles,
+DIRECT/0/LEAVE,feature06 reportado nunca llamado, IOCTLwhitelist/rangos/
+endian/aliases/buffers/truncados/duplicados/erroresAPI/cierre/args/environment/
+privacidad y wrapper0/1/124/buildfail/permisos/timeout simulado. Mock no liga
+pcsclite, ningún símbolo SCard indefinido; real solo importa Establish/List/
+Connect/Control/Disconnect/Release. ASan/UBSan4 pasaron detect_leaks0, sin
+prueba de fugas. Real compilado sin ejecutarlo; bashsyntax/diffcheck0. Suites
+firma/crypto intactas y vigentes, no repetidas. Agente sinPCSC/lector/tarjeta/
+PINreal/GUI/Idopte ejecutado; driver/submódulo/observador intactos.
+
+**Siguiente intervención:** mismo lector0, otros clientes cerrados,
+`nix develop -c make inspect/jcop4-reader-features READER=0`, una sola vez,
+**sin PIN ni firma**. No necesita tarjeta para consultar lector, puede seguir
+insertada; no registrar ATR/identidad. Revisar feature06, properties_result,
+max_apdu_data, extended_apdu, cierre/helper antes de diseñar transporte.
+No repetir sign baseline/aplicación ni solicitar otroPIN por este hallazgo.
+Gitreadonly: commitdocs3/Makefile y **seis nuevos** tools/reader-features.c,
+scripts/build-/probe-/test-jcop4-reader-features.sh, tests/reader-features.c
+y tests/reader-features-launcher.py (nombres completos tienen prefijojcop4-).
+No gitadd-u solamente: omite archivos nuevos; sincapturas/build/eludirGit.
+
+**Revisión anterior: PSO6A82 autenticado; variante de contexto de aplicación preparada.**
 Principal `bbfc323`, OpenSC `3dfef6704`, limpios al comenzar. Informe usuario
 `local/jcop4-channel-signature-6OxIbJvG/report.txt`,2026-10-14T08:04:59Z
 (14Oct02:04CR): login/MSE transporte0/decoderaccepted/MACverified/inner9000;

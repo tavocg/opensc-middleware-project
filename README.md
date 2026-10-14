@@ -374,6 +374,14 @@ Se preparó `make sign/jcop4-channel-application READER=0`, variante explícita
 que selecciona una vez el AID conocido bajo SM después del login y antes del
 MSE, sin cambiar llave/hash ni reintentar el PIN. Es una hipótesis de contexto,
 no una corrección validada en tarjeta. Pasaron18 grupos de firma simulada.
+La ejecuciónolZZ5giU confirmó SELECT del AID y MSE con MAC/9000; PSO cambió a
+una respuesta desnuda6500, sin firma y con cierre completo. No repetir firmas
+para confirmar esto. La revisión estática encontró DO97 de dos bytes para
+Le256 en una rama de Idopte que también cambia el transporte; aún falta
+conocer las capacidades del lector. Nuevo diagnóstico sin PIN ni APDU:
+`make inspect/jcop4-reader-features READER=0`, mediante controles de metadatos
+del lector. No activa otro formato de firma ni prueba compatibilidad extendida
+de la tarjeta. [Detalle](docs/jcop4.md#pso6500-sin-mac-y-capacidades-del-lector).
 [Protocolo y límites](docs/jcop4.md#diagnóstico-de-firma-rsa2048sha256-bajo-sm).
 El driver aún no firma con JCOP4.
 [Evidencia y límites](docs/jcop4.md#canal-confirmado-en-jcop4-sin-pin).
