@@ -3973,6 +3973,71 @@ por inercia. El significado completo de D004, tipo efectivo del perfil,
 VERIFY6982 y firma libre JCOP4/RSA3072 siguen pendientes. Git add -u volvió
 a fallar por .git montado solo lectura; cambios sin commit por el agente.
 
+## D004: corregir la suposición de prefijo SEC1
+
+Principal `ab46551`, OpenSC `3dfef6704`, limpios al comenzar. Informe del usuario
+`local/jcop4-dh-parameters-0lUpuwV0/report.txt`, **2026-10-14T02:17:16Z**
+(13 de octubre CR): build/inventario/conexión/ADF correctos, SELECT y READ
+D0040/9000; control coincide, lectura de137 bytes. **Discriminador coincide
+con candidato P-521; byte4 difiere del supuesto04**. Punto no comprobado por
+fallo previo de layout; unlock0/proceso1. El valor de byte4 no se registró.
+Sin PIN, VERIFY, MSE, GA, SM o firma enviados por el helper.
+
+La comprobación byte4=04 fue una **suposición incorrecta del diagnóstico**,
+introducida al interpretar esos datos como una codificación SEC1 no comprimida
+desde posición4. La revisión estática adicional confirma que el parser de
+Idopte en la rama18 (`3720e0` -> `371fd8`) usa **BN_bin2bn** sobre los bytes
+desde posición5 (`372060`), separando dos mitades de `(longitud-5)/2`; después
+llama `236860` / **EC_POINT_set_affine_coordinates**. Esa lectura de coordenadas
+no usa byte4 como prefijo. No demuestra que los campos restantes sean
+irrelevantes para configurar el canal o para el protocolo completo.
+
+Se corrigió el decoder: mantiene longitud137 y discriminador18, pero valida
+**X en5..70 e Y en71..136**, enteros unsigned big-endian de66 bytes, directamente
+como coordenadas afines de secp521r1. Comprueba explícitamente X,Y menores que
+el primo obtenido por
+[EC_GROUP_get_curve](https://docs.openssl.org/3.5/man3/EC_GROUP_copy/), construye
+el punto con
+[EC_POINT_set_affine_coordinates](https://docs.openssl.org/3.5/man3/EC_POINT_new/)
+y exige pertenencia a P-521 y punto no infinito. No acepta coordenadas fuera
+del cuerpo aunque una implementación pudiera reducirlas modularmente.
+
+Se elimina el campo engañoso dh_point_prefix; los otros campos de cabecera
+quedan sin interpretación ni registro. Un punto validado añade solo
+`dh_parameters_layout=affine_xy_at_offset5` y las etiquetas previas de curva,
+validación y resultado. Otros discriminadores siguen rechazados antes de
+validar; tamaños erróneos/nulos, punto inválido y fallos de asignación detienen.
+No hay otras curvas ni búsqueda de offsets; buffers/BIGNUM/punto se liberan
+y borran. No coordenadas/cabeceras/hashes/raw/capturas guardados.
+
+**No cambian las APDU**: SELECT previo exige D004 transparente/137 y se permite
+un solo00B0000089, respuesta9000/exactamente137, sin reintentos/continuaciones/
+GET RESPONSE. Sin apertura de canal, PIN ni firma; observador/driver/submódulo
+intactos. Esta corrección modifica el parser del diagnóstico, no el driver.
+El lector de la sesión del agente seguía sin ser accesible en consultas
+anteriores; no se repitió hardware en esta revisión.
+
+Pasaron **92 comprobaciones del helper** y compilación real contra ambos
+builds. Se verifica independencia de los otros cuatro bytes de cabecera para
+un punto sintético válido, rango de ambos componentes (igual al primo y
+mayor), rechazo de selector desconocido, formato corto/punto inválido y salida
+exclusivamente fija. Lanzador95/observador162/firma6/operación12 sin cambios,
+suites previas vigentes. No repetirlas por documentación.
+
+Siguiente intervención, misma JCOP4/otros clientes cerrados, sin PIN:
+
+```sh
+nix develop -c make inspect/jcop4-dh-parameters READER=0
+```
+
+Se repite únicamente para aplicar la validación corregida al contenido de la
+tarjeta: el buffer anterior fue borrado y no se puede validar offline desde
+las comparaciones de cabecera. Revisar curve/point/layout/result, sin volcar
+informes completos. Aun si valida, no prueba identidad, protocolo/KDF/MAC,
+necesidad del canal o causa6982; analizar estos aspectos antes de MSE/GA/PIN.
+JCOP4/RSA3072 siguen pendientes. Git add -u falló por .git montado solo
+lectura; cambios listos pero sin commit del agente.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño

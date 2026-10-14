@@ -311,12 +311,12 @@ Idopte; firma libre JCOP4 aún pendiente.
 
 El análisis estático del login encontró dos diferencias candidatas: selección
 de raíz para PIN global y apertura de canal anónimo según el perfil interno.
-**SELECT y READ D004 devolvieron9000; se recibieron137 bytes.** Nuestro parser
-rechazó el formato antes de validar el punto P-521 candidato. Se agregó detalle
-de cada condición mediante etiquetas fijas, sin registrar bytes ni aceptar
-otros formatos. Pasaron90 pruebas del helper; las95 del lanzador siguen vigentes.
-Para recoger el detalle omitido: `make inspect/jcop4-dh-parameters READER=0`,
-sin PIN ni abrir canal. [Evidencia y límites](docs/jcop4.md#read-d004-aceptado-formato-aún-no-reconocido).
+**SELECT y READ D004 devolvieron9000; 137 bytes y discriminador P-521 coinciden**.
+La exigencia de prefijo04 era una suposición del diagnóstico; se corrigió
+siguiendo el parser de Idopte, que toma dos coordenadas desde posición5.
+Pasaron92 pruebas del helper; la validación del punto real sigue pendiente.
+Ejecutar `make inspect/jcop4-dh-parameters READER=0`, sin PIN ni abrir canal.
+[Evidencia y límites](docs/jcop4.md#d004-corregir-la-suposición-de-prefijo-sec1).
 
 Capturas privadas bajo local/jcop4-idopte-spy-*/; no agregarlas a Git.
 Pasaron previamente **30 comprobaciones del observador/decoder y 40 del

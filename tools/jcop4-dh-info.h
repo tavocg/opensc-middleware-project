@@ -1,5 +1,6 @@
 /* Diagnostic only: a bounded public-parameter read, never a channel setup. */
 #include <openssl/ec.h>
+#include <openssl/bn.h>
 #include <openssl/obj_mac.h>
 
 static int d004_control_matches_observation(const unsigned char *buf, size_t size)
@@ -47,6 +48,7 @@ static int summarize_d004_parameters(const unsigned char *buf, size_t size)
 {
 	EC_GROUP *group = NULL;
 	EC_POINT *point = NULL;
+	BIGNUM *x = NULL, *y = NULL, *prime = NULL;
 	int valid = 0;
 	/* Installed Idopte parser: discriminator at2; coordinates at5.
 	 * Its discriminator18 selects OpenSSL NID716 (secp521r1).
@@ -56,30 +58,40 @@ static int summarize_d004_parameters(const unsigned char *buf, size_t size)
 		printf("dh_parameters_result=unrecognized_layout_stop\n");
 		return 1;
 	}
-	/* Report each prerequisite separately, with fixed labels only. These
-	 * comparisons do not interpret another selector or dump header bytes. */
+	/* Only the curve selector has established meaning in this header.
+	 * In particular, byte4 is not a proven SEC1 point prefix. */
 	printf("dh_layout_size=expected_137\n");
 	printf("dh_curve_selector=%s\n", buf[2] == 18 ?
 			"matches_p521_candidate" : "different_uninterpreted");
-	printf("dh_point_prefix=%s\n", buf[4] == 4 ?
-			"matches_uncompressed_candidate" : "different_uninterpreted");
-	if (buf[2] != 18 || buf[4] != 4) {
+	if (buf[2] != 18) {
 		printf("dh_parameters_point=not_checked_due_to_layout\n");
 		printf("dh_parameters_result=unrecognized_layout_stop\n");
 		return 1;
 	}
 	group = EC_GROUP_new_by_curve_name(NID_secp521r1);
 	if (group) point = EC_POINT_new(group);
-	if (point && EC_POINT_oct2point(group, point, buf + 4, 133, NULL) == 1 &&
+	/* Match the reviewed Idopte branch: two unsigned, big-endian 66-byte
+	 * affine coordinates at5 and71. Do not interpret the other header fields.
+	 * Check canonical field range explicitly before constructing the point. */
+	x = BN_bin2bn(buf + 5, 66, NULL);
+	y = BN_bin2bn(buf + 71, 66, NULL);
+	prime = BN_new();
+	if (point && x && y && prime && EC_GROUP_get_curve(group, prime, NULL, NULL, NULL) == 1 &&
+			BN_cmp(x, prime) < 0 && BN_cmp(y, prime) < 0 &&
+			EC_POINT_set_affine_coordinates(group, point, x, y, NULL) == 1 &&
 			EC_POINT_is_at_infinity(group, point) == 0 &&
 			EC_POINT_is_on_curve(group, point, NULL) == 1) valid = 1;
+	BN_clear_free(x);
+	BN_clear_free(y);
+	BN_clear_free(prime);
 	EC_POINT_clear_free(point);
 	EC_GROUP_free(group);
 	if (!valid) {
 		printf("dh_parameters_result=point_validation_failed_stop\n");
 		return 1;
 	}
-	printf("dh_parameters_curve=secp521r1\ndh_parameters_point=valid_non_infinity\n"
+	printf("dh_parameters_layout=affine_xy_at_offset5\n"
+			"dh_parameters_curve=secp521r1\ndh_parameters_point=valid_non_infinity\n"
 			"dh_parameters_result=recognized_point_only_no_channel\n");
 	return 0;
 }

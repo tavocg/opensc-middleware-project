@@ -927,11 +927,11 @@ int main(void)
 		{
 			unsigned char invalid[sizeof(fixture_dh)];
 			memcpy(invalid, fixture_dh, sizeof(invalid)); invalid[4] = 0;
-			assert(summarize_d004_parameters(invalid, sizeof(invalid)) == 1);
+			assert(summarize_d004_parameters(invalid, sizeof(invalid)) == 0);
 			memset(invalid + 5, 0, sizeof(invalid) - 5); invalid[4] = 4;
 			assert(summarize_d004_parameters(invalid, sizeof(invalid)) == 1);
 			assert(summarize_d004_parameters(fixture_dh, 136) == 1);
-			puts("PASS D004 parser rejects invalid point encodings, off-curve coordinates and truncated input");
+			puts("PASS D004 affine parser ignores the unsupported prefix condition but rejects off-curve and truncated coordinates");
 		}
 		{
 			char output[512] = {0}, point_hex[33]; FILE *capture = tmpfile(); int saved = dup(STDOUT_FILENO);
@@ -941,29 +941,29 @@ int main(void)
 			assert(summarize_d004_parameters(fixture_dh, sizeof(fixture_dh)) == 0);
 			fflush(stdout); rewind(capture); assert(fread(output, 1, sizeof(output) - 1, capture) > 0);
 			assert(dup2(saved, STDOUT_FILENO) >= 0); close(saved); fclose(capture);
-			assert(!strcmp(output, "dh_layout_size=expected_137\ndh_curve_selector=matches_p521_candidate\ndh_point_prefix=matches_uncompressed_candidate\ndh_parameters_curve=secp521r1\ndh_parameters_point=valid_non_infinity\ndh_parameters_result=recognized_point_only_no_channel\n"));
+			assert(!strcmp(output, "dh_layout_size=expected_137\ndh_curve_selector=matches_p521_candidate\ndh_parameters_layout=affine_xy_at_offset5\ndh_parameters_curve=secp521r1\ndh_parameters_point=valid_non_infinity\ndh_parameters_result=recognized_point_only_no_channel\n"));
 			assert(!strstr(output, point_hex));
 			puts("PASS D004 summary emits exclusively fixed curve/validation labels and no point, header, hash or identifying bytes");
 		}
-		for (int failure = 0; failure < 3; failure++) {
+		for (int failure = 0; failure < 2; failure++) {
 			unsigned char invalid[sizeof(fixture_dh)];
 			char output[512] = {0}; FILE *capture = tmpfile(); int saved = dup(STDOUT_FILENO);
 			assert(capture && saved >= 0);
 			memcpy(invalid, fixture_dh, sizeof(invalid));
-			if (failure != 1) invalid[2] = 0xAA;
-			if (failure != 0) invalid[4] = 0xBB;
+			invalid[2] = 0xAA;
+			if (failure) invalid[4] = 0xBB;
 			fflush(stdout); assert(dup2(fileno(capture), STDOUT_FILENO) >= 0);
 			assert(summarize_d004_parameters(invalid, sizeof(invalid)) == 1);
 			fflush(stdout); rewind(capture); assert(fread(output, 1, sizeof(output) - 1, capture) > 0);
 			assert(dup2(saved, STDOUT_FILENO) >= 0); close(saved); fclose(capture);
 			assert(strstr(output, "dh_layout_size=expected_137\n"));
-			assert(strstr(output, failure == 1 ? "dh_curve_selector=matches_p521_candidate\n" : "dh_curve_selector=different_uninterpreted\n"));
-			assert(strstr(output, failure == 0 ? "dh_point_prefix=matches_uncompressed_candidate\n" : "dh_point_prefix=different_uninterpreted\n"));
+			assert(strstr(output, "dh_curve_selector=different_uninterpreted\n"));
+			assert(!strstr(output, "dh_point_prefix="));
 			assert(strstr(output, "dh_parameters_point=not_checked_due_to_layout\n"));
 			assert(strstr(output, "dh_parameters_result=unrecognized_layout_stop\n"));
 			assert(!strstr(output, "secp521r1") && !strstr(output, "valid_non_infinity") && !strstr(output, "AA") && !strstr(output, "BB"));
 		}
-		puts("PASS D004 layout failure distinguishes either or both mismatches without exposing values or accepting another format");
+		puts("PASS D004 affine parser still rejects unknown curve selectors without assigning meaning to other header bytes");
 		{
 			char output[256] = {0}; FILE *capture = tmpfile(); int saved = dup(STDOUT_FILENO);
 			assert(capture && saved >= 0);
@@ -975,6 +975,30 @@ int main(void)
 			assert(!strstr(output, "dh_curve_selector=") && !strstr(output, "dh_point_prefix="));
 			assert(strstr(output, "dh_layout_size=unexpected_or_missing_stop\n"));
 			puts("PASS D004 layout diagnostic avoids reading or classifying absent and truncated input");
+		}
+		{
+			unsigned char candidate[sizeof(fixture_dh)];
+			for (int header = 0; header < 256; header++) {
+				memcpy(candidate, fixture_dh, sizeof(candidate));
+				candidate[0] = candidate[1] = candidate[3] = candidate[4] = (unsigned char)header;
+				assert(summarize_d004_parameters(candidate, sizeof(candidate)) == 0);
+			}
+			puts("PASS D004 coordinate validation does not assume semantics for unreviewed header bytes across all byte values");
+		}
+		{
+			unsigned char invalid[sizeof(fixture_dh)];
+			EC_GROUP *curve = EC_GROUP_new_by_curve_name(NID_secp521r1);
+			BIGNUM *field = BN_new();
+			assert(curve && field && EC_GROUP_get_curve(curve, field, NULL, NULL, NULL) == 1);
+			for (int coordinate = 0; coordinate < 2; coordinate++) {
+				memcpy(invalid, fixture_dh, sizeof(invalid));
+				assert(BN_bn2binpad(field, invalid + 5 + coordinate * 66, 66) == 66);
+				assert(summarize_d004_parameters(invalid, sizeof(invalid)) == 1);
+				memset(invalid + 5 + coordinate * 66, 0xFF, 66);
+				assert(summarize_d004_parameters(invalid, sizeof(invalid)) == 1);
+			}
+			BN_clear_free(field); EC_GROUP_free(curve);
+			puts("PASS D004 affine parser rejects either coordinate outside the prime field instead of accepting modular reduction");
 		}
 	}
 	{

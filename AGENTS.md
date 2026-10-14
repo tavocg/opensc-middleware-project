@@ -6,6 +6,46 @@ la tarjeta. El usuario ejecuta las operaciones que requieran PIN o GUI. Esto
 sustituye las restricciones anteriores de no ejecutar Git/hardware/Idopte por
 el agente; conservar límites de cada diagnóstico y privacidad de los registros.
 
+**Último resultado: discriminador P-521 coincide; prefijo04 era supuesto incorrecto.**
+Principal `ab46551`, OpenSC `3dfef6704`, limpios al comenzar. Informe del usuario
+`local/jcop4-dh-parameters-0lUpuwV0/report.txt`, **2026-10-14T02:17:16Z (13 CR)**.
+Build/inventario/conexión/ADF correctos, SELECT y READ D0040/9000,137 bytes.
+**dh_curve_selector=matches_p521_candidate; dh_point_prefix=different_uninterpreted**.
+Punto no comprobado/unrecognized_layout_stop, unlock0/proceso1. No valor byte4
+registrado ni coordenadas guardadas. Helper sin PIN/VERIFY/MSE/GA/SM/firma.
+
+La condición byte4=04 era una suposición incorrecta de SEC1 desdeposición4,
+no una regla confirmada del perfil. Se revisó rama18 de Idopte371ca0:
+3720e0 ->371fd8;372060 toma bytesdesde5 y BN_bin2bn separa `(longitud-5)/2`,
+236860 llama EC_POINT_set_affine_coordinates. **No usa byte4 como prefijo**
+al leer coordenadas; no implica irrelevancia para el protocolo/canal completo.
+
+Decoder corregido en tools/jcop4-dh-info.h: exige137/discriminador18, X66bytes
+5..70/Y66bytes71..136 unsigned big-endian. BN_bin2bn, rangoX,Y<primoP521
+explícito, puntoafín/oncurve/noinfinito. Otros campos sin interpretar/registrar;
+no otra curva/offset/algoritmo. Se elimina dh_point_prefix; en éxito añade
+**dh_parameters_layout=affine_xy_at_offset5**, curva/point/result fijos anteriores.
+No bytes/coords/header/hash/raw/captura; buffer/BIGNUM/punto borrados/liberados.
+Punto válido no demuestra identidad, protocolo/KDF/MAC o causaVERIFY6982.
+
+Pasaron **92 comprobaciones helper**, sintéticas: todos los valores de los
+cuatro bytes de cabecera restantes no alteran validación de un punto válido,
+rango de ambas coordenadas, selector desconocido, punto inválido/truncamiento,
+privacidad. Helper real compilado en ambos builds. Lanzador95/observador162/
+firma6/operación12 intactos, suites vigentes. **APDU/permisos sin cambios**:
+control D004 transparente137 antes de único00B0000089,9000/137 obligatorios,
+sin continuación/reintento/GET RESPONSE/canal/PIN. Driver/submódulo intactos.
+Sin hardware/GUI/PIN por agente; no repetir desde sesión antes sin lector.
+
+**Siguiente intervención:** mismaJCOP4/otros clientes cerrados,
+`nix develop -c make inspect/jcop4-dh-parameters READER=0`, sin PIN. Se necesita
+única lectura para aplicar validación corregida: buffer anterior borrado,
+comparaciones no permiten validación offline. Revisar layout/curve/point/result,
+sin informes completos. No pedir PIN ni MSE/GA/SM antes de identificar variante
+si el punto valida. JCOP4/RSA3072 aún pendientes. Git autorizado: git add -u
+falló por .git montado solo lectura. No eludirlo; dar comandos de commit de
+los archivos seguidos.
+
 **Último resultado: SELECT/READ D0049000; rechazo local de formato.**
 Principal `6465cb0`, OpenSC `3dfef6704`, limpios al comenzar. Informe del usuario
 `local/jcop4-dh-parameters-gd7lajTW/report.txt`, **2026-10-14T02:12:31Z (13 CR)**.
