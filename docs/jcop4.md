@@ -5965,3 +5965,49 @@ Makefile/test-iasecc.sh/documentación. Commit del submódulo primero y luego
 puntero/documentos/tests del principal. No agregar capturas/artefactos/build.
 Todos los comandos PCSC/hardware/PIN/GUI siguen siendo del usuario; no hay
 un nuevo comando de tarjeta que ejecutar ahora.
+
+### Adaptador interno CA/MF por el dispatcher normal de OpenSC
+
+Principal `ea2b6d0`, OpenSC `0b511757c`, limpios al comenzar. Se agrega
+iasecc-chipdoc-sm.c/.h privado, sin activar binding/vtable ni API PIN/firma.
+Las primitivas ya probadas pasan a headers del submódulo, con wrappers en
+tools/ para que helpers y tests reutilicen una sola implementación. El parser
+de control MF también queda compartido; no cambia la semántica de los vectores.
+
+Con sesión preparada/perfil/metadatos/límites ya validados, debug0 y lock
+exterior del llamador, el módulo manda MSE/GA/READ256 por sc_transmit_apdu
+normal, no por reader->transmit directo. Conserva contexto real únicamente
+tras MAC/inner9000/contenido137 idéntico y generación correcta. El llamador
+debe haber seleccionado/validado ADF/D004 y obtenido137 bajo el mismo lock.
+No hace ese bootstrap, no resetea remoto ni libera el outerlock.
+
+SELECT MF tipado corto256 o extendido291, explícitos/sin fallback; exige
+MAC/9000/MF3F00/DF canónico y deja SSC4. En éxito descarta el cacheADF/D004
+anterior; en fallo descarta contexto/MSE/cache preservando binding. Tras IO
+comprueba ownership/generación antes de usar contexto potencialmente liberado
+por el hookreset. Reportes solo comandos/transport/authenticated/sw/obligación
+de reset; no puntos/MAC/keys/contenido. El llamador debe cerrar/resetear antes
+de liberar la transacción: lock_count positivo no acredita continuidad tras
+unlock/relock y el hook ordinario actual tampoco la prueba.
+
+Backend experimental OpenSSL3; otras compilaciones retornan NOT_SUPPORTED
+sin tocar estado. Stub probado por macro, no compilaciones reales LibreSSL/
+OpenSSL1/sinOpenSSL. sc-ossl-compat/libctx/providers aún pendientes antes de
+activar el perfil; prototipo usa provider global de helpers. Makefile.am/mak
+incluyen módulo/headers, sin buildWindows. Nuevas funciones internas no
+aparecen en símbolos nm-D de la biblioteca.
+
+Pasaron seis grupos nuevos de software y ASan/UBSan6 detect_leaks0, sin
+prueba de fugas/instrumentación dispatcher.so/provider precompilados. Código
+real de driver/adaptador/core/serializer de fixture sí instrumentado. Pruebas
+usan dispatcher libOpenSC normal y locks/lector/peer sintéticos, sin PCSC;
+CA/MF/SSC/cache, errores/tamaños/61/6C/MAC64bits/padding/IV/control/SW/reset
+duranteIO, ninguna credencial/GET/reintento/fallback. También pasaron123grupos
+del core+helpers trasladados y suiteIAS/JCOP3 con el nuevo grupo. OpenSC/
+móduloPKCS11 y cuatro helpers reales compilados, no ejecutados.
+
+Sin hardware/PIN/GUI/Idopte por el agente, flake/lock/observador/capturas y
+firma real JnUUiy9x intactos. No repetir tarjeta por este traslado. Siguiente:
+providers/compatibilidad/bootstrap/detección y operaciones PIN/MSE/PSO
+por API con transporte sintético, luego PKCS15/PKCS11 antes de otra firma
+física. [Implementación y límites](jcop4-opensc-integration.md#adaptador-interno-de-canal-y-mf-por-dispatcher-normal).

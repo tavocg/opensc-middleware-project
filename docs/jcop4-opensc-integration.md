@@ -2,8 +2,8 @@
 
 Estado al 14 de octubre de 2026,10:13 Costa Rica. Base local del proyecto
 `0f51c4c`, submódulo OpenSC `3dfef6704`. Este documento define el siguiente
-cambio. **La base de perfil/estado y limpieza está implementada; el adaptador
-criptográfico/PIN/firma aún no está conectado al driver.**
+cambio. **Perfil/estado/limpieza y adaptador interno CA/MF están implementados;
+detección/bootstrap y PIN/firma todavía no están conectados al driver público.**
 
 ## Evidencia disponible
 
@@ -52,7 +52,7 @@ Los datos públicos de política no acreditan un login ni permiten saltar VERIFY
 | --- | --- | --- |
 | Detección e inicialización | `iasecc_match_card`, `iasecc_init`, `iasecc_init_amos_or_sagem` | Candidato/perfil local definidos; wiring a detección/init aún pendiente. No heredar defaultsIAS completos. La tabla de binding actual no tiene una entrada exacta para este ATR. |
 | Datos de perfil | `iasecc_private_data`, `iasecc-chipdoc.h`, `iasecc_is_chipdoc_signing_key` | Estado/binding independientes por tarjeta implementados, inicialmente inactivos; el selector legacy sigue reconociendo aplicación/ref3 JCOP3. |
-| Canal | Módulos locales `jcop4-channel-agreement`, `confirmation`, `messages` | Extraer primitivas reutilizables y adaptar el transporte OpenSC bajo lock; confirmar respuesta protegida antes de usar credencial. |
+| Canal | `iasecc-chipdoc-sm`, headers privados `jcop4-channel-*` | Implementación compartida y APIs internas CA/MF por dispatcher normal completadas. Quedan providers/libctx/compatibilidad, bootstrap y wiring al driver público. |
 | PIN | `iasecc_pin_cmd`, `iasecc_pin_verify`, `iasecc_pin_get_info` | VERIFY/consulta protegidos, un intento, sin copia persistente ni cache de PIN; publicar estado solo autenticado y limpiar login tras reset/error. |
 | MSE | `iasecc_set_security_env` | Mapear operación/hash/llave de PKCS#15 al formato probado, manteniendo selección AID bajo SM y orden. |
 | Firma | `iasecc_compute_signature`, `iasecc_compute_signature_dst`, `iasecc_compute_signature_at` | Para este perfil usar la operación PSO probada; no INTERNAL AUTHENTICATE o hashing convencional por semejanza. |
@@ -181,5 +181,73 @@ ASan/UBSan pasó los nueve grupos con detect_leaks0; no prueba de fugas ni
 instrumentación de OpenSC.so/provider precompilados. OpenSC/móduloPKCS11
 compilados y suiteIAS/JCOP3 pasó tras los cambios finales, incluyendo este
 nuevo grupo. No cambian helper/codec/flake/lock/observador ni artefactos reales.
-El siguiente parche debe conectar el canal/dispatcher/SM, todavía con pruebas
+El siguiente bloque de integración sigue descrito abajo; mantener pruebas
 offline antes de otra firma física.
+
+## Adaptador interno de canal y MF por dispatcher normal
+
+Sobre principal `ea2b6d0` y OpenSC `0b511757c`, módulo privado
+`iasecc-chipdoc-sm.c/.h`, compilado en libOpenSC. No se instala en una
+vtable pública, no añade ATR a binding ni pide PIN. Su apertura exige perfil
+y sesión preparada, metadata ya validada, capacidades/límites declarados,
+T1, debug0, SM_MODE_NONE y lock exterior del llamador. Este debe haber
+seleccionado/validado ADF/D004 y leído137 en la misma conexión/transacción.
+El módulo no sustituye ese bootstrap.
+
+Abre con los tres comandos MSE/GA/READ protegido137 (exterior256) de la firma
+exitosa. Usa **sc_transmit_apdu normal**, con validación APDU y lock recursivo,
+NO_RETRY_WL/NO_GET_RESP/NO_SM; ninguna llamada directa al lector. Solo
+conserva el contexto en secure_alloc tras verificar MAC/SW/contenido idéntico
+y generación, en SSC2. Un error descarta el contexto/MSE/cache sin borrar el
+binding. El contexto real tiene cleanup que limpia/libera claves/SSC.
+
+Selección MF tipada: corto DO97/1/Le256 de la firma o extendido explícito
+DO97/2/Le291 ya observado en el diagnóstico independiente. No es una lista
+de fallback. El dispatcher normal valida EXT con la capacidad existente;
+no se añade el flag ni se alteran tamaños para pasar. Tras SSC3/4 exige MAC,
+inner9000 y control MF3F00/DF canónico antes de marcar faseMF. Invalida el
+cache ADF/D004 antiguo sin descartar el canal ni inventar un sc_file completo.
+Después de IO comprueba ownership/generación antes de tocar contexto: el
+hook de reset puede haberlo liberado mientras se transmitía.
+
+La API comunica commands/transport/authenticated/sw/reset_required, sin
+buffers, claves o MAC. Duplicados/encoding local inválido no envían otra APDU
+ni reemplazan el contexto; si existe canal, sigue requiriendo cierre remoto.
+**Reset remoto y outerunlock son responsabilidad del llamador**, también
+tras setup fallido. lock_count>=1 es una precondición, no prueba histórica de
+que jamás se hizo unlock/relock. El futuro driver debe conservar la
+transacción entre llamadas y cerrar/resetear antes de liberarla; el hook
+ordinario actual no demuestra esa continuidad. Query/VERIFY/MSE/PSO y el
+wrapper SM genérico siguen pendientes, sin activar operaciones por defecto.
+
+Las cinco implementaciones KDF/primitives/agreement/messages/confirmation
+se trasladan al submódulo y se convierten en staticinline para uso de headers.
+tools/ conserva wrappers de dos líneas que incluyen esa implementación.
+El parser MF sale de transport.h a un sexto header controls compartido.
+Sin duplicar algoritmos y sin cambiar sus vectores/semántica. Makefile.am
+distribuye headers/compila módulo; Makefile.mak incluye obj, sin buildWindows.
+Las funciones de adaptador y limpieza son internas, sin símbolos nm-D nuevos.
+
+El backend experimental compila con OpenSSL3. En OpenSSL antiguo/LibreSSL/
+sinOpenSSL retorna NOT_SUPPORTED y no toca estado. Se prueba esa rama mediante
+una macro de fixture, **no con builds reales de esas bibliotecas**. Todavía
+falta adaptar sc-ossl-compat y usar libctx/providers de OpenSC: las primitivas
+conservan la selección global de provider de los helpers. Resolver esto antes
+de activar el perfil; no presentar el parche como portable/upstream listo.
+
+`make test/iasecc-chipdoc-channel` pasó seis grupos (cinco nativos y uno de
+backend no disponible). Usa dispatcher real libOpenSC, serializer real
+apdu.c, locks y lector/peer sintéticos; AES/CMAC de respuesta independientes
+del codec. CA/MF corto/extendido, SSC2/4/cache, límites/perfil/lock/debug/SM,
+errores/setup61/6C/payload/tamaños/MAC64bits/padding/IV/control/innerSW/replay,
+reset durante IO y cleanup sin uso de contexto liberado. Sin PIN ni
+GET/reintento/fallback. Stub retorna reportes0/NOT_SUPPORTED sin cambiar
+tarjeta/sesión. ASan/UBSan pasó6 detect_leaks0; no prueba de fugas ni
+instrumentación de dispatcher.so/provider precompilados; fixture del driver,
+adaptador, core y serializer sí instrumentados.
+
+OpenSC/móduloPKCS11 y cuatro helpers reales compilaron, sin ejecutarlos.
+Pasaron123 grupos previos del core y helpers tras el traslado (47+76) y la
+suiteIAS/JCOP3 con el nuevo grupo. No se ejecutó hardware/PIN/GUI/Idopte ni
+se alteraron flake/lock/observador/artefactos. La firma real JnUUiy9x sigue
+siendo la evidencia vigente; no repetirla por este traslado.

@@ -9,7 +9,77 @@ transporte simulado. PIN/GUI también los ejecuta el usuario. Esto sustituye
 la autorización anterior de hardware por el agente; conservar límites de
 cada diagnóstico y privacidad. Git sigue autorizado pero .git solo lectura.
 
-**Última revisión: perfil/estado por tarjeta y limpieza IAS integrados; adaptador criptográfico pendiente.**
+**Última revisión: adaptador CA/MF con dispatcher normal compilado/probado; PIN/firma/binding pendientes.**
+Principal `ea2b6d0`, OpenSC `0b511757c`, limpios al comenzar. Firma real
+JnUUiy9x sigue verificada; no repetir helper/lector/canal/PIN por inercia.
+SinPCSC/lector/tarjeta/PINreal/GUI/Idopte ejecutado por el agente.
+
+Nuevo módulo privado OpenSC **iasecc-chipdoc-sm.c/.h** con APIs internas
+channel_open/channel_select_mf. Requiere binding+sesiónPREPARED de perfil
+observado, límites/capsEXT ya declarados, T1, ctxdebug0, SM_MODE_NONE y
+**outerlock continuo del llamador**. Este debe haber seleccionado/validado
+ADF/D004 y leído137; el módulo no hace ese bootstrap. MSE/GA/READ256 por
+sc_transmit_apdu normal/validación/locks anidados, NO_RETRY_WL/NO_GET_RESP/
+NO_SM. No reader->transmit directo. Solo3comandos conocidos, sin fallback.
+Conserva contexto crypto secure_alloc únicamente tras MAC/SW/contenido137
+idéntico, SSC2 y generación igual; attach real, no un booleano inventado.
+
+MF porAPI tipada permite formato corto probado en firma (DO97/1/Le256) o
+extendido explícito probado aparte (DO97/2/Le291), nunca alternarlos como
+fallback. Normal dispatcher valida EXT; body32/33, SSC3/4. MAC antes de datos/
+SW y controlMF3F00/DF canónico obligatorio. En éxito invalida cacheADF/D004
+sin borrar crypto; en fallo borra contexto/MSE/cache y mantiene binding.
+Comprueba ownership/generación capturada antes de dereferenciar contexto
+tras transporte: hookreset puede haberlo liberado. Local duplicate/encoding
+inválido preserva canal sin IO; reporta reset_required si ya hay contexto.
+No API PIN/query/login/firma ni SM get/free wrapper/vtable/binding activados.
+
+Reset remoto/cierre/outerunlock **siguen siendo responsabilidad del llamador**;
+reportreset_required1 cuando intenta setup o existe canal, no se resetea
+hardware dentro de estas APIs. lock_count>=1 no demuestra continuidad frente
+a unlock/relock: futuro driver debe conservar una transacción entre pasos y
+cerrar/resetear antes de liberar. Hook actual de lock ordinario no detecta
+esa continuidad; no suponer que permisos sobreviven otras operaciones.
+
+**Una implementación crypto**: KDF/primitives/agreement/messages/confirmation
+trasladados a headers privados del submódulo, funcionesstaticinline; tools/
+conserva wrappers include2líneas para helpers/tests anteriores. ParserMF antes
+en transport.h extraído a **jcop4-channel-controls.h** compartido. Misma
+semántica/vectores, sin duplicar algoritmos; SPDXLGPL. Makefile.am distribuye
+headers y compila módulo en ambas listas; Makefile.mak agregaobjWindows,
+sin pruebaWindows. invalidate_card pasa a función interna no exportada,
+con declaración común/cache. Nuevos símbolos no aparecen en nm-D.
+
+Backend nuevo condicionado a OpenSSL3/noLibreSSL; otros builds retornan
+NOT_SUPPORTED sin IO/cambioestado. Stub probado mediante macro de fixture,
+**no prueba de compilación real con LibreSSL/OpenSSL1/noOpenSSL**. Adaptación
+sc-ossl-compat y uso del libctx/providers de OpenSC siguen pendientes antes
+de activar perfil; prototipo conserva provider global de helpers.
+
+Pasaron **6grupos nuevos** test/iasecc-chipdoc-channel (5nativos+1stub), real
+dispatcher libOpenSC y serializer apdu.c/lector/locks/peer sintéticos. CA/MF,
+metadata/phase/limits/debug/no outerlock, errores/61/6C/MAC64bits/padding/IV/
+control/SW/oversize/stale/resetduranteIO/cleanupcache/ownership, sin PIN/GET/
+retry/fallback. ASan/UBSan6 detect_leaks0, sin prueba fugas/instrumentación
+de dispatcher.so/provider precompilados; driver/adaptador/core/serializer de
+fixture sí instrumentados. OpenSC/móduloPKCS11 y cuatrohelpers reales compilados,
+no ejecutados. **123grupos** core+helpers pasaron tras traslado (47+76);
+suiteIAS/JCOP3 pasó con grupo nuevo (670líneasPASS, no670testcases distintos).
+Fallas iniciales de compilación fueron includes/size_t/prototipo/argumento
+secure_free corregidos, no errores tarjeta/PIN. Flake/lock/observador/capturas
+sin cambios; scripts bash/diffchecks0.
+
+**Siguiente trabajo autónomo:** adaptar provider/libctx/compatibilidad, conectar
+bootstrap/detección optativa desde metadatos reales y las operaciones query/
+VERIFY/MSE/PSO por API del driver; cuidar reserva/cierre/reset/errores y probar
+PKCS15/PKCS11 con transporte sintético antes de otra tarjeta. RSA3072/GUI/
+consecutivas/reinserción aún pendientes. No comandohardware nuevo ahora.
+Gitreadonly/noeludir: commit submódulo primero (4modificados+8nuevos: módulo2,
+headerscrypto5+controls1), luego principal/punterovendor/documentos4/Makefile/
+test-iasecc.sh/wrappers5/transport.h/testtransport y **4nuevos** wrappercontrols,
+scriptchannel/testchannel/testunavailable. Gitadd-u omite nuevos; nocapturas/build.
+
+**Revisión anterior: perfil/estado por tarjeta y limpieza IAS integrados; adaptador criptográfico pendiente.**
 Principal `4a06cfc`, OpenSC `3dfef6704`, limpios al comenzar. La firma real
 JnUUiy9x del14Oct10:13CR permanece verificada; **no repetir firma/helper/
 lector/canal/PIN**. Esta revisión sinPCSC/hardware/PINreal/GUI/Idopte ejecutado.

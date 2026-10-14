@@ -92,8 +92,8 @@ int main(void)
 	transport_defaults(); test_flow.mode = BAD_MAC; assert(invoke_transport() == 1 && !mf_calls);
 	transport_defaults(); test_state.reset_error = 2; assert(invoke_transport() == 1 && mf_calls == 1);
 	puts("PASS insufficient reader limit stops before bootstrap and missing channel confirmation prevents EXT probe; failed final reset prevents process success");
-	fixture_mf(0); assert(!transport_mf_control(mf_fixture, mf_size));
-	for (size_t i = 0; i < mf_size; i++) assert(transport_mf_control(mf_fixture, i));
+	fixture_mf(0); assert(!jcop4_sm_mf_control(mf_fixture, mf_size));
+	for (size_t i = 0; i < mf_size; i++) assert(jcop4_sm_mf_control(mf_fixture, i));
 	for (int mutation = 0; mutation < 7; mutation++) {
 		fixture_mf(0);
 		if (mutation == 0) mf_fixture[4] = 0;
@@ -103,7 +103,7 @@ int main(void)
 		if (mutation == 4) mf_fixture[3] = 3;
 		if (mutation == 5) mf_fixture[1] = 0x80;
 		if (mutation == 6) mf_fixture[mf_size++] = 0;
-		assert(transport_mf_control(mf_fixture, mf_size));
+		assert(jcop4_sm_mf_control(mf_fixture, mf_size));
 	}
 	puts("PASS MF semantic validation admits bounded canonical62/6F/direct/nested control only with unique3F00 and DF descriptor, rejecting other FID/type, duplicates, truncation and trailing data");
 	for (int mutation = 0; mutation < 13; mutation++) {

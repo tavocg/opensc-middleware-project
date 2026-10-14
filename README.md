@@ -57,8 +57,12 @@ sin verificar. [Plan de integración](docs/jcop4-opensc-integration.md).
 La integración empezó con el perfil y estado de sesión por tarjeta dentro
 de `iasecc`, incluyendo limpieza en logout/finish y notificaciones de reset.
 Pasaron nueve grupos nuevos de software y las regresiones IAS/JCOP3; OpenSC
-compiló. El canal seguro y las llamadas PIN/MSE/PSO todavía deben conectarse
-al driver. No hay una nueva prueba con tarjeta para esta revisión.
+compiló. Ya existe un adaptador interno CA/MF que conserva el canal tras
+verificar su MAC y usa el dispatcher normal, con seis grupos nuevos y
+ASan/UBSan pasados. Las primitivas ahora tienen una sola implementación en
+el submódulo; los helpers anteriores la reutilizan y sus pruebas pasaron.
+Faltan detección/bootstrap, integración de providers y operaciones PIN/MSE/
+PSO desde el driver público. No hay una nueva prueba con tarjeta ahora.
 Los párrafos siguientes conservan los pasos históricos de investigación.
 La selección temporal RSA/SHA-256 obtuvo `9000`; VERIFY vacío devolvió
 `63C7`, con siete intentos disponibles, PIN global 1 y formato UTF-8.
