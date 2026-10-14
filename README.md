@@ -63,7 +63,10 @@ ASan/UBSan pasados. Las primitivas ahora tienen una sola implementación en
 el submódulo; los helpers anteriores la reutilizan y sus pruebas pasaron.
 El canal ya usa el contexto criptográfico de OpenSC y respeta sus providers
 y restricciones, con pruebas de aislamiento frente al contexto global.
-Faltan detección/bootstrap y operaciones PIN/MSE/PSO desde el driver público;
+La API interna de preparación valida la llave y PIN de PKCS#15, selecciona
+la aplicación, comprueba D004 y confirma el canal. Pasaron cinco grupos
+adicionales con objetos decodificados y transporte simulado. Faltan la
+activación optativa desde el driver público y las operaciones PIN/MSE/PSO;
 el backend nuevo requiere OpenSSL3. No hay otra prueba con tarjeta ahora.
 Los párrafos siguientes conservan los pasos históricos de investigación.
 La selección temporal RSA/SHA-256 obtuvo `9000`; VERIFY vacío devolvió

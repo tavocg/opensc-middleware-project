@@ -16,6 +16,10 @@ int main(void)
 	memset(&report, 0xA5, sizeof(report));
 	assert(iasecc_chipdoc_channel_select_mf(&card, IASECC_CHIPDOC_MF_EXTENDED, &report) == SC_ERROR_NOT_SUPPORTED);
 	assert(!memcmp(&report, &empty, sizeof(report)) && !memcmp(&prv, &before, sizeof(prv)) && card.caps == SC_CARD_CAP_APDU_EXT);
+	struct iasecc_chipdoc_bootstrap_report boot, empty_boot = {0};
+	memset(&boot, 0xA5, sizeof(boot));
+	assert(iasecc_chipdoc_channel_bootstrap(NULL, NULL, &boot) == SC_ERROR_NOT_SUPPORTED);
+	assert(!memcmp(&boot, &empty_boot, sizeof(boot)) && !memcmp(&prv, &before, sizeof(prv)));
 	assert(iasecc_chipdoc_channel_open(NULL, NULL, 0, NULL) == SC_ERROR_NOT_SUPPORTED);
 	puts("PASS unavailable crypto backend returns not-supported with zero reports and unchanged driver/card/session state, no crypto/transport/PIN");
 	return 0;

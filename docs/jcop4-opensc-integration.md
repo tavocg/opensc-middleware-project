@@ -3,7 +3,8 @@
 Estado al 14 de octubre de 2026,10:13 Costa Rica. Base local del proyecto
 `0f51c4c`, submódulo OpenSC `3dfef6704`. Este documento define el siguiente
 cambio. **Perfil/estado/limpieza y adaptador interno CA/MF están implementados;
-detección/bootstrap y PIN/firma todavía no están conectados al driver público.**
+metadata/bootstrap privados y providers también implementados; activación
+optativa y PIN/firma todavía no están conectados al driver público.**
 
 ## Evidencia disponible
 
@@ -50,13 +51,13 @@ Los datos públicos de política no acreditan un login ni permiten saltar VERIFY
 
 | Pieza | Funciones/estructura actuales | Trabajo necesario |
 | --- | --- | --- |
-| Detección e inicialización | `iasecc_match_card`, `iasecc_init`, `iasecc_init_amos_or_sagem` | Candidato/perfil local definidos; wiring a detección/init aún pendiente. No heredar defaultsIAS completos. La tabla de binding actual no tiene una entrada exacta para este ATR. |
+| Detección e inicialización | `iasecc_match_card`, `iasecc_init`, `iasecc_init_amos_or_sagem` | Validación nativa PKCS15 y bootstrap privados implementados; wiring a detección/init aún pendiente. No heredar defaultsIAS completos. La tabla de binding actual no tiene una entrada exacta para este ATR. |
 | Datos de perfil | `iasecc_private_data`, `iasecc-chipdoc.h`, `iasecc_is_chipdoc_signing_key` | Estado/binding independientes por tarjeta implementados, inicialmente inactivos; el selector legacy sigue reconociendo aplicación/ref3 JCOP3. |
-| Canal | `iasecc-chipdoc-sm`, headers privados `jcop4-channel-*` | Implementación compartida y APIs internas CA/MF por dispatcher normal completadas. Quedan providers/libctx/compatibilidad, bootstrap y wiring al driver público. |
+| Canal | `iasecc-chipdoc-sm`, headers privados `jcop4-channel-*` | Implementación compartida y APIs internas CA/MF por dispatcher normal completadas. Providers/libctx OpenSSL3 y bootstrap privados completados. Quedan otros backends y wiring al driver público. |
 | PIN | `iasecc_pin_cmd`, `iasecc_pin_verify`, `iasecc_pin_get_info` | VERIFY/consulta protegidos, un intento, sin copia persistente ni cache de PIN; publicar estado solo autenticado y limpiar login tras reset/error. |
 | MSE | `iasecc_set_security_env` | Mapear operación/hash/llave de PKCS#15 al formato probado, manteniendo selección AID bajo SM y orden. |
 | Firma | `iasecc_compute_signature`, `iasecc_compute_signature_dst`, `iasecc_compute_signature_at` | Para este perfil usar la operación PSO probada; no INTERNAL AUTHENTICATE o hashing convencional por semejanza. |
-| Limpieza | `iasecc_logout`, `iasecc_finish`, `card_reader_lock_obtained` | Limpieza de estado/ownership/MSE/cache y hook de reset implementados. Quedan el contexto crypto real, reset explícito/remoción y reserva/liberación de sesión. |
+| Limpieza | `iasecc_logout`, `iasecc_finish`, `card_reader_lock_obtained` | Limpieza de estado/ownership/MSE/cache y hook de reset implementados. Contexto crypto real implementado; quedan reset explícito/remoción y reserva/liberación de sesión del llamador. |
 | PKCS#15/PKCS#11 | `sc_pkcs15_compute_signature`, algoritmos anunciados | Asegurar paso de digestSHA25632; manejar DigestInfo de CKM_RSA_PKCS conforme a la conversión existente, nunca firmarlo como un digest distinto. |
 
 La ruta actual de `iasecc` sigue siendo IAS convencional: no contiene este
@@ -309,3 +310,85 @@ Referencias primarias: [contextos EVP de OpenSSL](https://docs.openssl.org/3.5/m
 y [CMAC y cipher subyacente](https://docs.openssl.org/3.5/man7/EVP_MAC-CMAC/).
 Estas APIs permiten seleccionar libctx y sus algoritmos; las pruebas locales
 acreditan el aislamiento de esta implementación, no una certificación.
+
+## Bootstrap desde objetos PKCS15 y parámetros D004
+
+Sobre principal `d0ee1da` y OpenSC `8e107d776`, nueva API interna
+`iasecc_chipdoc_channel_bootstrap(p15,key,report)`. Se invoca explícitamente
+dentro del driver IAS; no se instala en match/init/vtable ni activa tarjetas
+por ATR. Usa objetos PKCS15 ya decodificados para elegir el perfil funcional,
+sin descubrirlos o leer certificados/credenciales desde esta API.
+
+El header privado `iasecc-chipdoc-pkcs15.h` exige llave RSA nativa2048/ref91,
+uso SIGN o NONREPUDIATION y pertenencia a la lista del mismo p15card. Su
+identificador de autenticación debe corresponder a un único PIN global/ref1,
+sin SO/PUK. Rechaza emulación, objetos de sesión, asociación ambigua, listas
+cíclicas o más de512 objetos (guard local, no capacidad de tarjeta). Requiere
+AID conocido anunciado una sola vez, y DDO/pathAID vacíos o iguales. No usa
+labels, certificado, contenido/cache de PIN, tries/logged_in o encoding para
+reconocer el perfil. Emisor/identidad no quedan autenticados por estos datos.
+
+El llamador debe invalidar estado local y hacer un reset exitoso bajo su
+lock exterior antes de entrar, y mantener la misma transacción hasta el
+reset/cierre final. La API no adquiere ese lock ni ejecuta resets y no puede
+probar esa historia a partir de lock_count. Exige contexto privado OpenSSL3,
+debug0, SM_MODE_NONE, T1/ATR y EXT/límites139/291 ya declarados; no los cambia
+para aprobar. Solo acepta estado inactivo, y preserva un propietario activo
+ante llamada duplicada o error local de argumentos/configuración.
+
+Antes del primer comando reserva BOOTSTRAPPING/generación. Así el hook de
+reset puede invalidar la operación cuando todavía no existe binding
+permanente. La secuencia plain medida usa el dispatcher normal:
+
+1. SELECT AID conocido, CASE3 corto/P1=4/P2=0C/sinLe: requiere9000 sin payload.
+2. SELECT D004, CASE4 corto/P1=2/P2=0/Le256: exige control FCI/FCP completo,
+   identidad D004, transparente y137bytes mediante el matcher existente.
+3. READ0/Le137: exige9000/exactamente137, selector18 decimal y punto P521
+   canónico válido, coordenadas desde5. Los demás bytes de cabecera no se
+   interpretan; atributos propietarios del control no acreditan permisos.
+
+Cada comando tiene NO_RETRY_WL/NO_GET_RESP/NO_SM, sin continuación o fallback.
+Un fallo detiene en su etapa y exige cierre remoto después de cualquier IO,
+aunque no haya MSE/GA/PIN. No conserva ni registra buffers/punto/control.
+El matcher D004 se trasladó a `jcop4-dh-control.h` privado y tools conserva
+un wrapper; reglas ASN1 y permisos de los diagnósticos anteriores intactos.
+
+La integración encontró una discrepancia local del perfil: selector0x18
+significa24, pero el helper/parsers/acuerdo y el punto real validado usaban
+**18 decimal (0x12)**. Se corrigió el perfil y se añadió rechazo explícito de
+0x18 a los tests. Los antiguos fixtures construían metadatos con la misma
+constante equivocada; la nueva prueba cruza esos metadatos con la lectura
+sintética y la confirmación existente. No se cambió el protocolo ni se volvió
+a consultar tarjeta para resolverlo.
+
+Solo después de validar PKCS15 y D004 establece el binding funcional
+persistente CR, limpia la reserva/cache/MSE y prepara el estado. Invoca
+channel_open existente para MSE/GA/READ protegido, exterior256. Son6APDU en
+total y conserva canal/SSC2 exclusivamente con MAC/SW/contenido iguales.
+Puede continuar con MF protegido corto ya medido, SSC4 y7APDU. Fallar CA
+limpia contexto pero mantiene binding; fallar D004 cuando ya había binding
+tampoco lo borra. No convierte un candidato nuevo fallido en perfil válido.
+La futura integración pública debe impedir que ese binding vuelva a las
+operaciones IAS en claro: ese wiring y esas guardas aún están pendientes.
+
+Cinco grupos nuevos de `make test/iasecc-chipdoc-bootstrap` pasaron: fixtures
+DER generados y decodificados con las funciones PKCS15 reales; reader/locks/
+peer de software, serializer/dispatcher reales y respuesta AES/CMAC del
+peer independiente. Cubre32 variantes antes de IO, control/READ/selector/
+punto/longitud/SW61/6C/transporte, reset/contexto en las seis fases, errores
+CA/MAC, binding anterior, argumentos/duplicados y contenido/cache/estado PIN
+ignorados. No transmite VERIFY, consulta PIN, firma o reset remoto.
+
+Pasaron perfil9/adaptador9/bootstrap5, **23 grupos nativos** y ASan/UBSan23
+con detect_leaks=0. No prueba de fugas ni instrumentación de OpenSC.so,
+OpenSSL o decoders ASN1 precompilados. También los76 grupos de helpers tras
+compartir control D004 y la suite IAS/JCOP3 completa. Core crypto47 anterior
+sigue vigente, sin cambios/no repetido. Compilados OpenSC/móduloPKCS11 y
+cinco helpers reales, sin ejecutarlos, ni nuevos símbolos nm-D. Makefile.am
+distribuye los dos headers nuevos y el target se incluye en test/iasecc.
+
+Sin PCSC/lector/tarjeta/PIN real/GUI/Idopte del agente ni otro informe. Firma
+JnUUiy9x sigue vigente. Siguiente: reserva/reset/cierre, query/VERIFY y luego
+MSE/PSO con APIs y transporte sintético, wiring público optativo y PKCS11,
+antes de pedir otra firma física. OpenSSL3 solamente; otros backends siguen
+con stub, sin builds reales/FIPS/Windows/macOS. RSA3072 aún no acreditado.

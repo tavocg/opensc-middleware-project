@@ -39,7 +39,7 @@ static void defaults(void)
 	card.max_send_size = 255; card.max_recv_size = 291; card.caps = SC_CARD_CAP_APDU_EXT;
 	aid.len = p->aid_len; memcpy(aid.value, p->aid, p->aid_len);
 	dummy.owner = &prv.chipdoc_session; memset(dummy.bytes, 0xA5, sizeof(dummy.bytes));
-	metadata = (struct iasecc_chipdoc_metadata){SC_ALGORITHM_RSA, 0x91, 2048, 1, 0xD004, 137, 0x18, 1, 1};
+	metadata = (struct iasecc_chipdoc_metadata){SC_ALGORITHM_RSA, 0x91, 2048, 1, 0xD004, 137, 18, 1, 1};
 	released = physical = 0;
 }
 
@@ -97,7 +97,7 @@ int main(void)
 		assert(prv.chipdoc_session.phase == IASECC_CHIPDOC_INACTIVE && !prv.chipdoc_session.channel && card.caps == caps && !physical);
 	}
 	puts("PASS card and reader EXT/T1/limits/candidate are checked locally without manufacturing capability or calling transport");
-	for (int variation = 0; variation < 10; variation++) {
+	for (int variation = 0; variation < 11; variation++) {
 		defaults();
 		if (variation == 0) metadata.algorithm = SC_ALGORITHM_EC;
 		if (variation == 1) metadata.reference = 0x90;
@@ -108,6 +108,7 @@ int main(void)
 		if (variation == 6) metadata.curve_selector = 0x17;
 		if (variation == 7) metadata.native = 0;
 		if (variation == 8) metadata.signing = 0;
+		if (variation == 10) metadata.curve_selector = 0x18; /* 24, not the observed decimal18. */
 		assert(iasecc_chipdoc_prepare(&prv.chipdoc_session, &card, &aid, variation == 9 ? NULL : &metadata) != SC_SUCCESS);
 		assert(!prv.chipdoc_session.profile && !prv.chipdoc_session.channel && !physical);
 	}

@@ -6040,3 +6040,37 @@ backends por macro, no builds reales/FIPS/plataformas/provider alternativo.
 Siguiente: bootstrap/detección y operaciones PIN/MSE/PSO con transporte
 sintético, después PKCS15/PKCS11 antes de volver a pedir tarjeta.
 [Detalles y fuentes](jcop4-opensc-integration.md#contexto-criptográfico-de-opensc-y-aislamiento-de-providers).
+
+### Bootstrap privado a partir de PKCS15 y D004
+
+Principal `d0ee1da`, OpenSC `8e107d776`, limpios al comenzar. Nueva API interna
+channel_bootstrap valida objetos PKCS15 ya decodificados: RSA nativa2048/ref91,
+uso de firma, pertenencia de objeto, PIN global1 asociado único y AID/DDO/path
+compatibles; sin emulación/objetos de sesión/listas cíclicas. No descubre
+objetos ni lee certificados, contenido/cache de PIN, logged_in o intentos.
+
+Con outerlock/reset previo del llamador, contexto privado OpenSSL3 y límites
+T1/EXT existentes, reserva BOOTSTRAPPING/generación para detectar reset antes
+del binding. SELECT AID corto/P2=0C/sinLe, SELECT D004/Le256/control
+transparente137 y READ0/137/punto P521. Corrige selector del perfil de0x18
+(24) a **18 decimal=0x12**, consistente con helper/acuerdo y la lectura real
+ya validada; rechazo explícito de0x18 probado, sin otra lectura física.
+
+Tras validar D004/metadatos prepara binding permanente y channel_open; solo
+MAC/9000/contenido137 igual entrega SSC2/6APDU, luego MF protegido SSC4/7.
+Errores/contexto/reset limpian sesión; binding reconocido queda separado.
+El llamador aún debe mantener reserva/reset/cierre antes de unlock, API no
+los realiza ni acredita continuidad desde lock_count. Wiring público y sus
+guardas contra operaciones IAS en claro siguen pendientes.
+
+Pasaron5 grupos nuevos, PKCS15 DER decodificado/dispatcher/serializer reales
+y transporte/peer de software,32 variantes previas a IO/6 fases con reset/
+contexto/controles/longitudes/SW/CA/MAC. Perfil9/adaptador9/bootstrap5 y
+ASan/UBSan23 detect_leaks0, sin prueba de fugas/instrumentación de bibliotecas
+precompiladas;76grupos helpers y suite IAS/JCOP3 pasaron. Core47 sin cambios
+vigente/no repetido. OpenSC/móduloPKCS11 y cinco helpers compilados, no
+ejecutados. Parser D004 compartido en nuevo header privado + wrapper,
+ningún cambio de permisos. Sin hardware/PIN real/GUI/Idopte del agente,
+firmareal JnUUiy9x/capturas/flake/lock/observador intactos. No comando nuevo
+de tarjeta: siguen reserva/cierre/query/VERIFY/MSE/PSO y activación pública
+con pruebas sintéticas. [Detalles](jcop4-opensc-integration.md#bootstrap-desde-objetos-pkcs15-y-parámetros-d004).

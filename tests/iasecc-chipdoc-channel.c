@@ -119,7 +119,7 @@ static void defaults(void)
 	memset(&card_ops, 0, sizeof(card_ops)); card_ops.card_reader_lock_obtained = iasecc_card_reader_lock_obtained; test_card.ops = &card_ops;
 	test_prv.chipdoc_profile = p->id;
 	struct sc_aid aid = { {0}, 0 }; aid.len = p->aid_len; memcpy(aid.value, p->aid, p->aid_len);
-	struct iasecc_chipdoc_metadata metadata = {SC_ALGORITHM_RSA,0x91,2048,1,0xD004,137,0x18,1,1};
+	struct iasecc_chipdoc_metadata metadata = {SC_ALGORITHM_RSA,0x91,2048,1,0xD004,137,18,1,1};
 	assert(iasecc_chipdoc_prepare(&test_prv.chipdoc_session, &test_card, &aid, &metadata) == SC_SUCCESS);
 	physical = locks = unlocks = 0; mf_error = mf_bit = reset_on_command = swap_provider_on_command = restrict_on_command = 0;
 	peer.calls = peer.fail_step = peer.bit = peer.ga_template = 0; peer.mode = NORMAL; peer.le = JCOP4_CA_LE_SHORT_MAX;
@@ -219,6 +219,7 @@ static void provider_checks(void)
 	OPENSSL_cleanse(plain, sizeof(plain)); OPENSSL_cleanse(mac, sizeof(mac)); OPENSSL_cleanse(tag, sizeof(tag));
 }
 
+#ifndef IASECC_CHIPDOC_CHANNEL_FIXTURE
 int main(void)
 {
 	struct iasecc_chipdoc_channel_report report;
@@ -297,3 +298,5 @@ int main(void)
 	puts("PASS invalid profile/lock/debug/SM/capability/limits/point/length/null inputs stop before transport; local duplicate/invalid encoding never replaces a live channel");
 	return 0;
 }
+
+#endif

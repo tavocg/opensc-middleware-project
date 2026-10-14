@@ -9,6 +9,80 @@ transporte simulado. PIN/GUI también los ejecuta el usuario. Esto sustituye
 la autorización anterior de hardware por el agente; conservar límites de
 cada diagnóstico y privacidad. Git sigue autorizado pero .git solo lectura.
 
+**Última revisión: bootstrap privado desde objetos PKCS15 y D004, probado sin hardware.**
+Principal `d0ee1da`, OpenSC `8e107d776`, limpios al comenzar. Firma real
+JnUUiy9x sigue vigente. Sin PCSC/lector/tarjeta/PIN real/GUI/Idopte ejecutado;
+no nuevo informe ni repetición de canal/lectura/lector/firma.
+
+Nueva API interna **iasecc_chipdoc_channel_bootstrap(p15,key,report)**, sin
+wiring a match/init/vtable pública ni activar automáticamente tarjetas.
+Nuevo header iasecc-chipdoc-pkcs15.h valida objetos ya decodificados: llave
+RSA nativa2048/ref91 con SIGN o NONREPUDIATION, pertenece a obj_list, auth_id
+no vacío/acotado, un PIN asociado global/ref1/noSO/noPUK, appAID conocido
+anunciado una vez, DDO/pathAID ausentes o iguales. Rechaza emulación/objetos
+de sesión/asociación ambigua/ciclos/listas>512 (límite local de recorrido).
+No lee certificados, contenido/cache de PIN, nombres, tries/logged_in ni
+interpreta auth_method/encoding; no es descubrimiento ni autenticación.
+
+Bootstrap exige driver iasecc/contexto privado OpenSSL3/debug0/T1/EXT y
+límites existentes139/291/outerlock. **El llamador invalida estado local y
+resetea exitosamente la tarjeta bajo ese lock ANTES de entrar**, mantiene
+transacción y resetea/cierra antes de unlock. API no hace esos resets ni
+adquiere reserva; lock_count>0 no acredita historia/reset/continuidad.
+Reserva fase/generación BOOTSTRAPPING para que el hook reset invalide incluso
+antes del binding permanente. SELECT AID CASE3/P2=0C/sinLe; SELECT D004
+CASE4 corto/P1=2/Le256; READ0/137. NO_RETRY_WL/NO_GET_RESP/NO_SM, dispatcher
+normal. SW9000/SELECTAIDsinpayload, FCI/FCP D004 transparente137 y punto
+P521 válido obligatorios; falla antes de MSE si cualquiera no coincide.
+Buffers solo en memoria y borrados; sin rutas relativas nuevas/GET/fallback.
+
+**Corrección local encontrada al conectar la secuencia:** el perfil previo
+usaba selector0x18 (24); helper/confirmation/parser instalado y lectura real
+validada usan **18 decimal =0x12**. Perfil corregido a18, bootstrap compara
+con él; tests rechazan0x18 y17. No cambio de curva, permisos o APDU ni nueva
+lectura real. Fixture anterior solo ejercitaba metadatos construidos con la
+constante errónea; la prueba nueva cruza objetos/lectura/acuerdo reales.
+
+Tras metadata pública y D004 vivos validados, conserva bindingCR separado,
+limpia reserva/cache/MSE, prepare y channel_open del adaptador existente.
+Resultado únicamente tras MAC/SW/contenido137 idéntico, SSC2. Total6APDU,
+MF protegido posterior SSC4/7APDU. Reset/contexto/reader/generación se
+comprueban antes/después de los tres comandos plain; errores CA preservan binding pero
+no devuelven canal. Binding previo no se pierde ante D004 distinto; error
+plain inicial sin binding no convierte candidato en perfil. Reconocer ese
+perfil funcional no identifica país ni autentica tarjeta. **Las operaciones
+públicas legacy aún no están conectadas/guardadas para este binding**; el
+futuro wiring debe impedir fallback en claro tras activarlo.
+
+Parser D004 existente compartido en nuevo header privado jcop4-dh-control.h;
+tools conserva wrapper, mismas reglas ASN1/identidad/estructura/tamaño,
+sin interpretar seguridad86. Makefile.am distribuye dos headers nuevos.
+Root añade make test/iasecc-chipdoc-bootstrap y suite IAS lo incluye.
+Stub sin crypto cubre bootstrap con estado intacto/report0/NOT_SUPPORTED.
+
+Pasaron **5 grupos bootstrap nuevos**, DER RSA/PIN generado y decodificado
+por funciones reales PKCS15, dispatcher/serializer reales, lector/locks/peer
+sintéticos. 32 variantes previas a IO, 6 fases con reset/cambio contexto,
+control/lectura/SW/61/6C/payload/longitud/selector/punto/CA/MAC, binding previo,
+propiedad de canal/duplicados/nulos/debug/cachePIN/tries/logged_in ignorados.
+También perfil9/adaptador9: **23 grupos nativos**, ASan/UBSan23 detect_leaks0;
+sin prueba de fugas ni instrumentación de OpenSC.so/provider/decoders ASN1
+precompilados. **76 grupos helpers** pasaron tras compartir parser D004 y
+suite IAS/JCOP3 completa pasó con bootstrap. Core crypto sin cambios/suite47
+anterior vigente/no repetida. OpenSC/móduloPKCS11 y cinco helpers reales
+compilados, no ejecutados; no nuevos símbolos nm-D. Fallos iniciales locales:
+script de creación con quoting Python, enlace a cleanup privado del fixture,
+y selector decimal/hex corregidos; no rechazo de tarjeta/PIN.
+
+**Siguiente trabajo autónomo:** reserva/reset/cierre del llamador e integración
+de query/VERIFY protegidos, luego selección/MSE/PSO por API; wiring optativo
+a match/init/PKCS15/PKCS11 y tests completos antes de otra tarjeta. No comando
+hardware nuevo. RSA3072/JCOP4 GUI/consecutivas/reinserción/otras plataformas/
+OpenSSL1/LibreSSL/FIPS siguen sin verificar. Gitreadonly/noeludir: submódulo
+primero (cuatro modificados y **dos headers nuevos**), principal después
+(puntero, cuatro docs, Makefile/test-iasecc.sh, tres tests previos, wrapperD004
+y **nuevo testbootstrap + lanzador**). No build/capturas a Git.
+
 **Última revisión: canal ligado al contexto criptográfico de OpenSC, probado sin hardware.**
 Principal `35823ef`, OpenSC `1c3d01ba2`, limpios al comenzar. Firma real
 JnUUiy9x permanece vigente; no repetir canal, lector ni PIN por este cambio.
