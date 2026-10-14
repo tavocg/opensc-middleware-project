@@ -361,8 +361,13 @@ Nuevo `make sign/jcop4-channel READER=0`: firma un texto técnico con nonce,
 un único PIN bajo SM, MSE/PSO y verificaciónRSA2048/SHA256 con el certificado
 público guardado de la tarjeta. Solo guarda firma/texto/certificado tras
 verificación y cierre completos. Pasaron12 grupos de firma con tarjeta/PIN
-ficticios y las regresiones del transporte/lanzador. Falta prueba real: ante
-error, detenerse y revisar informe antes de repetir.
+ficticios y las regresiones del transporte/lanzador. La prueba realKuqlCvbf
+confirmó login y MSE con MAC/9000, pero PSO devolvió16bytes/status99/exterior6A82:
+la colección se detuvo antes de verificar ese MAC. Cierre completo, sin firma.
+Se preparó la autenticación acotada de ese error, sin cambiar comandos ni
+reintentar: solo16bytes/99+8E, MAC válido y estado interno igual a6A82, después
+parada. Pasaron14 grupos de firma y13 de codec offline; todavía falta verificar
+la respuesta de error real. Ante error, detenerse y revisar antes de repetir.
 [Protocolo y límites](docs/jcop4.md#diagnóstico-de-firma-rsa2048sha256-bajo-sm).
 El driver aún no firma con JCOP4.
 [Evidencia y límites](docs/jcop4.md#canal-confirmado-en-jcop4-sin-pin).

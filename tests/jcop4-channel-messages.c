@@ -206,6 +206,41 @@ int main(void)
 		puts("PASS opt-in matching outer63Cx requires canonical DO99/MAC and exact authenticated status; default, bare SW, mismatches, tampering and replay remain rejected");
 	}
 	{
+		/* Independent OpenSSL CLI CMAC: pad(SSC2||99026A82), Kmac10..1f. */
+		unsigned char error[16]; struct jcop4_sm_decode_report report;
+		assert(hex(error, "99026a828e08645628c4089f1c226a82") == sizeof(error));
+		rejected(error, sizeof(error), sizeof(plain)); /* Default stays strict. */
+		waiting(&channel);
+		assert(jcop4_sm_open_report_policy(&channel, error, sizeof(error), plain, sizeof(plain), &written, &sw,
+			JCOP4_SM_OUTER_9000_OR_MATCHING_63CX, &report) == 1 && !written && !sw); invalid(&channel);
+		waiting(&channel); memset(plain, 0xAA, sizeof(plain));
+		assert(jcop4_sm_open_report_policy(&channel, error, sizeof(error), plain, 0, &written, &sw,
+			JCOP4_SM_OUTER_PSO_STATUS_6A82, &report) == 0 && !written && sw == 0x6A82);
+		assert(report.mac == JCOP4_SM_MAC_VERIFIED && plain[0] == 0xAA && channel.keys.ssc[15] == 2);
+		for (size_t i = 0; i < sizeof(error); i++) for (int bit = 0; bit < 8; bit++) {
+			memcpy(altered, error, sizeof(error)); altered[i] ^= 1 << bit; waiting(&channel);
+			assert(jcop4_sm_open_report_policy(&channel, altered, sizeof(error), plain, sizeof(plain), &written, &sw,
+				JCOP4_SM_OUTER_PSO_STATUS_6A82, &report) == 1 && !written && !sw); invalid(&channel);
+			assert(plain[0] == 0xAA);
+		}
+		for (size_t i = 0; i < sizeof(error); i++) {
+			waiting(&channel);
+			assert(jcop4_sm_open_report_policy(&channel, error, i, plain, sizeof(plain), &written, &sw,
+				JCOP4_SM_OUTER_PSO_STATUS_6A82, &report) == 1 && !written && !sw); invalid(&channel);
+		}
+		hex(altered, "990290008e08b0c5a464ba2d9ba36a82"); waiting(&channel);
+		assert(jcop4_sm_open_report_policy(&channel, altered, 16, plain, sizeof(plain), &written, &sw,
+			JCOP4_SM_OUTER_PSO_STATUS_6A82, &report) == 1 && !written && !sw);
+		assert(report.mac == JCOP4_SM_MAC_VERIFIED && report.result == JCOP4_SM_DECODE_STATUS_MISMATCH); invalid(&channel);
+		waiting(&channel); channel.keys.ssc[15] = 3;
+		assert(jcop4_sm_open_report_policy(&channel, error, 16, plain, sizeof(plain), &written, &sw,
+			JCOP4_SM_OUTER_PSO_STATUS_6A82, &report) == 1 && !written && !sw); invalid(&channel);
+		memcpy(altered, error, 16); altered[14] = 0x90; altered[15] = 0; waiting(&channel);
+		assert(jcop4_sm_open_report_policy(&channel, altered, 16, plain, sizeof(plain), &written, &sw,
+			JCOP4_SM_OUTER_PSO_STATUS_6A82, &report) == 1 && !written && !sw); invalid(&channel);
+		puts("PASS PSO-only status6A82 policy requires canonical16-byte envelope, matching authenticated status and current SSC; strict/PIN policies, tampering, truncation and replay reject it");
+	}
+	{
 		waiting(&channel); memset(plain, 0xAA, sizeof(plain));
 		assert(jcop4_sm_open(&channel, response, response_size, plain, sizeof(plain), &written, &sw) == 0);
 		assert(written == 14 && !memcmp(plain, "PUBLIC FIXTURE", 14) && plain[14] == 0xAA && sw == 0x9000);

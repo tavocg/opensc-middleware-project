@@ -51,6 +51,23 @@ static int test_signature_reply(sc_apdu_t *a)
 		unsigned char digest[32], signature[256], padded[272] = {0}, iv[16], auth[304] = {0}, mac[16];
 		assert(++signature_pso_calls == 1 && signature_mse_calls == 1); check_command(a, 1, digest);
 		if (sign_mode_fixture == 7) return -7;
+		if (sign_mode_fixture >= 12) {
+			/* Independent status-only response, including the observed shape.
+			 * No real card data or MAC is used by this software fixture. */
+			unsigned int sw = sign_mode_fixture == 14 ? 0x9000 : 0x6A82;
+			auth[15] = sign_mode_fixture == 15 ? 10 : 12;
+			auth[16] = 0x99; auth[17] = 2; auth[18] = sw >> 8; auth[19] = sw & 255; auth[20] = 0x80;
+			cmac(test_flow.derived.keys.mac, auth, 32, mac);
+			if (sign_mode_fixture == 13) mac[0] ^= 1;
+			if (sign_mode_fixture >= 100) mac[(sign_mode_fixture - 100) / 8] ^= 1 << ((sign_mode_fixture - 100) % 8);
+			memcpy(a->resp, auth + 16, 4); memcpy(a->resp + 4, "\x8e\x08", 2); memcpy(a->resp + 6, mac, 8); a->resplen = 14;
+			a->sw1 = 0x6A; a->sw2 = sign_mode_fixture == 18 ? 0x83 : 0x82;
+			if (sign_mode_fixture == 16) a->resplen = 0;
+			if (sign_mode_fixture == 17) a->resp[0] = 0x85;
+			if (sign_mode_fixture == 19) { a->sw1 = 0x63; a->sw2 = 0xC7; }
+			if (sign_mode_fixture == 20) a->resplen = 13;
+			OPENSSL_cleanse(mac, sizeof(mac)); return 0;
+		}
 		EVP_PKEY_CTX *rsa = EVP_PKEY_CTX_new(rsa_fixture, NULL); assert(rsa); size_t size = 256;
 		assert(EVP_PKEY_sign_init(rsa) == 1 && EVP_PKEY_CTX_set_rsa_padding(rsa, RSA_PKCS1_PADDING) > 0);
 		assert(EVP_PKEY_CTX_set_signature_md(rsa, EVP_sha256()) > 0 && EVP_PKEY_sign(rsa, signature, &size, digest, 32) == 1 && size == 256);
@@ -137,6 +154,21 @@ int main(void)
 		if (mode == 8) assert(strstr(output, "signature_verification=invalid_stop"));
 	}
 	puts("PASS MSE/PSO/GET transport, authenticated error, bad MAC/replay and valid-MAC non-RSA bytes never save artifacts or retry PIN/signature");
+	for (int mode = 12; mode <= 20; mode++) {
+		sign_defaults(); sign_mode_fixture = mode;
+		assert(invoke_sign() == 1 && verifies == 1 && signature_mse_calls == 1 && signature_pso_calls == 1 && !signature_get_calls);
+		assert(strstr(output, "signature_result=not_saved_stop") && !strstr(output, "signature_verification="));
+		char path[768]; snprintf(path, sizeof(path), "%s/signature.bin", directory_path); assert(access(path, F_OK) != 0);
+		if (mode == 12) assert(strstr(output, "signature_pso_mac_check=verified") && strstr(output, "signature_pso_sw=6A82"));
+		else assert(!strstr(output, "signature_pso_sw="));
+		if (mode == 14) assert(strstr(output, "signature_pso_mac_check=verified") && strstr(output, "authenticated_status_outer_mismatch"));
+	}
+	for (int bit = 0; bit < 64; bit++) {
+		sign_defaults(); sign_mode_fixture = 100 + bit;
+		assert(invoke_sign() == 1 && verifies == 1 && signature_pso_calls == 1 && !signature_get_calls);
+		assert(strstr(output, "signature_pso_mac_check=failed") && !strstr(output, "signature_pso_sw="));
+	}
+	puts("PASS PSO status-only6A82 is authenticated once and stops without GET/retry/artifacts; all MAC bits, status mismatch, replay, bare/unknown/truncated envelopes fail closed");
 	sign_defaults(); sign_mode_fixture = 0; test_state.reset_error = 2;
 	assert(invoke_sign() == 1 && signature_pso_calls == 1 && strstr(output, "signature_verification=rsa_sha256_pkcs1_verified"));
 	char path[768]; snprintf(path, sizeof(path), "%s/signature.bin", directory_path); assert(access(path, F_OK) != 0);

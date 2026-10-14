@@ -147,9 +147,11 @@ enum jcop4_sm_decode_result {
 	JCOP4_SM_DECODE_PADDING, JCOP4_SM_DECODE_CAPACITY, JCOP4_SM_DECODE_OK,
 	JCOP4_SM_DECODE_STATUS_MISMATCH
 };
-/* Opt-in only for the observed empty PIN-query response family. Neither
- * policy accepts a bare status or bypasses MAC/structure validation. */
-enum jcop4_sm_outer_policy { JCOP4_SM_OUTER_9000, JCOP4_SM_OUTER_9000_OR_MATCHING_63CX };
+/* Explicit opt-ins for observed response families. No policy accepts a bare
+ * status or bypasses MAC/structure validation. The PSO policy accepts only
+ * the complete status-only16-byte error envelope, never signature data. */
+enum jcop4_sm_outer_policy { JCOP4_SM_OUTER_9000, JCOP4_SM_OUTER_9000_OR_MATCHING_63CX,
+	JCOP4_SM_OUTER_PSO_STATUS_6A82 };
 enum jcop4_sm_mac_result { JCOP4_SM_MAC_NOT_CHECKED, JCOP4_SM_MAC_FAILED, JCOP4_SM_MAC_VERIFIED };
 struct jcop4_sm_decode_report {
 	enum jcop4_sm_decode_result result;
@@ -178,6 +180,7 @@ static inline const char *jcop4_sm_decode_name(enum jcop4_sm_decode_result resul
 /* Conservative response subset: optional encrypted87/01, then99/2,8E/8,
  * physical SW9000 by default. The explicit PIN-query policy additionally
  * permits outer63Cx only when it matches MAC-authenticated DO99 exactly.
+ * The PSO-only policy requires outer6A82, canonical99/2+8E/8 and no data.
  * No other tags/alternatives or fallback. An authenticated
  * inner error SW is returned as such, never converted into success. */
 static int jcop4_sm_open_report_policy(struct jcop4_sm_channel *channel, const unsigned char *response,
@@ -194,12 +197,15 @@ static int jcop4_sm_open_report_policy(struct jcop4_sm_channel *channel, const u
 	if (written) *written = 0;
 	if (sw) *sw = 0;
 	if (!channel || channel->phase != JCOP4_SM_WAITING || !written || !sw || !plain || !response ||
-		(policy != JCOP4_SM_OUTER_9000 && policy != JCOP4_SM_OUTER_9000_OR_MATCHING_63CX)) goto out;
+		(policy != JCOP4_SM_OUTER_9000 && policy != JCOP4_SM_OUTER_9000_OR_MATCHING_63CX &&
+		 policy != JCOP4_SM_OUTER_PSO_STATUS_6A82)) goto out;
 	local.result = JCOP4_SM_DECODE_SIZE;
 	if (size < 2 || size > JCOP4_SM_CRYPTO_LIMIT - 32) goto out;
 	local.result = JCOP4_SM_DECODE_OUTER_SW;
 	outer_sw = (unsigned int)response[size - 2] * 256 + response[size - 1];
-	if (outer_sw != 0x9000 && !(policy == JCOP4_SM_OUTER_9000_OR_MATCHING_63CX && (outer_sw & 0xFFF0) == 0x63C0)) goto out;
+	if (policy == JCOP4_SM_OUTER_PSO_STATUS_6A82) {
+		if (outer_sw != 0x6A82 || size != 16 || response[0] != 0x99) goto out;
+	} else if (outer_sw != 0x9000 && !(policy == JCOP4_SM_OUTER_9000_OR_MATCHING_63CX && (outer_sw & 0xFFF0) == 0x63C0)) goto out;
 	local.result = JCOP4_SM_DECODE_SIZE;
 	if (size < 16) goto out;
 	local.result = JCOP4_SM_DECODE_SSC;

@@ -38,22 +38,31 @@ static int probe_sign_once(sc_card_t *card, struct jcop4_sm_channel *channel)
 		OPENSSL_cleanse(probe_guard.expected, sizeof(probe_guard.expected)); probe_guard.expected_size = 0;
 		printf("%s_transport=%d\n", label, rv); if (rv || received > sizeof(first)) goto out;
 		const unsigned char *response = first; size_t response_size = received;
+		enum jcop4_sm_outer_policy response_policy = JCOP4_SM_OUTER_9000;
 		if (step) {
 			/* Envelope metadata only; these observations are not authenticated. */
 			printf("signature_first_size=%zu\n", received);
 			if (received >= 2) printf("signature_first_outer_sw=%04X\n", (unsigned int)first[received-2]*256 + first[received-1]);
 			printf("signature_first_leading_object=%s\n", received <= 2 ? "absent" : first[0] == 0x87 ? "encrypted87" :
 				first[0] == 0x85 ? "unsupported85" : first[0] == 0x99 ? "status99" : "other_uninterpreted");
-			struct jcop4_response_report report;
-			rv = jcop4_response_collect(first, received, JCOP4_RESPONSE_CLA_ZERO, 293, probe_signature_get, card,
-				collected, sizeof(collected), &collected_size, &report);
-			printf("signature_collection=%d\nsignature_get_count=%u\nsignature_collection_transport=%d\nsignature_outer_sw=%04X\n",
-				report.result, report.get_count, report.transport, report.physical_sw);
-			if (rv) goto out;
-			response = collected; response_size = collected_size;
+			if (received == 16 && first[0] == 0x99 && first[14] == 0x6A && first[15] == 0x82) {
+				/* Authenticate this observed terminal error directly at the pending
+				 * SSC12. It cannot authorize GET RESPONSE, another PSO or success. */
+				response_policy = JCOP4_SM_OUTER_PSO_STATUS_6A82;
+				printf("signature_response_policy=status_only_matching_6A82\nsignature_collection=not_attempted_status_only\nsignature_get_count=0\n");
+			} else {
+				struct jcop4_response_report report;
+				rv = jcop4_response_collect(first, received, JCOP4_RESPONSE_CLA_ZERO, 293, probe_signature_get, card,
+					collected, sizeof(collected), &collected_size, &report);
+				printf("signature_collection=%d\nsignature_get_count=%u\nsignature_collection_transport=%d\nsignature_outer_sw=%04X\n",
+					report.result, report.get_count, report.transport, report.physical_sw);
+				if (rv) goto out;
+				response = collected; response_size = collected_size;
+			}
 		}
 		struct jcop4_sm_decode_report decoded;
-		rv = jcop4_sm_open_report(channel, response, response_size, plain, sizeof(plain), &plain_size, &sw, &decoded);
+		rv = jcop4_sm_open_report_policy(channel, response, response_size, plain, sizeof(plain), &plain_size, &sw,
+			response_policy, &decoded);
 		printf("%s_decode_result=%s\n%s_mac_check=%s\n", label, jcop4_sm_decode_name(decoded.result), label,
 			decoded.mac == JCOP4_SM_MAC_VERIFIED ? "verified" : decoded.mac == JCOP4_SM_MAC_FAILED ? "failed" : "not_checked");
 		if (rv) goto out;

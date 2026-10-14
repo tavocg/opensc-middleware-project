@@ -5457,3 +5457,59 @@ limpieza sin autenticación ni reintentos. Las simulaciones
 de consulta pública incluyen metadatos RSA 3072 con otra referencia; no
 validan RSA ni transporte de una firma de 384 bytes. No se repitió toda la
 suite JCOP3 ni se modificó su driver durante esta investigación.
+
+### PSO con estado exterior 6A82: autenticación del error pendiente
+
+Principal `3d8a515`, OpenSC `3dfef6704`, limpios al comenzar. Informe privado
+`local/jcop4-channel-signature-KuqlCvbf/report.txt`, 2026-10-14T07:53:24Z
+(14 de octubre, 01:53 CR), ejecución del usuario. Canal, selección MF,
+query63C7 y login9000 autenticados. **MSE también pasó: transporte0,
+MACverified, decoderaccepted e inner9000**. PSO llegó con transporte0,
+16bytes, primer objeto categorizado status99 y exterior6A82. El collector
+devolvió STATUS(3), sin GET RESPONSE, antes de ejecutar el decoder SM.
+Por tanto, **6A82 solo es una observación exterior: no está autenticado**.
+No permite atribuir el fallo a archivo/llave ausente, referencia incorrecta,
+contexto MF, hash o PIN. No se guardó firma; guard0,13APDU, helper1,
+interrupted0 y reset final/unlock/disconnect0. El PIN sí había sido aceptado.
+
+La revisión estática del mismo Idopte/hash documentado arriba mantiene la
+regla de igualdad exterior/DO99 en243981..24399f y243abb..243ae2, seguida
+de verificación MAC en243c50..243c69. El ZIP no resuelve la configuración
+RSA: chipdoc/sign.py declara la entrada MSE porOID como una conjetura.
+No se ejecutó Idopte ni se capturó una sesión autenticada.
+
+Se incorpora una política de recepción explícita y exclusiva para ese error:
+`JCOP4_SM_OUTER_PSO_STATUS_6A82`. Exige exterior6A82, tamaño16, DO99/2 seguido
+de DO8E/8 canónicos y sin datos cifrados. Verifica el MAC con el SSC pendiente
+y exige estado interno igual a6A82 **después** del MAC. Default9000 y política
+PIN63Cx conservan su aceptación anterior. No admite otros errores, SW desnudo,
+datos ni omisión de MAC. Un estado interno distinto con MAC válido sigue
+fallando sin publicar ese estado. No convierte error en9000 ni firma válida.
+
+El helper de firma usa la política solo cuando el primer PSO presenta esa
+forma; registra signature_response_policy=status_only_matching_6A82,
+signature_collection=not_attempted_status_only y signature_get_count0.
+Autentica directamente en SSC12 y siempre termina con error/cierre/borrado.
+No llama al collector ni envía GET ante6A82. Otros casos conservan el collector
+anterior y sus límites. No cambia ningún comando MSE/PSO enviado, selección,
+referencia, digest, Le, PIN, guard, timeout, presupuesto o condición de guardado.
+
+Pasaron14 grupos de firma (7nativos+7bootstrap OpenSC real/lector simulado),
+13codec,14login,22probe,7confirmation y5collector. Fixtures de software
+construyen CMAC independientemente; el vector del codec usa OpenSSL CLI.
+Cubren6A82 válido, todos los bits del MAC y de la estructura alterados,
+truncación, replay, bareSW, tag85, error distinto y mismatch con MAC válido.
+Exigen cero GET/reintentos/artefactos y aislamiento de políticas default/PIN.
+ASan/UBSan pasaron14firma+13codec con detect_leaks0; bibliotecas precompiladas
+sin instrumentar, no prueba de fugas. Tres helpers reales compilados sin
+ejecutarlos. Agente sin PCSC/hardware/PIN real/GUI/Idopte; driver/submódulo,
+observador, flake y lock intactos.
+
+Siguiente intervención desde la terminal del usuario, misma JCOP4 RSA2048 y
+otros clientes cerrados: `nix develop -c make sign/jcop4-channel READER=0`,
+una sola vez, PIN correcto solo al prompt. El propósito nuevo es autenticar
+el error descartado y borrado antes; puede volver a terminar estado1.
+Revisar signature_pso_decode_result/mac_check/sw y cierre antes de decidir
+otro cambio. No repetir por inercia ni cambiar contexto/referencia/hash
+sin esa evidencia. Firma real, causa del error, integración OpenSC yRSA3072
+siguen pendientes.

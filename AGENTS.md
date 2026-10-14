@@ -9,7 +9,50 @@ transporte simulado. PIN/GUI también los ejecuta el usuario. Esto sustituye
 la autorización anterior de hardware por el agente; conservar límites de
 cada diagnóstico y privacidad. Git sigue autorizado pero .git solo lectura.
 
-**Última revisión: firma RSA2048/SHA256 bajo SM preparada, aún sin prueba real.**
+**Última revisión: login/MSE confirmados; PSO exterior 6A82 aún sin autenticar.**
+Principal `3d8a515`, OpenSC `3dfef6704`, limpios al comenzar. Informe usuario
+`local/jcop4-channel-signature-KuqlCvbf/report.txt`, 2026-10-14T07:53:24Z
+(14Oct01:53CR): canal/MF/query63C7/login9000 autenticados; MSE transporte0,
+decoderaccepted/MACverified/inner9000. PSO transporte0/16bytes/status99,
+exterior6A82, collector3(STATUS), GET0. **Collector detuvo antes del decoder:
+no MAC ni estado interno acreditado de PSO.** No concluir llave/archivo
+ausente ni cambiar referencia/contexto/algoritmo por ese exterior. Guard0,
+13APDU/interrupted0/helper1; reset final/unlock/disconnect0, ningún artefacto
+de firma. PIN aceptado, no atribuir fallo a credencial/contador.
+
+Cambio exclusivamente de recepción: nuevo opt-in codec
+JCOP4_SM_OUTER_PSO_STATUS_6A82 exige exterior6A82,16bytes/status-only99/2+8E/8,
+MAC con SSC pendiente y DO99 igual al exterior. Modo firma lo usa solo para
+primer PSO con esa forma; omite colección/GET, autentica una vez en SSC12 y
+**siempre termina con error**, sin firma/retry. MAC inválido/replay/mismatch
+no publican SW interno. Default9000 y familiaPIN63Cx intactos. No aceptar
+cipher/data/otroSW/noMAC ni convertir error a9000. Nuevo reporte policy y
+collection=not_attempted_status_only/get_count0. MSE/PSO enviados, nonce,
+PIN/lock/timeout/guard/budget/cierre/permisos/collector/driver/submódulo intactos.
+Revisión estática243981..24399f/243abb..243ae2 compara exterior con99 y
+243c50..243c69 verifica MAC en mismo Idopte/hash; no ejecución/captura Idopte.
+ZIP chipdoc/sign.py declara MSE porOID una conjetura; no es prueba de éxito
+ni justifica sustituir91022891. Contexto/ref/ruta RSA siguen pendientes.
+
+Pasaron **14firma** (7nativos+7bootstrap/lector simulado), **13codec**,
+**14login**, **22probe**, **7confirmation**, **5collector**. Nuevos fixtures
+independientes CMAC/software peer:6A82 válido, cada bitMAC/estado/estructura
+alterado, replay/truncado/bare/unknown/mismatch autenticado, ceroGET/reintentos/
+artefactos; políticas anteriores excluyen6A82. ASan/UBSan14firma+13codec0,
+detect_leaks0; bibliotecas precompiladas sin instrumentar/no prueba de fugas.
+Tres helpers compilados. Agente sin PCSC/lector/tarjeta/PINreal/GUI/Idopte.
+
+**Siguiente intervención:** misma JCOP4 RSA2048, otros clientes cerrados,
+`nix develop -c make sign/jcop4-channel READER=0`, una sola vez, PIN correcto
+solo al prompt. Repetición justificada para autenticar respuesta de error
+descartada/borrada anteriormente; no variante ni promesa de resolver firma.
+Puede terminar estado1 otra vez: revisar signature_pso_mac_check/decode_result/
+sw y cierre. No repetir por inercia; timeout/reset ausente o fallido exige
+reinserción. No cambiar contexto/ref/hash antes de evidencia autenticada.
+Gitreadonly: commit siete archivos seguidos, documentos3/tools2/tests2;
+sin capturas/build y sin eludir restricción.
+
+**Revisión anterior: firma RSA2048/SHA256 bajo SM preparada, aún sin prueba real.**
 Principal `4241b41`, OpenSC `3dfef6704`, limpios al comenzar. Última tarjeta
 siguehSQwNDBj/unVERIFY9000/MAC/cierre0. Esta revisión sinPCSC/hardware/PINreal/
 GUI/Idopte ejecutado. Certificados5Dpadr1N/0dfqWRSN/6m61lek4 tienen misma
