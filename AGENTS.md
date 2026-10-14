@@ -9,6 +9,47 @@ transporte simulado. PIN/GUI también los ejecuta el usuario. Esto sustituye
 la autorización anterior de hardware por el agente; conservar límites de
 cada diagnóstico y privacidad. Git sigue autorizado pero .git solo lectura.
 
+**Último resultado: dos firmas consecutivas JCOP4 verificadas.**
+Principal `90ea080`, OpenSC `52057cc6a`, limpios al comenzar. Informe usuario
+`local/jcop4-firmador-api-KKBZwTnU/report.txt`, 2026-10-14T23:22:27Z (17:22 CR):
+exit GUI0/221 eventos API, dos C_Login0 y dos SignInit0 (0x40/SHA256_RSA_PKCS),
+Update0, llave0x91/RSA2048, SELECT/MSE0, KEY_COMPUTE256 y SignFinal0. Logout101
+antes cada login sobre PUBLIC esperado. Seis GetSessionInfo USER antes firmas;
+31 CARD_PRESENCE1 y ningún SLOT_TOKEN_REMOVED. Pasos y traza consistentes con
+misma GUI sin retirar tarjeta; no inferir número de diálogos PIN de dos logins,
+ni contar VERIFY/reset/PSO físicos con logger limitado.
+
+Originales6967 idénticos en local/jcop4-consecutive-rwva61gm; resultados
+primero-firmado80454 y segundo-firmado80474. Verificados offline con Mutool
+(dicts activos) y OpenSSL CMS/env limpio/OPENSSL_CONF/dev/null: bytes originales
+preservados/cubiertos, rangos/Contents/DER/relleno0, CAdES SHA256/RSA2048 con
+certificado DER exacto JCOP4, bit alterado rechazado, token RFC3161 de
+SignatureValue y DocTS CMS válidos/imprints SHA512 correctos. CAdES ambos
+[0,7343,33969,4430]/revisión38399; DocTS primero[0,60468,79414,1040]/80454,
+segundo[0,60488,79434,1040]/80474, cubren revisión final de cada PDF.
+Copias/reportes privados local/jcop4-pdf-verification-kfjd3fcr/report.json y
+01rpnzzp/report.json,0700/0600. Sin confianza/revocación/identidad/render.
+Sin PCSC/hardware/PINreal/GUI/Idopte/red por agente; no código modificado ni
+regresiones repetidas, resultados anteriores vigentes. Driver/submódulo/
+flake/lock/helpers/observador intactos. No repetir firmas/enum/estado/D004 por
+inercia. Ahora confirmado nuevo login y segunda firma en recorrido GUI;
+reinserción/otros lectores/modelos/plataformas/RSA3072/upstream pendientes.
+
+**Preparación local:** local/jcop4-reinsert-vnw9_xsr/antes.pdf y despues.pdf,
+copias idénticas0600 del original6967/dir0700/preparation.json sin datos.
+**Siguiente intervención usuario:** mismaJCOP4/clientescerrados,
+`nix develop -c make firmador/jcop4`; abrir antes.pdf/LlaveDeFirma, firmar y
+conservar antes-firmado.pdf. DESPUÉS de guardar, mantener GUI abierta y lector
+conectado; retirar SOLO tarjeta, esperar unos segundos y reinsertar la misma.
+No firmar durante ausencia. Abrir despues.pdf, firmar una vez y conservar
+despues-firmado.pdf; cerrar GUI después. Ante primer error detenerse sin
+reiniciar ni repetir PIN. La espera no prueba que Java observó la retirada;
+revisar nueva traza/detección/login/key/sign y verificar ambos CMS antes otra
+operación. GUI sin guard/cuota/namespace/timeout de helper; no otro cliente o
+prueba PCSC durante esta secuencia. Git autorizado; git add falló creando
+index.lock por .gitRO: no eludir; commit
+solo AGENTS/README/docs, ninguna copia/captura/PDF/build/local/script privado.
+
 **Último resultado: primer PDF JCOP4 del firmador verificado offline.**
 Principal `7bb9661`, OpenSC `52057cc6a`, limpios al comenzar. Usuario
 local/jcop4-firmador-api-2VJ372cf/report.txt/2026-10-14T23:10:42Z (17:10CR):

@@ -1,7 +1,7 @@
 # Integrar el perfil JCOP4 observado en OpenSC
 
 Estado al 14 de octubre de 2026. Base de esta etapa: proyecto
-`7bb9661`, submódulo OpenSC `52057cc6a`. Este documento describe la integración.
+`90ea080`, submódulo OpenSC `52057cc6a`. Este documento describe la integración.
 **Perfil/estado/limpieza, canal/bootstrap/providers y operaciones
 PIN/firma privados están implementados. Frontend PKCS15 y routing privado
 instalado por tarjeta pasaron con callbacks de producción y lector simulado.
@@ -11,7 +11,7 @@ transporte simulado. El módulo PKCS11 del build ya pasó nueve grupos de
 mecanismos, objetos, sesiones y firmas con contexto/lector/PIN sintéticos.
 El diagnóstico público y una firma SHA256_RSA_PKCS ya pasaron en la JCOP4
 real. El firmador produjo un PDF CAdES y dos sellos RFC3161 verificados offline;
-faltan dos firmas consecutivas y reinserción en la GUI.**
+dos firmas consecutivas también pasaron. Falta reinserción en la misma GUI.**
 
 ## Evidencia disponible
 
@@ -1219,3 +1219,52 @@ Esta preparación no accedió a tarjeta/lector ni modifica originales.
 Introducir PIN correcto solo cuando lo solicite; registrar si lo pide de nuevo.
 No anticipar éxito/cantidad de logins del cliente: se revisará la traza y cada
 CMS posteriormente. Reinserción será otra prueba después de estos resultados.
+
+## Dos firmas consecutivas confirmadas en la GUI
+
+Principal90ea080/OpenSC52057cc6a, limpios al comenzar. Ejecución
+`local/jcop4-firmador-api-KKBZwTnU/report.txt`,2026-10-14T23:22:27Z (17:22CR),
+exitGUI0/221eventos API. Dos C_Login0, separados por una firma completa; cada
+una tiene C_SignInit0/0x40SHA256_RSA_PKCS, Update0, llave0x91/RSA2048,
+KEY_SELECT/MSE0, KEY_COMPUTE256 y SignFinal0. Dos Logout0x101 antes sus logins
+sobre sesiones públicas esperados.6GetSessionInfo0/USER antes operaciones,
+31CARD_PRESENCE0x1 y ningún SLOT_TOKEN_REMOVED. La traza y ejecución registrada
+son consistentes con los pasos de dos firmas sin retirar tarjeta en la misma
+GUI. Dos logins no determinan cuántos diálogos PIN mostró Java; eso no se
+registró. No contar VERIFY/reset/PSO físicos desde la traza limitada.
+
+Los resultados están en local/jcop4-consecutive-rwva61gm/primero-firmado.pdf
+y segundo-firmado.pdf. Ambos originales son6967bytes idénticos a doc.pdf.
+Se verificaron offline los diccionarios activos, huecos Contents/rangos/
+DER/relleno0, CMS SHA256 con certificado DER exactoJCOP4/RSA2048, rechazo de
+un bit cambiado, tokenRFC3161 de signatureTimeStampToken e imprintSHA512
+sobre SignatureValue, y DocTS RFC3161/imprintSHA512 sobre ByteRange final.
+Ambos conservan/cubren todos los bytes originales. Copias+capturas+report
+privados0700/0600, sin datos identificables en el resumen:
+
+| Resultado | PDF final | CAdES/revisión | DocTS/rangos finales | Informe privado |
+| --- | --- | --- | --- | --- |
+| Primero |80454bytes|[0,7343,33969,4430]/38399|[0,60468,79414,1040]|local/jcop4-pdf-verification-kfjd3fcr/report.json|
+| Segundo |80474bytes|[0,7343,33969,4430]/38399|[0,60488,79434,1040]|local/jcop4-pdf-verification-01rpnzzp/report.json|
+
+Firma tarjeta cubre revisión38399; sello documento cubre todo PDF final en
+cada caso. Confianza/revocación/identidad/render no evaluados. Sin NSS/red/
+PCSC/PIN/GUI/Idopte del agente; Mutool/OpenSSL/envlimpio/OPENSSL_CONF/dev/null,
+misma verificación offline anterior aplicada a cada archivo nuevo. No código
+modificado ni regresiones repetidas; resultados software anteriores vigentes.
+Se confirma que este recorrido del firmador puede renovar login después de
+una firma y producir otra firma correcta con el perfil optativo observado.
+No prueba reinserción ni otros lectores/modelos/plataformas/RSA3072.
+
+Se prepararon dos copias idénticas0600 del original en
+local/jcop4-reinsert-vnw9_xsr/antes.pdf y despues.pdf, directorio0700, sin
+lector/PIN. Siguiente usuario: clientescerrados/mismaJCOP4, abrir
+`nix develop -c make firmador/jcop4`, firmar antes.pdf/LlaveDeFirma y conservar
+antes-firmado.pdf. Después de guardar, **mantener GUI/lector conectados**,
+retirar solo tarjeta, esperar unos segundos y reinsertar la misma. Sin
+intentar firmar durante ausencia, abrir despues.pdf, firmar una vez y
+conservar despues-firmado.pdf. Cerrar GUI después. Ante primer error de GUI
+o firma, detenerse sin reiniciar/repetir PIN; se revisarán eventos y resultados
+antes de otra operación. La espera no demuestra detección en Java: la traza
+posterior deberá mostrar cómo se recuperó el token. No inventario/estado/
+D004 separado ni otras pruebas de concurrencia durante esa secuencia.

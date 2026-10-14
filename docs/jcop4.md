@@ -6366,3 +6366,28 @@ originales, no segunda firma del primerresultado. Anteprimererror detenerse
 sin repetirPIN; observar si pidePINdenuevo. Luego verificar ambos CMS/API
 antes reinserción. RSA3072/otrasplataformas/upstream siguenpendientes.
 [Detalles](jcop4-opensc-integration.md#primer-pdf-del-firmador-verificado-offline).
+
+### Dos firmas consecutivas verificadas; reinserción pendiente
+
+KKBZwTnU/2026-10-14T23:22:27Z, exitGUI0/221APIeventos: dos Login0 y dos
+SignInit0x40/Update0/SignFinal0, llave0x91/RSA2048, MSE0/compute256. Logout101
+antescadaLogin esperado;31presence1/sinTOKEN_REMOVED. No se puede contar
+diálogosPIN, VERIFY/reset/PSO físicos con esa traza. Firmas consecutivas
+correctas con el recorridoGUI observado, sin dar por probada reinserción.
+
+primero-firmado.pdf80454 y segundo-firmado.pdf80474 verificados offline:
+original6967preservado/cubierto, CAdES CMS SHA256/cert exactoJCOP4/RSA2048
+revisión38399, bitnegativo rechazado, ambos tokensRFC3161 válidos/imprintSHA512
+correcto paraSignatureValue y ByteRangefinal. Reportes privados kfjd3fcr y
+01rpnzzp en local/jcop4-pdf-verification-*/report.json, dir0700/archivos0600.
+Confianza/revocación/render no evaluados; sin hardware/red/PIN/GUI del agente,
+sin código nuevo/tests repetidos, pruebas anteriores vigentes.
+
+Copias preparadas en local/jcop4-reinsert-vnw9_xsr/antes.pdf y despues.pdf.
+Siguiente usuario: make firmador/jcop4, firmarantes yguardar antes-firmado;
+GUIabierta/lectorconectado, retirar solo tarjeta/esperarunossegundos/reinsertar
+misma, firmardespues yguardar despues-firmado, luego cerrarGUI. No intento
+sintarjeta ni repetir PIN anteprimererror. Revisar eventos/CMS antesotra
+operación; no inferir detección del token solo por haber esperado. RSA3072/
+otrasplataformas/upstream pendientes.
+[Detalles](jcop4-opensc-integration.md#dos-firmas-consecutivas-confirmadas-en-la-gui).

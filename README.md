@@ -112,18 +112,22 @@ firmados. Se rechazó una alteración de un bit. Esta comprobación fue offline
 y no evalúa confianza ni revocación. Informe privado:
 `local/jcop4-pdf-verification-z4w35w5c/report.json`.
 
-La siguiente prueba son dos firmas consecutivas en la misma GUI, con la
-misma JCOP4 y otros clientes cerrados:
+Las dos firmas consecutivas también pasaron en la misma GUI: KKBZwTnU,
+14 de octubre, 17:22 CR, dos logins y dos firmas multipart correctos. Ambos
+PDF y sus sellos de tiempo se verificaron offline. La siguiente prueba es
+retirar y reinsertar la misma tarjeta entre dos firmas, manteniendo la GUI
+abierta y el lector conectado:
 
 ```bash
 nix develop -c make firmador/jcop4
 ```
 
-Hay dos copias idénticas de `doc.pdf` en `local/jcop4-consecutive-rwva61gm/`.
-Abre `primero.pdf`, elige `LlaveDeFirma`, firma y conserva su resultado como
-`primero-firmado.pdf`. Mantén la GUI abierta y la tarjeta insertada; abre
-`segundo.pdf`, firma y conserva `segundo-firmado.pdf`. Después cierra la GUI.
-Se firman dos originales, sin añadir otra firma al primer resultado. Introduce
+Hay dos copias idénticas de `doc.pdf` en `local/jcop4-reinsert-vnw9_xsr/`.
+Abre `antes.pdf`, elige `LlaveDeFirma`, firma y conserva `antes-firmado.pdf`.
+Una vez guardado, mantén la GUI abierta, retira solo la tarjeta, espera unos
+segundos y vuelve a insertar la misma. Abre `despues.pdf`, firma y conserva
+`despues-firmado.pdf`; después cierra la GUI. No intentes firmar con la tarjeta
+retirada. Se firman dos originales, sin añadir otra firma al primer resultado. Introduce
 el PIN en la GUI cuando lo solicite. Si falla, detenerse y revisar el informe
 antes de repetir el PIN. El lanzador
 selecciona el módulo y libOpenSC locales, activa el perfil optativo, desactiva
