@@ -309,6 +309,14 @@ no PIN/login/firma nuevos. Próximo paso: analizar la ruta C_Login/VERIFY de
 Idopte; firma libre JCOP4 aún pendiente.
 [Evidencia y límites](docs/jcop4.md#inventario-idopte-completo-tras-las-selecciones-de-raíz).
 
+El análisis estático del login encontró dos diferencias candidatas: selección
+de raíz para PIN global y apertura de canal anónimo condicionada por un perfil
+interno aún sin determinar. Se añadió `make inspect/jcop4-filed004 READER=0`
+para consultar solo control de D004, ruta de parámetros presente en ese código.
+La ejecución del agente no encontró lector; **D004 aún no se consultó**.
+No pedir otro PIN ni inferir SM obligatorio por esta pista. Pasaron82 pruebas
+del helper y93 del lanzador. [Evidencia y límites](docs/jcop4.md#login-idopte-contexto-global-y-candidato-d004).
+
 Capturas privadas bajo local/jcop4-idopte-spy-*/; no agregarlas a Git.
 Pasaron previamente **30 comprobaciones del observador/decoder y 40 del
 lanzador** con transporte ficticio. El diagnóstico de firma pasó además

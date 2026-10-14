@@ -6,6 +6,57 @@ la tarjeta. El usuario ejecuta las operaciones que requieran PIN o GUI. Esto
 sustituye las restricciones anteriores de no ejecutar Git/hardware/Idopte por
 el agente; conservar límites de cada diagnóstico y privacidad de los registros.
 
+**Última revisión: login estático y candidato D004; consulta de tarjeta pendiente.**
+Principal `1cfe6fd`, OpenSC `3dfef6704`, limpios al comenzar. Revisión estática
+sin ejecutar C_Login/T_Login, sin PIN, GUI ni firma. T_Login (`285ca0`) pasa
+por CP71 slot200 / `3c1bf0`: la rama de usuario condiciona la apertura de canal
+(slot590 / `368190`) a `385530` / IsAnonymousDHRequired antes del login
+`3c1840` / `3c11b0`. El descriptor interno en token+380 habilita esa decisión
+para tipos1/2/8; tipo7 consulta EF.DH. **El tipo efectivo está pendiente**:
+no equivale a generación JCOP, auth_method8, PACE ni CAN. C_Login de libidop11
+(`1b4c00`) envuelve la credencial y llama `1ae380`; cadena intermedia hasta
+T_Login aún sin resolver. No declarar esa rama ejecutada en esta tarjeta.
+
+La consulta de estado PIN (slot5e8 / `3755c0`) prepara el contexto mediante
+`368b90`: referencia global ordinaria pasa por `39cd30` y raíz `3a8432`;
+hay ramas locales y de perfiles7/10/12 diferentes. El helper libre mantiene
+ADF para PIN1: diferencia candidata, no causa6982 probada. Slot618 / `2d1740`
+es RET/vacío, no selección. Constructor `39ce80` / `383b70` depende de
+metadatos/flags; formato interno2 / `383f39` copia bytes sin hash en esa rama.
+**No igualar el enum a OpenSC UTF8 ni dar por resuelto el formato completo**.
+Perfil8 modifica un flag previo. La rama `3c1690` reenvía VERIFY tras ciertos
+SW: no portarla ni atribuir reset sin resolverla.
+
+`371ca0`, parámetros del canal desde `368190` slot460, forma D0+04 mediante
+`367a80` (appendbyte verificado). Ruta D004 -> `381ca0` -> `3acb60`, bajo la
+primera aplicación obtenida por `39cdd0`. Hay ramas1/7 alternativas; no prueba
+ubicación efectiva ni que el AID conocido sea la primera aplicación de Idopte.
+Precedente concreto para SELECT-only D004, no permiso READ/SM/PIN. Hashes,
+VMA y límites en docs/jcop4.md; disassembly privado en
+`local/jcop4-idopte-static-u8qg_p48/`, no copiar propietario/IDs a Git/chat.
+
+Nuevo `make inspect/jcop4-filed004` / --filed004: helper default, ATR/AID
+conocidos y AID anunciado en EF.DIR, ADF y único 00A4020002D00400, control<=256.
+Sin READ, binding, PIN, challenge, MSE, GA, SM, firma, GET RESPONSE, reintentos
+ni variantes. Parser existente sin interpretar86 como permiso. Pasaron **82
+del helper y93 del lanzador**, transporte ficticio; helper real compilado
+contra OpenSC offline/habitual. Observador162, firma6 y operación12 intactos,
+suites previas vigentes. Nix falló por caché solo lectura/socket del daemon;
+se usaron compilador/dependencias de sesión, sin flake/lock/HOME/sistema.
+Driver/submódulo y permisos del observador intactos.
+
+Intento `timeout 35s make inspect/jcop4-filed004 READER=0`: informe privado
+`local/jcop4-filed004-yJF43Rcq/report.txt`, **2026-10-14T01:35:10Z (13 CR)**.
+Inventario sin lectores, conexión fallida antes del helper: **no SELECT D004
+ni SW**. Informe0600/directorio0700. No asumir rechazo6982/PIN ni causa física
+frente a entorno. **Siguiente intervención:** misma JCOP4/lector accesibles,
+otros clientes cerrados: `nix develop -c make inspect/jcop4-filed004 READER=0`,
+sin PIN. Revisar control/SW antes de READ; no repetir inventario Idopte/estado,
+otros FID/MF, login o PIN por inercia. No se solicitó la oferta de firmas
+fallidas. Estados7/15 no prueban máximos/reinicios. JCOP4/RSA3072 pendientes.
+Git autorizado: `git add -u` falló porque .git está montado solo lectura.
+No eludirlo; dar comandos de commit al usuario.
+
 **Último resultado: inventario público Idopte completo, sin PIN.**
 Principal `e095ffa`, OpenSC `3dfef6704` limpios al comenzar. Nuevo modo separado
 inspect/jcop4-idopte-post-auth-mf/--idopte-post-auth-mf,

@@ -3718,6 +3718,112 @@ constructor VERIFY/referencia/contexto/formato PIN, comparado con el diagnóstic
 libre6982. No repetir inventario/estado ni provocar PIN fallidos por inercia.
 Driver/submódulo intactos; JCOP4/RSA3072 pendientes.
 
+## Login Idopte: contexto global y candidato D004
+
+Revisión desde principal `1cfe6fd`, OpenSC `3dfef6704`, ambos limpios al
+comenzar. Análisis estático de los módulos instalados, sin llamar C_Login,
+T_Login ni funciones internas, sin PIN/GUI/firma ni tráfico autenticado.
+`libt_ias.so` mantiene SHA256
+`2380540cd85316306233aa2baf640019a848606ce72bb5692cbebbb111542dc4`;
+`libidop11.so`, SHA256
+`1533c1702968b7f30124987abb1c13c256f10235f47d0d08c8fa526d15fc3c01`.
+Las direcciones siguientes son VMA de esos binarios. Las etiquetas de símbolos
+vecinos que objdump asigna a funciones internas sin nombre no son sus nombres.
+Disassembly privado en `local/jcop4-idopte-static-u8qg_p48/`, sin copiar código
+propietario ni inventarios con identificadores a Git/chat.
+
+### Dos diferencias candidatas antes de VERIFY
+
+El export T_Login (`285ca0`) despacha al slot `200` de la vtable CP71
+(`5d0c68`), resuelto a `3c1bf0`. La rama de usuario obtiene el objeto PIN,
+consulta `385530` (cadena `IsAnonymousDHRequired`) y, si devuelve verdadero,
+invoca slot `590` / `368190` (cadena `OpenAnonymousSecureChannel`) antes de
+la rutina de login `3c1840` / `3c11b0`. Esto describe una rama del software,
+**no demuestra que esta tarjeta la tome**. El export C_Login de libidop11
+(`1b4c00`) envuelve los bytes de entrada y pasa por `1ae380`; aún no se ha
+resuelto toda la cadena intermedia hasta T_Login.
+
+Dentro de `3c11b0`, la consulta de estado PIN por slot `5e8` / `3755c0`
+llama primero `368b90`. Para referencia global ordinaria esta pasa por
+`39cd30` y selección de raíz `3a8432`; hay ramas diferentes para referencia
+local y perfiles internos `7/10/12`. El diagnóstico libre conserva el ADF
+al consultar/verificar PIN global `1`. **El contexto es una diferencia
+concreta candidata**, pendiente de confirmar la rama aplicable durante login.
+El slot `618` / `2d1740` es una función vacía: no atribuirle selección de raíz.
+
+La construcción de credencial pasa por `39ce80` / `383b70` y depende de
+metadatos y flags. La rama interna de formato `2` termina copiando bytes
+(`383f39`); no aplica un hash en esa rama. **No equiparar automáticamente
+ese número interno con el enum OpenSC UTF-8 ni dar por probada la codificación
+completa del PIN de esta tarjeta**. El perfil interno `8` también modifica
+un flag previo al formateo. No cambiar formato por conjetura. La cabecera
+VERIFY construida en la ruta revisada es `00 20 00 <referencia>`.
+Existe además una rama de reenvío tras ciertos SW (`3c1690`): no trasladarla
+al diagnóstico libre de un único intento ni atribuirle reset sin resolverla.
+
+`385530` conserva una decisión en token+408 y consulta el descriptor interno
+en token+380. Los tipos internos `1/2/8` habilitan la rama anónima; el tipo `7`
+intenta comprobar EF.DH; otros tipos pueden deshabilitarla. **No son números
+de generación JCOP ni equivalen a auth_method de OpenSC**. La propia cadena
+"Profile NXP jcop3 detected, shifting profile description" acompaña una
+conversión al tipo `8`, lo que impide identificarlo sin más con JCOP4.
+El tipo efectivo de esta personalización aún no se obtuvo. Ni el inventario
+público satisfactorio ni esas cadenas prueban PACE/CAN o ausencia de SM.
+
+### D004: precedente estático y diagnóstico SELECT-only
+
+La función de parámetros `371ca0`, llamada por slot `460` desde la apertura
+de canal, construye una ruta de un byte `D0` y añade `04` mediante `367a80`.
+Se verificó que esta última incrementa la longitud y escribe el byte al final.
+La ruta `D004` pasa por `381ca0` y lectura `3acb60`, usando la primera aplicación
+obtenida por `39cdd0`. Hay ramas distintas para tipos `1/7`: no universalizar
+el FID, algoritmo, ubicación o necesidad del canal. Este precedente da una
+razón concreta para consultar metadatos de D004 bajo el AID conocido, pero
+no acredita que la primera aplicación de Idopte sea ese AID en todo perfil.
+
+Se añadió `make inspect/jcop4-filed004 READER=0`: reutiliza el helper default
+driver con ATR/AID conocidos y AID anunciado en EF.DIR. Selecciona ese ADF y
+manda exclusivamente `00 A4 02 00 02 D0 04 00`, con control máximo256 bytes.
+**No READ D004, binding, credencial, challenge, MSE, GA, SM ni firma**. Sin
+GET RESPONSE/reintentos/variantes; resume los metadatos de control mediante el
+parser existente, sin interpretar atributos propietarios como permiso READ.
+9000 confirmaría existencia/control en ese contexto; 6A82 solo su ausencia
+allí. Ninguno demuestra política global, contenido público o causa de6982.
+No cambian permisos del observador ni el helper de firma/driver/submódulo.
+
+Pasaron **82 comprobaciones del helper** y **93 del lanzador**, con transporte
+ficticio: SELECT exacto/único, ATR/AID/contexto, ausencia de READ/binding/PIN,
+FID distinto, 6A82, transporte/SW/truncamiento fallidos sin seguimiento,
+stdin vacío, aislamiento de flags y reportes0700/0600. Helper real compilado
+contra OpenSC offline y la compilación habitual. Suites anteriores del
+observador162, firma6 y operación12 siguen vigentes, sin repetir código intacto.
+Nix no pudo iniciar otro shell por caché solo lectura y acceso al daemon;
+se usaron el compilador/dependencias ya disponibles en esta sesión, sin cambiar
+flake, HOME, lock ni sistema.
+
+Una ejecución acotada `timeout 35s make inspect/jcop4-filed004 READER=0`
+generó `local/jcop4-filed004-yJF43Rcq/report.txt`, **2026-10-14T01:35:10Z**
+(13 de octubre CR). El inventario no encontró lectores y falló su conexión,
+antes de compilar/invocar el helper: **no hay SELECT D004 ni SW de tarjeta**.
+No atribuirlo a rechazo6982, PIN o contenido de D004; tampoco se conoce aquí
+si faltó lector físico o acceso PC/SC de esta sesión. Informe0600/directorio0700.
+No se repitió ni se intentó eludir la restricción del entorno.
+Se intentó `git add -u`: .git está montado solo lectura y no se pudo crear
+index.lock. Los cambios quedan revisados, pero sin commit; no se eludió ese límite.
+
+Siguiente intervención con la misma JCOP4/lector accesibles y otros clientes
+cerrados, sin introducir PIN:
+
+```sh
+nix develop -c make inspect/jcop4-filed004 READER=0
+```
+
+Revisar transporte/SW/control antes de decidir lectura; no ampliar READ D004,
+ensayar MF alternativo, abrir canal, capturar login ni pedir otra credencial por
+inercia. La rama SM efectiva y la causa VERIFY6982 siguen pendientes, igual que
+firma libre JCOP4/RSA3072. No se necesita la oferta de firmas fallidas para
+esta consulta y los estados7/15 previos no prueban máximos o reinicios.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño
