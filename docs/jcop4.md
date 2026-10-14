@@ -3441,6 +3441,71 @@ Mantenerlo bloqueado, no repetir la captura idéntica ni pedir otro PIN por
 inercia. Informes0700/0600 bajo local/, fuera de Git/chat. Firma JCOP4,
 VERIFY6982 y RSA3072 siguen pendientes.
 
+## Precedente ISO para EXTERNAL AUTHENTICATE sin datos
+
+Investigación iniciada con principal `3e44bb6` y OpenSC `3dfef6704` limpios.
+Solo documentación y revisión estática del código/módulo instalado: no se
+ejecutó Idopte ni se comunicó con la tarjeta. La evidencia de `00 82 00 03`
+sigue siendo la solicitud bloqueada del informeY4Vg2V5R, **sin respuesta de
+tarjeta**. No se modificaron el observador, sus permisos o el driver.
+
+### Lo que sí establece la norma
+
+[ISO/IEC 7816-4:2005, original alojado por USPTO](https://ptacts.uspto.gov/ptacts/public-informations/petitions/1528566/download-documents?artifactId=PopQy1plFOQHSsHyHiAXK-0BBsF13u2SVbhITWCr4KbEKUelaC40rHM),
+7.5.4, páginas51–52 y tabla68, permite EXTERNAL AUTHENTICATE sin datos para
+consultar intentos restantes mediante63Cx o comprobar necesidad de verificación
+mediante9000. La tabla admite Lc/datos ausentes y exige Le ausente, consistente
+con el caso1 observado. En7.5.1/tabla65, P1=00 no explicita algoritmo; P2=03
+codifica referencia global3. **Esa interpretación presupone la codificación
+estándar**, no identifica el objeto de este perfil. La autenticación con datos
+usa un challenge y puede registrar fallos; la forma vacía tiene un uso distinto
+contemplado por la norma. Se revisó el texto del original; el servicio de
+screenshot no pudo recuperar la página, no se atribuye una revisión visual.
+
+Esto reemplaza la ausencia de precedente normativo por una **hipótesis
+concreta de consulta de estado**. No demuestra que ChipDoc3.2/BCCR implemente
+ese uso opcional, que la referencia3 exista o pertenezca al Card Admin Key, ni
+que la operación observada no altere un contador. Tampoco establece una
+relación con licencias, canal seguro, CAN/PACE o el VERIFY6982 autenticado.
+No se presenta la cabecera vacía como una autenticación completada.
+
+### Contrastes locales y del proveedor
+
+`vendor/opensc/src/libopensc/card-epass2003.c`, función
+get_external_key_retries, usa un INS82 caso1 para recuperar63Cx. **Es otro
+perfil:** P1=01, P2=80|kid y GET CHALLENGE previo. No copiar parámetros ni
+añadir ese challenge a la secuencia JCOP4. El iasecc-sm local tampoco define
+esta consulta vacía: implementa una autenticación con MSE/challenge/SM.
+
+La [API oficial Idopte Token.externalAuthenticate](https://www.idopte.com/ssmwapi/javadoc/com/idopte/scmapi/Token.html#externalAuthenticate)
+describe una ruta con challenge y criptograma, precedida por MSE en IAS ECC.
+Para NXP P71 omite ese MSE y deja el parámetro de algoritmo sin usar. **No
+documenta la consulta vacía, referencia03 ni su manejo de contadores**; no
+identificar la tarjeta actual como P71 solo por esa documentación.
+
+Una revisión estática limitada de símbolos/cadenas del módulo instalado
+encontró nombres Control2ExternalAuthenticate y T_ExternalAuthenticate, además
+de variantes unblock/changeSOPin. Solo son nombres de rutinas: no establecen
+qué función construye00820003, sus condiciones o la interpretación de respuesta.
+No se cargó el módulo ni se ejecutaron esas rutas, y no se extrajeron secretos
+o datos de licencia. Las búsquedas públicas por ChipDoc/comando vacío no
+obtuvieron una definición aplicable; no significa que no exista.
+
+### Decisión y siguiente contraste
+
+**00820003 permanece bloqueado incluso en caso1.** El dato faltante es el
+vínculo entre este uso ISO y el manejador ChipDoc de esta personalización.
+Puede obtenerse del User Guide678510/perfil BCCR o de análisis estático del
+constructor y manejo de estado en el módulo instalado. La pregunta previa
+sobre disponibilidad de manuales no se repite como requisito automático.
+No repetir la captura second-mf, probar otra referencia/challenge ni pedir
+otro PIN: la forma y el punto de la secuencia ya están establecidos.
+
+Solo cambiaron documentos; no se repitieron suites sin cambios. Siguen
+vigentes142 comprobaciones observador/constructor/decoder,87 lanzador público,
+6 lanzador firma,79 helper y12 operación anteriores. Driver/submódulo intactos;
+firma JCOP4, VERIFY6982 y RSA3072 siguen pendientes.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño

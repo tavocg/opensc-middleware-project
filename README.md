@@ -284,6 +284,13 @@ modificados. No PIN/login/firma nuevos ni permisos de lectura tras MF. Próximo
 contraste: determinar el significado y los efectos de ese comando vacío para
 ChipDoc CR antes de permitirlo.
 
+La investigación documental encontró un uso ISO de EXTERNAL AUTHENTICATE sin
+datos para consultar estado/intentos. Es una hipótesis fundada para00820003,
+pero aún falta confirmar su aplicación a ChipDoc CR y la referencia03. El
+comando permanece bloqueado; no se repitieron consultas a la tarjeta ni suites
+por este cambio documental. Fuentes, límites y siguiente contraste en
+[docs/jcop4.md](docs/jcop4.md#precedente-iso-para-external-authenticate-sin-datos).
+
 Capturas privadas bajo local/jcop4-idopte-spy-*/; no agregarlas a Git.
 Pasaron previamente **30 comprobaciones del observador/decoder y 40 del
 lanzador** con transporte ficticio. El diagnóstico de firma pasó además

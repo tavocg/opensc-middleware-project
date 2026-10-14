@@ -6,7 +6,38 @@ la tarjeta. El usuario ejecuta las operaciones que requieran PIN o GUI. Esto
 sustituye las restricciones anteriores de no ejecutar Git/hardware/Idopte por
 el agente; conservar límites de cada diagnóstico y privacidad de los registros.
 
-**Último resultado: MF9000 por handle original; 00820003 caso1 bloqueado.**
+**Última investigación: precedente ISO para EXTERNAL AUTHENTICATE vacío.**
+Principal `3e44bb6`, OpenSC `3dfef6704`, ambos limpios al comenzar.
+Solo revisión documental/estática, sin hardware, PIN, GUI, Idopte ejecutado ni
+cambios de protocolo/permisos. ISO/IEC7816-4:2005,7.5.4 y tabla68, contempla
+EXTERNAL AUTHENTICATE sin datos para consultar intentos63Cx o necesidad de
+verificación9000;7.5.1/tabla65 describe P1=00 sin algoritmo explícito y P2=03
+como referencia global3 **en esa codificación estándar**. Original ISO alojado
+por USPTO enlazado en docs/jcop4.md; texto revisado, screenshot no disponible.
+Esto aporta una hipótesis fundada para la solicitud Idopte ya observada, **no
+confirma su semántica ChipDoc/BCCR, identidad de clave ni efectos de contador**.
+No decir que es autenticación efectiva, licencia, Card Admin Key o causa6982.
+
+El ejemplo local epass2003 get_external_key_retries usa INS82 vacío, pero
+P1=01/P2=80|kid y challenge previo: otro perfil, no copiarlo. API oficial
+Idopte Token.externalAuthenticate describe criptogramas/challenge (MSE en IAS
+ECC), no el estado vacío ni ref03. Búsquedas públicas no aportaron definición
+ChipDoc aplicable; no prueba inexistencia. Inspección estática limitada de
+símbolos/cadenas del módulo instalado encontró nombres
+Control2ExternalAuthenticate/T_ExternalAuthenticate y variantes unblock/
+changeSOPin; **no vincula esos nombres con esta APDU ni autoriza esas rutas**.
+No ejecutar comandos administrativos ni extraer secretos/licencias.
+
+**Próximo paso:** establecer ese vínculo mediante documentación ChipDoc678510/
+perfil BCCR o análisis estático del constructor/manejador de la consulta vacía
+en el módulo instalado. Mantener00820003 bloqueado; no repetir second-mf ni
+pedir PIN para resolverlo. No solicitar otra vez los documentos ya preguntados
+por inercia. Última evidencia hardware sigueY4Vg2V5R/00:03:32Z, sin SW para82.
+Sin cambios de código, suites142/87/6 y79/12 previas vigentes, no repetidas.
+JCOP4/VERIFY6982/RSA3072 pendientes. Git autorizado; .git de solo lectura
+puede impedir el commit documental, no eludirlo.
+
+**Resultado anterior: MF9000 por handle original; 00820003 caso1 bloqueado.**
 Principal `0dfca5f`, OpenSC `3dfef6704` limpios al comenzar. Nuevo modo separado
 `inspect/jcop4-idopte-second-mf` / --idopte-second-mf, opt-in
 `JCOP4_DIAGNOSTIC_SECOND_MF=1` depende de B002 y padres, solo inventario Idopte/
