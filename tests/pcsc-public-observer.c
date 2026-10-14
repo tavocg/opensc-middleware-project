@@ -6,6 +6,7 @@
 
 static int calls, control_calls, control_missing, control_response_fixture;
 static DWORD control_capacity, control_size = 16;
+static int second_atr_calls, second_atr_bad, second_atr_failure;
 static LONG control_result;
 static unsigned int fixture_sw = 0x9000;
 static unsigned int fixture_payload = 16, fixture_overrun;
@@ -44,9 +45,20 @@ static LONG fixture_control(SCARDHANDLE card, DWORD code, const void *send, DWOR
 	*returned = control_size;
 	return control_result;
 }
+static LONG fixture_second_atr(SCARDHANDLE card, DWORD attr, unsigned char *data, DWORD *size)
+{
+	const unsigned char atr[] = { 0x3B, 0xD5, 0x18, 0xFF, 0x81, 0x91, 0xFE, 0x1F, 0xC3, 0x80, 0x73, 0xC8, 0x21, 0x10, 0x0A };
+	assert((card == 7 || card == 8) && attr == SCARD_ATTR_ATR_STRING && *size >= sizeof(atr)); second_atr_calls++;
+	if (second_atr_failure) return SCARD_E_NOT_TRANSACTED;
+	memcpy(data, atr, sizeof(atr)); *size = sizeof(atr);
+	if (second_atr_bad == 1) data[0] ^= 1;
+	if (second_atr_bad == 2) *size = 65;
+	return SCARD_S_SUCCESS;
+}
 void *fixture_dlsym(void *handle, const char *name)
 {
 	assert(handle == RTLD_NEXT);
+	if (!strcmp(name, "SCardGetAttrib")) return (void *)fixture_second_atr;
 	if (!strcmp(name, "SCardTransmit")) return (void *)fixture_transmit;
 	if (!strcmp(name, "SCardControl")) return control_missing ? NULL : (void *)fixture_control;
 	assert(!strcmp(name, "SCardReconnect"));
@@ -60,6 +72,7 @@ static FILE *fixture_reset(void)
 	trace_fd = fileno(file);
 	stopped = selected_public_file = selected_mf = selected_app = handle_set = pending_response = calls = events = lifecycle_events = 0;
 	control_calls = control_missing = control_capacity = 0;
+	compare_second_mf = second_mf_connect_seen = second_mf_ready = second_mf_calls = second_atr_calls = second_atr_bad = second_atr_failure = 0;
 	connection_reference_set = connection_reader_valid = connection_records = connection_boundary_stop = boundary_operation_recorded = 0;
 	memset(connection_reference_reader, 0, sizeof(connection_reference_reader));
 	control_response_fixture = 0; select_spy_fd = -1;
@@ -165,6 +178,24 @@ static FILE *fixture_before_b002(void)
 	assert(send_command(target, sizeof(target)) == 0 && send_large(read, sizeof(read)) == 0);
 	return file;
 }
+static FILE *fixture_second_mf(void)
+{
+	const unsigned char select[] = { 0, 0xA4, 2, 0, 2, 0xB0, 2, 0 };
+	const unsigned char read[] = { 0, 0xB0, 0, 0, 0 };
+	SCARDHANDLE first = 7; DWORD protocol = SCARD_PROTOCOL_T1;
+	FILE *file = fixture_before_b002(); compare_second_mf = 1;
+	assert(send_command(select, sizeof(select)) == 0 && send_large(read, sizeof(read)) == 0);
+	log_connection_relation(17, "PRIVATE_READER", SCARD_SHARE_SHARED, &first, &protocol, 0);
+	drop_card_context(); assert(stopped && connection_boundary_stop && !selected_mf && !comparison_atr_ok);
+	return file;
+}
+static LONG send_second(const unsigned char *cmd, size_t size)
+{
+	unsigned char response[402]; DWORD len = sizeof(response);
+	LONG rv = SCardTransmit(8, NULL, cmd, size, NULL, response, &len);
+	if (rv != SCARD_S_SUCCESS) assert(!len);
+	return rv;
+}
 int main(void)
 {
 	const unsigned char select[] = { 0, 0xA4, 0, 0x0C, 2, 0x2F, 0 };
@@ -192,6 +223,102 @@ int main(void)
 			send_command(version, sizeof(version)) == 0 && calls == 5);
 	check_private(file);
 	puts("PASS public observer forwards only allowed discovery and logs no payloads or lengths");
+	{
+		const unsigned char select[] = { 0, 0xA4, 0, 0, 2, 0x3F, 0, 0 };
+		SCARDHANDLE next = 8; DWORD protocol = SCARD_PROTOCOL_T1;
+		for (int i = 0; i < 2; i++) {
+			file = fixture_second_mf(); int before = calls;
+			prepare_second_mf("PRIVATE_READER", SCARD_SHARE_SHARED, &next, &protocol, 0);
+			assert(second_mf_ready && second_atr_calls == 1);
+			unsigned char response[64]; DWORD size = sizeof(response);
+			assert(SCardTransmit(8, NULL, select, sizeof(select) - i, NULL, response, &size) == 0 && size == 18 &&
+					!memcmp(response, "PRIVATE_RESPONSE", 16) && calls == before + 1 && second_mf_calls == 1);
+			assert(stopped && !selected_mf && !selected_app && !comparison_atr_ok && !second_mf_ready &&
+					read_b001_budget == 256 && read_b002_budget == 256);
+			assert(send_second(read, sizeof(read)) != 0 && send_second(pin, sizeof(pin)) != 0 &&
+					send_second(get_response, sizeof(get_response)) != 0 && calls == before + 1);
+			check_private(file);
+		}
+		puts("PASS second MF permits one unchanged short selection after private ATR check and preserves all stopped states/read budgets");
+		for (int i = 0; i < 2; i++) {
+			file = fixture_second_mf(); int before = calls;
+			prepare_second_mf("PRIVATE_READER", SCARD_SHARE_SHARED, &next, &protocol, 0);
+			if (i) second_atr_bad = 1;
+			assert((send_large(select, sizeof(select)) == 0) == !i && calls == before + !i && second_atr_calls == 2);
+			assert(stopped && !selected_mf && !selected_app && !comparison_atr_ok);
+			assert(send_large(read, sizeof(read)) != 0 && calls == before + !i); check_private(file);
+		}
+		puts("PASS observed original-handle MF requires a fresh ATR check on the actual sender without permitting reads");
+		for (int i = 0; i < 11; i++) {
+			file = fixture_second_mf(); next = 8; protocol = SCARD_PROTOCOL_T1;
+			if (i == 0) compare_second_mf = 0;
+			if (i == 1) connection_reader_valid = 0;
+			if (i == 2) read_b002_calls = 0;
+			if (i == 3) next = 7;
+			if (i == 4) protocol = SCARD_PROTOCOL_T0;
+			if (i == 5) boundary_operation_recorded = 1;
+			if (i == 6) second_atr_bad = 1;
+			if (i == 7) second_atr_bad = 2;
+			if (i == 8) second_atr_failure = 1;
+			int before = calls;
+			prepare_second_mf(i == 9 ? "PRIVATE_OTHER_READER" : "PRIVATE_READER", i == 10 ? SCARD_SHARE_DIRECT : SCARD_SHARE_SHARED, &next, &protocol, 0);
+			assert(!second_mf_ready && send_second(select, sizeof(select)) != 0 && calls == before);
+			check_private(file);
+		}
+		puts("PASS second MF rejects missing opt-in/context/reader, old handle, direct/T0 and unavailable/mismatched/oversized ATR");
+		for (int i = 0; i < 7; i++) {
+			file = fixture_second_mf(); next = 8; protocol = SCARD_PROTOCOL_T1;
+			prepare_second_mf("PRIVATE_READER", SCARD_SHARE_SHARED, &next, &protocol, 0);
+			unsigned char bad[sizeof(select)]; memcpy(bad, select, sizeof(bad)); int before = calls;
+			if (i == 0) bad[0] = 1;
+			if (i == 1) bad[3] = 0x0C;
+			if (i == 2) bad[6] = 1;
+			if (i == 3) bad[7] = 1;
+			if (i == 4) { assert(send_second(pin, sizeof(pin)) != 0); }
+			else if (i == 5) { unsigned char out[402]; DWORD n = sizeof(out); assert(SCardTransmit(9, NULL, select, sizeof(select), NULL, out, &n) != 0 && !n); }
+			else if (i == 6) {
+				unsigned char out[32]; DWORD count = 0;
+				assert(SCardControl(8, CM_IOCTL_GET_FEATURE_REQUEST, NULL, 0, out, sizeof(out), &count) != 0 && !control_calls);
+			} else assert(send_second(bad, sizeof(bad)) != 0);
+			assert(!second_mf_ready && send_second(select, sizeof(select)) != 0 && calls == before);
+			check_private(file);
+		}
+		puts("PASS first unexpected APDU/control/handle consumes the MF opportunity without transport or credential leakage");
+		file = fixture_second_mf(); next = 8; protocol = SCARD_PROTOCOL_T1;
+		prepare_second_mf("PRIVATE_READER", SCARD_SHARE_SHARED, &next, &protocol, 0);
+		unsigned char nonzero_le[sizeof(select)]; memcpy(nonzero_le, select, sizeof(select)); nonzero_le[7] = 0xFF;
+		int rejected_before = calls;
+		assert(send_second(nonzero_le, sizeof(nonzero_le)) != 0 && calls == rejected_before);
+		char log[4096] = {0}; fflush(file); rewind(file); assert(fread(log, 1, sizeof(log)-1, file) > 0);
+		assert(strstr(log, "second_mf_request_handle=checked_handle") && strstr(log, "second_mf_requested_form=case4_le255"));
+		check_private(file);
+		puts("PASS nonzero MF Le is classified as a fixed public form without silently widening the exception");
+		for (int i = 0; i < 4; i++) {
+			file = fixture_second_mf(); next = 8; protocol = SCARD_PROTOCOL_T1;
+			prepare_second_mf("PRIVATE_READER", SCARD_SHARE_SHARED, &next, &protocol, 0);
+			int before = calls; fixture_sw = i == 0 ? 0x6101 : i == 1 ? 0x6982 : 0x9000;
+			if (i == 2) fixture_overrun = 1;
+			if (i == 3) events = 128;
+			assert(send_second(select, sizeof(select)) != 0 && stopped && calls == before + (i != 3));
+			assert(send_second(get_response, sizeof(get_response)) != 0 && send_second(select, sizeof(select)) != 0);
+			check_private(file);
+		}
+		puts("PASS non-9000/oversized MF responses and global event budget prevent retry or GET RESPONSE");
+		file = fixture_second_mf(); next = 8; protocol = SCARD_PROTOCOL_T1;
+		prepare_second_mf("PRIVATE_READER", SCARD_SHARE_SHARED, &next, &protocol, 0);
+		unsigned char output[1]; DWORD count = 1; int before = calls;
+		assert(SCardTransmit(8, NULL, select, sizeof(select), NULL, output, &count) != 0 && !count && calls == before);
+		check_private(file);
+		file = fixture_second_mf(); prepare_second_mf("PRIVATE_READER", SCARD_SHARE_SHARED, &next, &protocol, 0);
+		int saved = trace_fd; trace_fd = open("/dev/full", O_WRONLY); assert(trace_fd >= 0); before = calls;
+		assert(send_second(select, sizeof(select)) != 0 && calls == before); close(trace_fd); trace_fd = saved; check_private(file);
+		puts("PASS MF requires output capacity for SW and a written private marker before transmission");
+		file = fixture_second_mf(); prepare_second_mf("PRIVATE_READER", SCARD_SHARE_SHARED, &next, &protocol, 0);
+		assert(send_second(select, sizeof(select)) == 0); before = calls; drop_card_context();
+		prepare_second_mf("PRIVATE_READER", SCARD_SHARE_SHARED, &next, &protocol, 0);
+		assert(!second_mf_ready && second_atr_calls == 1 && send_second(select, sizeof(select)) != 0 && calls == before); check_private(file);
+		puts("PASS later connections cannot replenish second MF allowance or repeat ATR preparation");
+	}
 	{
 		file = fixture_reset(); compare_b002 = 1;
 		SCARDHANDLE first_card = 7, next_card = 8; DWORD proto = SCARD_PROTOCOL_T1;
@@ -233,6 +360,16 @@ int main(void)
 			check_private(file);
 		}
 		puts("PASS first suppressed boundary APDU is classified once without forwarding any command or printing PIN data");
+		for (int i = 0; i < 3; i++) {
+			file = fixture_reset(); compare_b002 = 1; read4141_calls = 1; drop_card_context();
+			const unsigned char auth[] = { 0, 0x82, 0, 3, 10, 'S','E','C','R','E','T','_','P','I','N' };
+			assert(send_command(auth, i == 0 ? 4 : i == 1 ? 5 : sizeof(auth)) != 0 && !calls);
+			memset(log, 0, sizeof(log)); fflush(file); rewind(file); assert(fread(log, 1, sizeof(log)-1, file) > 0);
+			assert(strstr(log, i == 0 ? "header_00820003_case1_no_data" : i == 1 ?
+					"header_00820003_case2_no_data" : "header_00820003_other_contents_omitted") && !strstr(log, "SECRET"));
+			check_private(file);
+		}
+		puts("PASS 00820003 command form is classified without credentials or transport, including empty and data-bearing forms");
 		file = fixture_reset(); compare_b002 = 1; read4141_calls = 1; drop_card_context();
 		unsigned char response[256]; DWORD returned = 99;
 		assert(SCardControl(7, CM_IOCTL_GET_FEATURE_REQUEST, NULL, 0, response, sizeof(response), &returned) != 0 && !returned && !control_calls);

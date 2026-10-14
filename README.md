@@ -275,6 +275,15 @@ ni ruta de verificación del PIN. Pasaron **129 comprobaciones** del observador;
 los límites y permisos permanecen iguales. Próximo contraste: una excepción
 separada y comprobada únicamente para esa selección, sin rehabilitar lecturas.
 
+`make inspect/jcop4-idopte-second-mf READER=0` permite una sola selección MF
+tras comprobar conexión/lector/ATR, manteniendo el guard detenido. Idopte la
+solicita por el **handle original**, cuyo ATR se vuelve a comprobar: **MF9000**.
+El siguiente comando es **00 82 00 03, caso1 sin datos**, bloqueado antes de
+transmitir y sin SW. Pasaron **235 comprobaciones** de los componentes
+modificados. No PIN/login/firma nuevos ni permisos de lectura tras MF. Próximo
+contraste: determinar el significado y los efectos de ese comando vacío para
+ChipDoc CR antes de permitirlo.
+
 Capturas privadas bajo local/jcop4-idopte-spy-*/; no agregarlas a Git.
 Pasaron previamente **30 comprobaciones del observador/decoder y 40 del
 lanzador** con transporte ficticio. El diagnóstico de firma pasó además

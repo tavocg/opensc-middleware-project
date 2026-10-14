@@ -15,7 +15,7 @@
 .PHONY: inspect/jcop4-pin-policy
 .PHONY: inspect/jcop4-odf-map
 .PHONY: inspect/jcop4-file4141 inspect/jcop4-file4109 inspect/jcop4-file7001 inspect/jcop4-file7002 inspect/jcop4-file7004 inspect/jcop4-file7005 inspect/jcop4-filedf0f inspect/jcop4-fileb001 inspect/jcop4-fileb002 inspect/jcop4-public-keys inspect/jcop4-certificate-paths
-.PHONY: inspect/jcop4-idopte-compare inspect/jcop4-idopte-read4109 inspect/jcop4-idopte-aodf inspect/jcop4-idopte-prkdf inspect/jcop4-idopte-pukdf inspect/jcop4-idopte-cdf inspect/jcop4-idopte-pin-status inspect/jcop4-idopte-df0f inspect/jcop4-idopte-read-df0f inspect/jcop4-idopte-b001 inspect/jcop4-idopte-b002
+.PHONY: inspect/jcop4-idopte-compare inspect/jcop4-idopte-read4109 inspect/jcop4-idopte-aodf inspect/jcop4-idopte-prkdf inspect/jcop4-idopte-pukdf inspect/jcop4-idopte-cdf inspect/jcop4-idopte-pin-status inspect/jcop4-idopte-df0f inspect/jcop4-idopte-read-df0f inspect/jcop4-idopte-b001 inspect/jcop4-idopte-b002 inspect/jcop4-idopte-second-mf
 .PHONY: inspect/jcop4-idopte
 .PHONY: inspect/jcop4-idopte-discovery inspect/jcop4-idopte-spy test/pcsc-public-observer
 
@@ -66,6 +66,7 @@ help:
 		'make inspect/jcop4-idopte-pukdf Observa Idopte tras lectura acotada de metadatos PuKDF7004, sin PIN.' \
 		'make inspect/jcop4-idopte-cdf Observa Idopte tras lectura acotada de CDF7005, sin PIN.' \
 		'make inspect/jcop4-idopte-pin-status Permite una sola consulta de estado VERIFY sin datos en MF, sin PIN ni login.' \
+		'make inspect/jcop4-idopte-second-mf Permite un SELECT MF acotado en segunda conexión comprobada, sin habilitar lecturas ni PIN.' \
 		'make inspect/jcop4-idopte-b002 Observa lectura acotada de B002 por Idopte, sin registrar contenido ni permitir PIN.' \
 		'make inspect/jcop4-idopte-b001 Observa lectura acotada de B001 por Idopte, sin registrar contenido ni permitir PIN.' \
 		'make inspect/jcop4-idopte-read-df0f Lee DF0F una vez, hasta 150 bytes, solo dentro de Idopte y sin registrar contenido.' \
@@ -158,6 +159,9 @@ inspect/jcop4-file4109:
 
 inspect/jcop4-file4141:
 	@bash scripts/probe-jcop4.sh "$$READER" --file4141
+
+inspect/jcop4-idopte-second-mf:
+	@bash scripts/probe-jcop4.sh "$$READER" --idopte-second-mf
 
 inspect/jcop4-idopte-b002:
 	@bash scripts/probe-jcop4.sh "$$READER" --idopte-b002

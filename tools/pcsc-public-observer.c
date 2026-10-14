@@ -19,7 +19,7 @@
 
 static int trace_fd = -1, stopped, selected_public_file, selected_mf, selected_app, handle_set, pending_response;
 static int select_spy_fd = -1;
-static int compare_read4141, compare_read4109, compare_aodf, compare_prkdf, compare_pukdf, compare_cdf, compare_pin_status, compare_select_df0f, compare_read_df0f, compare_b001, compare_b002;
+static int compare_read4141, compare_read4109, compare_aodf, compare_prkdf, compare_pukdf, compare_cdf, compare_pin_status, compare_select_df0f, compare_read_df0f, compare_b001, compare_b002, compare_second_mf;
 static unsigned int select_df0f_calls, read_df0f_calls, select_b001_calls, select_b002_calls;
 static unsigned int read_b001_budget, read_b001_offset, read_b001_calls;
 static unsigned int read_b002_budget, read_b002_offset, read_b002_calls;
@@ -40,6 +40,9 @@ static SCARDHANDLE connection_reference_handle;
 static int connection_reference_set, connection_reader_valid;
 static unsigned int connection_records;
 static int connection_boundary_stop, boundary_operation_recorded;
+static SCARDHANDLE second_mf_handle;
+static int second_mf_connect_seen, second_mf_ready;
+static unsigned int second_mf_calls;
 static SCARDHANDLE trace_handle;
 static pthread_mutex_t trace_mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -139,6 +142,14 @@ __attribute__((constructor)) static void observer_init(void)
 			if (dprintf(trace_fd, "comparison_certificate_b002=bounded3000_contents_omitted\n") < 0) stopped = 1;
 		}
 	}
+	path = getenv("JCOP4_DIAGNOSTIC_SECOND_MF");
+	if (path) {
+		if (strcmp(path, "1") || !compare_b002 || trace_fd < 0) stopped = 1;
+		else {
+			compare_second_mf = 1;
+			if (dprintf(trace_fd, "comparison_second_mf=select_once_no_followup_permissions\n") < 0) stopped = 1;
+		}
+	}
 	path = getenv("JCOP4_PUBLIC_SELECT_SPY_TRACE");
 	if (path) {
 		select_spy_fd = open(path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
@@ -228,7 +239,7 @@ done:
 static void drop_card_context(void)
 {
 	pthread_mutex_lock(&trace_mutex);
-	selected_public_file = selected_mf = selected_app = pending_response = 0;
+	selected_public_file = selected_mf = selected_app = pending_response = second_mf_ready = 0;
 	comparison_atr_ok = pin_status_result_valid = 0;
 	/* Do not continue an unknown-file read across a connection/reset boundary. */
 	if (read4141_calls) {
@@ -257,6 +268,35 @@ static LONG check_comparison_atr(SCARDHANDLE card)
 	return rv;
 }
 
+/* One opt-in exception for the first new connection after B002. No state or
+ * budget is restored; ATR is compared privately on this new handle. */
+static void prepare_second_mf(const char *reader, DWORD share,
+		const SCARDHANDLE *card, const DWORD *protocol, LONG rv)
+{
+	typedef LONG (*attrib_fn)(SCARDHANDLE, DWORD, unsigned char *, DWORD *);
+	const unsigned char known[] = { 0x3B, 0xD5, 0x18, 0xFF, 0x81, 0x91, 0xFE, 0x1F, 0xC3, 0x80, 0x73, 0xC8, 0x21, 0x10, 0x0A };
+	unsigned char atr[64]; DWORD size = sizeof(atr);
+	pthread_mutex_lock(&trace_mutex);
+	if (!compare_second_mf || !stopped || !connection_boundary_stop || second_mf_connect_seen) goto done;
+	second_mf_connect_seen = 1;
+	if (!read_b002_calls || boundary_operation_recorded || second_mf_calls || !connection_reference_set ||
+			!connection_reader_valid || !reader || strnlen(reader, sizeof(connection_reference_reader)) >= sizeof(connection_reference_reader) ||
+			strcmp(reader, connection_reference_reader) || rv != SCARD_S_SUCCESS || !card || !protocol ||
+			share != SCARD_SHARE_SHARED || *protocol != SCARD_PROTOCOL_T1 || !handle_set ||
+			*card == connection_reference_handle || *card == trace_handle) {
+		if (trace_fd >= 0) dprintf(trace_fd, "second_mf_connection=ineligible_no_select\n");
+		goto done;
+	}
+	attrib_fn get = (attrib_fn)dlsym(RTLD_NEXT, "SCardGetAttrib");
+	rv = get ? get(*card, SCARD_ATTR_ATR_STRING, atr, &size) : SCARD_F_INTERNAL_ERROR;
+	int matches = rv == SCARD_S_SUCCESS && size == sizeof(known) && !memcmp(atr, known, sizeof(known));
+	if (trace_fd >= 0 && dprintf(trace_fd, "second_mf_atr=%s\n", matches ? "known_jcop4" : "unavailable_or_mismatch") >= 0 && matches) {
+		second_mf_handle = *card; second_mf_ready = 1;
+	}
+done:
+	pthread_mutex_unlock(&trace_mutex);
+}
+
 LONG SCardEstablishContext(DWORD scope, const void *reserved1, const void *reserved2,
 		SCARDCONTEXT *context)
 {
@@ -277,6 +317,7 @@ LONG SCardConnect(SCARDCONTEXT context, const char *reader, DWORD share,
 	if (compare_read4141 && !stopped && rv == SCARD_S_SUCCESS)
 		rv = card ? check_comparison_atr(*card) : SCARD_F_INTERNAL_ERROR;
 	log_connection_relation(context, reader, share, card, protocol, rv);
+	prepare_second_mf(reader, share, card, protocol, rv);
 	log_lifecycle("SCardConnect", rv);
 	return rv;
 }
@@ -317,9 +358,66 @@ static void log_boundary_apdu(const unsigned char *cmd, DWORD len)
 	if (len == 5 && !memcmp(cmd, "\x00\xCA\x01\x00", 4)) kind = "known_chipdoc_name_query";
 	else if (len == 5 && !memcmp(cmd, "\x00\xCA\x01\x16", 4)) kind = "known_chipdoc_version_query";
 	else if (len == 4 && !memcmp(cmd, "\x00\x20\x00\x01", 4)) kind = "known_pin1_status_without_data";
+	else if (!memcmp(cmd, "\x00\x82\x00\x03", 4))
+		kind = len == 4 ? "header_00820003_case1_no_data" : len == 5 ?
+				"header_00820003_case2_no_data" : "header_00820003_other_contents_omitted";
 	else if ((len == 7 || len == 8) && !memcmp(cmd, "\x00\xA4\x00\x00\x02\x3F\x00", 7))
 		kind = "known_master_file_select";
 	dprintf(trace_fd, "boundary_command=%s\n", kind);
+}
+
+/* Mutex held. A single MF SELECT while the global guard stays stopped.
+ * Never sets selected_mf/app/file, never grants READ or GET RESPONSE. */
+static LONG transmit_second_mf(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
+		const unsigned char *cmd, DWORD len, SCARD_IO_REQUEST *recv_pci,
+		unsigned char *response, DWORD *response_len)
+{
+	typedef LONG (*transmit_fn)(SCARDHANDLE, const SCARD_IO_REQUEST *, const unsigned char *,
+			DWORD, SCARD_IO_REQUEST *, unsigned char *, DWORD *);
+	unsigned char control[258]; DWORD size = sizeof(control);
+	LONG rv = SCARD_E_NOT_TRANSACTED;
+	second_mf_ready = 0; /* The first attempted operation consumes the opportunity. */
+	const char *form = "unsupported_contents_omitted";
+	if (cmd && (len == 7 || len == 8) && !memcmp(cmd, "\x00\xA4\x00\x00\x02\x3F\x00", 7))
+		form = len == 7 ? "case3_no_le" : !cmd[7] ? "case4_le256" : cmd[7] == 0xFF ? "case4_le255" : "case4_other_le_uninterpreted";
+	dprintf(trace_fd, "second_mf_request_handle=%s\nsecond_mf_requested_form=%s\n",
+			card == second_mf_handle ? "checked_handle" : card == trace_handle ? "first_handle_value" : "other_handle_value", form);
+	if (!compare_second_mf || second_mf_calls || (card != second_mf_handle && !(card == trace_handle && card == connection_reference_handle)) || !cmd ||
+			!((len == 7) || (len == 8 && !cmd[7])) ||
+			memcmp(cmd, "\x00\xA4\x00\x00\x02\x3F\x00", 7)) return rv;
+	/* Idopte observed a new connection while using its original handle for MF.
+	 * Recheck ATR on that actual sender, without restoring any normal state. */
+	if (card != second_mf_handle) {
+		typedef LONG (*attrib_fn)(SCARDHANDLE, DWORD, unsigned char *, DWORD *);
+		const unsigned char known[] = { 0x3B, 0xD5, 0x18, 0xFF, 0x81, 0x91, 0xFE, 0x1F, 0xC3, 0x80, 0x73, 0xC8, 0x21, 0x10, 0x0A };
+		unsigned char atr[64]; DWORD atr_size = sizeof(atr);
+		attrib_fn get = (attrib_fn)dlsym(RTLD_NEXT, "SCardGetAttrib");
+		LONG result = get ? get(card, SCARD_ATTR_ATR_STRING, atr, &atr_size) : SCARD_F_INTERNAL_ERROR;
+		int matches = result == SCARD_S_SUCCESS && atr_size == sizeof(known) && !memcmp(atr, known, sizeof(known));
+		if (dprintf(trace_fd, "second_mf_request_atr=%s\n", matches ? "known_jcop4" : "unavailable_or_mismatch") < 0 || !matches) return rv;
+	}
+	if (!response || !response_len || *response_len < 2) {
+		dprintf(trace_fd, "second_mf_result=output_buffer_unavailable_no_select\n"); return rv;
+	}
+	if (*response_len < size) size = *response_len;
+	DWORD limit = size;
+	if (++events > 128) { dprintf(trace_fd, "second_mf_result=event_limit_no_select\n"); return rv; }
+	second_mf_calls++;
+	if (dprintf(trace_fd, "second_mf_select=once_no_followup_permissions\nsecond_mf_header=00A40000\n") < 0) return rv;
+	transmit_fn transmit = (transmit_fn)dlsym(RTLD_NEXT, "SCardTransmit");
+	if (!transmit) return rv;
+	rv = transmit(card, send_pci, cmd, len, recv_pci, control, &size);
+	dprintf(trace_fd, "second_mf_transport=%ld\n", (long)rv);
+	if (rv != SCARD_S_SUCCESS || size < 2 || size > limit) {
+		dprintf(trace_fd, "second_mf_result=response_unavailable_or_oversized\n");
+		return rv == SCARD_S_SUCCESS ? SCARD_E_INSUFFICIENT_BUFFER : rv;
+	}
+	unsigned int sw = ((unsigned int)control[size - 2] << 8) | control[size - 1];
+	dprintf(trace_fd, "second_mf_sw=%04X\n", sw);
+	if (sw != 0x9000) { dprintf(trace_fd, "second_mf_result=status_stopped\n"); return SCARD_E_NOT_TRANSACTED; }
+	memcpy(response, control, size); *response_len = size;
+	dprintf(trace_fd, "second_mf_result=selected_still_stopped\n");
+	return SCARD_S_SUCCESS;
 }
 
 static unsigned int read4141_size(const unsigned char *cmd, DWORD len)
@@ -579,7 +677,13 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
 	struct timeval start;
 	pthread_mutex_lock(&trace_mutex);
 	if (trace_fd < 0) goto out;
-	if (stopped) { log_boundary_apdu(cmd, len); goto out; }
+	if (stopped) {
+		if (second_mf_ready) {
+			rv = transmit_second_mf(card, send_pci, cmd, len, recv_pci, response, response_len);
+			if (rv == SCARD_S_SUCCESS || second_mf_calls) goto out;
+		}
+		log_boundary_apdu(cmd, len); goto out;
+	}
 	if (!handle_set) { trace_handle = card; handle_set = 1; }
 	if (card != trace_handle || ++events > 128) {
 		dprintf(trace_fd, "blocked=handle_or_event_limit\n");
@@ -801,6 +905,7 @@ LONG SCardControl(SCARDHANDLE card, DWORD code, const void *send, DWORD send_len
 	if (returned) *returned = 0;
 	if (trace_fd < 0) goto out;
 	if (stopped) {
+		second_mf_ready = 0;
 		if (begin_boundary_record("reader_control"))
 			dprintf(trace_fd, "boundary_blocked_control_code=%08lX\nboundary_control_kind=%s\n", (unsigned long)code,
 					code == CM_IOCTL_GET_FEATURE_REQUEST ? (send_len ? "feature_request_unsupported" : "feature_request_empty") : "unknown");
@@ -842,7 +947,7 @@ LONG SCardSetAttrib(SCARDHANDLE card, DWORD attribute, const unsigned char *data
 {
 	(void)card; (void)attribute; (void)data; (void)len;
 	pthread_mutex_lock(&trace_mutex);
-	if (stopped) begin_boundary_record("reader_attribute");
+	if (stopped) { second_mf_ready = 0; begin_boundary_record("reader_attribute"); }
 	if (trace_fd >= 0 && !stopped)
 		dprintf(trace_fd, "blocked=reader_attribute\n");
 	stopped = 1;

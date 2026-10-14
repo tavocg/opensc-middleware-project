@@ -6,7 +6,65 @@ la tarjeta. El usuario ejecuta las operaciones que requieran PIN o GUI. Esto
 sustituye las restricciones anteriores de no ejecutar Git/hardware/Idopte por
 el agente; conservar límites de cada diagnóstico y privacidad de los registros.
 
-**Último resultado: segunda conexión shared/T1; primer bloqueado SELECT MF.**
+**Último resultado: MF9000 por handle original; 00820003 caso1 bloqueado.**
+Principal `0dfca5f`, OpenSC `3dfef6704` limpios al comenzar. Nuevo modo separado
+`inspect/jcop4-idopte-second-mf` / --idopte-second-mf, opt-in
+`JCOP4_DIAGNOSTIC_SECOND_MF=1` depende de B002 y padres, solo inventario Idopte/
+stdin vacío. Modos anteriores mantienen parada total; inventario/otros modos/
+firma eliminan variable. No reinicia presupuestos ni estado seleccionado.
+Tras lectura B002 y primera conexión posterior a la barrera, exige mismo nombre
+de lector guardado, nuevo handle, SHARED/T1 y ATR conocido en ese nuevo handle.
+Permite un solo SELECT MF exacto00A40000023F00 (caso3 o caso4/Le00) después:
+por el handle nuevo comprobado o **por el original igual al snapshot y trace**,
+con ATR nuevamente comprobado sobre el emisor real. Otros handles/formas/control
+consumen la oportunidad sin enviar; no reintentos/rearme por conexión/reset.
+Global stopped sigue1; selected_mf/app/file y comparison_atr siguen0. Buffer
+mínimo de capacidad del cliente/258, al menos2; SW9000 y tamaño válido únicamente
+se devuelven a Idopte, datos nunca en log. Marker privado previo obligatorio;
+eventos límite128 incluye SELECT; fallos detienen sin GET RESPONSE. Solo se
+emiten SW/transporte y clases fijas de handle/forma/ATR; no valores brutos.
+
+Se corrigió una hipótesis de emisor con evidencia, sin cambiar APDU: primera
+consulta `local/jcop4-idopte-second-mf-wAVg1O4r/report.txt`,23:53:15UTC:
+ATR del nuevo handle conocido, MF no transmitido, motivo aún sin distinguir.
+Nueva clasificación, `...-qLdINu1m/report.txt`,23:55:56UTC:
+**first_handle_value + case4_le256**, no MF transmitido. No era Le255 ni error
+de tarjeta. Corrección con ATR del emisor original y tests, `...-3keXM1Gb/
+report.txt`,23:59:20UTC: **MF0/9000**, siguiente **00820003 bloqueado**, forma
+aún omitida. No afirmar que MF se transmitió por el handle nuevo.
+
+Última consulta con clasificación de forma, tras pruebas:
+`nix develop --offline -c make inspect/jcop4-idopte-second-mf READER=0`.
+Informe `local/jcop4-idopte-second-mf-Y4Vg2V5R/report.txt`,
+**2026-10-14T00:03:32Z (13 de octubre en Costa Rica)**. Build/inventario correctos;
+ATR de handle nuevo y emisor original conocidos, MF solicitado por
+first_handle_value/case4_le256 ->0/9000, selected_still_stopped. **104 APDU:
+103SW9000 y un estado vacío63C7**. Luego **boundary_first_operation=apdu,
+boundary_blocked_header=00820003,
+boundary_command=header_00820003_case1_no_data**: APDU exactamente4bytes,
+**sin datos, no transmitida, sin SW**, permanece bloqueada. No nuevas lecturas
+tras MF, PIN, login, MSE/PSO/SM/escritura/firma. No atribuir efectos de contador,
+licencia, Card Admin Key, PACE/CAN o causa de6982 a la mera cabecera/forma.
+Módulo0/token_info_result=CKR_TOKEN_NOT_PRESENT/diagnóstico1/token_info_unavailable,
+events_recorded. No rechazo nuevo de tarjeta.
+
+Pasaron **142 observador/constructor/decoder,87 lanzador,6 lanzador firma
+(235)**, fake transporte/redirector real; biblioteca compilada. Helper79 y
+operación12 intactos, suites anteriores vigentes. Las repeticiones recuperaron
+información antes omitida/corrigieron la hipótesis del handle, no fueron reintentos
+de PIN ni variantes APDU. Cambios sin driver/submódulo ni protocolos de firma.
+
+**Próximo contraste:** investigar la semántica de **00 82 00 03 sin datos** en
+ChipDoc de este perfil antes de permitirlo. Biblioteca local iasecc-sm.c define
+external authentication mediante MSE y challenge/SM, no esta consulta vacía;
+no copiar esa ruta ni política de otro perfil. ZIP fuentes/textos no contiene
+external-auth/00820003 según búsqueda estática, no ejecutar ZIP. No asumir que
+vacío es consulta inocua/retry-counter o no consume intentos: requiere precedente
+aplicable. Mantenerlo bloqueado, no pedir PIN ni repetir la captura idéntica.
+JCOP4/VERIFY6982/RSA3072 pendientes. Capturas0700/0600local/ fuera de Git/chat.
+Git autorizado, .git de solo lectura aún impide commits si persiste; no eludirlo.
+
+**Resultado anterior: segunda conexión shared/T1; primer bloqueado SELECT MF.**
 Usuario registró `2b7f401`, principal y OpenSC `3dfef6704` limpios al comenzar.
 Instrumentación nueva únicamente en modo B002 ya optativo: conserva primera
 conexión exitosa en memoria (nombre limitado a256 bytes, contexto y handle),

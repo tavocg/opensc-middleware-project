@@ -13,7 +13,7 @@ int fixture_control_count(void) { return control_calls; }
 LONG SCardGetAttrib(SCARDHANDLE card, DWORD attribute, unsigned char *data, DWORD *size)
 {
 	const unsigned char atr[] = { 0x3B, 0xD5, 0x18, 0xFF, 0x81, 0x91, 0xFE, 0x1F, 0xC3, 0x80, 0x73, 0xC8, 0x21, 0x10, 0x0A };
-	assert(card == 7 && attribute == SCARD_ATTR_ATR_STRING && data && size && *size >= sizeof(atr));
+	assert((card == 7 || (card == 8 && getenv("JCOP4_DIAGNOSTIC_SECOND_MF"))) && attribute == SCARD_ATTR_ATR_STRING && data && size && *size >= sizeof(atr));
 	assert(getenv("JCOP4_DIAGNOSTIC_READ4141") && !strcmp(getenv("JCOP4_DIAGNOSTIC_READ4141"), "1"));
 	memcpy(data, atr, sizeof(atr)); *size = sizeof(atr);
 	if (getenv("FIXTURE_COMPARISON_BAD_ATR")) data[0] ^= 1;
@@ -41,8 +41,10 @@ LONG SCardConnect(SCARDCONTEXT context, const char *reader, DWORD share,
 		DWORD protocols, SCARDHANDLE *card, DWORD *protocol)
 {
 	if (context == 18) {
-		assert(share == SCARD_SHARE_DIRECT && !protocols && !strcmp(reader, "PRIVATE_READER"));
-		*card = 8; *protocol = 0; return SCARD_S_SUCCESS;
+		assert(!strcmp(reader, "PRIVATE_READER"));
+		if (share == SCARD_SHARE_DIRECT) { assert(!protocols); *protocol = 0; }
+		else { assert(getenv("JCOP4_DIAGNOSTIC_SECOND_MF") && share == SCARD_SHARE_SHARED && protocols == SCARD_PROTOCOL_T1); *protocol = SCARD_PROTOCOL_T1; }
+		*card = 8; return SCARD_S_SUCCESS;
 	}
 	assert(context == 17 && share == SCARD_SHARE_SHARED && protocols == SCARD_PROTOCOL_T1);
 	if (!strcmp(reader, "PRIVATE_READER_CONNECT_FAILURE"))
@@ -63,6 +65,12 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *pci,
 {
 	(void)pci; (void)rpci;
 	/* Any leaked authentication or other command fails the fixture immediately. */
+	if (card == 8) {
+		assert(getenv("JCOP4_DIAGNOSTIC_SECOND_MF") && (size == 7 || size == 8) &&
+				!memcmp(cmd, "\x00\xA4\x00\x00\x02\x3F\x00", 7) && (size == 7 || !cmd[7]) && *len >= 18 && *len <= 258);
+		calls++; memcpy(response, "PRIVATE_RESPONSE", 16); response[16] = 0x90; response[17] = 0; *len = 18;
+		return SCARD_S_SUCCESS;
+	}
 	assert(card == 7 && cmd[0] == 0);
 	if (cmd[1] == 0x20) {
 		assert(size == 4 && !memcmp(cmd, "\x00\x20\x00\x01", 4) && selected_file == 0x3F00);

@@ -3337,6 +3337,110 @@ transporte global ni repetir el mismo diagnóstico/PIN por inercia. El modo
 actual conserva SELECT MF de esa conexión bloqueado. Archivos privados0700/0600
 bajo local/, fuera de Git; JCOP4/VERIFY6982/RSA3072 pendientes.
 
+## SELECT MF aceptado por el handle original; 00820003 sin datos bloqueado
+
+Revisión iniciada con principal `0dfca5f` y OpenSC `3dfef6704` limpios.
+Nuevo modo `make inspect/jcop4-idopte-second-mf READER=0`, con opt-in
+`JCOP4_DIAGNOSTIC_SECOND_MF=1` dependiente de B002 y todos sus padres. Solo se
+habilita dentro del inventario Idopte con stdin vacío; inventario previo, otros
+modos y firma eliminan la variable externa. Modos anteriores conservan la
+parada total ante la nueva conexión. Driver y submódulo permanecen intactos.
+
+Después de una lectura B002 aceptada y la barrera, se examina una única conexión
+nueva: nombre de lector igual al snapshot privado, otro handle, SHARED/T1 y ATR
+conocido comprobado con SCardGetAttrib sobre ese handle. No se restauran
+presupuestos ni selecciones. La oportunidad de SELECT se consume con el primer
+intento de APDU/control/atributo y no se renueva por nuevas conexiones/reset.
+
+Permite únicamente **00 A4 00 00 02 3F 00**, caso3 o caso4 con Le00, sin
+modificar la solicitud. El emisor puede ser el nuevo handle comprobado o el
+original que coincide con snapshot y trace; en este último caso **se vuelve a
+comprobar el ATR en el emisor real** antes de transmitir. Otros handles y formas
+se bloquean. Un marker privado es obligatorio antes del SELECT; la operación
+cuenta dentro del presupuesto global128. La respuesta usa un buffer de tamaño
+mínimo de la capacidad del cliente/258, requiere al menos SW1/SW2 y solo se
+copia al cliente con SW9000/tamaño válido. Datos de control nunca se registran.
+Global stopped permanece1; selected_mf/app/file y comparison_atr permanecen0:
+**no se habilitan READ, GET RESPONSE, controles o autenticación**. Fallos de
+ATR/log/transporte/tamaño/SW/buffer/límite no permiten reintentos ni fallback.
+
+La primera implementación exigía que el SELECT se enviara por el nuevo handle.
+La consulta `local/jcop4-idopte-second-mf-wAVg1O4r/report.txt`,
+2026-10-13T23:53:15Z, comprobó el ATR nuevo pero no envió el SELECT. No era un
+rechazo de tarjeta; faltaba distinguir handle/forma. Se agregó clasificación
+fija sin valores brutos, datos o longitudes de credenciales. El informe
+`local/jcop4-idopte-second-mf-qLdINu1m/report.txt`,23:55:56Z, mostró:
+
+```text
+second_mf_atr=known_jcop4
+second_mf_request_handle=first_handle_value
+second_mf_requested_form=case4_le256
+```
+
+Idopte abre una conexión adicional pero solicita este SELECT por el handle
+original; **no era una variante Le255**. La corrección se limitó a ese emisor,
+con ATR fresco y la misma APDU/presupuestos. En
+`local/jcop4-idopte-second-mf-3keXM1Gb/report.txt`,23:59:20Z, el SELECT recibió
+0/9000 y el siguiente comando bloqueado tuvo cabecera00820003. La forma de ese
+comando aún estaba omitida, por lo que no se infirió presencia de credenciales.
+
+Se agregó exclusivamente clasificación de forma de esa cabecera fija: caso1
+sin datos, caso2 sin datos u otro contenido omitido. Incluso la forma vacía
+sigue bloqueada antes de transporte; ningún buffer de autenticación se captura.
+Pasaron **142 comprobaciones del observador/constructor/decoder**, **87 del
+lanzador público** y **6 del lanzador de firma**:235. Incluyen ATR real del
+emisor, handle original/nuevo, otros lectores/protocolos/handles, evento y
+presupuestos sin reinicio, primera operación inesperada, respuesta9000/corta/
+oversize/61xx/69xx, log/buffer fallido, exclusión de READ/PIN/GET RESPONSE,
+constructor/entorno y delegación PC/SC real con backend ficticio. Biblioteca
+real compilada; helper79/operación12 intactos, suites anteriores vigentes.
+
+Última consulta tras las pruebas:
+
+```sh
+nix develop --offline -c make inspect/jcop4-idopte-second-mf READER=0
+```
+
+Informe privado `local/jcop4-idopte-second-mf-Y4Vg2V5R/report.txt`,
+**2026-10-14T00:03:32Z**, todavía13 de octubre en Costa Rica. Build/inventario
+correctos.103 APDU de bootstrap/directory/certificados y un SELECT MF adicional:
+**104 APDU,103SW9000 y un estado vacío63C7**. Resumen permitido:
+
+```text
+second_mf_atr=known_jcop4
+second_mf_request_handle=first_handle_value
+second_mf_requested_form=case4_le256
+second_mf_request_atr=known_jcop4
+second_mf_select=once_no_followup_permissions
+second_mf_transport=0
+second_mf_sw=9000
+second_mf_result=selected_still_stopped
+boundary_first_operation=apdu
+boundary_blocked_header=00820003
+boundary_command=header_00820003_case1_no_data
+```
+
+**00 82 00 03 tiene exactamente cuatro bytes, sin datos de comando. No se
+transmitió y no tiene SW**. No hubo lecturas posteriores al MF, credencial/PIN,
+login, MSE, PSO, SM, escritura o firma. Hubo el único estado VERIFY sin datos
+preexistente. `module_exit_status=0`, `token_info_result=CKR_TOKEN_NOT_PRESENT`,
+`diagnostic_result=token_info_unavailable`, `observer_result=events_recorded`;
+el diagnóstico termina1 por el guard, sin nuevo rechazo de tarjeta.
+
+No atribuir a esta cabecera y forma vacía una consulta inocua de intentos,
+autenticación efectiva, licencia, Card Admin Key, CAN/PACE obligatorio ni causa
+de6982. El código local `iasecc-sm.c` implementa external authentication con
+MSE y challenge/SM; no define el significado de esta consulta vacía del perfil.
+La búsqueda estática en textos/fuentes del ZIP no encontró external-auth/00820003;
+no se ejecutó el ZIP ni se copiaron rutinas criptográficas.
+
+Próximo contraste: buscar un precedente aplicable que defina **00820003 sin
+datos** y sus posibles efectos en estado/contador antes de permitirlo. El
+contenido vacío no prueba que sea seguro para un contador en esta personalización.
+Mantenerlo bloqueado, no repetir la captura idéntica ni pedir otro PIN por
+inercia. Informes0700/0600 bajo local/, fuera de Git/chat. Firma JCOP4,
+VERIFY6982 y RSA3072 siguen pendientes.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño
