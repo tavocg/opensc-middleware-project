@@ -25,7 +25,7 @@
 .PHONY: inspect/jcop4-channel-pin-context
 .PHONY: login/jcop4-channel test/jcop4-channel-login
 .PHONY: test/jcop4-response-collector
-.PHONY: sign/jcop4-channel sign/jcop4-channel-application test/jcop4-channel-sign
+.PHONY: sign/jcop4-channel sign/jcop4-channel-application sign/jcop4-channel-extended test/jcop4-channel-sign
 .PHONY: inspect/jcop4-reader-features test/jcop4-reader-features
 .PHONY: inspect/jcop4-channel-transport test/jcop4-channel-transport
 
@@ -98,6 +98,7 @@ help:
 		'make test/jcop4-response-collector Prueba recolección acotada de respuesta con GET RESPONSE simulado.' \
 		'make sign/jcop4-channel READER=0 Firma y verifica un texto técnico RSA2048/SHA256 bajo SM, un PIN.' \
 		'make sign/jcop4-channel-application READER=0 Prueba el AID conocido bajo SM después del login, antes de firmar.' \
+		'make sign/jcop4-channel-extended READER=0 Prueba un único PSO extendido después del login y del AID conocido.' \
 		'make inspect/jcop4-reader-features READER=0 Consulta capacidades del lector, sin PIN ni APDU de tarjeta.' \
 		'make inspect/jcop4-channel-transport READER=0 Prueba MF protegido con DO97/2 y APDU extendida, sin PIN.' \
 		'make test/jcop4-channel-transport Prueba la variante de transporte con lector simulado.' \
@@ -366,6 +367,9 @@ sign/jcop4-channel:
 
 sign/jcop4-channel-application:
 	@bash scripts/probe-jcop4-channel.sh "$(READER)" --sign-application-once
+
+sign/jcop4-channel-extended:
+	@bash scripts/probe-jcop4-channel.sh "$(READER)" --sign-extended-once
 
 test/jcop4-channel-sign:
 	@bash scripts/test-jcop4-channel-sign.sh

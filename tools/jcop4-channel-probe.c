@@ -34,9 +34,10 @@ static struct {
 	int login_mode; unsigned int context_query_sw;
 	int sign_mode, login_authenticated, signature_mse_verified;
 	int signature_application_mode, signature_application_verified;
+	int signature_extended_mode;
 	int transport_mode, transport_channel_verified;
 	unsigned int signature_pending_sw, signature_gets;
-	unsigned char expected[70]; size_t expected_size;
+	unsigned char expected[74]; size_t expected_size;
 } probe_guard;
 
 static void probe_signal(int sig) { (void)sig; probe_interrupted = 1; }
@@ -55,10 +56,14 @@ static int probe_apdu_allowed(sc_apdu_t *a)
 {
 	static const unsigned char mse[] = {0x80,0x0A,4,0,0x7F,0,7,2,2,3,2,2};
 	int extended_mf = 0;
+	int extended_pso = 0;
 #ifdef JCOP4_TRANSPORT_DIAGNOSTIC
 	extended_mf = probe_guard.transport_mode && probe_guard.phase == PROBE_TRANSPORT_MF;
 #endif
-	if (a->control || a->lc != a->datalen || (a->datalen && !a->data) || a->le > (extended_mf ? 291u : 256u) ||
+#ifdef JCOP4_SIGN_DIAGNOSTIC
+	extended_pso = probe_guard.sign_mode && probe_guard.signature_extended_mode && probe_guard.phase == PROBE_SIGNATURE_PSO;
+#endif
+	if (a->control || a->lc != a->datalen || (a->datalen && !a->data) || a->le > (extended_mf || extended_pso ? 291u : 256u) ||
 		(a->flags & (SC_APDU_FLAGS_CHAINING | SC_APDU_FLAGS_SM_CHAINING))) return 0;
 #ifdef JCOP4_TRANSPORT_DIAGNOSTIC
 	if (extended_mf) {
@@ -127,6 +132,16 @@ static int probe_apdu_allowed(sc_apdu_t *a)
 	}
 #endif
 #ifdef JCOP4_SIGN_DIAGNOSTIC
+	if (extended_pso) {
+		return probe_guard.login_authenticated && probe_guard.signature_application_mode && probe_guard.signature_application_verified &&
+			probe_guard.signature_mse_verified && probe_guard.reader->max_recv_size >= 291 && probe_guard.expected_size == 74 &&
+			a->cla == 0x0C && a->ins == 0x2A && a->p1 == 0x9E && a->p2 == 0x9A && a->cse == (SC_APDU_CASE_4_EXT) &&
+			a->lc == 65 && a->le == 291 && a->resplen == 291 && a->resp &&
+			!memcmp(probe_guard.expected, "\x0c\x2a\x9e\x9a\0\0\x41", 7) &&
+			!memcmp(probe_guard.expected + 72, "\x01\x23", 2) &&
+			!memcmp(a->data, "\x87\x31\x01", 3) && !memcmp(a->data + 51, "\x97\x02\x01\0\x8e\x08", 6) &&
+			!memcmp(a->data, probe_guard.expected + 7, 65);
+	}
 	else if (probe_guard.sign_mode && probe_guard.signature_application_mode && probe_guard.login_authenticated &&
 		probe_guard.phase == PROBE_SIGNATURE_APP) {
 		return !probe_guard.signature_application_verified && probe_guard.expected_size == 35 &&
@@ -147,7 +162,7 @@ static int probe_apdu_allowed(sc_apdu_t *a)
 			a->lc == (pso ? 64u : 29u) && !memcmp(a->data, pso ? "\x87\x31\x01" : "\x87\x11\x01", 3) &&
 			(pso ? !memcmp(a->data + 51, "\x97\x01\0\x8e\x08", 5) : !memcmp(a->data + 19, "\x8e\x08", 2)) &&
 			!memcmp(probe_guard.expected + 5, a->data, a->lc);
-	} else if (probe_guard.sign_mode && probe_guard.login_authenticated && probe_guard.signature_mse_verified && probe_guard.phase == PROBE_SIGNATURE_GET) {
+	} else if (probe_guard.sign_mode && !probe_guard.signature_extended_mode && probe_guard.login_authenticated && probe_guard.signature_mse_verified && probe_guard.phase == PROBE_SIGNATURE_GET) {
 		unsigned int le = probe_guard.signature_pending_sw & 255; if (!le) le = 256;
 		return (probe_guard.signature_pending_sw & 0xFF00) == 0x6100 && probe_guard.signature_gets < 3 &&
 			probe_guard.expected_size == 5 && !a->cla && a->ins == 0xC0 && !a->p1 && !a->p2 &&
@@ -201,6 +216,19 @@ static int probe_exchange(void *context, const unsigned char *wire, size_t size,
 	int big_response = 0;
 #ifdef JCOP4_SIGN_DIAGNOSTIC
 	big_response = probe_guard.sign_mode && probe_guard.phase == PROBE_SIGNATURE_PSO && capacity == 293;
+	if (probe_guard.sign_mode && probe_guard.signature_extended_mode && probe_guard.phase == PROBE_SIGNATURE_PSO) {
+		if (!wire || !response || !big_response || !probe_transport_ready(card) || probe_guard.blocked || probe_interrupted ||
+			size != 74 || probe_guard.expected_size != size || memcmp(wire, probe_guard.expected, size)) return SC_ERROR_NOT_ALLOWED;
+		sc_format_apdu(card, &a, SC_APDU_CASE_4_EXT, 0x2A, 0x9E, 0x9A); a.cla = 0x0C;
+		a.data = wire + 7; a.lc = a.datalen = 65; a.le = a.resplen = 291; a.resp = response;
+		a.flags |= SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP | SC_APDU_FLAGS_NO_SM;
+		/* Exact experimental frame through the guarded reader, without declaring
+		 * a generic card capability or allowing retry/GET RESPONSE. */
+		rv = card->reader->ops->transmit(card->reader, &a);
+		if (rv < 0 || a.resplen > capacity - 2) { probe_guard.blocked = 1; return rv < 0 ? rv : SC_ERROR_INVALID_DATA; }
+		response[a.resplen] = (unsigned char)a.sw1; response[a.resplen + 1] = (unsigned char)a.sw2;
+		*received = a.resplen + 2; return 0;
+	}
 #endif
 	if (!wire || !response || (capacity != 258 && !big_response) || !probe_transport_ready(card) || probe_guard.blocked || probe_interrupted)
 		return SC_ERROR_NOT_ALLOWED;
@@ -337,7 +365,8 @@ int main(int argc, char **argv)
 #endif
 #ifdef JCOP4_LOGIN_DIAGNOSTIC
 #ifdef JCOP4_SIGN_DIAGNOSTIC
-	int signature_application_mode = argc == 5 && !strcmp(argv[2], "--sign-application-once");
+	int signature_extended_mode = argc == 5 && !strcmp(argv[2], "--sign-extended-once");
+	int signature_application_mode = signature_extended_mode || (argc == 5 && !strcmp(argv[2], "--sign-application-once"));
 	int sign_mode = signature_application_mode || (argc == 5 && !strcmp(argv[2], "--sign-once"));
 	int login_mode = sign_mode;
 #else
@@ -366,6 +395,7 @@ int main(int argc, char **argv)
 #ifdef JCOP4_SIGN_DIAGNOSTIC
 	probe_guard.sign_mode = sign_mode;
 	probe_guard.signature_application_mode = signature_application_mode;
+	probe_guard.signature_extended_mode = signature_extended_mode;
 #endif
 #ifdef JCOP4_LOGIN_DIAGNOSTIC
 	/* Interrupt terminal read so TERM/INT can restore echo before closing. */
@@ -388,6 +418,13 @@ int main(int argc, char **argv)
 	printf("atr_result=%s\n", probe_atr_matches(&card->atr) ? "known" : "mismatch_stop");
 	if (!probe_transport_ready(card)) { printf("transport_policy=unsupported_stop\n"); goto out; }
 	if (probe_guard.transport_mode && reader->max_recv_size < 291) { printf("transport_policy=reader_limit_below291_stop\n"); goto out; }
+#ifdef JCOP4_SIGN_DIAGNOSTIC
+	if (probe_guard.signature_extended_mode) {
+		printf("signature_transport_policy=application_context_pso_extended291_only\n");
+		printf("signature_card_capability=not_inferred_or_modified\n");
+		if (reader->max_recv_size < 291) { printf("signature_transport_result=reader_limit_below291_stop\n"); goto out; }
+	}
+#endif
 	printf("transport_policy=%s\n", probe_guard.transport_mode ? "candidate_t1_read172_mf_extended291" : "opensc_t1_short_max256");
 	rv = sc_lock(card); printf("lock_result=%d\n", rv); if (rv < 0) goto out; locked = 1;
 	rv = sc_reset(card, 0); printf("initial_reset_result=%d\n", rv); if (rv < 0) goto out; session = 1;

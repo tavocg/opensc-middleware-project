@@ -21,7 +21,7 @@ elif (( $# == 2 )) && [[ $2 == --transport-extended ]]; then
     task_helper=jcop4-channel-transport
     task_helper_args+=(--transport-extended)
     task_builder_args=("" --transport-extended)
-elif (( $# == 2 )) && [[ $2 == --login-once || $2 == --sign-once || $2 == --sign-application-once ]]; then
+elif (( $# == 2 )) && [[ $2 == --login-once || $2 == --sign-once || $2 == --sign-application-once || $2 == --sign-extended-once ]]; then
     # A controlling terminal is required, never accept credentials via pipe.
     if [[ ! -t 0 || ! -t 1 ]]; then
         printf 'El login requiere una terminal para introducir el PIN sin eco.\n' >&2
@@ -35,7 +35,7 @@ elif (( $# == 2 )) && [[ $2 == --login-once || $2 == --sign-once || $2 == --sign
     # A timeout subprocess group is not the terminal foreground group when
     # launched from this script: keep terminal access and Ctrl+C on the helper.
     task_timeout_args=(--foreground)
-    if [[ $2 == --sign-once || $2 == --sign-application-once ]]; then
+    if [[ $2 == --sign-once || $2 == --sign-application-once || $2 == --sign-extended-once ]]; then
         task_mode=anonymous_channel_signature_once_rsa2048_sha256
         task_prefix=jcop4-channel-signature
         task_helper=jcop4-channel-sign
@@ -44,10 +44,13 @@ elif (( $# == 2 )) && [[ $2 == --login-once || $2 == --sign-once || $2 == --sign
         if [[ $2 == --sign-application-once ]]; then
             task_mode=anonymous_channel_signature_application_once_rsa2048_sha256
             task_prefix=jcop4-channel-signature-application
+        elif [[ $2 == --sign-extended-once ]]; then
+            task_mode=anonymous_channel_signature_extended_once_rsa2048_sha256
+            task_prefix=jcop4-channel-signature-extended
         fi
     fi
 elif (( $# > 1 )); then
-    printf 'Uso: bash scripts/probe-jcop4-channel.sh [lector] [--pin-context|--transport-extended|--login-once|--sign-once|--sign-application-once]\n' >&2
+    printf 'Uso: bash scripts/probe-jcop4-channel.sh [lector] [--pin-context|--transport-extended|--login-once|--sign-once|--sign-application-once|--sign-extended-once]\n' >&2
     exit 2
 fi
 if [[ ! $task_reader =~ ^[0-9]+$ ]]; then
@@ -85,6 +88,8 @@ CONFIG
     printf 'date_utc=%s\nreader_index=%s\nmode=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$task_reader" "$task_mode"
     if [[ $task_mode == anonymous_channel_extended_mf_no_pin_once ]]; then
         printf 'policy=candidate_t1_read172_mf_extended291\n'
+    elif [[ $task_mode == anonymous_channel_signature_extended_once_rsa2048_sha256 ]]; then
+        printf 'policy=application_context_pso_extended291_only\n'
     else
         printf 'policy=opensc_t1_short_max256\n'
     fi

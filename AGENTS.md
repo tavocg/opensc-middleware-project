@@ -9,7 +9,62 @@ transporte simulado. PIN/GUI también los ejecuta el usuario. Esto sustituye
 la autorización anterior de hardware por el agente; conservar límites de
 cada diagnóstico y privacidad. Git sigue autorizado pero .git solo lectura.
 
-**Última revisión: lector anuncia extensión; diagnóstico de transporte sin PIN preparado.**
+**Última revisión: SELECT MF extendido confirmado; prueba de firma extendida preparada.**
+Principal `6607b15`, OpenSC `3dfef6704`, limpios al comenzar. Informe usuario
+`local/jcop4-channel-transport-Od74BxHu/report.txt`, 2026-10-14T16:01:11Z
+(14Oct10:01CR): build/context/driver/connect/lock/reset inicial/directory0;
+READ protegido137/exterior172, MAC/inner9000/contenido idéntico confirmados.
+SELECT MF extendido transporte0/decoderaccepted/**MACverified/inner9000**,
+control fci6f/matches_mf_df, extended_frame_authenticated_mf_no_pin;
+reset final/unlock/disconnect0,9APDU/guard0/interrupted0/helper0. **Una operación
+extendida real confirmada en esta tarjeta/sesión**, no toda capacidad EXT,
+firmaJCOP4/RSA3072 ni ReaderNames.bit1/política efectivaIdopte. Sin PIN/query/
+VERIFY/firma en ese diagnóstico. No repetir lector/MF/canal por inercia.
+
+Nuevo **make sign/jcop4-channel-extended READER=0**, flag explícito
+--sign-extended-once/prefixjcop4-channel-signature-extended, mismo helper de
+firma separado. Conserva la secuencia del experimento olZZ5giU: READ256,
+MF corto/query autenticado63C7, un PIN/VERIFY, SELECT AID conocido bajo SM,
+MSE91022891. **Solo cambia PSO**: DO97/2=0100, body65, wire74/CASE4_EXT/Lc0041/
+Le exterior0123=291, SSC13/14. Readermax_recv>=291 antes de lock/bootstrap/
+PIN. Mismos digest32/algoritmo28/ref91/certificado público previo. Hipótesis
+de formato, no corrección de firma validada ni afirmación ramaIdopte activa.
+
+PSO pasa por reader.ops->transmit con guard exacto de modo/phase/login/AID/
+MSE/ATR/T1/límite/cabecera/case/Lc/Le/cuerpo, sin añadir SC_CARD_CAP_APDU_EXT
+ni modificar límites/cache/driver. **Sin GET/reintento/fallback/6C** en el modo
+nuevo, incluso ante61xx. Error6A82 observado puede autenticar MAC/status una
+vez y detiene; ningún error desnudo se convierte en estado autenticado/éxito.
+Firma solo tras MAC/inner9000, plaintext256 y verificaciónRSA2048/SHA256PKCS1
+con certificado público guardado, después cierrecompleto/helper0. Una sola
+lecturaPIN del terminal sin eco/registro, query63C7 previo obligatorio; no
+se presume que7 es máximo ni que firma fallida decrementa intentos.
+Lanzador conserva terminal/timeoutforeground45s+5/core0/stdin vacío/entorno
+limpio/report0600/dir0700. Texto técnico con nonce, no PDF ni GUI.
+
+Pasaron **26grupos firma** (13nativos+13bootstrap real con lector sintético),
+**16login/PTY**, **24probe/lanzador**, **10transporte**. Fixture usa serializer
+real apdu.c/EVP CBC+CMAC/RSA independientes: wire74/DO97/SSC14, todosbitsMAC,
+61xx/6500/6C00/9000 desnudos/overflow/errores autenticados, noGET/noartefactos,
+límite290 antes dePIN, guard19mutaciones/cierrefallido. Fallo inicial de
+fixture fue modo de error previo no reiniciado; corregido en defaults, no
+fallo de tarjeta/PIN. Cuatro helpers reales compilados sin ejecutarlos;
+ASan/UBSan26firma detect_leaks0, no prueba de fugas ni instrumentación de
+OpenSC.so/provider precompilados. Codec/confirmation/session/collector sin
+cambios/suites vigentes, no repetidas. Driver/submódulo/observador/flake/lock
+intactos. Agente sinPCSC/hardware/PINreal/GUI/Idopte ejecutado.
+
+**Siguiente intervención:** misma JCOP4 RSA2048/lector0, otros clientes
+cerrados, `nix develop -c make sign/jcop4-channel-extended READER=0`, una sola
+vez, PIN correcto únicamente al prompt tras leer el texto técnico. Revisar
+primer fallo/login/SELECT/MSE/PSO/MAC/verificación/cierre/helper antes de otro
+comando. Si falla no repetirPIN por inercia; timeout/reset final ausente o
+fallido requiere reinsertar antes de otra operación. FirmaJCOP4/RSA3072
+siguen pendientes. Git autorizado/.gitreadonly/noeludir; commit10archivos
+seguidos: documentos3/Makefile/wrapper/testscriptfirma/tests firma+PTY/
+tools probe+sign.h. Sin archivos nuevos/capturas/build/submódulo.
+
+**Revisión anterior: lector anuncia extensión; diagnóstico de transporte sin PIN preparado.**
 Principal `93e161c`, OpenSC `3dfef6704`, limpios al comenzar. Informe usuario
 `local/jcop4-reader-features-kwMEvhg4/report.txt`, 2026-10-14T15:28:34Z
 (14Oct09:28CR): consultas/control/decoders/cierre/helper0, APDU0;

@@ -5810,3 +5810,88 @@ control y cierre/helper antes de decidir otra operación. No repetir reader
 features ni sign baseline/aplicación. Una confirmación solo demostraría
 esta operación extendida en esta sesión; firma JCOP4/RSA3072 y política
 efectiva de Idopte seguirían pendientes.
+
+### Firma con PSO extendido: un único intento
+
+Principal `6607b15`, OpenSC `3dfef6704`, limpios al comenzar. Informe usuario
+`local/jcop4-channel-transport-Od74BxHu/report.txt`, 2026-10-14T16:01:11Z
+(14Oct10:01CR): canal confirmado mediante READ137 protegido con exterior172,
+MAC/inner9000 y contenido idéntico. SELECT MF extendido pasó con transporte0,
+decoderaccepted, **MACverified/inner9000**, control fci6f/matches_mf_df.
+Resultado extended_frame_authenticated_mf_no_pin,9APDU/guard0/interrupted0,
+reset final/unlock/disconnect0 y helper0. No hubo query/PIN/VERIFY/firma.
+Se confirma esa operación extendida en esa tarjeta/sesión; no es detección
+general de EXT, identidad autenticada, firmaJCOP4 o RSA3072. ReaderNames.bit1
+y política runtime de Idopte siguen pendientes. No repetir diagnóstico de
+lector/MF/canal para confirmar este resultado.
+
+Esta evidencia permite probar el formato extendido en PSO sin cambiar la
+llave ni el algoritmo. Nuevo `make sign/jcop4-channel-extended READER=0`,
+argumento explícito `--sign-extended-once`, mismo helper de firma separado,
+reporte privado `local/jcop4-channel-signature-extended-*/report.txt`.
+La prueba conserva la secuencia del experimento de aplicación olZZ5giU:
+bootstrap/canal con READ exterior256, SELECT MF corto, queryPIN1 vacío
+autenticado63C7, un VERIFY con el PIN correcto, SELECT protegido del AID
+conocido y MSE91022891. **Solo cambia el formato de PSO**:
+
+- DigestSHA25632, RSA2048/algoritmo28/referencia91 y Le lógico256 anteriores.
+- DO97 de dos bytes0100, cubierto por el MAC; body65 en lugar de64.
+- Frame74 CASE4_EXT, Lc0041 y Le exterior0123=291.
+- SSC13 de comando y14 de respuesta después del SELECT de aplicación.
+
+No cambia el READ al172 ni el MF a extendido en esta prueba: eso alteraría
+más pasos de la secuencia ya observada. Tampoco afirma que la selección del
+AID conserve login por sí misma ni que la rama de Idopte sea la activa.
+Se trata de una hipótesis de formato, todavía sin firma real acreditada.
+
+Antes de lock/bootstrap/PIN exige max_recv_size del lectorOpenSC>=291. PSO
+se transmite una sola vez por reader.ops->transmit guardado, con validación
+de modo/fase/ATR/T1/login/MSE/AID confirmados, CASE4_EXT/Lc/Le/cabecera/body
+exactos y buffer291. No se añade SC_CARD_CAP_APDU_EXT ni se modifican límites
+de tarjeta/lector, cache o driver. El guard rechaza un PSO corto en este modo.
+El serializer real OpenSC produce el frame completo sin inferir capacidad
+general. **No envía GET RESPONSE**, ni siquiera ante61xx; no ajuste6C,
+fallback, reintentoPSO o nuevo PIN después de fallo.
+
+La respuesta directa se autentica antes de descifrar/publicar datos. El
+error6A82 con el formato observado99+8E puede verificar MAC y concordancia
+del estado una vez, y siempre detiene. Respuestas6500/9000 desnudas no
+acreditan estado interno autenticado ni una firma. Para éxito exige MAC
+válido, inner9000, plaintext256 y verificación RSA/SHA256/PKCS1 con el
+certificado público guardado de LlaveDeFirma. El texto técnico contiene un
+nonce nuevo y se muestra antes de pedir PIN; no es firma de PDF ni GUI.
+Solo guarda texto/firma/certificado tras verificación y cierre completos.
+Un reset final fallido impide guardar incluso una firma matemática válida.
+
+La entrada conserva el terminal sin eco, un único intento, query63C7 como
+precondición y ninguna credencial/longitud/hash en el informe. La observación
+63C7 no demuestra que7 sea el máximo ni qué errores consuman intentos.
+Lanzador conserva timeoutforeground45sTERM+5sKILL, stdin vacío, entorno sin
+trazas/delegados/precargas y core0. Directorio0700/report0600. Timeout o reset
+final ausente/fallido requiere cerrar clientes y reinsertar antes de otra
+operación; no repetir firma/PIN por inercia.
+
+Pasaron26 grupos de firma (13nativos+13bootstrap OpenSC real con lector
+sintético),16login/PTY,24probe/lanzador y10transporte. Se verifica el frame74
+con el serializer real apdu.c, CBC/CMAC independientes y firmaRSA sintética;
+DO97/SSC14, todos los bits de MAC alterados,61xx/6500/6C00/9000 desnudos,
+overflow/errores autenticados, falta de login/AID/MSE/límite291,19mutaciones
+del guard, noGET/reintentos/artefactos y cierre fallido. Lanzador mantiene
+flag/prefix/policy explícitos/terminal requerido y una llamada ante0/1/124.
+El primer fallo del fixture se debió a conservar un modo de error de un
+caso previo, corregido en defaults; no fue una prueba de tarjeta o PIN.
+ASan/UBSan pasó26firma, detect_leaks0, sin prueba de fugas ni instrumentación
+de OpenSC.so/provider precompilados. Cuatro helpers reales compilados sin
+ejecutar. Codec/confirmation/session/collector sin cambios y suites vigentes,
+no repetidas. Driver/submódulo/observador/flake/lock intactos; agente sin
+PCSC/lector/tarjeta/PINreal/GUI/Idopte ejecutado.
+
+Siguiente intervención: misma JCOP4 RSA2048/lector0, otros clientes cerrados:
+
+```sh
+nix develop -c make sign/jcop4-channel-extended READER=0
+```
+
+Una sola vez, PIN correcto únicamente en el prompt tras leer el texto.
+Revisar login/SELECT/MSE/PSO/MAC/verificación/cierre/helper antes de otro
+comando. La firma JCOP4 y RSA3072 siguen pendientes de evidencia real.

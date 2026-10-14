@@ -1,5 +1,6 @@
 /* Synthetic PIN, RSA key/certificate and software reader. No hardware. */
 #include "libopensc/opensc.h"
+#include "libopensc/internal.h"
 static int test_signature_reply(sc_apdu_t *a);
 #define JCOP4_SIGN_DIAGNOSTIC
 #define JCOP4_SIGN_FIXTURE
@@ -9,6 +10,7 @@ static EVP_PKEY *rsa_fixture;
 static unsigned char protected_response[293]; static size_t response_offset;
 static int sign_mode_fixture, signature_mse_calls, signature_pso_calls, signature_get_calls;
 static int application_mode_fixture, application_error, signature_application_calls;
+static int extended_mode_fixture;
 static char certificate_path[512], directory_path[512];
 
 static void cipher_iv(unsigned int counter, unsigned char iv[16])
@@ -22,9 +24,19 @@ static void cipher_iv(unsigned int counter, unsigned char iv[16])
 static void check_command(sc_apdu_t *a, int pso, unsigned char digest[32])
 {
 	unsigned char iv[16], plain[48], auth[96] = {0}, mac[16]; int n, last;
-	size_t cipher_size = pso ? 48 : 16, auth_size = pso ? 96 : 64, before_mac = pso ? 54 : 19;
-	assert(a->cla == 0x0C && a->lc == (pso ? 64u : 29u));
+	int extended = pso && extended_mode_fixture;
+	size_t cipher_size = pso ? 48 : 16, auth_size = pso ? 96 : 64, before_mac = pso ? (extended ? 55 : 54) : 19;
+	assert(a->cla == 0x0C && a->lc == (pso ? (extended ? 65u : 64u) : 29u));
 	assert(a->ins == (pso ? 0x2A : 0x22) && a->p1 == (pso ? 0x9E : 0x81) && a->p2 == (pso ? 0x9A : 0xB6));
+	if (extended) {
+		unsigned char *serialized = NULL; size_t serialized_size = 0;
+		assert(a->cse == (SC_APDU_CASE_4_EXT) && a->le == 291 && a->resplen == 291);
+		assert(!test_card.caps && test_card.max_recv_size == 256);
+		assert(!memcmp(a->data + 51, "\x97\x02\x01\0\x8e\x08", 6));
+		assert(sc_apdu_get_octets(&test_ctx, a, &serialized, &serialized_size, SC_PROTO_T1) == 0 && serialized_size == 74);
+		assert(!memcmp(serialized, "\x0c\x2a\x9e\x9a\0\0\x41", 7) && !memcmp(serialized + 72, "\x01\x23", 2));
+		assert(!memcmp(serialized + 7, a->data, 65)); free(serialized);
+	} else assert(a->cse == SC_APDU_CASE_4_SHORT && a->le == 256);
 	cipher_iv((pso ? 11 : 9) + 2 * application_mode_fixture, iv); EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new(); assert(ctx);
 	assert(EVP_DecryptInit_ex(ctx, EVP_aes_128_cbc(), NULL, test_flow.derived.keys.encryption, iv) == 1);
 	assert(EVP_CIPHER_CTX_set_padding(ctx, 0) == 1 && EVP_DecryptUpdate(ctx, plain, &n, a->data + 3, (int)cipher_size) == 1);
@@ -88,7 +100,7 @@ static int test_signature_reply(sc_apdu_t *a)
 		if (sign_mode_fixture >= 12) {
 			/* Independent status-only response, including the observed shape.
 			 * No real card data or MAC is used by this software fixture. */
-			unsigned int sw = sign_mode_fixture == 14 ? 0x9000 : 0x6A82;
+			unsigned int sw = sign_mode_fixture == 14 ? 0x9000 : sign_mode_fixture == 24 ? 0x6982 : 0x6A82;
 			auth[15] = (sign_mode_fixture == 15 ? 10 : 12) + 2 * application_mode_fixture;
 			auth[16] = 0x99; auth[17] = 2; auth[18] = sw >> 8; auth[19] = sw & 255; auth[20] = 0x80;
 			cmac(test_flow.derived.keys.mac, auth, 32, mac);
@@ -100,6 +112,11 @@ static int test_signature_reply(sc_apdu_t *a)
 			if (sign_mode_fixture == 17) a->resp[0] = 0x85;
 			if (sign_mode_fixture == 19) { a->sw1 = 0x63; a->sw2 = 0xC7; }
 			if (sign_mode_fixture == 20) a->resplen = 13;
+			if (sign_mode_fixture == 21) { a->resplen = 0; a->sw1 = 0x65; a->sw2 = 0; }
+			if (sign_mode_fixture == 22) { a->resplen = 0; a->sw1 = 0x6C; a->sw2 = 0; }
+			if (sign_mode_fixture == 23) a->resplen = 292;
+			if (sign_mode_fixture == 24) { a->sw1 = 0x90; a->sw2 = 0; }
+			if (sign_mode_fixture == 25) { a->resplen = 0; a->sw1 = 0x90; a->sw2 = 0; }
 			OPENSSL_cleanse(mac, sizeof(mac)); return 0;
 		}
 		EVP_PKEY_CTX *rsa = EVP_PKEY_CTX_new(rsa_fixture, NULL); assert(rsa); size_t size = 256;
@@ -145,20 +162,25 @@ static void certificate_fixture(void)
 }
 static int invoke_sign(void)
 {
-	char *args[] = {"jcop4-channel-sign", "0", application_mode_fixture ? "--sign-application-once" : "--sign-once", certificate_path, directory_path};
+	char *args[] = {"jcop4-channel-sign", "0", extended_mode_fixture ? "--sign-extended-once" : application_mode_fixture ? "--sign-application-once" : "--sign-once", certificate_path, directory_path};
 	int saved = dup(STDOUT_FILENO); FILE *capture = tmpfile(); assert(saved >= 0 && capture); fflush(stdout);
 	assert(dup2(fileno(capture), STDOUT_FILENO) >= 0); int rv = channel_probe_main(5, args); fflush(stdout); rewind(capture);
 	size_t size = fread(output, 1, sizeof(output)-1, capture); output[size] = 0;
 	assert(!strstr(output, "777777") && !strstr(output, "Synthetic fixture") && !strstr(output, "Sending:"));
 	assert(dup2(saved, STDOUT_FILENO) >= 0); close(saved); fclose(capture);
 	assert(!test_lock_depth);
-	if (test_state.connects) assert(test_state.resets == 2 && test_state.unlocks == 1 && test_state.disconnects == 1);
+	if (test_state.connects) {
+		assert(test_state.disconnects == 1);
+		if (test_state.locks) assert(test_state.resets == 2 && test_state.unlocks == 1);
+	}
 	return rv;
 }
 static void sign_defaults(void)
 {
 	login_defaults(); signature_mse_calls = signature_pso_calls = signature_get_calls = 0;
+	sign_mode_fixture = 0;
 	application_mode_fixture = application_error = signature_application_calls = 0;
+	extended_mode_fixture = 0;
 }
 static void remove_outputs(void)
 {
@@ -288,5 +310,69 @@ int main(void)
 		assert(probe_guard_transmit(&test_reader, &a) < 0 && probe_guard.blocked && !test_state.physical);
 	}
 	puts("PASS application guard rejects missing opt-in/login, plaintext/changed ciphertext/P1/P2/Le, repeated SELECT and MSE without confirmed application before backend");
+	{
+		sign_defaults(); extended_mode_fixture = application_mode_fixture = 1; test_reader.max_recv_size = 65536; sign_mode_fixture = 0;
+		assert(invoke_sign() == 0 && verifies == 1 && pin_reads == 1 && signature_application_calls == 1 && signature_mse_calls == 1 && signature_pso_calls == 1 && !signature_get_calls);
+		assert(strstr(output, "signature_collection=not_attempted_extended_no_get") && strstr(output, "signature_result=rsa_sha256_verified_and_saved"));
+		assert(!test_card.caps && test_card.max_recv_size == 256); remove_outputs();
+		puts("PASS explicit extended PSO serializes exact74-byte CASE4_EXT/DO97two-byte/Le291 with real OpenSC serializer, authenticates synthetic RSA2048 at SSC14, preserves capabilities and saves only after closure");
+		for (int mode = 1; mode <= 25; mode++) {
+			sign_defaults(); extended_mode_fixture = application_mode_fixture = 1; test_reader.max_recv_size = 291; sign_mode_fixture = mode;
+			assert(invoke_sign() == 1 && verifies == 1 && pin_reads == 1 && signature_application_calls == 1 && signature_mse_calls == 1 && !signature_get_calls);
+			assert(signature_pso_calls == (mode >= 4 && mode <= 6 ? 0 : 1) && strstr(output, "signature_result=not_saved_stop"));
+			assert(access(path, F_OK) != 0);
+		}
+		for (int bit = 0; bit < 64; bit++) {
+			sign_defaults(); extended_mode_fixture = application_mode_fixture = 1; test_reader.max_recv_size = 291; sign_mode_fixture = 100 + bit;
+			assert(invoke_sign() == 1 && signature_pso_calls == 1 && !signature_get_calls && strstr(output, "signature_pso_mac_check=failed"));
+			assert(!strstr(output, "signature_pso_sw="));
+		}
+		puts("PASS extended PSO never sends GET/fallback/retry on61xx or transport/SW/MAC/replay/RSA failures, all MAC bits and authenticated6A82 stop without artifacts");
+		sign_defaults(); extended_mode_fixture = application_mode_fixture = 1; test_reader.max_recv_size = 290;
+		assert(invoke_sign() == 1 && !test_state.locks && !test_state.physical && !pin_reads && !verifies && !signature_pso_calls);
+		assert(strstr(output, "signature_transport_result=reader_limit_below291_stop"));
+		for (int error = 1; error <= 7; error++) {
+			sign_defaults(); extended_mode_fixture = application_mode_fixture = 1; test_reader.max_recv_size = 291; application_error = error;
+			assert(invoke_sign() == 1 && verifies == 1 && !signature_mse_calls && !signature_pso_calls);
+		}
+		sign_defaults(); extended_mode_fixture = application_mode_fixture = 1; test_reader.max_recv_size = 291; reply_error = 3;
+		assert(invoke_sign() == 1 && verifies == 1 && !signature_application_calls && !signature_pso_calls);
+		sign_defaults(); extended_mode_fixture = application_mode_fixture = 1; test_reader.max_recv_size = 291; test_state.reset_error = 2;
+		assert(invoke_sign() == 1 && signature_pso_calls == 1 && strstr(output, "signature_verification=rsa_sha256_pkcs1_verified"));
+		assert(access(path, F_OK) != 0);
+		puts("PASS extended reader limit is checked before bootstrap/PIN; login/application failure blocks PSO and final reset failure prevents saving a valid signature");
+		for (int mutation = 0; mutation < 19; mutation++) {
+			sign_defaults(); test_state.locks = 1; test_reader.max_recv_size = 291; memset(&probe_guard, 0, sizeof(probe_guard));
+			probe_guard.reader = &test_reader; probe_guard.original = &test_ops; probe_guard.sign_mode = probe_guard.signature_extended_mode = 1;
+			probe_guard.signature_application_mode = probe_guard.signature_application_verified = 1;
+			probe_guard.login_authenticated = probe_guard.signature_mse_verified = 1; probe_guard.phase = PROBE_SIGNATURE_PSO;
+			unsigned char wire[74] = {0}, reply[291]; memcpy(wire, "\x0c\x2a\x9e\x9a\0\0\x41\x87\x31\x01", 10);
+			memcpy(wire + 58, "\x97\x02\x01\0\x8e\x08", 6); memcpy(wire + 72, "\x01\x23", 2);
+			memcpy(probe_guard.expected, wire, 74); probe_guard.expected_size = 74;
+			sc_apdu_t a; sc_format_apdu(&test_card, &a, SC_APDU_CASE_4_EXT, 0x2A, 0x9E, 0x9A);
+			a.cla = 0x0C; a.le = a.resplen = 291; a.resp = reply; a.data = wire + 7; a.lc = a.datalen = 65;
+			if (mutation == 0) probe_guard.signature_extended_mode = 0;
+			if (mutation == 1) probe_guard.login_authenticated = 0;
+			if (mutation == 2) probe_guard.signature_application_verified = 0;
+			if (mutation == 3) probe_guard.signature_mse_verified = 0;
+			if (mutation == 4) a.cse = SC_APDU_CASE_4_SHORT;
+			if (mutation == 5) a.le = 256;
+			if (mutation == 6) a.resplen = 290;
+			if (mutation == 7) a.cla = 0;
+			if (mutation == 8) a.p1 = 0;
+			if (mutation == 9) a.p2 = 0;
+			if (mutation == 10) wire[10] ^= 1;
+			if (mutation == 11) probe_guard.called = 1;
+			if (mutation == 12) test_reader.max_recv_size = 290;
+			if (mutation == 13) wire[59] = 1;
+			if (mutation == 14) probe_guard.expected[73] = 0;
+			if (mutation == 15) probe_guard.signature_application_mode = 0;
+			if (mutation == 16) a.control = 1;
+			if (mutation == 17) a.flags |= SC_APDU_FLAGS_CHAINING;
+			if (mutation == 18) { probe_guard.phase = PROBE_SIGNATURE_GET; a.ins = 0xC0; a.p1 = a.p2 = 0; a.le = 256; a.lc = a.datalen = 0; a.cse = SC_APDU_CASE_2_SHORT; }
+			assert(probe_guard_transmit(&test_reader, &a) < 0 && probe_guard.blocked && !test_state.physical);
+		}
+		puts("PASS extended guard requires explicit mode/login/application/MSE/readerlimit and exact case/header/DO97/Le/ciphertext, rejects unsolicited GET/control/chaining/repetition before backend");
+	}
 	unlink(certificate_path); rmdir(directory_path); rmdir(root); jcop4_ca_pending_clear(&test_flow.derived); EVP_PKEY_free(test_flow.peer); EVP_PKEY_free(rsa_fixture); return 0;
 }

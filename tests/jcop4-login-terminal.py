@@ -187,6 +187,22 @@ exec "$@"
     status = subprocess.run(["bash", str(launcher), "0", "--sign-application-once"], env=env, stdin=subprocess.DEVNULL,
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE).returncode
     assert status == 2 and (fixture / "calls").read_text() == before
+    env["FIXTURE_SIGN_ARGUMENT"] = "--sign-extended-once"
+    for expected in (0, 1, 124):
+        env["FIXTURE_HELPER_EXIT"] = str(expected)
+        status, output = pty_run(["bash", str(launcher), "0", "--sign-extended-once"], tty_stdout=True, environment=env)
+        assert status == expected
+        report = Path(next(line.removeprefix("Informe: ").strip() for line in output.decode().splitlines() if line.startswith("Informe: ")))
+        assert "mode=anonymous_channel_signature_extended_once_rsa2048_sha256" in report.read_text()
+        assert "policy=application_context_pso_extended291_only" in report.read_text()
+        assert report.parent.name.startswith("jcop4-channel-signature-extended-")
+        assert report.stat().st_mode & 0o777 == 0o600 and report.parent.stat().st_mode & 0o777 == 0o700
+    assert (fixture / "calls").read_text()[len(before):].splitlines() == ["build", "helper"] * 3
+    before = (fixture / "calls").read_text()
+    status = subprocess.run(["bash", str(launcher), "0", "--sign-extended-once"], env=env, stdin=subprocess.DEVNULL,
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE).returncode
+    assert status == 2 and (fixture / "calls").read_text() == before
 print("PASS login launcher requires a terminal, selects separate binary, isolates tracing, closes stdin, preserves private reports and never retries failures/timeouts/build errors")
 print("PASS signature launcher explicitly selects the separate binary/cached public certificate/private output and foreground timeout, with no retries or nonterminal PIN input")
 print("PASS application-signature launcher preserves its explicit argument/private prefix and inherited protections with one invocation, no retry and terminal required")
+print("PASS extended-signature launcher preserves opt-in flag/private prefix/explicit PSO policy and0/1/124 with one invocation and terminal required")

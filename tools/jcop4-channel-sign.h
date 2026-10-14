@@ -34,7 +34,7 @@ out:
 static int probe_signature_get(void *context, const unsigned char *wire, size_t size,
 		unsigned char *response, size_t capacity, size_t *received)
 {
-	if (!probe_guard.sign_mode || !probe_guard.login_authenticated || !probe_guard.signature_mse_verified ||
+	if (!probe_guard.sign_mode || probe_guard.signature_extended_mode || !probe_guard.login_authenticated || !probe_guard.signature_mse_verified ||
 		(probe_guard.phase != PROBE_SIGNATURE_PSO && probe_guard.phase != PROBE_SIGNATURE_GET) || !probe_guard.called ||
 		(probe_guard.signature_pending_sw & 0xFF00) != 0x6100 || size != 5 || capacity != 258 ||
 		memcmp(wire, "\0\xc0\0\0", 4)) return SC_ERROR_NOT_ALLOWED;
@@ -47,7 +47,7 @@ static int probe_sign_once(sc_card_t *card, struct jcop4_sm_channel *channel)
 {
 	const unsigned char mse_header[4] = {0,0x22,0x81,0xB6}, mse_data[4] = {0x91,2,0x28,0x91};
 	const unsigned char pso_header[4] = {0,0x2A,0x9E,0x9A};
-	unsigned char header[4], body[64], wire[70], first[293], collected[293], plain[256], expected_ssc[16] = {0};
+	unsigned char header[4], body[65], wire[74], first[293], collected[293], plain[256], expected_ssc[16] = {0};
 	size_t body_size, wire_size, received, collected_size, plain_size; unsigned int sw; int rv, result = 1;
 	expected_ssc[15] = 8;
 	if (!probe_guard.sign_mode || !probe_guard.login_authenticated || probe_guard.phase != PROBE_LOGIN_VERIFY ||
@@ -56,11 +56,19 @@ static int probe_sign_once(sc_card_t *card, struct jcop4_sm_channel *channel)
 	if (probe_guard.signature_application_mode && probe_signature_application(card, channel)) goto out;
 	for (int step = 0; step < 2; step++) {
 		const char *label = step ? "signature_pso" : "signature_mse";
-		if (jcop4_sm_seal(channel, step ? pso_header : mse_header, step ? probe_signature.digest : mse_data,
-			step ? 32 : 4, step, step ? 256 : 0, header, body, sizeof(body), &body_size)) goto out;
-		if (body_size != (step ? 64u : 29u)) goto out;
-		memcpy(wire, header, 4); wire[4] = (unsigned char)body_size; memcpy(wire + 5, body, body_size);
-		wire_size = body_size + 6; wire[wire_size - 1] = 0;
+		int extended = step && probe_guard.signature_extended_mode;
+		if (jcop4_sm_seal_policy(channel, step ? pso_header : mse_header, step ? probe_signature.digest : mse_data,
+			step ? 32 : 4, step, step ? 256 : 0, header, body, sizeof(body), &body_size,
+			extended ? JCOP4_SM_LE_TWO_BYTE_256 : JCOP4_SM_LE_SHORT)) goto out;
+		if (body_size != (step ? (extended ? 65u : 64u) : 29u)) goto out;
+		memcpy(wire, header, 4);
+		if (extended) {
+			memcpy(wire + 4, "\0\0\x41", 3); memcpy(wire + 7, body, body_size);
+			wire_size = 74; wire[72] = 1; wire[73] = 0x23;
+		} else {
+			wire[4] = (unsigned char)body_size; memcpy(wire + 5, body, body_size);
+			wire_size = body_size + 6; wire[wire_size - 1] = 0;
+		}
 		probe_phase_set(step ? PROBE_SIGNATURE_PSO : PROBE_SIGNATURE_MSE);
 		memcpy(probe_guard.expected, wire, wire_size); probe_guard.expected_size = wire_size; received = 0;
 		rv = probe_exchange(card, wire, wire_size, first, step ? sizeof(first) : 258, &received);
@@ -80,6 +88,9 @@ static int probe_sign_once(sc_card_t *card, struct jcop4_sm_channel *channel)
 				 * authorize GET RESPONSE, another PSO or success. */
 				response_policy = JCOP4_SM_OUTER_PSO_STATUS_6A82;
 				printf("signature_response_policy=status_only_matching_6A82\nsignature_collection=not_attempted_status_only\nsignature_get_count=0\n");
+			} else if (probe_guard.signature_extended_mode) {
+				/* One direct response only. No physical continuation even on61xx. */
+				printf("signature_collection=not_attempted_extended_no_get\nsignature_get_count=0\n");
 			} else {
 				struct jcop4_response_report report;
 				rv = jcop4_response_collect(first, received, JCOP4_RESPONSE_CLA_ZERO, 293, probe_signature_get, card,

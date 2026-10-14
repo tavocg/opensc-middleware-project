@@ -390,6 +390,15 @@ Exige MAC/9000/control MF válidos y cierre completo; no modifica capacidades
 del driver ni habilita firma extendida. Pasaron10 grupos de transporte
 simulado y las regresiones de codec/probe/login/firma. Ejecutarlo una sola
 vez y revisar el informe antes de continuar.
+La prueba Od74BxHu confirmó SELECT MF extendido con MAC/9000/control válido,
+9APDU y cierre completo, sin PIN. Nuevo `make sign/jcop4-channel-extended READER=0`:
+conserva el login y la selección de aplicación anteriores; solo cambia PSO
+a DO97/2 y transporte extendido Le291. Hace un único intento de PIN y PSO,
+sin GET/reintento, y solo guarda una firma tras verificar RSA/SHA256 y cerrar
+la sesión. Pasaron26 grupos de firma y16 de login/terminal con datos
+sintéticos. Firma real JCOP4 aún pendiente; ejecutar una sola vez y revisar
+el informe si falla.
+[Prueba de firma extendida](docs/jcop4.md#firma-con-pso-extendido-un-único-intento).
 [Detalle](docs/jcop4.md#transporte-extendido-candidato-sin-pin).
 [Protocolo y límites](docs/jcop4.md#diagnóstico-de-firma-rsa2048sha256-bajo-sm).
 El driver aún no firma con JCOP4.
