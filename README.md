@@ -98,9 +98,22 @@ como llave privada la candidata de firma validada; los mecanismos no anuncian
 descifrado, y el token no anuncia escritura ni PIN-pad. Después de cada firma
 se cierra la reserva y el próximo firmado requiere un login explícito.
 El perfil rechaza las opciones PKCS#11 `atomic` y `lock_login`; usa su propia
-reserva y no conserva credenciales para repetir logins. Falta preparar una
-consulta pública del módulo, sin PIN, antes de probar esta integración real.
-No hay otra prueba con tarjeta ahora.
+reserva y no conserva credenciales para repetir logins. La consulta pública
+acotada del módulo ya está preparada y probada con lector simulado. El próximo
+paso, desde la terminal del usuario, con la misma JCOP4 y otros clientes cerrados:
+
+```bash
+nix develop -c make inspect/jcop4-pkcs11 READER=0
+```
+
+Ejecutarla una sola vez, sin PIN. Comprueba token, mecanismos, certificados y
+objetos públicos con el módulo local; no llama login ni firma. Un filtro limita
+los SELECT/READ a archivos públicos conocidos y detiene el primer fallo. El
+informe privado contiene resultados y conteos, sin identidad ni certificados.
+Si falla o vence el timeout, revisar etapa y cierre antes de otra operación;
+no repetir ni introducir PIN por inercia. La exploración inicial de PCSC puede
+consultar capacidades de otros lectores; el filtro limita las conexiones del
+módulo a uno. Todavía no se ha ejecutado este diagnóstico sobre la tarjeta real.
 Los párrafos siguientes conservan los pasos históricos de investigación.
 La selección temporal RSA/SHA-256 obtuvo `9000`; VERIFY vacío devolvió
 `63C7`, con siete intentos disponibles, PIN global 1 y formato UTF-8.

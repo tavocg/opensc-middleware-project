@@ -34,6 +34,7 @@
 .PHONY: test/iasecc-chipdoc-routing
 .PHONY: test/iasecc-chipdoc-init
 .PHONY: test/iasecc-chipdoc-pkcs11
+.PHONY: inspect/jcop4-pkcs11 test/jcop4-pkcs11-public
 
 PDF_INPUT ?= doc.pdf
 PDF_OUTPUT ?= local/jcop3-cli.pdf
@@ -118,6 +119,8 @@ help:
 		'make test/iasecc-chipdoc-routing Prueba routing por tarjeta y lifecycle PKCS15 con lector simulado.' \
 		'make test/iasecc-chipdoc-init Prueba configuración/init/bind nativo con lector y ficheros simulados.' \
 		'make test/iasecc-chipdoc-pkcs11 Prueba el módulo PKCS#11 compilado con tarjeta y PIN simulados.' \
+		'make inspect/jcop4-pkcs11 READER=0 Consulta pública acotada del módulo JCOP4, sin PIN ni login.' \
+		'make test/jcop4-pkcs11-public Prueba el diagnóstico público y su lanzador con lector simulado.' \
 		'make test/jcop4-reader-features Prueba el diagnóstico del lector con PC/SC simulado.' \
 		'make test/jcop4-channel-sign Prueba firma/guard/verificación con transporte y PIN ficticios.' \
 		'make test/jcop4-channel-kdf Prueba la derivación candidata AES128 con datos sintéticos, sin tarjeta ni PIN.' \
@@ -431,3 +434,10 @@ test/iasecc-chipdoc-init:
 
 test/iasecc-chipdoc-pkcs11:
 	@bash scripts/test-iasecc-chipdoc-pkcs11.sh
+
+inspect/jcop4-pkcs11:
+	@bash scripts/probe-jcop4-pkcs11.sh "$(READER)"
+
+test/jcop4-pkcs11-public:
+	@bash scripts/test-jcop4-pkcs11-public.sh
+	@bash tests/jcop4-pkcs11-launcher.sh

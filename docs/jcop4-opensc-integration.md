@@ -1,7 +1,7 @@
 # Integrar el perfil JCOP4 observado en OpenSC
 
 Estado al 14 de octubre de 2026. Base de esta etapa: proyecto
-`348e37b`, submódulo OpenSC `0d1f8bd26`. Este documento describe la integración.
+`528db12`, submódulo OpenSC `52057cc6a`. Este documento describe la integración.
 **Perfil/estado/limpieza, canal/bootstrap/providers y operaciones
 PIN/firma privados están implementados. Frontend PKCS15 y routing privado
 instalado por tarjeta pasaron con callbacks de producción y lector simulado.
@@ -9,7 +9,8 @@ Configuración/init y activación automática desde el binding nativo PKCS15
 están implementados para una opción explícita, con firma verificada en
 transporte simulado. El módulo PKCS11 del build ya pasó nueve grupos de
 mecanismos, objetos, sesiones y firmas con contexto/lector/PIN sintéticos.
-Falta diagnóstico público sin PIN y prueba real de esta integración.**
+El diagnóstico público sin PIN ya está preparado y probado en software;
+falta su ejecución por el usuario y la prueba real de esta integración.**
 
 ## Evidencia disponible
 
@@ -935,3 +936,71 @@ compruebe el binding y certificados/mecanismos reales. Después, una firma
 PKCS11 acotada y verificable; GUI/consecutivas/reinserción reales y RSA3072
 siguen pendientes. Helper JnUUiy9x es la firma real vigente; no nueva captura
 ni PCSC/hardware/PIN real/GUI/Idopte desde esta sesión.
+
+## Diagnóstico público acotado del módulo local
+
+`make inspect/jcop4-pkcs11 READER=0` ejecuta una sola consulta pública, sin
+stdin, C_Login, C_Sign, PIN, Idopte o GUI. El ejecutable exige la ruta absoluta
+del módulo del build y comprueba su origen con dladdr. Interpone únicamente
+siete APIs de contexto/lectores/conexión; las reenvía a libOpenSC y presenta
+al módulo un solo lector elegido. Exige el driver PCSC e iasecc integrado,
+depuración0, OpenSSL3, ATR conocido, T=1 y límites declarados139/291. Estos
+límites no son máximos físicos ni prueban PIN-pad. El perfil optativo y las
+cachés desactivadas quedan en una configuración privada del diagnóstico.
+
+La creación real del contexto PCSC puede conectar temporalmente otros
+lectores y consultar sus capacidades antes de instalar el filtro. No se
+cuentan esas operaciones como conexiones del módulo: el diagnóstico limita
+el namespace y los posteriores comandos de tarjeta, no reemplaza el backend
+PCSC ni demuestra una única conexión física durante toda la inicialización.
+Escape, PIN-pad y PACE quedan deshabilitados para el diagnóstico.
+
+El filtro por instancia del lector admite únicamente SELECT corto en canal
+básico de MF, EF.DIR absoluto2F00, el AID conocido y los FID públicos
+5031/5032/7001/7002/7004/7005/B001/B002 dentro de esa aplicación. READ BINARY
+corto queda limitado por offset, tamaño y presupuesto por archivo; READ RECORD
+solo permite los cuatro primeros registros secuenciales de EF.DIR. Los techos
+1024 de EF.DIR/ODF/TokenInfo son límites locales; los restantes corresponden a
+los tamaños públicos observados300/2048/4096/2368/3000/3000. Presupuesto de
+lectura doble por archivo y máximo128 invocaciones del backend; no es un
+conteo de transmisiones físicas internas de PCSC. No hay VERIFY ni consulta
+vacía de PIN, MSE, GA, SM, PSO, D004, cambios, escrituras, extended, SFI,
+chaining, resets explícitos o fallback. Se fijan NO_RETRY_WL/NO_GET_RESP/NO_SM;
+primer fallo de guard, transporte, tamaño o SW bloquea toda continuación.
+Solo9000 y EOF6282 de lectura/6A83 de READ RECORD son aceptados.
+
+El módulo enumera EF.DIR con las funciones reales, exige una aplicación
+conocida por AID/DF_NAME y realiza binding PKCS15 nativo. Comprueba token
+readonly, mecanismos RSA2048/SHA256 y digests software, sesión pública,
+certificados DER RSA2048 y coincidencia de IDs con llaves públicas en memoria.
+Las privadas permanecen ocultas sin login. Esa coincidencia no demuestra
+identidad, confianza del certificado ni correspondencia criptográfica de
+cada llave. Certificados, IDs, etiquetas, nombres de lector, respuestas y
+secretos no se imprimen. Stdout/stderr de las bibliotecas se descartan; el
+informe contiene solo resultados, conteos, etapas y primer fallo.
+
+El lanzador vacía el entorno, fija las bibliotecas locales, desactiva core
+dumps y usa timeout45s/TERM+5s/KILL sin repetir. Directorio0700, informe y
+configuración0600. Cierra sesión/finaliza y comprueba por separado intentos y
+resultados de desconexión de tarjeta/lector, liberación de contexto y balance
+de locks; Finalize0 aislado no acredita cierre. Un resultado0 del backend
+sigue siendo su resultado, no una confirmación física independiente. No se
+establece canal autenticado que necesite reset final. Ante timeout o cierre
+incompleto, cerrar clientes/reinsertar antes de otra operación; revisar el
+informe antes de repetir o introducir PIN.
+
+`make test/jcop4-pkcs11-public` pasó cinco grupos nativos con el ejecutable
+de producción incluido, módulo local real, contexto/lector/archivos/DER y
+credenciales de software: binding y objetos públicos; sc_enum_apps/EF.DIR
+real y SELECT absoluto abreviado; ATR/protocolo/límites/debug/lector incorrectos
+sin APDU; primer error/SW61/transporte/tamaño y fallos de cierre; comandos
+prohibidos y bloqueo permanente. Dos grupos del lanzador verifican entorno,
+permisos, timeout simulado, estado propagado y ausencia de reintentos. Los
+nueve grupos previos del módulo se repitieron por compartir el fixture y
+pasaron. ASan/UBSan detect_leaks0 pasó los cinco grupos del diagnóstico;
+módulo/libOpenSC precompilados no instrumentados, sin prueba de fugas. La
+primera expectativa de liberación del fixture usaba0: sc_free_apps realmente
+marca app_count=-1; se corrigió el test, no el backend ni los permisos.
+No PCSC/hardware/PIN real/GUI/Idopte por el agente. Suites no modificadas no
+repetidas. El diagnóstico real y firma PKCS11/GUI/consecutivas/reinserción y
+RSA3072 siguen pendientes.

@@ -9,6 +9,56 @@ transporte simulado. PIN/GUI también los ejecuta el usuario. Esto sustituye
 la autorización anterior de hardware por el agente; conservar límites de
 cada diagnóstico y privacidad. Git sigue autorizado pero .git solo lectura.
 
+**Última revisión: diagnóstico público del módulo preparado, sin hardware.**
+Principal `528db12`, OpenSC `52057cc6a`, limpios al comenzar. Firma real
+JnUUiy9x vigente; no PCSC/hardware/PIN real/GUI/Idopte/captura/informe nuevo.
+Submódulo/driver/helpers autenticados/flake/lock intactos. No repetir firma,
+estados/D004 ni asumir contador máximo7 o efecto de reinicio.
+
+Nuevo `make inspect/jcop4-pkcs11 READER=0`: helper público separado, módulo
+local fijado y comprobado con dladdr, APIs reales reenviadas por7 símbolos
+solo del ejecutable. Namespace del módulo limitado al lector elegido, driver
+PCSC+iasecc integrado/debug0/OpenSSL3/ATR conocido/T1/límites139/291. Contexto
+PCSC inicial puede consultar/conectar temporalmente otros lectores antes del
+filtro: no prometer una única conexión física ni control de esa exploración.
+Fuerza perfil optativo, cachés0, atomic0/lock_login0, PIN-pad/PACE desactivados.
+
+Guard antes del backend: SELECT corto MF/EF.DIR absoluto2F00/AID conocido y
+FID públicos5031/5032/7001/7002/7004/7005/B001/B002 relativos al AID; READ corto
+con offset/tamaño/presupuesto doble porarchivo, READ RECORD soloEF.DIR1..4.
+Techos1024 de2F00/5031/5032 locales, restantes observados; máximo128 llamadas
+backend, no conteo físico internoPCSC. NO_RETRY_WL/NO_GET_RESP/NO_SM. Primer
+bloqueo/transporte/SW/tamaño definitivo; sin fallback. Bloquea VERIFY incluso
+vacío/MSE/GA/SM/PSO/D004/escrituras/extended/SFI/chaining/reset explícito.
+No C_Login/C_Sign/PIN; consulta token/mecanismos/certificadosDER/IDs públicos
+enmemoria, privadas ocultas. No validar identidad/confianza con la coincidencia
+de IDs. Stdout/stderr de bibliotecas descartados, reporte solo enums/conteos/
+resultados/primerfallo/cierre. Lanzador envvacío/stdinvacío/core0/45sTERM+5sKILL,
+una invocación, informe+config0600/directorio0700. Reporta intentos además de
+resultados para distinguir cierre noejecutado. Finalize0 solo no acredita
+cierre físico. Ante timeout/cierre incompleto, cerrar clientes/reinsertar
+antes de otra operación, no repetir ni PIN por inercia.
+
+Pasaron **5 grupos nativos+2 lanzador** de make test/jcop4-pkcs11-public:
+helper producción/módulo/bind/DER reales con contexto/lector sintéticos,
+sc_enum_apps/EF.DIR real, selección abreviada2F00, lectura pública, exclusión
+del otro lector, privacidad, guard/fallos/transporte/cierre/timeout simulado.
+ASan/UBSan5 detect_leaks0, sin instrumentar módulo/libOpenSC precompilados
+ni probar fugas. Fixture previo mainguard compartido; **9 grupos anteriores
+PKCS11** repetidos/pasaron. Error inicial del fixture fue esperar app_count0
+tras sc_free_apps, fuente establece-1; corregido solo test. Helper real
+compilado; suites no modificadas no repetidas.
+
+**Siguiente intervención:** mismaJCOP4 y otros clientes/firmador cerrados,
+`nix develop -c make inspect/jcop4-pkcs11 READER=0`, una sola vez desde terminal
+del usuario, sin PIN. Revisar etapa/primerfallo/policy/objetos/mecanismos y
+intentos/resultados de cierre antes de pedir otra operación. Enumeración y
+firma PKCS11 real/GUI/consecutivas/reinserción/RSA3072 pendientes. Git autorizado
+pero git add falló creando index.lock por .git sololectura: no eludir.
+Commit principal incluye6archivos nuevos
+(helper/build/probe/testscript/2tests), mainguard del fixturePKCS11, Makefile/
+README/AGENTS/docs; ningún build/captura/archivo privado/submódulo.
+
 **Última revisión: módulo PKCS11 del build probado con contexto/tarjeta sintéticos.**
 Principal `348e37b`, OpenSC `0d1f8bd26`, limpios al comenzar. Firma real
 JnUUiy9x vigente, sin PCSC/hardware/PIN real/GUI/Idopte/captura/informe nuevo.

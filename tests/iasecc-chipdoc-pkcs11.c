@@ -111,6 +111,7 @@ static CK_OBJECT_HANDLE find(CK_SESSION_HANDLE h, CK_OBJECT_CLASS type)
 	assert(api->C_FindObjects(h,&object,1,&count) == CKR_OK && count == 1);
 	assert(api->C_FindObjectsFinal(h) == CKR_OK); return object;
 }
+#ifndef IASECC_CHIPDOC_PKCS11_FIXTURE
 int main(int argc, char **argv)
 {
 	(void)thread_ops;
@@ -263,3 +264,4 @@ int main(int argc, char **argv)
 	OSSL_PROVIDER_unload(alternate_provider.defprov); OSSL_LIB_CTX_free(alternate_provider.libctx);
 	return 0;
 }
+#endif

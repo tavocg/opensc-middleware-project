@@ -6290,3 +6290,15 @@ serializer, sin instrumentar módulo/libOpenSC precompilados ni probar fugas.
 Falta diagnóstico público sin PIN por usuario antes de firma PKCS11 real.
 RSA3072/GUI/consecutivas/reinserción reales pendientes, JnUUiy9x sigue vigente.
 [Detalles](jcop4-opensc-integration.md#módulo-pkcs11-compilado-con-contexto-y-tarjeta-sintéticos).
+
+### Consulta pública del módulo antes de otra firma
+
+Está preparado `make inspect/jcop4-pkcs11 READER=0`, una sola invocación
+del módulo local, sin PIN/login/firma. Filtro previo al backend permite solo
+SELECT/READ de los archivos públicos conocidos; primer fallo detiene todo
+intercambio. Informe privado de resultados y conteos, sin objetos/identidades.
+Cinco grupos nativos y dos del lanzador pasaron en software, también ASan/UBSan
+nativo detect_leaks0; las bibliotecas precompiladas no se instrumentaron ni
+se probaron fugas. Se repitieron y pasaron nueve grupos del módulo al compartir
+fixture. Falta la ejecución real por el usuario antes de pedir otro PIN.
+[Alcance y límites](jcop4-opensc-integration.md#diagnóstico-público-acotado-del-módulo-local).
