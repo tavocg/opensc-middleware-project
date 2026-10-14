@@ -3824,6 +3824,100 @@ inercia. La rama SM efectiva y la causa VERIFY6982 siguen pendientes, igual que
 firma libre JCOP4/RSA3072. No se necesita la oferta de firmas fallidas para
 esta consulta y los estados7/15 previos no prueban máximos o reinicios.
 
+## D004 confirmado y consulta aislada de parámetros
+
+Principal `fa9c8f2`, OpenSC `3dfef6704`, ambos limpios al comenzar. Se revisó
+el informe del usuario `local/jcop4-filed004-qSMBuWC3/report.txt`,
+**2026-10-14T01:38:49Z** (13 de octubre CR). Inventario, compilación, conexión,
+transacción y selección de aplicación correctos. **SELECT D004 transporte0 /
+SW9000**, EF transparente de **137 bytes**, atributo directo86 no interpretado;
+unlock y proceso0. Solo control de archivo: no READ, PIN, autenticación ni firma.
+Esto confirma existencia/tamaño en ese AID; no contenido, regla de acceso,
+necesidad de canal o causa de VERIFY6982. No se repitió SELECT-only.
+
+### Contraste estático del contenido esperado
+
+Se amplió la revisión de `371ca0` en el mismo libt_ias.so/hash documentado.
+Después de la lectura de parámetros, usa el byte en posición2 como discriminador
+con tabla en `4b9868`. El valor18 selecciona rama `3720e0`, que carga `0x2cc`
+(716) para **EC_GROUP_new_by_curve_name**. En los headers OpenSSL instalados,
+716 es NID_secp521r1. Luego separa los bytes desde posición5 en dos mitades y
+llama **BN_bin2bn** (`63800`) para convertirlas; `236860` llama
+**EC_POINT_set_affine_coordinates** (`63330`). Son símbolos PLT reales,
+distintos de las etiquetas vecinas ficticias del desensamblador.
+
+Para longitud137 las dos mitades tienen66 bytes. La hipótesis comprobable es
+un punto P-521 no comprimido de133 bytes desde posición4, con prefijo04.
+**No se observaron aún esos bytes en esta tarjeta**, ni se conocen todas las
+funciones de los otros campos de cabecera. El ZIP usa SELECT D004 y READ
+00B0000089, pero lo llama EF.CardAccess; esa etiqueta no constituye definición
+estándar ni evidencia de PACE. El parser instalado aporta un precedente
+independiente para consultar parámetros antes de abrir canal/verificar PIN,
+y el SELECT actual corrobora ubicación y tamaño. Aún no demuestra que la rama
+anónima sea la efectiva durante login de esta personalización.
+
+### Nuevo diagnóstico sin PIN ni apertura de canal
+
+`make inspect/jcop4-dh-parameters READER=0` usa el helper default y controles
+previos de ATR/AID anunciado. Selecciona ADF y D004 con la misma APDU de control.
+Antes de leer exige una sola plantilla FCI/FCP válida y campos directos únicos:
+83=D004, 82 transparente ordinario y80=137. Ausencia/duplicación/contradicción,
+truncamiento, SW distinto de9000, transporte o identidad diferentes detienen
+sin READ; 6A82 también hace fallar este modo, a diferencia del resumen SELECT-only.
+**No deriva permiso de86 ni lo interpreta como ACL**: la nueva lectura se
+fundamenta en el precedente del parser y el diagnóstico de tamaño/contexto.
+
+Después transmite **un solo READ BINARY 00 B0 00 00 89**, canal básico, sin
+SFI/datos de entrada; buffer137 y respuesta9000/exactamente137 obligatorios.
+No GET RESPONSE, repetición, continuación ni fallback, incluso ante61xx/6282/
+6982. No binding, objetos, certificados, VERIFY siquiera vacío, challenge,
+MSE, GA, SM, PIN, firma ni administración. No cambios del observador/driver.
+El modo filed004 anterior sigue SELECT-only.
+
+El decoder solo reconoce longitud137, discriminador18 y prefijo04 en posición4.
+Valida localmente el punto mediante
+[EC_POINT_oct2point](https://docs.openssl.org/3.5/man3/EC_POINT_new/) y exige
+que no sea infinito y
+[pertenezca a la curva](https://docs.openssl.org/3.5/man3/EC_POINT_add/).
+La salida admite exclusivamente etiquetas fijas de curva/validación/resultado,
+transporte/SW y control confirmado. **No coordenadas, cabecera, claves, hash,
+seriales, contenido bruto ni fichero de captura**. El buffer de lectura se
+borra al terminar. Un punto válido no acredita autenticidad, vínculo con la
+llave de firma, protocolo CA/PACE, variante/KDF/MAC ni canal establecido.
+P-521 aquí sería parámetro del canal; no cambia el certificado RSA2048 de firma.
+
+Se agrega enlace explícito libcrypto al constructor; dependencia OpenSSL ya
+estaba en el flake, sin cambiarlo ni el lock. **88 comprobaciones del helper
+y95 del lanzador**, transporte ficticio y punto generador sintético P-521.
+Cubren APDU única/exacta y flags sin reintento, selección/contexto inválidos,
+control duplicado/malformado/tamaño distinto, errores/continuaciones/longitudes,
+formato desconocido, punto inválido y salida exclusivamente fija; stdin vacío,
+isolación de flags y privacidad0700/0600. Helper real compilado contra ambos
+build/opensc-offline y build/opensc, sin instalar nada. Observador162, firma6 y
+operación12 intactos; suites previas vigentes, sin repetirlas por documentación.
+
+Intento del agente `timeout 35s make inspect/jcop4-dh-parameters READER=0`:
+`local/jcop4-dh-parameters-D0xMmCEq/report.txt`, **2026-10-14T02:00:05Z**
+(13 de octubre CR). Inventario no encontró lectores y falló la conexión antes
+del helper: **no SELECT ni READ D004 en ese intento**, sin SW, PIN o cambios
+de contador. Informe0600/directorio0700. No confundir con rechazo de tarjeta
+ni descartar el SELECT9000 previo del usuario. Sin reintentos del entorno.
+
+Siguiente intervención, misma JCOP4/lector accesibles y otros clientes cerrados:
+
+```sh
+nix develop -c make inspect/jcop4-dh-parameters READER=0
+```
+
+No introducir PIN. Revisar únicamente campos dh_control_result/dh_read_transport/
+dh_read_sw/dh_parameters_result/curve/point. No volcar informe o inventario
+completos. Si el formato/SW difiere, detener sin probar otra curva/ubicación o
+pedir PIN. Si valida el punto, analizar el acuerdo de claves y su variante
+antes de intentar MSE/GA/SM; no portar las discrepancias 3DES/AES del ZIP.
+JCOP4/RSA3072 y la causa de VERIFY6982 siguen pendientes. Se intentó añadir
+los archivos a Git; .git sigue montado solo lectura y no permitió index.lock.
+El commit del principal debe incluir el nuevo tools/jcop4-dh-info.h.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño

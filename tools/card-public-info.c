@@ -10,8 +10,9 @@
 #include "libopensc/opensc.h"
 #include "libopensc/pkcs15.h"
 #include "libopensc/asn1.h"
+#include "jcop4-dh-info.h"
 
-enum inspect_mode { INSPECT_PKCS15, INSPECT_SIGN_SETUP, INSPECT_PIN_STATUS, INSPECT_SECURITY_INFO, INSPECT_PIN_POLICY, INSPECT_ODF_MAP, INSPECT_FILE4141, INSPECT_FILE4109, INSPECT_FILE7001, INSPECT_FILE7002, INSPECT_FILE7004, INSPECT_FILE7005, INSPECT_FILEDF0F, INSPECT_FILEB001, INSPECT_FILEB002, INSPECT_FILED004, INSPECT_PUBLIC_KEYS, INSPECT_CERTIFICATE_PATHS };
+enum inspect_mode { INSPECT_PKCS15, INSPECT_SIGN_SETUP, INSPECT_PIN_STATUS, INSPECT_SECURITY_INFO, INSPECT_PIN_POLICY, INSPECT_ODF_MAP, INSPECT_FILE4141, INSPECT_FILE4109, INSPECT_FILE7001, INSPECT_FILE7002, INSPECT_FILE7004, INSPECT_FILE7005, INSPECT_FILEDF0F, INSPECT_FILEB001, INSPECT_FILEB002, INSPECT_FILED004, INSPECT_DH_PARAMETERS, INSPECT_PUBLIC_KEYS, INSPECT_CERTIFICATE_PATHS };
 
 static void print_hex(const char *name, const unsigned char *value, size_t len)
 {
@@ -320,7 +321,7 @@ static int print_file4141_metadata(const unsigned char *buf, size_t size)
 	return print_file_metadata(buf, size, 0x4141);
 }
 
-static int inspect_file_metadata(sc_card_t *card, const struct sc_aid *aid, unsigned int fid_number)
+static int inspect_file_metadata(sc_card_t *card, const struct sc_aid *aid, unsigned int fid_number, int read_dh)
 {
 	const unsigned char fid[] = { fid_number >> 8, fid_number & 0xFF };
 	char transport_name[40];
@@ -348,9 +349,10 @@ static int inspect_file_metadata(sc_card_t *card, const struct sc_aid *aid, unsi
 	printf("file%04X_select_sw=%02X%02X\n", fid_number, apdu.sw1, apdu.sw2);
 	if (apdu.sw1 == 0x6A && apdu.sw2 == 0x82) {
 		printf("file%04X_result=not_found_in_known_application_no_read\n", fid_number);
-		return 0;
+		return read_dh ? 1 : 0;
 	}
 	if (apdu.sw1 != 0x90 || apdu.sw2 != 0 || apdu.resplen > sizeof(response)) return 1;
+	if (read_dh) return fid_number == 0xD004 ? inspect_d004_parameters(card, response, apdu.resplen) : 1;
 	if (fid_number == 0x4141 ? print_file4141_metadata(response, apdu.resplen) :
 			print_file_metadata(response, apdu.resplen, fid_number)) {
 		printf("file%04X_result=selected_metadata_unrecognized_no_read\n", fid_number);
@@ -824,7 +826,7 @@ int main(int argc, char **argv)
 	memset(&app_aid, 0, sizeof(app_aid));
 	app_aid.len = sizeof(app_aid.value);
 	if (argc == 5 && ((strcmp(argv[3], "--pkcs15") && strcmp(argv[3], "--sign-setup") &&
-			strcmp(argv[3], "--pin-status") && strcmp(argv[3], "--security-info") && strcmp(argv[3], "--pin-policy") && strcmp(argv[3], "--odf-map") && strcmp(argv[3], "--file4141") && strcmp(argv[3], "--file4109") && strcmp(argv[3], "--file7001") && strcmp(argv[3], "--file7002") && strcmp(argv[3], "--file7004") && strcmp(argv[3], "--file7005") && strcmp(argv[3], "--fileb001") && strcmp(argv[3], "--fileb002") && strcmp(argv[3], "--filed004") && strcmp(argv[3], "--filedf0f") && strcmp(argv[3], "--public-keys") && strcmp(argv[3], "--certificate-paths")) ||
+			strcmp(argv[3], "--pin-status") && strcmp(argv[3], "--security-info") && strcmp(argv[3], "--pin-policy") && strcmp(argv[3], "--odf-map") && strcmp(argv[3], "--file4141") && strcmp(argv[3], "--file4109") && strcmp(argv[3], "--file7001") && strcmp(argv[3], "--file7002") && strcmp(argv[3], "--file7004") && strcmp(argv[3], "--file7005") && strcmp(argv[3], "--fileb001") && strcmp(argv[3], "--fileb002") && strcmp(argv[3], "--filed004") && strcmp(argv[3], "--dh-parameters") && strcmp(argv[3], "--filedf0f") && strcmp(argv[3], "--public-keys") && strcmp(argv[3], "--certificate-paths")) ||
 			sc_hex_to_bin(argv[4], app_aid.value, &app_aid.len) < 0 || !app_aid.len))
 		return 2;
 
@@ -853,6 +855,7 @@ int main(int argc, char **argv)
 			!strcmp(argv[3], "--fileb001") ? INSPECT_FILEB001 :
 			!strcmp(argv[3], "--fileb002") ? INSPECT_FILEB002 :
 			!strcmp(argv[3], "--filed004") ? INSPECT_FILED004 :
+			!strcmp(argv[3], "--dh-parameters") ? INSPECT_DH_PARAMETERS :
 			!strcmp(argv[3], "--public-keys") ? INSPECT_PUBLIC_KEYS :
 			!strcmp(argv[3], "--certificate-paths") ? INSPECT_CERTIFICATE_PATHS :
 			!strcmp(argv[3], "--pin-policy") ? INSPECT_PIN_POLICY : INSPECT_SECURITY_INFO;
@@ -914,8 +917,8 @@ int main(int argc, char **argv)
 			printf("application_label=%s\n", card->app[i]->label ? card->app[i]->label : "");
 		}
 	}
-	status = argc == 5 ? ((mode == INSPECT_FILE4141 || mode == INSPECT_FILE4109 || mode == INSPECT_FILE7001 || mode == INSPECT_FILE7002 || mode == INSPECT_FILE7004 || mode == INSPECT_FILE7005 || mode == INSPECT_FILEDF0F || mode == INSPECT_FILEB001 || mode == INSPECT_FILEB002 || mode == INSPECT_FILED004) ?
-		inspect_file_metadata(card, &app_aid, mode == INSPECT_FILE4141 ? 0x4141 : mode == INSPECT_FILE4109 ? 0x4109 : mode == INSPECT_FILE7001 ? 0x7001 : mode == INSPECT_FILE7002 ? 0x7002 : mode == INSPECT_FILE7004 ? 0x7004 : mode == INSPECT_FILE7005 ? 0x7005 : mode == INSPECT_FILEB001 ? 0xB001 : mode == INSPECT_FILEB002 ? 0xB002 : mode == INSPECT_FILED004 ? 0xD004 : 0xDF0F) :
+	status = argc == 5 ? ((mode == INSPECT_FILE4141 || mode == INSPECT_FILE4109 || mode == INSPECT_FILE7001 || mode == INSPECT_FILE7002 || mode == INSPECT_FILE7004 || mode == INSPECT_FILE7005 || mode == INSPECT_FILEDF0F || mode == INSPECT_FILEB001 || mode == INSPECT_FILEB002 || mode == INSPECT_FILED004 || mode == INSPECT_DH_PARAMETERS) ?
+		inspect_file_metadata(card, &app_aid, mode == INSPECT_FILE4141 ? 0x4141 : mode == INSPECT_FILE4109 ? 0x4109 : mode == INSPECT_FILE7001 ? 0x7001 : mode == INSPECT_FILE7002 ? 0x7002 : mode == INSPECT_FILE7004 ? 0x7004 : mode == INSPECT_FILE7005 ? 0x7005 : mode == INSPECT_FILEB001 ? 0xB001 : mode == INSPECT_FILEB002 ? 0xB002 : (mode == INSPECT_FILED004 || mode == INSPECT_DH_PARAMETERS) ? 0xD004 : 0xDF0F, mode == INSPECT_DH_PARAMETERS) :
 		mode == INSPECT_ODF_MAP ? inspect_odf_map(card, &app_aid) :
 		inspect_native_pkcs15(card, &app_aid, mode)) : 0;
 out:

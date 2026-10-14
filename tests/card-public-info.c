@@ -35,6 +35,9 @@ static int odf_mode, odf_select_calls, odf_read_calls, odf_select_result, odf_re
 static size_t odf_size;
 static int file4141_wrongfid, file4141_mode, file4141_calls, file4141_transport, file4141_sw;
 static size_t file4141_size;
+static int dh_mode, dh_calls, dh_transport, dh_sw;
+static size_t dh_size;
+static unsigned char fixture_dh[137];
 static const unsigned char fixture_fcp[] = { 0x62, 11, 0x82, 1, 1, 0x83, 2, 0x41, 0x41, 0x80, 2, 0, 32 };
 static const unsigned char fixture_odf[] = { 0xA4, 6, 0x30, 4, 4, 2, 0x70, 5, 0xA8, 6, 0x30, 4, 4, 2, 0x41, 0x41 };
 static char fixture_atr[] = "3b:d5:18:ff:81:91:fe:1f:c3:80:73:c8:21:10:0a";
@@ -167,6 +170,20 @@ int sc_transmit_apdu(sc_card_t *card, sc_apdu_t *apdu)
 {
 	const unsigned char expected[] = { 0x91, 0x02, 0x28, 0x91 };
 	assert(card == &fixture_card && lock_calls == 1 && !unlock_calls);
+	if (dh_mode && file4141_calls == 1) {
+		assert(card == &fixture_card && lock_calls == 1 && !unlock_calls && select_calls == 1 && !dh_calls &&
+				!bind_calls && !object_calls && !cert_calls && !mse_calls && !pin_calls && !odf_read_calls &&
+				apdu->cla == 0 && apdu->ins == 0xB0 && apdu->p1 == 0 && apdu->p2 == 0 &&
+				apdu->cse == SC_APDU_CASE_2_SHORT && !apdu->lc && !apdu->datalen && !apdu->data &&
+				apdu->le == 137 && apdu->resplen == 137 &&
+				(apdu->flags & (SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP)) ==
+				(SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP));
+		dh_calls++;
+		memcpy(apdu->resp, fixture_dh, sizeof(fixture_dh));
+		apdu->resplen = dh_size;
+		apdu->sw1 = dh_sw >> 8; apdu->sw2 = dh_sw & 0xFF;
+		return dh_transport;
+	}
 	if (file4141_mode) {
 		assert(select_calls == 1 && !file4141_calls && !bind_calls && !object_calls && !cert_calls && !mse_calls && !pin_calls &&
 				!odf_read_calls && apdu->cla == 0 && apdu->ins == 0xA4 && apdu->p1 == 2 && apdu->p2 == 0 &&
@@ -181,6 +198,7 @@ int sc_transmit_apdu(sc_card_t *card, sc_apdu_t *apdu)
 			apdu->resp[7] = file4141_mode == 10 ? 0xD0 : file4141_mode >= 8 ? 0xB0 : file4141_mode == 7 ? 0xDF : file4141_mode >= 3 ? 0x70 : 0x41;
 			apdu->resp[8] = file4141_mode == 10 ? 4 : file4141_mode == 9 ? 2 : file4141_mode == 8 ? 1 : file4141_mode == 7 ? 0x0F : file4141_mode == 6 ? 5 : file4141_mode == 5 ? 4 : file4141_mode == 4 ? 2 : file4141_mode == 3 ? 1 : 0x09;
 		}
+		if (dh_mode) apdu->resp[12] = 137;
 		apdu->resplen = file4141_size;
 		apdu->sw1 = file4141_sw >> 8; apdu->sw2 = file4141_sw & 0xFF;
 		return file4141_transport;
@@ -360,6 +378,7 @@ static void reset_fixture(void)
 	odf_select_sw = odf_read_sw = 0x9000; odf_size = sizeof(fixture_odf);
 	file4141_wrongfid = file4141_mode = file4141_calls = file4141_transport = 0;
 	file4141_sw = 0x9000; file4141_size = sizeof(fixture_fcp);
+	dh_mode = dh_calls = dh_transport = 0; dh_sw = 0x9000; dh_size = sizeof(fixture_dh);
 }
 static void expect_metadata_summary(const unsigned char *buf, size_t size, const char *expected)
 {
@@ -848,6 +867,84 @@ int main(void)
 					!bind_calls && !pin_calls && !mse_calls && !odf_read_calls);
 		}
 		puts("PASS B002 treats 6A82 as a context-specific diagnostic and stops on status/transport/malformed data without follow-up");
+	}
+	{
+		char *args[] = { "card-public-info", "2", fixture_atr, "--dh-parameters", fixture_aid };
+		EC_GROUP *group = EC_GROUP_new_by_curve_name(NID_secp521r1);
+		assert(group);
+		memset(fixture_dh, 0, sizeof(fixture_dh)); fixture_dh[2] = 18;
+		assert(EC_POINT_point2oct(group, EC_GROUP_get0_generator(group), POINT_CONVERSION_UNCOMPRESSED,
+				fixture_dh + 4, sizeof(fixture_dh) - 4, NULL) == 133);
+		EC_GROUP_free(group);
+		reset_fixture(); dh_mode = 1; file4141_mode = 10;
+		assert(card_public_info_main(5, args) == 0 && file4141_calls == 1 && dh_calls == 1 && unlock_calls == 1 &&
+				!pin_calls && !bind_calls && !mse_calls && !object_calls && !cert_calls);
+		puts("PASS D004 parameter probe makes one exact 137-byte READ after checked SELECT, validates a synthetic P521 point without authentication");
+		for (int i = 0; i < 6; i++) {
+			reset_fixture(); dh_mode = 1; file4141_mode = 10;
+			if (i == 0) file4141_sw = 0x6A82;
+			if (i == 1) file4141_wrongfid = 1;
+			if (i == 2) file4141_size = sizeof(fixture_fcp) - 1;
+			if (i == 3) mismatch = 1;
+			if (i == 4) select_result = SC_ERROR_READER;
+			if (i == 5) file4141_transport = SC_ERROR_READER;
+			assert(card_public_info_main(5, args) == 1 && !dh_calls && !pin_calls && !bind_calls && !mse_calls);
+		}
+		puts("PASS D004 parameter probe never reads after failed/missing/malformed selection or mismatched card");
+		for (int i = 0; i < 7; i++) {
+			reset_fixture(); dh_mode = 1; file4141_mode = 10;
+			if (i == 0) dh_transport = SC_ERROR_READER;
+			if (i == 1) dh_sw = 0x6982;
+			if (i == 2) dh_sw = 0x6101;
+			if (i == 3) dh_sw = 0x6282;
+			if (i == 4) dh_size = 136;
+			if (i == 5) dh_size = 138;
+			if (i == 6) fixture_dh[2] = 17;
+			assert(card_public_info_main(5, args) == 1 && dh_calls == 1 && unlock_calls == 1 &&
+					!pin_calls && !bind_calls && !mse_calls);
+		}
+		fixture_dh[2] = 18;
+		puts("PASS D004 parameter probe stops on READ errors, continuation, wrong size or unknown format without a second read");
+		{
+			unsigned char control[sizeof(fixture_fcp)], duplicate[sizeof(fixture_fcp) + 4];
+			memcpy(control, fixture_fcp, sizeof(control));
+			control[7] = 0xD0; control[8] = 4; control[12] = 137;
+			assert(d004_control_matches_observation(control, sizeof(control)));
+			for (int i = 0; i < 4; i++) {
+				unsigned char invalid[sizeof(control)]; memcpy(invalid, control, sizeof(invalid));
+				if (i == 0) invalid[4] = 0x38;
+				if (i == 1) invalid[12] = 136;
+				if (i == 2) invalid[7] = 0x41;
+				if (i == 3) invalid[9] = 0x85;
+				assert(!d004_control_matches_observation(invalid, sizeof(invalid)));
+			}
+			memcpy(duplicate, control, sizeof(control)); duplicate[1] += 4;
+			memcpy(duplicate + sizeof(control), control + 5, 4);
+			assert(!d004_control_matches_observation(duplicate, sizeof(duplicate)));
+			assert(!d004_control_matches_observation(NULL, 0));
+			puts("PASS D004 control matching rejects absent/duplicate identity, other structure, size or malformed bounds without interpreting security attributes");
+		}
+		{
+			unsigned char invalid[sizeof(fixture_dh)];
+			memcpy(invalid, fixture_dh, sizeof(invalid)); invalid[4] = 0;
+			assert(summarize_d004_parameters(invalid, sizeof(invalid)) == 1);
+			memset(invalid + 5, 0, sizeof(invalid) - 5); invalid[4] = 4;
+			assert(summarize_d004_parameters(invalid, sizeof(invalid)) == 1);
+			assert(summarize_d004_parameters(fixture_dh, 136) == 1);
+			puts("PASS D004 parser rejects invalid point encodings, off-curve coordinates and truncated input");
+		}
+		{
+			char output[512] = {0}, point_hex[33]; FILE *capture = tmpfile(); int saved = dup(STDOUT_FILENO);
+			assert(capture && saved >= 0);
+			for (int i = 0; i < 16; i++) sprintf(point_hex + i * 2, "%02X", fixture_dh[i + 4]);
+			fflush(stdout); assert(dup2(fileno(capture), STDOUT_FILENO) >= 0);
+			assert(summarize_d004_parameters(fixture_dh, sizeof(fixture_dh)) == 0);
+			fflush(stdout); rewind(capture); assert(fread(output, 1, sizeof(output) - 1, capture) > 0);
+			assert(dup2(saved, STDOUT_FILENO) >= 0); close(saved); fclose(capture);
+			assert(!strcmp(output, "dh_parameters_curve=secp521r1\ndh_parameters_point=valid_non_infinity\ndh_parameters_result=recognized_point_only_no_channel\n"));
+			assert(!strstr(output, point_hex));
+			puts("PASS D004 summary emits exclusively fixed curve/validation labels and no point, header, hash or identifying bytes");
+		}
 	}
 	{
 		char *args[] = { "card-public-info", "2", fixture_atr, "--filed004", fixture_aid };

@@ -7,8 +7,13 @@ if (( $# > 1 )) || [[ ! -f $task_build/config.h || ! -f $task_build/src/libopens
     exit 1
 fi
 task_build=$(cd -- "$task_build" && pwd)
+task_crypto_cflags=$(pkg-config --cflags libcrypto)
+task_crypto_libs=$(pkg-config --libs libcrypto)
+read -r -a task_crypto_cflags_array <<< "$task_crypto_cflags"
+read -r -a task_crypto_libs_array <<< "$task_crypto_libs"
+
 "${CC:-cc}" -std=c99 -D_GNU_SOURCE -DHAVE_CONFIG_H -Wall -Wextra -Werror \
-    -I"$task_build" -I"$task_root/vendor/opensc/src" \
+    -I"$task_build" -I"$task_root/vendor/opensc/src" "${task_crypto_cflags_array[@]}" \
     "$task_root/tools/card-public-info.c" \
     -L"$task_build/src/libopensc/.libs" -Wl,-rpath,"$task_build/src/libopensc/.libs" \
-    -lopensc -o "$task_build/card-public-info"
+    -lopensc "${task_crypto_libs_array[@]}" -o "$task_build/card-public-info"

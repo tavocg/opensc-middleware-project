@@ -6,6 +6,57 @@ la tarjeta. El usuario ejecuta las operaciones que requieran PIN o GUI. Esto
 sustituye las restricciones anteriores de no ejecutar Git/hardware/Idopte por
 el agente; conservar límites de cada diagnóstico y privacidad de los registros.
 
+**Último resultado: D004 existe; lectura aislada de parámetros preparada.**
+Principal `fa9c8f2`, OpenSC `3dfef6704`, limpios al comenzar. Informe del usuario
+`local/jcop4-filed004-qSMBuWC3/report.txt`, **2026-10-14T01:38:49Z (13 CR)**:
+inventario/build/conexión/ADF correctos, SELECT D0040/9000, transparente/
+**137 bytes**, seguridad directa86 no interpretada; unlock/proceso0. No READ,
+PIN, firma ni autenticación. No repetir SELECT-only ni interpretar86 como ACL.
+
+Revisión estática de `371ca0` en libt_ias.so instalado/hash previo: byte2 es
+índice de tabla4b9868, valor18 ->3720e0 ->NID716 (OpenSSL secp521r1).
+EC_GROUP_new_by_curve_name/61c10, coordenadas desde5 divididas en dos mitades,
+BN_bin2bn/63800 y236860 -> EC_POINT_set_affine_coordinates/63330, símbolosPLT
+reales. Con137 serían66 bytes por coordenada. **Contenido aún no leído**;
+no probar tipo runtime ni canal obligatorio por esta tabla. ZIP coincide con
+SELECT/READ137 pero llama CardAccess al archivo: no adoptar esa etiqueta ni
+su mezcla3DES/AES. El parser instalado y SELECT actual fundamentan una nueva
+lectura acotada; no se deriva permiso de atributos propietarios.
+
+Nuevo **make inspect/jcop4-dh-parameters / --dh-parameters**, helper default,
+ATR/AID conocidos/anunciado. ADF y SELECT D004 de control, exige FCI/FCP íntegro,
+83=D004,82 transparente y80=137, únicos. Ausentes/duplicados/diferentes/SW o
+transporte malos detienen sin READ; 6A82 falla este modo. Un solo00B0000089,
+canal básico, sin SFI/input; buffer137/9000/longitud137 obligatorios. Sin GET
+RESPONSE/reintento/continuación/fallback, binding/objetos/certificados/VERIFY
+incluso vacío/challenge/MSE/GA/SM/PIN/firma/administración. Filed004 conserva
+SELECT-only; observador/driver/submódulo intactos. No afecta intentos mediante
+VERIFY ni ejecuta la oferta de firmas fallidas del usuario.
+
+Decoder `tools/jcop4-dh-info.h` reconoce solo137, byte2=18 y byte4=04; valida
+punto P-521 no infinito localmente con OpenSSL. Solo etiquetas fijas/transporte/
+SW, sin header/coordenadas/hash/serial/contenido ni captura; buffer borrado.
+Punto válido no autentica identidad, perfil de canal/KDF/MAC ni vínculo con
+RSA2048 de firma. No confundir estos parámetros EC con algoritmo de firma.
+Se enlaza libcrypto explícitamente; ya presente en flake, sin cambiar lock.
+**88 comprobaciones helper y95 lanzador** pasaron, transporte/punto sintéticos;
+helper real compilado en ambos builds. Observador162/firma6/operación12 intactos,
+suites vigentes. Logs privados habituales, sin repetir suites sin cambios.
+
+Intento del agente timeout35s make inspect/jcop4-dh-parameters READER=0:
+`local/jcop4-dh-parameters-D0xMmCEq/report.txt`, **2026-10-14T02:00:05Z (13 CR)**.
+Inventario sin lectores/conexión fallida antes del helper: **sin SELECT/READ**
+ni SW/PIN. Report0600/directorio0700. No atribuir rechazo6982 ni invalidar
+SELECT9000 del usuario. **Siguiente intervención:** mismaJCOP4/lector accesible,
+otros clientes cerrados, `nix develop -c make inspect/jcop4-dh-parameters READER=0`,
+sin PIN. Revisar dh_control_result/read_transport/read_sw/parameters_result/
+curve/point sin volcar informes completos. No ampliar otra curva/archivo/canal
+ni solicitar PIN por inercia. Si valida, investigar acuerdo de claves/variante;
+si falla, detener. Tipo runtime/VERIFY6982/JCOP4/RSA3072 siguen pendientes.
+Git autorizado: se intentó añadir estos archivos y falló index.lock por .git
+montado solo lectura; no eludirlo. **Incluir el nuevo tools/jcop4-dh-info.h
+al hacer commit**, git add -u solo lo omitiría.
+
 **Última revisión: login estático y candidato D004; consulta de tarjeta pendiente.**
 Principal `1cfe6fd`, OpenSC `3dfef6704`, limpios al comenzar. Revisión estática
 sin ejecutar C_Login/T_Login, sin PIN, GUI ni firma. T_Login (`285ca0`) pasa
