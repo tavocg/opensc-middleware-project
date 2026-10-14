@@ -9,7 +9,79 @@ transporte simulado. PIN/GUI también los ejecuta el usuario. Esto sustituye
 la autorización anterior de hardware por el agente; conservar límites de
 cada diagnóstico y privacidad. Git sigue autorizado pero .git solo lectura.
 
-**Última revisión: respuesta PIN vacío tiene SW exterior63C7; regla9000 corregida solo para query.**
+**Última revisión: canal/MF/estado PIN autenticados en tarjeta; login único preparado.**
+Principal `3cdadc1`, OpenSC `3dfef6704`, limpios al comenzar. Informe usuario
+`local/jcop4-channel-pin-context-H3dqRC8j/report.txt`,2026-10-14T06:35:03Z
+(14Oct00:35CR): canal íntegro confirmado, MF9000/MAC válido, query16/status99/
+exterior63C7, decoder accepted/MACverified/inner63C7/available_unverified,
+pin_context_result=status_observed_no_pin_no_login. Finalreset/unlock/
+disconnect0, guard0/10APDU/helper0. **Estado autenticado, no login ni firma**.
+63C7 observado no acredita máximo7, reset por firma ni identidad de tarjeta.
+No repetir diagnóstico de canal/MF/estado por inercia; buffers borrados.
+
+Revisión estática de formato:flagperfil8 entra383cb0 y agrega límites de
+objetos PIN por slots30/38, retorna al mismo dispatcher383c69; no cambia por
+sí solo la rama raw2/383f39 ni acredita formato efectivo. Campo token379
+inicial0 (3b0197, palabra378) puede activar longitud fija; escritura1 en
+3b5a2f tras rama etiquetadaOrange/IN.pro.0183.01, no atribuirla a tarjetaCR.
+Se conserva formato candidato del metadata PKCS15 ya observado: referencia
+global1/UTF8/flags11/sin padding/bounds6..14/ruta vacía. No código Idopte
+copiado ni ejecutado. Diagnóstico libre prueba ese candidato con SM, no afirma
+que se haya resuelto cada clase/perfil/formateador de Idopte.
+
+Nuevo **make login/jcop4-channel READER=0**: binario separado
+jcop4-channel-login (--login-once), comparte bootstrap/cierre por include
+de probe.c pero solo ese build compila colector de PIN/guard VERIFY. Probe
+normal rechaza --login-once antes de conexión, no env activa credenciales.
+Misma JCOP4 RSA2048, mismo lock/conexión; tras canal+D004 íntegro/MF9000/query
+autenticado **exactamente63C7**, retieneSSC6 solo para login. Otros estados,
+fallos o budget agotado detienen antes de pedir PIN;7 es precondición observada,
+no máximo universal. Leer/dev/tty sin eco, no argv/env/pass/stdin ni informe;
+acepta solo ASCII imprimible6..14 bytes (subconjuntoUTF8), no conversión/hash/
+relleno de credencial. Otros caracteres/cancelación/longitudes detienen sin
+VERIFY; no experimentar formatos alternativos sobre tarjeta.
+
+Un único VERIFY interior00200001 con credencial; SSC7, CLA0C/cuerpo29/wire35,
+DO871101+cipher16/DO8E8, sinDO97/Le interior, exteriorLe256. No PIN clear al
+transporte: borrar input antes; método2 SM es framing, no paddingPIN. Guard
+compara frame completo exacto y estado; no plaintext/ref3/cambio/reenvío.
+RespuestaSSC8 exige MAC+coherencia exterior63Cx/DO99 o exterior9000; éxito
+solo inner9000/datos0. Warning no login/no retry. login_attempted cuenta
+despacho al backend; transport/decoder/MAC/innerSW validados solo metadatos,
+sin credential/longitud/cipher/MAC/keys. Borra estado incluso éxito; reset
+final/unlock/disconnect, sin firma/PSO/lectura posterior. No key privada fuera
+de tarjeta. Binario normal/observador/driver/crypto/submódulo intactos.
+
+Lanzador requiere terminalstdin/stdout antes de compilar, stdinhelper vacío;
+PIN va por/dev/tty, logs0700/0600/configdebug0/tracesaisladas/core0 como antes.
+SIGINT/TERM sinSA_RESTART restauran eco antes de cierre; timeout45sTERM+5sKILL.
+Timeout/reset ausente/fallido exige cerrar clientes/reinsertar antes de otro uso.
+**Un VERIFY fallido puede consumir intento**: usuario usa PIN correcto y no
+repite automáticamente; no ejecutar oferta de PIN incorrecto ni asumirreset.
+
+Pasaron **12 grupos login**(5nativos+5OpenSC bootstrap/reader simulado+2PTY/
+wrapper), PIN exclusivamente ficticio: límites6..14/encryptionECB-CBC/CMAC
+independientes/SSC7/8, failures/replay/warnings/guard/no retry/close, input sin
+eco/restauraciónTERM y launcher una llamada/permisos/EOF/errores. ASan/UBSan
+10nativo/bootstrap+PTY input pasó, wrapper simulado; detect_leaks0, libs
+precompiladas sin instrumentar/no prueba de fugas. **22 grupos probe** pasaron
+de nuevo por helper/lanzador/build compartidos; ambos binarios compilados.
+Fallo inicial build fue write con resultado ignorado/Werror en salto de línea
+del colector, corregido; no error de tarjeta/PIN. Suites crypto sin cambio no
+repetidas; flake/lock/Idopte/driver/submódulo intactos. Sin PCSC/lector/tarjeta/
+PIN real/GUI por agente; pruebasPTY no crean contexto de tarjeta.
+
+**Siguiente intervención:** misma JCOP4 RSA2048, firmador/otros clientes
+cerrados, `nix develop -c make login/jcop4-channel READER=0`, una sola vez.
+Introducir PIN correcto únicamente si pide el helper, sin pegarlo en chat.
+No usar viejos sign/jcop4-apdu/verify-first por inercia. Revisar login_attempted/
+transport/decode/mac/response/sw/result y cierre antes de firma u otro intento.
+Login real/Jcop4firma/RSA3072/causa6982 siguen pendientes. Git solo lectura:
+commit Makefile/scripts2/toolsprobe/testsprobe/docs3 y **seis nuevos**:
+tools/login.c/login.h, tests/login.c/pin-input.c/login-terminal.py y script
+test-login.sh. No capturas/build ni eludir .git sololectura.
+
+**Revisión anterior: respuesta PIN vacío tiene SW exterior63C7; regla9000 corregida solo para query.**
 Principal `02b0d2c`, OpenSC `3dfef6704`, limpios al comenzar. Informe usuario
 `local/jcop4-channel-pin-context-8H2TMoTn/report.txt`,2026-10-14T06:28:45Z
 (14Oct00:28CR): canal íntegro confirmado, MF respuesta51/outer9000/87,

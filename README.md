@@ -345,14 +345,15 @@ antes de usar la nueva pieza con PIN.
 Nuevo `make inspect/jcop4-channel-pin-context READER=0`: confirma el canal y
 prueba SELECT MF seguido de consulta PIN1 vacía bajo SM, en la misma conexión.
 Es un diagnóstico separado **sin introducir PIN, login ni firma**, con parada
-ante error y cierre de sesión. La ejecución8H2TMoTn confirmó MF con respuesta
-autenticada9000; query devolvió16 bytes/status99/exterior63C7 y se rechazó
-localmente antes del MAC por exigir exterior9000. Se corrige solo la política
-de respuesta del query:63Cx requiere MAC válido y estado interno idéntico;
-el resto conserva9000. Pasaron22 grupos del diagnóstico y12 del codec. Una
-repetición del mismo target, sin PIN, permitirá comprobar ese MAC en tarjeta.
-No habilita credenciales ni modifica el observador
-Idopte. [Protocolo y límites](docs/jcop4.md#consulta-de-contexto-mf-y-pin-vacío-bajo-sm).
+ante error y cierre de sesión. La ejecuciónH3dqRC8j confirmó también el MAC
+del query y estado interno/exterior63C7, con cierre0: canal y contexto comprobados,
+todavía sin login. No repetir esta consulta por inercia.
+Nuevo `make login/jcop4-channel READER=0`: diagnóstico separado, un único
+intento de PIN bajo SM y sin firma. Solo pide PIN tras canal/MF/query autenticados
+y estado63C7; acepta ASCII imprimible6..14, sin eco ni registro de credencial.
+Un fallo puede consumir intento: usar el PIN correcto y detenerse si falla.
+Pasaron12 grupos login con PIN/transporte ficticios y22 de regresión del probe.
+[Protocolo y límites](docs/jcop4.md#login-experimental-de-un-único-intento-bajo-sm).
 El driver aún no firma con JCOP4.
 [Evidencia y límites](docs/jcop4.md#canal-confirmado-en-jcop4-sin-pin).
 

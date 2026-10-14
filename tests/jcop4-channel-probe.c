@@ -92,6 +92,9 @@ static int backend_transmit(sc_reader_t *r, sc_apdu_t *a)
 	const unsigned long flags = SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP | SC_APDU_FLAGS_NO_SM;
 	assert(r == &test_reader && (a->flags & flags) == flags && test_state.locks == 1 && !test_state.unlocks);
 	test_state.physical++; a->sw1 = 0x90; a->sw2 = 0;
+#ifdef JCOP4_LOGIN_FIXTURE
+	if (probe_guard.phase == PROBE_LOGIN_VERIFY) return test_login_reply(a);
+#endif
 	if (probe_guard.phase == PROBE_CONTEXT_MF || probe_guard.phase == PROBE_PIN_QUERY) return context_reply(a);
 	if (probe_guard.phase >= PROBE_MSE) {
 		unsigned char wire[264], reply[258]; size_t size = 5 + a->lc, received = 0;
@@ -243,7 +246,11 @@ static int invoke_mode(int context_mode)
 	assert(dup2(saved, STDOUT_FILENO) >= 0); close(saved); fclose(capture); return result;
 }
 static int invoke(void) { return invoke_mode(0); }
+#ifdef JCOP4_LOGIN_FIXTURE
+int no_pin_fixture_main(void)
+#else
 int main(void)
+#endif
 {
 	init(&test_flow); memcpy(test_initial, test_flow.initial, 137); setenv("OPENSC_CONF", "/tmp/synthetic-config", 1); setenv("OPENSC_DEBUG", "0", 1);
 #ifdef TEST_REAL_BOOTSTRAP
@@ -273,6 +280,9 @@ int main(void)
 	assert(strstr(output, "pin_query_sw=63C7") && strstr(output, "pin_context_result=status_observed_no_pin_no_login"));
 	puts("PASS context mode also uses real OpenSC bootstrap/transmit and software MF/PIN status peer without reader access");
 #else
+	defaults();
+	char *login_args[] = {"jcop4-channel-probe", "0", "--login-once"};
+	assert(channel_probe_main(3, login_args) == 2 && !test_state.connects);
 	defaults(); assert(invoke() == 0 && test_flow.calls == 3 && test_state.physical == 9 && test_state.resets == 2);
 	assert(test_state.unlocks == 1 && test_state.disconnects == 1 && test_state.releases == 1);
 	assert(strstr(output, "channel_result=protected_d004_read_confirmed_no_login") && strstr(output, "final_reset_result=0"));

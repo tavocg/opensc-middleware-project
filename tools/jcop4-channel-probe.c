@@ -1,4 +1,5 @@
-/* Bounded experimental anonymous-channel diagnostic, never PIN/login/sign.
+/* Bounded experimental anonymous-channel diagnostic. Default binary never
+ * accepts credentials; only the separate login binary compiles that path.
  * Uses the local OpenSC default driver and owns one connection/transaction. */
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -17,7 +18,8 @@
 static const unsigned char probe_atr[] = {0x3B,0xD5,0x18,0xFF,0x81,0x91,0xFE,0x1F,0xC3,0x80,0x73,0xC8,0x21,0x10,0x0A};
 static const unsigned char probe_aid[] = {0xE8,0x28,0xBD,0x08,0x0F,0xA0,0,0,3,0x63,0x64,0x79,0x6E,0x69,0x64};
 static volatile sig_atomic_t probe_interrupted;
-enum probe_phase { PROBE_STOP, PROBE_DIR, PROBE_APP, PROBE_D004, PROBE_INITIAL, PROBE_MSE, PROBE_GA, PROBE_READ, PROBE_CONTEXT_MF, PROBE_PIN_QUERY };
+enum probe_phase { PROBE_STOP, PROBE_DIR, PROBE_APP, PROBE_D004, PROBE_INITIAL, PROBE_MSE, PROBE_GA, PROBE_READ, PROBE_CONTEXT_MF, PROBE_PIN_QUERY,
+	PROBE_LOGIN_VERIFY };
 static struct {
 	const struct sc_reader_operations *original;
 	sc_reader_t *reader;
@@ -25,6 +27,7 @@ static struct {
 	unsigned int commands, binary_reads, next_record;
 	int root, directory, blocked, called, ended;
 	int context_mode, context_selected;
+	int login_mode; unsigned int context_query_sw;
 	unsigned char expected[38]; size_t expected_size;
 } probe_guard;
 
@@ -92,6 +95,14 @@ static int probe_apdu_allowed(sc_apdu_t *a)
 			!memcmp(probe_guard.expected, query ? "\x0c\x20\0\x01\x0a" : "\x0c\xa4\0\0\x20", 5) &&
 			!memcmp(a->data, probe_guard.expected + 5, a->lc);
 	}
+#ifdef JCOP4_LOGIN_DIAGNOSTIC
+	else if (probe_guard.login_mode && probe_guard.phase == PROBE_LOGIN_VERIFY) {
+		return probe_guard.context_selected && probe_guard.context_query_sw == 0x63C7 && probe_guard.expected_size == 35 &&
+			a->cla == 0x0C && a->ins == 0x20 && !a->p1 && a->p2 == 1 && a->cse == SC_APDU_CASE_4_SHORT && a->le == 256 &&
+			a->lc == 29 && !memcmp(a->data, "\x87\x11\x01", 3) && !memcmp(a->data + 19, "\x8e\x08", 2) &&
+			!memcmp(probe_guard.expected, "\x0c\x20\0\x01\x1d", 5) && !memcmp(a->data, probe_guard.expected + 5, 29);
+	}
+#endif
 	return 0;
 }
 static int probe_guard_transmit(sc_reader_t *reader, sc_apdu_t *apdu)
@@ -136,6 +147,10 @@ static int probe_exchange(void *context, const unsigned char *wire, size_t size,
 	else if (probe_guard.context_mode &&
 		((probe_guard.phase == PROBE_CONTEXT_MF && size == 38) || (probe_guard.phase == PROBE_PIN_QUERY && size == 16)) &&
 		probe_guard.expected_size == size && !memcmp(wire, probe_guard.expected, size)) cse = SC_APDU_CASE_4_SHORT;
+#ifdef JCOP4_LOGIN_DIAGNOSTIC
+	else if (probe_guard.login_mode && probe_guard.phase == PROBE_LOGIN_VERIFY && size == 35 &&
+		probe_guard.expected_size == size && !memcmp(wire, probe_guard.expected, size)) cse = SC_APDU_CASE_4_SHORT;
+#endif
 	else { probe_guard.blocked = 1; return SC_ERROR_NOT_ALLOWED; }
 	sc_format_apdu(card, &a, cse, wire[1], wire[2], wire[3]); a.cla = wire[0];
 	a.data = wire + 5; a.lc = a.datalen = wire[4];
@@ -202,17 +217,24 @@ static int probe_pin_context(sc_card_t *card, struct jcop4_sm_channel *channel)
 			if (sw == 0x9000) printf("pin_query_result=status_9000_no_pin_supplied\n");
 			else if ((sw & 0xFFF0) == 0x63C0 && (sw & 15)) printf("pin_query_result=available_unverified\n");
 			else { printf("pin_query_result=blocked_or_unexpected_stop\n"); goto out; }
+			probe_guard.context_query_sw = sw;
 		}
 		OPENSSL_cleanse(plain, sizeof(plain));
 	}
 	result = 0;
 out:
-	jcop4_sm_invalidate(channel); OPENSSL_cleanse(header, sizeof(header)); OPENSSL_cleanse(body, sizeof(body));
+	/* Only the separately compiled login diagnostic may retain SSC6. */
+	if (result || !probe_guard.login_mode) jcop4_sm_invalidate(channel);
+	OPENSSL_cleanse(header, sizeof(header)); OPENSSL_cleanse(body, sizeof(body));
 	OPENSSL_cleanse(wire, sizeof(wire)); OPENSSL_cleanse(response, sizeof(response)); OPENSSL_cleanse(plain, sizeof(plain));
 	OPENSSL_cleanse(probe_guard.expected, sizeof(probe_guard.expected)); probe_guard.expected_size = 0;
 	printf("pin_context_result=%s\n", result ? "not_confirmed_stop" : "status_observed_no_pin_no_login");
 	return result;
 }
+
+#ifdef JCOP4_LOGIN_DIAGNOSTIC
+#include "jcop4-channel-login.h"
+#endif
 
 int main(int argc, char **argv)
 {
@@ -225,6 +247,11 @@ int main(int argc, char **argv)
 		"LIBPCSCLITE_DELEGATE", "LIBPCSCLITE_SPY_DELEGATE", "JCOP4_PUBLIC_DISCOVERY_TRACE", "JCOP4_PUBLIC_SELECT_SPY_TRACE"};
 	unsigned long index; char *end; int rv, status = 1, locked = 0, session = 0, announced = 0;
 	int context_mode = argc == 3 && !strcmp(argv[2], "--pin-context");
+#ifdef JCOP4_LOGIN_DIAGNOSTIC
+	int login_mode = argc == 3 && !strcmp(argv[2], "--login-once");
+	if (!login_mode) return 2; /* Separate binary cannot silently run another mode. */
+	context_mode = 1;
+#endif
 	if ((argc != 2 && !context_mode) || !argv[1][0] || strspn(argv[1], "0123456789") != strlen(argv[1])) return 2;
 	errno = 0; index = strtoul(argv[1], &end, 10); if (errno || *end || index > UINT_MAX) return 2;
 	for (size_t i = 0; i < sizeof(unsafe_env)/sizeof(unsafe_env[0]); i++) if (getenv(unsafe_env[i])) return 2;
@@ -232,7 +259,17 @@ int main(int argc, char **argv)
 	if (!getenv("OPENSC_CONF")) return 2;
 	memset(&probe_guard, 0, sizeof(probe_guard)); probe_guard.next_record = 1; probe_interrupted = 0;
 	probe_guard.context_mode = context_mode;
+#ifdef JCOP4_LOGIN_DIAGNOSTIC
+	probe_guard.login_mode = login_mode;
+#endif
+#ifdef JCOP4_LOGIN_DIAGNOSTIC
+	/* Interrupt terminal read so TERM/INT can restore echo before closing. */
+	struct sigaction action; memset(&action, 0, sizeof(action)); action.sa_handler = probe_signal;
+	sigemptyset(&action.sa_mask);
+	if (sigaction(SIGINT, &action, NULL) || sigaction(SIGTERM, &action, NULL)) return 2;
+#else
 	signal(SIGINT, probe_signal); signal(SIGTERM, probe_signal);
+#endif
 	memset(&params, 0, sizeof(params)); params.app_name = "jcop4-channel-probe";
 	rv = sc_context_create(&ctx, &params); printf("context_result=%d\n", rv); if (rv < 0) goto out;
 	ctx->debug = 0; ctx->flags |= SC_CTX_FLAG_ENABLE_DEFAULT_DRIVER;
@@ -284,6 +321,9 @@ int main(int argc, char **argv)
 	}
 	printf("channel_result=%s\n", status ? "not_confirmed_stop" : "protected_d004_read_confirmed_no_login");
 	if (!status && context_mode) status = probe_pin_context(card, &confirmed);
+#ifdef JCOP4_LOGIN_DIAGNOSTIC
+	if (!status) status = probe_login_once(card, &confirmed);
+#endif
 out:
 	probe_guard.phase = PROBE_STOP;
 	jcop4_sm_invalidate(&confirmed); OPENSSL_cleanse(probe_guard.expected, sizeof(probe_guard.expected));

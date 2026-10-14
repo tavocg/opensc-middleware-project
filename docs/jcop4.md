@@ -5146,6 +5146,88 @@ observada tras corregir la regla local, sin cambiar comandos. Revisar
 pin_query_mac_check/response/sw/result y cierre antes de otro comando.
 No ofrecer PIN hasta respuesta autenticada; firmaJCOP4/RSA3072 pendientes.
 
+### Login experimental de un único intento bajo SM
+
+Principal `3cdadc1`, OpenSC `3dfef6704`, limpios al comenzar. Informe privado
+`local/jcop4-channel-pin-context-H3dqRC8j/report.txt`,2026-10-14T06:35:03Z
+(14Oct00:35CR): canal íntegro/MF9000, query16/status99/exterior63C7,
+MACverified/decoderaccepted/inner63C7, estado available_unverified y contexto
+confirmado sin PIN. Finalreset/unlock/disconnect0/guard0/10APDU/helper0.
+La igualdad exigida de estados permite ahora observar63C7 autenticado; no
+prueba máximo7, reset de intentos por firma, identidad autenticada ni login.
+No repetir canal/D004/MF/estado para confirmar ese resultado.
+
+Revisión adicional de formato, sin ejecutar Idopte: el flag de perfil8 en
+383cb0 obtiene límites de objetos PIN (slots30/38) y vuelve al dispatcher
+383c69. No cambia por sí solo la rama de copia2/383f39 ni prueba formato
+efectivo. token379 comienza0 (palabra378 inicializada en3b0197); puede forzar
+longitud fija, y se escribe1 en3b5a2f tras una rama etiquetadaOrange/
+IN.pro.0183.01. No se atribuye esa rama a CR. El candidato libre conserva
+metadata PKCS15 ya observado: PIN global1, UTF8, flags11, sin padding,
+bounds6..14/ruta vacía. No es una réplica de clases/formateadores Idopte;
+su validez para VERIFY real todavía necesita prueba con credencial correcta.
+
+`make login/jcop4-channel READER=0` compila un binario independiente
+`jcop4-channel-login` con flag obligatorio--login-once. Comparte bootstrap,
+guard y cierre de probe.c; solo ese build compila input/PIN y faseVERIFY.
+El binario habitual no acepta ese flag ni activa login por env. El launcher
+requiere terminalstdin/stdout antes de compilación, conserva report/config
+0600/directorio0700,debug0/core0/aislamiento de tracing/delegates/preload.
+El helper recibe stdin vacío y obtiene la credencial por/dev/tty sin eco,
+nunca por argv/env/pass/log. SIGINT/TERM sinSA_RESTART interrumpen input para
+restaurar terminal y cerrar; timeout45sTERM+5sKILL. Timeout/cierre incompleto
+exige cerrar otros clientes/reinsertar antes de otra operación.
+
+Secuencia sobre **la misma JCOP4 RSA2048 probada**, conexión/lock únicos:
+
+1. Confirma canal/D004 completo, MF9000 y query MAC/estado exactamente63C7.
+   ConservaSSC6 solo dentro de login; no requiere ni afirma máximo7. Cualquier
+   fallo, estado distinto o presupuesto agotado detiene antes de pedir PIN.
+2. Pide PIN correcto una vez. Diagnóstico acepta ASCII imprimible6..14bytes,
+   un subconjuntoUTF8; controles/noASCII/longitud distinta/cancelación detienen
+   sin VERIFY. No convierte, hashea ni añade relleno a la credencial.
+3. VERIFY interior00200001 con datos, sinLe. SSC7/CLA0C,DO871101+cipher16,
+   DO8E08/MAC8, cuerpo29/wire35/Le exterior256. Padding método2 es framingSM,
+   no formatoPIN. Borra input antes de transporte; guard compara frame completo
+   construido localmente, referencia/fase/contexto/tamaño y permite solo una vez.
+4. RespuestaSSC8 exige MAC/formato y política exterior9000 o63Cx igual alDO99.
+   Solo inner9000 sin datos confirma PIN. Warning/Error/replay/MAC/transporte
+   malos detienen sin reintento/PSO/firma ni consulta posterior.
+5. Borra canal/credencial/buffers incluso éxito, reset final bajo lock,
+   unlock/disconnect. No devuelve sesión ni deja login para otro proceso.
+
+Reporte añade login_attempted (despacho físico al backend), transport,
+decode_result/mac_check y, solo tras aceptación, response/sw. Resultado positivo
+pin_verified_no_signature exige además helper0/cierre0. No credencial/longitud/
+hash/cipher/MAC/claves/control. Un VERIFY fallido puede consumir intento; no
+es una prueba sin PIN y no se repite por inercia. No usar una credencial falsa
+ni los targets de firma plaintext anteriores para investigar después.
+
+Pasaron12 grupos nuevos:5nativos+5bootstrap OpenSC real con lector/contexto
+simulados+2PTY/lanzador. PIN ficticio6..14, decryptionECB/CBC y CMAC
+independientes de comandoSSC7, respuestaSSC8; failures/replay/status/guard,
+sin PIN antes de contexto validado, un único intento y cierre. Input real
+ejercitado en PTY sintético sin crear contexto de tarjeta: sin eco/restaurado
+tras éxito/fallo/TERM, bounds/noASCII rechazados. Launcher requiere TTY,
+stdin EOF/privatefiles/una llamada/failure/timeout/buildstop. ASan/UBSan
+10grupos nativo/bootstrap e inputPTY pasaron, detect_leaks0; wrapper simulado,
+bibliotecas precompiladas sin instrumentar/no prueba de fugas.22grupos del
+probe pasaron de nuevo por código/lanzador/build compartidos; ambos helpers
+compilados. Fallo inicial build fue write sin consumir resultado/Werror en
+salto de línea del colector, corregido. Crypto/observador/driver/submódulo/
+flake/lock intactos. No PCSC/lector/tarjeta/PIN real/GUI/Idopte por el agente.
+
+**Siguiente intervención del usuario:** mismaJCOP4 RSA2048, firmador/otros
+clientes cerrados, una sola vez:
+
+```sh
+nix develop -c make login/jcop4-channel READER=0
+```
+
+PIN correcto solo en prompt del helper, nunca chat. Si falla, detenerse y
+revisar informe/cierre antes de otro intento. Login/firmaJCOP4/RSA3072 y causa
+del antiguo VERIFY6982 siguen pendientes; este test no firma documentos.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño

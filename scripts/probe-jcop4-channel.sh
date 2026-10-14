@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# One bounded anonymous-channel diagnostic. No PIN/login/GUI/Idopte.
+# Bounded channel diagnostic; explicit separate login mode can collect one PIN.
+# No signature, GUI or Idopte in any mode.
 set -euo pipefail
 umask 077
 ulimit -c 0
@@ -7,12 +8,25 @@ task_reader=${1:-${READER:-0}}
 task_mode=anonymous_channel_no_pin_once
 task_prefix=jcop4-channel
 task_helper_args=("$task_reader")
+task_helper=jcop4-channel-probe
+task_builder_args=()
 if (( $# == 2 )) && [[ $2 == --pin-context ]]; then
     task_mode=anonymous_channel_pin_context_no_pin_once
     task_prefix=jcop4-channel-pin-context
     task_helper_args+=(--pin-context)
+elif (( $# == 2 )) && [[ $2 == --login-once ]]; then
+    # A controlling terminal is required, never accept credentials via pipe.
+    if [[ ! -t 0 || ! -t 1 ]]; then
+        printf 'El login requiere una terminal para introducir el PIN sin eco.\n' >&2
+        exit 2
+    fi
+    task_mode=anonymous_channel_login_once_no_signature
+    task_prefix=jcop4-channel-login
+    task_helper=jcop4-channel-login
+    task_helper_args+=(--login-once)
+    task_builder_args=("" --login-once)
 elif (( $# > 1 )); then
-    printf 'Uso: bash scripts/probe-jcop4-channel.sh [lector] [--pin-context]\n' >&2
+    printf 'Uso: bash scripts/probe-jcop4-channel.sh [lector] [--pin-context|--login-once]\n' >&2
     exit 2
 fi
 if [[ ! $task_reader =~ ^[0-9]+$ ]]; then
@@ -51,7 +65,7 @@ CONFIG
     git -C "$task_root/vendor/opensc" status --short || true
 } > "$task_report" 2>&1
 printf 'Informe: %s\n' "$task_report"
-if bash "$task_root/scripts/build-jcop4-channel-probe.sh" >> "$task_report" 2>&1; then
+if bash "$task_root/scripts/build-jcop4-channel-probe.sh" "${task_builder_args[@]}" >> "$task_report" 2>&1; then
     printf 'helper_build_status=0\n' >> "$task_report"
 else
     task_status=$?
@@ -66,10 +80,12 @@ env -u OPENSC_API_TRACE_FILE -u OPENSC_DEBUG_FILE -u OPENSC_DEEPBIND \
     -u JCOP4_PUBLIC_DISCOVERY_TRACE -u JCOP4_PUBLIC_SELECT_SPY_TRACE \
     OPENSC_CONF="$task_config" OPENSC_DEBUG=0 \
     timeout --signal=TERM --kill-after=5s 45s \
-    "$task_root/build/opensc/jcop4-channel-probe" "${task_helper_args[@]}" \
+    "$task_root/build/opensc/$task_helper" "${task_helper_args[@]}" \
     </dev/null >> "$task_report" 2>&1 || task_status=$?
 printf 'helper_exit_status=%d\n' "$task_status" >> "$task_report"
-if (( task_status )); then
+if [[ $task_mode == anonymous_channel_login_once_no_signature ]]; then
+    printf 'Login terminado (estado %d), sin firma. Revisar el informe; no repetir por inercia.\n' "$task_status"
+elif (( task_status )); then
     if [[ $task_mode == anonymous_channel_pin_context_no_pin_once ]]; then
         printf 'Consulta de contexto incompleta. Revisar el informe; no repetir ni introducir PIN.\n' >&2
     else
