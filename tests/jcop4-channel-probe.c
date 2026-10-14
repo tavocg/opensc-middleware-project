@@ -18,7 +18,7 @@ static struct {
 	int missing_reader, bad_atr, bad_protocol, short_send, short_receive, missing_app;
 	int connect_error, lock_error, reset_error, select_error, bad_control, bad_initial, bootstrap_attack, bad_app_count;
 	int connects, locks, unlocks, resets, disconnects, releases, physical;
-	int context_fail, followups; unsigned int query_sw;
+	int context_fail, followups; unsigned int query_sw, query_outer_sw, mf_outer_sw;
 } test_state;
 static char output[8192];
 static int test_lock_depth;
@@ -31,6 +31,8 @@ static int context_reply(sc_apdu_t *a)
 	unsigned int sw = query ? test_state.query_sw : test_state.context_fail == 3 ? 0x6982 : 0x9000;
 	size_t body_size = 0, auth_size; EVP_CIPHER_CTX *cipher = EVP_CIPHER_CTX_new(); assert(cipher);
 	test_state.followups++;
+	unsigned int outer = query ? test_state.query_outer_sw : test_state.mf_outer_sw;
+	if (outer) { a->sw1 = outer >> 8; a->sw2 = outer & 255; }
 	assert(test_state.followups == (query ? 2 : 1) && a->cla == 0x0C && !a->p1 && a->p2 == (query ? 1 : 0));
 	assert(a->ins == (query ? 0x20 : 0xA4) && a->le == 256 && a->lc == (query ? 10 : 32));
 	auth[15] = (unsigned char)(query ? 5 : 3); auth[16] = 0x0C; auth[17] = (unsigned char)a->ins;
@@ -265,7 +267,9 @@ int main(void)
 		assert(probe_guard_transmit(&test_reader, &a) < 0 && !test_state.physical && probe_guard.blocked);
 	}
 	puts("PASS absolute EF.DIR allowance does not allow other files, relative paths, channels, lengths or P2");
-	defaults(); assert(invoke_mode(1) == 0 && test_state.physical == 10 && test_state.followups == 2 && test_state.resets == 2);
+	defaults(); test_state.query_outer_sw = 0x63C7;
+	assert(invoke_mode(1) == 0 && test_state.physical == 10 && test_state.followups == 2 && test_state.resets == 2);
+	assert(strstr(output, "pin_query_outer_sw=63C7") && strstr(output, "pin_query_mac_check=verified"));
 	assert(strstr(output, "pin_query_sw=63C7") && strstr(output, "pin_context_result=status_observed_no_pin_no_login"));
 	puts("PASS context mode also uses real OpenSC bootstrap/transmit and software MF/PIN status peer without reader access");
 #else
@@ -387,6 +391,25 @@ int main(void)
 		defaults(); assert(invoke_mode(1) == 0);
 		assert(strstr(output, "pin_query_decode_result=accepted") && strstr(output, "pin_query_mac_check=verified"));
 		puts("PASS bounded envelope/reason metadata distinguishes rejected query responses without inner SW/data, retries or extra APDUs");
+	}
+	{
+		defaults(); test_state.query_outer_sw = 0x63C7;
+		assert(invoke_mode(1) == 0 && test_state.followups == 2 && test_state.resets == 2 && test_state.physical == 11);
+		assert(strstr(output, "pin_query_outer_sw=63C7") && strstr(output, "pin_query_sw=63C7") &&
+			strstr(output, "pin_query_response=authenticated") && strstr(output, "pin_query_mac_check=verified"));
+		for (int which = 0; which < 5; which++) {
+			defaults(); test_state.query_outer_sw = which == 0 ? 0x63C0 : which == 1 ? 0x63C6 : 0x63C7;
+			if (which == 0) test_state.query_sw = 0x63C0;
+			if (which >= 2) test_state.context_fail = which == 2 ? 5 : which == 3 ? 11 : 6;
+			assert(invoke_mode(1) == 1 && test_state.followups == 2 && test_state.resets == 2);
+			assert(test_state.unlocks == 1 && test_state.disconnects == 1 && !strstr(output, "pin_context_result=status_observed"));
+			if (which == 1) assert(strstr(output, "pin_query_decode_result=authenticated_status_outer_mismatch"));
+			if (which >= 1 && which <= 3) assert(!strstr(output, "pin_query_sw="));
+		}
+		defaults(); test_state.mf_outer_sw = 0x63C7;
+		assert(invoke_mode(1) == 1 && test_state.followups == 1 && !strstr(output, "pin_query_"));
+		assert(strstr(output, "context_select_decode_result=outer_sw_not_9000"));
+		puts("PASS outer63Cx policy is query-only with MAC/status equality; zero counter, mismatches, malformed MAC, data and MF warnings stop and close");
 	}
 	defaults(); test_flow.mode = BAD_MAC; assert(invoke_mode(1) == 1 && !test_state.followups && test_state.resets == 2);
 	defaults(); test_flow.mode = WRONG_CONTENT; assert(invoke_mode(1) == 1 && !test_state.followups);

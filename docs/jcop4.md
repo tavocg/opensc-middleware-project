@@ -5094,6 +5094,58 @@ la respuesta fallida, sin variantes APDU ni reconfirmación por inercia.
 Revisar query outer_sw/size/leading_object/decode_result/mac_check y cierre
 antes de otro comando o credencial. No se habilita firma JCOP4 ni RSA3072.
 
+### SW exterior63C7 y política acotada de respuesta del query
+
+Principal `02b0d2c`, OpenSC `3dfef6704`, limpios al comenzar. Informe privado
+`local/jcop4-channel-pin-context-8H2TMoTn/report.txt`,2026-10-14T06:28:45Z
+(14Oct00:28CR), ejecución del usuario. Canal íntegro confirmado; MF51 bytes,
+outer9000/87, MAC verificado/inner9000. Query vacío: transporte0,16 bytes,
+leading_object=status99 y outer_sw=63C7. El decoder paró por
+outer_sw_not_9000 **antes de comprobar MAC**. Guard0/10comandos; cierre
+reset/unlock/disconnect0/helper1. No prueba un MAC fallido, VERIFY6982 ni
+PIN incorrecto. Tampoco acredita DO99/contador autenticado: contenido y
+MAC reales anteriores fueron borrados, no se pueden validar offline ahora.
+
+Revisión estática del mismo libt_ias.so/hash2380540c..542dc4, sin ejecutarlo:
+22bfa0..22bfc3 obtiene los dos bytes finales.243981..24399f compara SW1
+de DO99 con el exterior,243abb..243ae2 hace lo mismo con SW2; no exige9000.
+La comparación de MAC está en243c50..243c69;3756d9..3756e3 maneja familia63Cx.
+Esto apoya admitir un warning protegido coherente en este contraste limitado;
+no declara runtime completo, perfil normativo universal ni efecto de intentos.
+
+`jcop4_sm_open_report_policy` añade una política explícita para el query vacío:
+exterior9000 o63Cx. Sigue exigiendo estructura canónica87 opcional/99/2/8E/8,
+SSC correcto y MAC válido. Si el exterior es63Cx exige igualdad exacta con
+DO99 **después de comprobar MAC y antes de descifrar/publicarSW o datos**.
+La discrepancia devuelve authenticated_status_outer_mismatch y borra canal;
+MACverified no equivale a respuesta aceptada. SW63Cx nunca se convierte en9000
+ni en login. El helper mantiene datos0/x>0:63C0 detiene como antes. Respuesta
+plain de dos bytes, ausencia deMAC, replay, padding malo o estado distinto
+siguen fallando; exteriores6982/6983/61xx/6Cxx no se admiten por esta política.
+
+API open/open_report anterior, confirmación de D004 y SELECT MF conservan
+exterior9000. El helper imprime response_policy por fase para distinguir
+el opt-in; no cambia ningún APDU/CLA/Le/ref/fase/guard/reset/presupuesto ni
+habilita85, retries, fallbackplaintext, credencial o firma. Mismas restricciones
+de privacidad: estados/estructura exteriores no son datos autenticados.
+
+Pasaron12 grupos codec,22 probe(13nativo+3bootstrap real con lector simulado+
+6wrapper),7confirmation y6session. Vectores63C0/7/F generados con OpenSSL CLI,
+claves sintéticas; todos128bits del warning alterados, DO99 distinto conMAC
+válido, bareSW63C7, SSC viejo y política inválida no publicanSW/plaintext.
+Default sigue rechazando warning; bootstrap real procesa exterior63C7 con
+OpenSC y peer simulado, sin tarjeta. Helper mantiene bloqueo por cero/datos,
+MF warning impide query, no comandos extra y cierre. ASan/UBSan28 grupos,
+detect_leaks0; bibliotecas precompiladas sin instrumentar/no prueba de fugas.
+Helper real compilado, driver/submódulo/observador intactos. No hardware,
+PCSC/Idopte/PIN/GUI por el agente.
+
+**Siguiente intervención:** una ejecución del mismo target sin PIN, misma
+JCOP4 y otros clientes cerrados. Es para verificar el MAC de la respuesta
+observada tras corregir la regla local, sin cambiar comandos. Revisar
+pin_query_mac_check/response/sw/result y cierre antes de otro comando.
+No ofrecer PIN hasta respuesta autenticada; firmaJCOP4/RSA3072 pendientes.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño

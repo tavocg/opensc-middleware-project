@@ -182,7 +182,9 @@ static int probe_pin_context(sc_card_t *card, struct jcop4_sm_channel *channel)
 		printf("%s_leading_object=%s\n", label, received <= 2 ? "absent" : response[0] == 0x87 ? "encrypted87" :
 			response[0] == 0x85 ? "unsupported85" : response[0] == 0x99 ? "status99" : "other_uninterpreted");
 		struct jcop4_sm_decode_report decoded;
-		rv = jcop4_sm_open_report(channel, response, received, plain, sizeof(plain), &plain_size, &sw, &decoded);
+		printf("%s_response_policy=%s\n", label, step ? "outer9000_or_mac_matching_63Cx" : "outer9000_only");
+		rv = jcop4_sm_open_report_policy(channel, response, received, plain, sizeof(plain), &plain_size, &sw,
+			step ? JCOP4_SM_OUTER_9000_OR_MATCHING_63CX : JCOP4_SM_OUTER_9000, &decoded);
 		printf("%s_decode_result=%s\n%s_mac_check=%s\n", label, jcop4_sm_decode_name(decoded.result), label,
 			decoded.mac == JCOP4_SM_MAC_VERIFIED ? "verified" : decoded.mac == JCOP4_SM_MAC_FAILED ? "failed" : "not_checked");
 		if (rv) {

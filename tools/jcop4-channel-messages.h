@@ -144,8 +144,12 @@ enum jcop4_sm_decode_result {
 	JCOP4_SM_DECODE_ARGUMENT, JCOP4_SM_DECODE_SIZE, JCOP4_SM_DECODE_OUTER_SW,
 	JCOP4_SM_DECODE_SSC, JCOP4_SM_DECODE_CIPHER_TLV, JCOP4_SM_DECODE_STATUS_TLV,
 	JCOP4_SM_DECODE_MAC_TLV, JCOP4_SM_DECODE_MAC, JCOP4_SM_DECODE_DECRYPT,
-	JCOP4_SM_DECODE_PADDING, JCOP4_SM_DECODE_CAPACITY, JCOP4_SM_DECODE_OK
+	JCOP4_SM_DECODE_PADDING, JCOP4_SM_DECODE_CAPACITY, JCOP4_SM_DECODE_OK,
+	JCOP4_SM_DECODE_STATUS_MISMATCH
 };
+/* Opt-in only for the observed empty PIN-query response family. Neither
+ * policy accepts a bare status or bypasses MAC/structure validation. */
+enum jcop4_sm_outer_policy { JCOP4_SM_OUTER_9000, JCOP4_SM_OUTER_9000_OR_MATCHING_63CX };
 enum jcop4_sm_mac_result { JCOP4_SM_MAC_NOT_CHECKED, JCOP4_SM_MAC_FAILED, JCOP4_SM_MAC_VERIFIED };
 struct jcop4_sm_decode_report {
 	enum jcop4_sm_decode_result result;
@@ -166,31 +170,36 @@ static inline const char *jcop4_sm_decode_name(enum jcop4_sm_decode_result resul
 	case JCOP4_SM_DECODE_PADDING: return "padding_invalid";
 	case JCOP4_SM_DECODE_CAPACITY: return "plaintext_capacity_exceeded";
 	case JCOP4_SM_DECODE_OK: return "accepted";
+	case JCOP4_SM_DECODE_STATUS_MISMATCH: return "authenticated_status_outer_mismatch";
 	}
 	return "unknown_local_result";
 }
 
 /* Conservative response subset: optional encrypted87/01, then99/2,8E/8,
- * physical SW9000, no other tags/alternatives or fallback. An authenticated
+ * physical SW9000 by default. The explicit PIN-query policy additionally
+ * permits outer63Cx only when it matches MAC-authenticated DO99 exactly.
+ * No other tags/alternatives or fallback. An authenticated
  * inner error SW is returned as such, never converted into success. */
-static int jcop4_sm_open_report(struct jcop4_sm_channel *channel, const unsigned char *response,
+static int jcop4_sm_open_report_policy(struct jcop4_sm_channel *channel, const unsigned char *response,
 		size_t size, unsigned char *plain, size_t capacity, size_t *written, unsigned int *sw,
-		struct jcop4_sm_decode_report *report)
+		enum jcop4_sm_outer_policy policy, struct jcop4_sm_decode_report *report)
 {
 	unsigned char next[16] = {0}, iv[16] = {0};
 	unsigned char authenticated[JCOP4_SM_CRYPTO_LIMIT] = {0}, decrypted[JCOP4_SM_CRYPTO_LIMIT] = {0};
 	const unsigned char *ciphertext = NULL, *status = NULL, *tag = NULL;
 	size_t offset = 0, cipher_size = 0, length = 0, auth_end = 0, auth_size = 0, plain_size = 0;
-	unsigned int inner_sw = 0;
+	unsigned int inner_sw = 0, outer_sw = 0;
 	struct jcop4_sm_decode_report local = {JCOP4_SM_DECODE_ARGUMENT, JCOP4_SM_MAC_NOT_CHECKED};
 	int result = 1;
 	if (written) *written = 0;
 	if (sw) *sw = 0;
-	if (!channel || channel->phase != JCOP4_SM_WAITING || !written || !sw || !plain || !response) goto out;
+	if (!channel || channel->phase != JCOP4_SM_WAITING || !written || !sw || !plain || !response ||
+		(policy != JCOP4_SM_OUTER_9000 && policy != JCOP4_SM_OUTER_9000_OR_MATCHING_63CX)) goto out;
 	local.result = JCOP4_SM_DECODE_SIZE;
 	if (size < 2 || size > JCOP4_SM_CRYPTO_LIMIT - 32) goto out;
 	local.result = JCOP4_SM_DECODE_OUTER_SW;
-	if (response[size - 2] != 0x90 || response[size - 1] != 0) goto out;
+	outer_sw = (unsigned int)response[size - 2] * 256 + response[size - 1];
+	if (outer_sw != 0x9000 && !(policy == JCOP4_SM_OUTER_9000_OR_MATCHING_63CX && (outer_sw & 0xFFF0) == 0x63C0)) goto out;
 	local.result = JCOP4_SM_DECODE_SIZE;
 	if (size < 16) goto out;
 	local.result = JCOP4_SM_DECODE_SSC;
@@ -214,6 +223,9 @@ static int jcop4_sm_open_report(struct jcop4_sm_channel *channel, const unsigned
 	if (jcop4_sm_pad(authenticated, 16 + auth_end, authenticated, sizeof(authenticated), &auth_size) ||
 			jcop4_sm_verify_mac8(channel->keys.mac, authenticated, auth_size, tag)) goto out;
 	local.mac = JCOP4_SM_MAC_VERIFIED;
+	inner_sw = (unsigned int)status[0] * 256 + status[1];
+	local.result = JCOP4_SM_DECODE_STATUS_MISMATCH;
+	if (outer_sw != 0x9000 && inner_sw != outer_sw) goto out;
 	/* Nothing reaches the caller before MAC, padding and capacity all pass. */
 	if (cipher_size) {
 		local.result = JCOP4_SM_DECODE_DECRYPT;
@@ -224,7 +236,6 @@ static int jcop4_sm_open_report(struct jcop4_sm_channel *channel, const unsigned
 	}
 	local.result = JCOP4_SM_DECODE_CAPACITY;
 	if (plain_size > JCOP4_SM_DATA_LIMIT || plain_size > capacity) goto out;
-	inner_sw = (unsigned int)status[0] * 256 + status[1];
 	if (plain_size) memcpy(plain, decrypted, plain_size);
 	*written = plain_size;
 	*sw = inner_sw;
@@ -241,7 +252,13 @@ out:
 	return result;
 }
 
-/* Existing callers retain precisely the same acceptance and cleanup policy. */
+/* Existing callers retain precisely the same strict outer9000 policy. */
+static int jcop4_sm_open_report(struct jcop4_sm_channel *channel, const unsigned char *response,
+		size_t size, unsigned char *plain, size_t capacity, size_t *written, unsigned int *sw,
+		struct jcop4_sm_decode_report *report)
+{
+	return jcop4_sm_open_report_policy(channel, response, size, plain, capacity, written, sw, JCOP4_SM_OUTER_9000, report);
+}
 static int jcop4_sm_open(struct jcop4_sm_channel *channel, const unsigned char *response,
 		size_t size, unsigned char *plain, size_t capacity, size_t *written, unsigned int *sw)
 {

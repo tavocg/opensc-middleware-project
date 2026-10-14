@@ -9,7 +9,55 @@ transporte simulado. PIN/GUI también los ejecuta el usuario. Esto sustituye
 la autorización anterior de hardware por el agente; conservar límites de
 cada diagnóstico y privacidad. Git sigue autorizado pero .git solo lectura.
 
-**Última revisión: MF protegido confirmado; respuesta de PIN vacío aún sin validar.**
+**Última revisión: respuesta PIN vacío tiene SW exterior63C7; regla9000 corregida solo para query.**
+Principal `02b0d2c`, OpenSC `3dfef6704`, limpios al comenzar. Informe usuario
+`local/jcop4-channel-pin-context-8H2TMoTn/report.txt`,2026-10-14T06:28:45Z
+(14Oct00:28CR): canal íntegro confirmado, MF respuesta51/outer9000/87,
+decode accepted/MAC verified/inner9000. Query transporte0/respuesta16,
+outer63C7/leading status99, decoder outer_sw_not_9000/MAC not_checked.
+Finalreset/unlock/disconnect0, guard0/10comandos/helper1. **Bloqueo local por
+regla de SW exterior, no fallo MAC comprobado ni rechazo6982/PIN incorrecto.**
+No prueba aún contenidoDO99/MAC/estado autenticado ni contador máximo7 o
+efectos de reset; buffers borrados, no raw recuperable. Sin PIN suministrado.
+
+Análisis estático mismo libt_ias/hash2380540c..542dc4 confirmado:22bfa0
+obtiene los dos últimos bytes;243981..24399f y243abb..243ae2 comparan ambos
+con DO99, sin exigir9000, antes de MAC243c50..243c69.3756d9..3756e3 clasifica
+familia63Cx. Justifica contraste limitado, no atribuir rama runtime completa
+ni regla ISO universal/Idopte ejecutado a esta revisión. No ampliar85.
+
+Nuevo open_report_policy: política predeterminada OUTER_9000 intacta en
+open/open_report/confirmation/session/MF. Solo el query vacío opta por
+OUTER_9000_OR_MATCHING_63CX: exterior9000 o63Cx, TLV canónicos99/8E/MAC8,
+SSC correcto y MAC obligatorio; si exterior63Cx exige DO99 exactamente igual
+**después de verificar MAC y antes de descifrar/publicarSW/datos**. Mismatch
+fijo authenticated_status_outer_mismatch/MACverified no publica innerSW.
+No transformar63Cx en9000/login: helper sigue exigiendo datos0 y63Cx x>0;
+63C0 bloquea, estados desconocidos/bareSW/cuerpo sinMAC fallan. Exterior6983/
+6982/61xx/6Cxx siguen fuera de política. Sin nuevos comandos/fallback/retries/
+variantesCLA/Le/ref/MF, guard/reset/límites/permisos/privacidad intactos.
+Report añade response_policy por fase; estructura/exterior no autenticados.
+
+Pasaron **12 codec**, **22 probe**(13nativos+3bootstrap real/OpenSC simulado+
+6wrapper), **7confirmation** y **6session** por dependencia del codec. Vector
+warning sintético independiente OpenSSL CLI para63C0/7/F, todos128bits alterados,
+bare63C7/DO99 distinto conMACválido/missingMAC/SSC viejo/política inválida,
+default rechaza warnings. Fixture bootstrap real prueba exterior63C7/MAC,
+guard/helperMF siguen9000; query cero/datos/mismatch/MACbad detienen y cierran
+sin extraAPDU. ASan/UBSan28grupos codec/nativo/bootstrap detect_leaks0,
+sin prueba de fugas ni libs precompiladas instrumentadas. Helper compilado.
+Driver/submódulo/observador/flake/lock intactos; otras suites no repetidas.
+
+**Siguiente intervención:** misma JCOP4, firmador/otros clientes cerrados,
+`nix develop -c make inspect/jcop4-channel-pin-context READER=0`, una sola vez,
+sin introducir PIN. Repetición justificada por corregir aceptación de respuesta
+observada, no ensayar variantes ni repetir canal por inercia. Revisar query
+MAC/innerSW/response/result/cierre; no preparar credencial antes de comprobarlo.
+JCOP4 firma/RSA3072/antiguoVERIFY6982 pendientes. Git sololectura: commit de
+tools2/tests2/AGENTS/README/docs, sin archivo nuevo/captura/build. No comando
+PCSC/lector/tarjeta/Idopte/PIN/GUI por agente.
+
+**Revisión anterior: MF protegido confirmado; respuesta de PIN vacío aún sin validar.**
 Principal `c3f2bf7`, OpenSC `3dfef6704`, limpios al comenzar. Informe del usuario
 `local/jcop4-channel-pin-context-VoAbbMum/report.txt`,2026-10-14T06:19:03Z
 (14Oct00:19CR): build/context/driver/connect/lock/reset inicial0, ATR/T1/límites

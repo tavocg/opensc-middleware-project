@@ -155,6 +155,57 @@ int main(void)
 		puts("PASS fixed response reasons distinguish outer SW/structure/MAC/padding/capacity/state without publishing rejected plaintext or inner status");
 	}
 	{
+		/* Independently generated OpenSSL CLI CMACs, synthetic fixture keys,
+		 * pad(SSC2||990263Cx); no observed card response or session secret. */
+		const char *warnings[] = {"990263c08e085dc956359db69dd563c0", "990263c78e08762e1574488f24b463c7",
+			"990263cf8e08922094706bc15d4463cf"};
+		const unsigned int statuses[] = {0x63C0, 0x63C7, 0x63CF};
+		struct jcop4_sm_decode_report report;
+		for (size_t i = 0; i < 3; i++) {
+			size_t size = hex(altered, warnings[i]); rejected(altered, size, 64); /* Default remains strict. */
+			waiting(&channel); memset(plain, 0xAA, sizeof(plain));
+			assert(jcop4_sm_open_report_policy(&channel, altered, size, plain, 0, &written, &sw,
+				JCOP4_SM_OUTER_9000_OR_MATCHING_63CX, &report) == 0);
+			assert(report.result == JCOP4_SM_DECODE_OK && report.mac == JCOP4_SM_MAC_VERIFIED && sw == statuses[i] && !written);
+			assert(plain[0] == 0xAA && channel.phase == JCOP4_SM_IDLE && channel.keys.ssc[15] == 2);
+		}
+		/* Bare status remains rejected; every altered bit must fail, including
+		 * physical SW changes outside the MAC input (exact match mandatory). */
+		unsigned char warning[16]; assert(hex(warning, warnings[1]) == sizeof(warning));
+		for (size_t i = 0; i < sizeof(warning); i++) for (int bit = 0; bit < 8; bit++) {
+			memcpy(altered, warning, sizeof(warning)); altered[i] ^= (unsigned char)(1 << bit);
+			waiting(&channel); memset(plain, 0xAA, sizeof(plain));
+			assert(jcop4_sm_open_report_policy(&channel, altered, sizeof(warning), plain, sizeof(plain), &written, &sw,
+				JCOP4_SM_OUTER_9000_OR_MATCHING_63CX, &report) == 1);
+			assert(!written && !sw && plain[0] == 0xAA); invalid(&channel);
+			if (i == 15 && bit < 4) assert(report.result == JCOP4_SM_DECODE_STATUS_MISMATCH && report.mac == JCOP4_SM_MAC_VERIFIED);
+		}
+		waiting(&channel); size_t size = hex(altered, "63c7");
+		assert(jcop4_sm_open_report_policy(&channel, altered, size, plain, sizeof(plain), &written, &sw,
+			JCOP4_SM_OUTER_9000_OR_MATCHING_63CX, &report) == 1);
+		assert(report.result == JCOP4_SM_DECODE_SIZE && report.mac == JCOP4_SM_MAC_NOT_CHECKED && !sw); invalid(&channel);
+		waiting(&channel); size = hex(altered, "990269828e08cb3ef064b14ca89a63c7");
+		assert(jcop4_sm_open_report_policy(&channel, altered, size, plain, sizeof(plain), &written, &sw,
+			JCOP4_SM_OUTER_9000_OR_MATCHING_63CX, &report) == 1);
+		assert(report.result == JCOP4_SM_DECODE_STATUS_MISMATCH && report.mac == JCOP4_SM_MAC_VERIFIED && !sw); invalid(&channel);
+		waiting(&channel); memcpy(altered, warning, sizeof(warning)); altered[14] = 0x69; altered[15] = 0x83;
+		assert(jcop4_sm_open_report_policy(&channel, altered, sizeof(warning), plain, sizeof(plain), &written, &sw,
+			JCOP4_SM_OUTER_9000_OR_MATCHING_63CX, &report) == 1);
+		assert(report.result == JCOP4_SM_DECODE_OUTER_SW && report.mac == JCOP4_SM_MAC_NOT_CHECKED); invalid(&channel);
+		waiting(&channel);
+		assert(jcop4_sm_open_report_policy(&channel, warning, sizeof(warning), plain, sizeof(plain), &written, &sw,
+			(enum jcop4_sm_outer_policy)-1, &report) == 1);
+		assert(report.result == JCOP4_SM_DECODE_ARGUMENT && report.mac == JCOP4_SM_MAC_NOT_CHECKED); invalid(&channel);
+		waiting(&channel); channel.keys.ssc[15] = 3;
+		assert(jcop4_sm_open_report_policy(&channel, warning, sizeof(warning), plain, sizeof(plain), &written, &sw,
+			JCOP4_SM_OUTER_9000_OR_MATCHING_63CX, &report) == 1);
+		assert(report.result == JCOP4_SM_DECODE_MAC && report.mac == JCOP4_SM_MAC_FAILED); invalid(&channel);
+		waiting(&channel); warning[14] = 0x90; warning[15] = 0;
+		assert(jcop4_sm_open_report_policy(&channel, warning, sizeof(warning), plain, sizeof(plain), &written, &sw,
+			JCOP4_SM_OUTER_9000_OR_MATCHING_63CX, NULL) == 0 && sw == 0x63C7 && !written);
+		puts("PASS opt-in matching outer63Cx requires canonical DO99/MAC and exact authenticated status; default, bare SW, mismatches, tampering and replay remain rejected");
+	}
+	{
 		waiting(&channel); memset(plain, 0xAA, sizeof(plain));
 		assert(jcop4_sm_open(&channel, response, response_size, plain, sizeof(plain), &written, &sw) == 0);
 		assert(written == 14 && !memcmp(plain, "PUBLIC FIXTURE", 14) && plain[14] == 0xAA && sw == 0x9000);
