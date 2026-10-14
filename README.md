@@ -73,8 +73,12 @@ VERIFY privado ya recibe `sc_pin_cmd_data`, cifra el PIN prestado sin
 guardarlo y permite un único intento después de la consulta autenticada.
 Admite inicialmente ASCII imprimible de 6 a 14 bytes para el perfil UTF-8
 observado; PIN-pad y otros formatos quedan fuera. Sus pruebas usan PIN ficticio.
-Faltan la activación optativa desde el driver público y las operaciones
-AID/MSE/PSO después del login; el backend nuevo requiere OpenSSL3. No hay otra prueba con tarjeta ahora.
+Las APIs privadas también seleccionan el AID y preparan MSE desde
+`sc_security_env`; PSO extendido recibe exclusivamente un digest SHA-256 de
+32 bytes. La salida RSA 2048 se entrega después de comprobar MAC/estado y
+cierre completo. Pasaron seis grupos nuevos con firma RSA de software y
+ASan/UBSan. Falta la activación optativa desde el driver público y conectar
+PKCS#15/PKCS#11; el backend nuevo requiere OpenSSL3. No hay otra prueba con tarjeta ahora.
 Los párrafos siguientes conservan los pasos históricos de investigación.
 La selección temporal RSA/SHA-256 obtuvo `9000`; VERIFY vacío devolvió
 `63C7`, con siete intentos disponibles, PIN global 1 y formato UTF-8.

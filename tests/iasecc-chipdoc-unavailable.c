@@ -27,6 +27,13 @@ int main(void)
 	int tries = 123; memset(&report, 0xA5, sizeof(report));
 	assert(iasecc_chipdoc_channel_query_pin(&card, 1, &tries, &report) == SC_ERROR_NOT_SUPPORTED);
 	assert(tries == -1 && !memcmp(&report, &empty, sizeof(report)) && !memcmp(&prv, &before, sizeof(prv)));
+	memset(&report, 0xA5, sizeof(report));
+	assert(iasecc_chipdoc_channel_set_security_env(&card, NULL, 0, &report) == SC_ERROR_NOT_SUPPORTED);
+	assert(!memcmp(&report, &empty, sizeof(report)) && !memcmp(&prv, &before, sizeof(prv)));
+	struct iasecc_chipdoc_signature_report sig, empty_sig = {0}; unsigned char output[256], saved_output[256];
+	memset(output, 0xA5, sizeof(output)); memcpy(saved_output, output, sizeof(output)); memset(&sig, 0xA5, sizeof(sig));
+	assert(iasecc_chipdoc_channel_compute_signature(&card, NULL, 32, output, 256, &sig) == SC_ERROR_NOT_SUPPORTED);
+	assert(!memcmp(&sig, &empty_sig, sizeof(sig)) && !memcmp(output, saved_output, sizeof(output)) && !memcmp(&prv, &before, sizeof(prv)));
 	tries = 123; memset(&report, 0xA5, sizeof(report));
 	assert(iasecc_chipdoc_channel_verify_pin(&card, NULL, &tries, &report) == SC_ERROR_NOT_SUPPORTED);
 	assert(tries == -1 && !memcmp(&report, &empty, sizeof(report)) && !memcmp(&prv, &before, sizeof(prv)));

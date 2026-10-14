@@ -9,6 +9,68 @@ transporte simulado. PIN/GUI también los ejecuta el usuario. Esto sustituye
 la autorización anterior de hardware por el agente; conservar límites de
 cada diagnóstico y privacidad. Git sigue autorizado pero .git solo lectura.
 
+**Última revisión: AID/MSE/PSO privados desde argumentos OpenSC implementados.**
+Principal `f15feb4`, OpenSC `6d149ac38`, limpios al comenzar. Firma real
+JnUUiy9x vigente. Sin PCSC/lector/tarjeta/PIN real/GUI/Idopte ejecutado ni
+captura/informe nuevo. No pedir otra firma con tarjeta todavía.
+
+Nueva **channel_set_security_env(card,const sc_security_env*,se_num,report)**:
+solo se_num0/flagsALG_PRESENT|KEY_REF_PRESENT/SIGN/RSA/ref91 deunbyte/bits2048/
+PKCS1_TYPE01|HASH_SHA256, sinfile/AID/target/ALG_REF/params. Args unsupported
+fallan antesIO/preservanowner. No guarda env/punteros ni usa supported_algos
+para elegir algoritmo. Contrato privado exige conciliar campos/path/método
+PIN nativos antes de wiring público; no eliminarlos a ciegas. RSA3072/raw/PSS/
+otros hashes fuera. Reserva propia/LOGIN/SSC8/SM_IDLE/provider/generation.
+
+SELECT AID ligado al bootstrap protegido: 00A4040C/noLeinterior/body29/
+frame35/CASE4 corto/exteriorLe256/SSC9/10;9000/payloadvacío ->APPLICATION.
+Luego MSE002281B6/data91022891, mismo frame35/exterior256/SSC11/12,
+9000/vacío fija MSE/ref91/bits2048. No DOCP/certificados/lecturas/VERIFY extra.
+Helper privado compartido de3callsitesfijos, no wrapper arbitrario; compara
+owner/generation ANTES de dereferenciar crypto tras callbacks/transporte.
+
+Nueva **channel_compute_signature(card,in,in_len,out,out_len,report)**:
+exige MSE/ref91/2048/SSC12, digestSHA256 exactamente32 y out>=256. No hash/
+DigestInfo/conversión/truncamiento. PSO002A9E9A protegido body65/frame74/
+CASE4_EXT/DO97020100/exteriorLe291/SSC13/14, respuesta293incluidoSW.
+NO_RETRY_WL/NO_GET_RESP/NO_SM, sin chaining/61/6C/GET RESPONSE/fallback/otroPSO.
+Caps T1/EXT y límites existentes139/291, no alterados. MAC/padding/outer9000/
+inner9000/exact256 requeridos. Solo status-only99/8E/6A82 observado se
+autentica como ERROR, sin continuación/output. Otros errores permanecen
+errores. Driver comprueba respuesta protegida, no RSA con certificado en
+producción: test/consumidor verifica matemáticamente con llave pública.
+
+Todo PSO aceptado intenta close incluso si cifrado falla antes de envío.
+Claves/MSE/cache borrados antes de reset/unlock, anidados ajenos conservados.
+Devuelve256/copia salida SOLO después de cierre completo; cualquier error,
+incluido cierre, deja output intacto. Reporte canal+cierre numérico, sin
+digest/firma/PIN/secretos. Preflight/formato/fase locales noIO, caller cierra;
+ready puede invalidar contexto viejo. Pérdida reserva: no reset/unlock ajenos,
+recovery_required hasta recrear instancia. No segunda firma sin nueva
+transacción/login. No cache ni reinicio/maxintentos inferidos.
+
+**6 grupos nuevos** test/iasecc-chipdoc-sign: peer/PIN/llaveRSA sintéticos,
+dispatcher/serializer/locks reales, AES/CBC/CMAC independientes, frames/SSC,
+RSA positivo+negativo1bit/salida ausente en callbacks reset/unlock, anidados,
+20env+8inputs inválidos,64bitsMAC/forma/padding/replay/SW/61/6C/transporte/
+reset/reattach/remoción/provider por3etapas, cleanup/recuperación. ASan/UBSan6
+detect_leaks0 pasó, sin fugas verificadas ni instrumentación de libOpenSC/
+provider/locks/ASN1 precompilados.36grupos previos+suiteIAS/JCOP3 pasaron:
+697líneasPASS total, NO697testcases distintos. Stub macro otrascrypto incluye
+las2APIs sinIO/output/estado; no builds reales otrosbackends/FIPS/plataformas.
+OpenSC/móduloPKCS11 compilados, sin exports nuevos. Core47/helpers76/helper
+hardware/observador/flake/lock/capturas intactos/vigentes/no repetidos.
+
+**Siguiente trabajo autónomo:** wiring optativo init/capacidades/método PIN
+nativo/paths/args reales, PKCS15/PKCS11 y mecanismos/DigestInfo. use_key en
+pkcs15-sec.c revalida cachePIN ante security status: controlar y probar esa
+ruta para conservar un intento, no autoriza replay. Serialización real/
+JCOP4 GUI/consecutivas/reinserción/RSA3072/plataformas/FIPS pendientes.
+Git readonly/no eludir: submódulo primero2modificados sm.c/h; principal
+después puntero/4docs/Makefile/test-iasecc.sh/verify+unavailable fixtures
+y **nuevo tests/iasecc-chipdoc-sign.c/scripts/test-iasecc-chipdoc-sign.sh**.
+No builds/capturas a Git.
+
 **Última revisión: VERIFY privado con argumentos OpenSC y PIN ficticio implementado.**
 Principal `c58d485`, OpenSC `1f36a170d`, limpios al comenzar. Firma real
 JnUUiy9x vigente. Sin PCSC/lector/tarjeta/PIN real/GUI/Idopte ejecutado ni

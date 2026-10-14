@@ -536,3 +536,84 @@ precompilados. Stub del backend no soportado probado por macro con VERIFY
 sinIO ni cambios de estado; no builds reales de esos backends. OpenSC y
 módulo PKCS11 compilados, sin exports nuevos. Core47/helpers76 y helpers
 reales sin cambios, resultados anteriores vigentes/no repetidos.
+
+### AID, MSE y PSO privados desde argumentos OpenSC
+
+Principal `f15feb4`, OpenSC `6d149ac38`, limpios al comenzar. Se añaden
+`channel_set_security_env(card,const sc_security_env*,se_num,report)` y
+`channel_compute_signature(card,in,in_len,out,out_len,report)`. APIs privadas,
+sin PIN_CMD/set_security_env/compute_signature públicos, match/init,
+algoritmos anunciados ni nuevos exports. Ningún comando de tarjeta del agente.
+
+Set_security_env acepta solo se_num0, flagsALG_PRESENT|KEY_REF_PRESENT,
+SIGN/RSA/ref91 de un byte/key_size_bits2048 y PKCS1_TYPE01|HASH_SHA256.
+Sin FILE_REF/ALG_REF ni paths/AID/target/params opcionales; referencias de
+algoritmos anunciados se ignoran en esta API, no eligen algoritmo de tarjeta.
+Campos, digest, PIN o punteros del argumento no se guardan en drv_data.
+Operaciones/hash/llave/tamaño/flags/paths/params no soportados se rechazan
+antes de seleccionar aplicación. Este contrato acotado debe conciliarse
+con los argumentos reales de PKCS15 antes de wiring; no eliminar campos
+del llamador a ciegas ni anunciar RSA3072, rawRSA, PSS u otros hashes.
+
+Exige reserva propia/LOGGED_IN/SM_IDLE/SSC8/provider/generación. Selecciona
+el AID del perfil confirmado por bootstrap una vez bajo SM: 00A4040C,
+sin Le interior, DO87+8E/body29/CASE4 corto/frame35/Le exterior256, SSC9/10.
+Respuesta autenticada9000 y payload vacío permiten APPLICATION. Después
+único MSE002281B6/data91022891, mismo frame35/Le256/SSC11/12, respuesta
+vacía9000; fija referencia91/tamaño2048 de MSE. No DOCP/private components,
+certificados, lectura, selección IAS en claro, query o VERIFY adicionales.
+Cada etapa verifica owner/generation ANTES de volver a usar crypto tras IO.
+
+Compute_signature exige MSE vigente/ref91/2048/SSC12, input exactamente32
+bytes y output con capacidad al menos256. **Input ya es digestSHA256**, sin
+hash, DigestInfo, conversión, padding de credencial ni truncamiento local.
+PSO002A9E9A, DO87/cipher48+DO97020100+DO8E/body65, CASE4_EXT/frame74,
+Le exterior291, SSC13/14. Usa capacidades T1/EXT/envío139/recepción291 ya
+exigidas por el perfil, sin alterarlas. NO_RETRY_WL/NO_GET_RESP/NO_SM,
+sin chaining, 61/6C/GET RESPONSE, fallback de Le/CLA u otro PSO.
+
+MAC/padding/outer9000 y SW interno9000 + exactamente256 bytes obligatorios.
+Conserva solo la política observada para status-only99/8E/6A82 (16bytes
+incluidoSW): MAC/SW coincidente son un **error**, sin output/continuación.
+Otros fallos autenticados permanecen errores; forma/MAC/IO/crypto/contexto
+inválidos no publican SW. FaseMSE/clave se consume y todo error real invalida.
+El driver valida procedencia/forma de respuesta protegida; no lee certificado
+ni verifica RSA en producción. La verificación matemática de RSA corresponde
+al test/consumidor que tenga la llave pública, como ya hizo el helper real.
+
+Una operación PSO aceptada siempre intenta transaction_close, incluso ante
+fallo de cifrado previo a envío, transporte, respuesta o resultado. Descarta
+claves/MSE/cache antes de reset/unlock y respeta locks anidados del llamador.
+Solo devuelve256/copia el resultado después de cierre completo; output
+permanece intacto ante fallo, incluido reset/unlock final. Reporte contiene
+canal y cierre numéricos, no digest/firma/PIN/claves. No contadores máximos
+o reinicio inferidos ni cache/credencial retenida. Pérdida de reserva impide
+reset/unlock de otra reserva y marca recuperación hasta recrear instancia.
+Errores locales de formato/fase previos a aceptar operación no envían PSO
+y dejan cierre a cargo del llamador; ready puede invalidar un contexto viejo.
+No uso de nuevo MSE/PSO tras firma; siguiente firma requiere nueva transacción.
+
+`make test/iasecc-chipdoc-sign` pasó **seis grupos**: peer lector/RSA/PIN
+sintéticos con dispatcher/serializer/locks reales y construcción CBC/CMAC
+independiente; frames35/35/74/SSC9..14, firmaRSA positiva y negativo de un
+bit, salida ausente durante callbacks de reset/unlock, locks anidados,
+20 ambientes+8 inputs inválidos,64bitsMAC/forma/replay/padding/SW/61/6C/
+transport/reset/reattach/remoción/provider en cada etapa, cierre fallido y
+cuarentena. ASan/UBSan6 detect_leaks0 pasó: sin fugas verificadas ni
+instrumentación de libOpenSC/provider/locks/ASN1 precompilados. Stub de
+backend no soportado incluye ambas APIs sinIO/output/estado; no builds
+reales OpenSSL1/LibreSSL/noSSL/FIPS/plataformas o concurrencia física.
+
+Siguen activación pública optativa, capacidades justificadas, método PIN
+nativo y paths/argumentos reales de PKCS15, anuncio/transformación de
+mecanismos (incluido DigestInfo de CKM_RSA_PKCS) y pruebas PKCS15/PKCS11.
+`pkcs15-sec.c:use_key` tiene revalidación de PIN cacheado ante security status;
+es una ruta existente que el wiring debe controlar y probar con este perfil
+para conservar el límite de un intento, no una autorización para repetir.
+No hardware/PIN real/GUI/Idopte/capturas nuevas; firma JnUUiy9x sigue vigente.
+No pedir otra firma real hasta probar ese wiring; RSA3072 sin acreditar.
+
+Pasaron también36 grupos previos y la suite IAS/JCOP3 completa con el nuevo
+target:697líneasPASS (no697casos distintos). OpenSC/móduloPKCS11 compilados;
+sin exports nuevos. Core47/helpers76/helpers de hardware, flake/lock/
+observador/capturas sin cambios; resultados anteriores vigentes/no repetidos.

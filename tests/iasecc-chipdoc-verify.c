@@ -75,6 +75,7 @@ static struct sc_pin_cmd_data arguments(void)
 	d.pin1.prompt = (const char *)1; /* Driver must not prompt or read this. */
 	return d;
 }
+#ifndef IASECC_CHIPDOC_VERIFY_FIXTURE
 int main(void)
 {
 	(void)thread_ops; /* Mutex-error variants remain in the shared transaction suite. */
@@ -206,3 +207,4 @@ int main(void)
 	OSSL_PROVIDER_unload(alternate_provider.defprov); OSSL_LIB_CTX_free(alternate_provider.libctx);
 	return 0;
 }
+#endif

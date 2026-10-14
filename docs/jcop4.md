@@ -6139,3 +6139,37 @@ sin exports nuevos; core47/helpers76/helpers reales intactos/no repetidos.
 Sin PCSC/hardware/PIN real/GUI/Idopte ni capturas del agente. Firma JnUUiy9x
 vigente; sigue AID/MSE/PSO y wiring PKCS15/PKCS11 antes de otra tarjeta.
 [Detalles](jcop4-opensc-integration.md#verify-privado-desde-argumentos-opensc).
+
+### AID/MSE/PSO privados desde argumentos OpenSC
+
+Principal `f15feb4`, OpenSC `6d149ac38`, limpios al comenzar. API privada
+set_security_env valida SIGN/RSA2048/ref91/PKCS1_TYPE01|HASH_SHA256 y se_num0/
+flagsALG_PRESENT|KEY_REF_PRESENT sin file/ALG_REF/paths/params. Desde login
+SSC8 selecciona una vez el AID ligado al bootstrap bajo SM, 00A4040C,
+frame35/Le exterior256/SSC9/10, luego MSE002281B6/data91022891, frame35/
+Le256/SSC11/12. Respuestas vacías autenticadas9000 requeridas; no lecturas,
+selección IAS en claro o VERIFY extras. Sin wiring público/init/algoritmos.
+
+Compute_signature acepta únicamente digestSHA25632 y output>=256; no hash/
+DigestInfo/conversión. PSO extendido protegido frame74/body65/DO97020100/
+Le291/SSC13/14, con caps/límites existentes, sin cambiarlos. MAC/padding/
+outer9000/inner9000/exact256 para éxito; status-only6A82 observado solo
+error. No GET RESPONSE/61/6C/fallback/replay. PSO aceptado siempre intenta
+close, incluso cifrado previo fallido; salida se copia solo después de
+reset/unlock completo, queda intacta en error. Conserva locks anidados y
+recuperación explícita si se pierde reserva/cierre. Driver comprueba SM,
+test/consumidor con llave pública verifica RSA; no certificado nuevo leído.
+
+Seis grupos nuevos+ASan/UBSan6 detect_leaks0 y36grupos previos/suiteIAS/JCOP3
+pasaron:697líneasPASS, no697casos distintos. Peer/PIN/llaveRSA software con
+dispatcher/serializer/locks reales, AES/CMAC independientes, RSA positivo/
+negativo1bit, frames/SSC/salida tardía/anidados/20env+8inputs inválidos y
+fallos64bitsMAC/replay/padding/SW/IO/reset/reattach/remoción/provider por etapa.
+Sin fugas verificadas ni instrumentación de bibliotecas externas. OpenSC/
+móduloPKCS11 compilados, sin exports nuevos; stub macro APIs sinIO/estado.
+Core47/helpers76/helperhardware/observador/flake/lock/capturas intactos,
+resultados anteriores vigentes/no repetidos. Sin PCSC/PIN real/GUI/Idopte del
+agente. Firma JnUUiy9x vigente; sigue wiring optativo/args y métodoPIN nativos/
+capacidades/mecanismos/PKCS15/PKCS11 antes de tarjeta. Controlar revalidación
+de PIN cacheado de use_key para no introducir intentos automáticos. RSA3072
+no acreditada. [Detalles](jcop4-opensc-integration.md#aid-mse-y-pso-privados-desde-argumentos-opensc).
