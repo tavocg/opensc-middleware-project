@@ -6,6 +6,47 @@ la tarjeta. El usuario ejecuta las operaciones que requieran PIN o GUI. Esto
 sustituye las restricciones anteriores de no ejecutar Git/hardware/Idopte por
 el agente; conservar límites de cada diagnóstico y privacidad de los registros.
 
+**Última revisión: codec candidato de mensajes protegidos probado offline.**
+Principal `98b4f86`, OpenSC `3dfef6704`, limpios al comenzar. Última tarjeta:
+LbbFD51N/02:22:26Z, punto D004 válido. No repetir D004, estados ni inventario.
+Esta revisión no ejecutó hardware, Idopte, PIN, GUI ni captura autenticada.
+
+Nuevo `tools/jcop4-channel-messages.h`, separado del helper y del driver:
+contexto local con claves/SSC y estados INVALID/IDLE/WAITING; constructor de
+cabecera y cuerpo protegido, sin serializar Lc/Le de transporte. Subconjunto
+conservador: CLA básica00 ->0C, datos87/01, Le97 de un byte, MAC8 en8E;
+respuesta87 opcional,99/2,8E/8 y SW físico9000. No acepta85 ni otras variantes.
+CBC usa IV0 de la rama revisada; MAC de comando sobre SSC||pad(cabecera)
+y cuerpo87/97, con padding adicional solo si hay cuerpo. Respuesta:
+pad(SSC||87 opcional||99). SSC se incrementa antes de cada mensaje.
+**Verifica MAC antes de descifrar y antes de publicar datos/SW**; un SW interno
+autenticado6982 se devuelve como error, no se transforma en9000.
+
+Toda respuesta inválida borra claves y descarta el contexto. Overflow nunca
+reinicia SSC. Un error local de construcción conserva estado sin enviar;
+no se pueden intercalar comandos mientras se espera respuesta. El futuro
+llamador debe serializar acceso e invalidar ante error de transporte; el codec
+no hace PC/SC ni locks ni permite asumir que init establece un canal.
+Límite3584/TLV81/82 es local, no soporte APDU/RSA3072 ni autorización de tarjeta.
+
+Nuevo `make test/jcop4-channel-messages`: **9 grupos pasaron**, fixtures
+sintéticos independientes Python/OpenSSL CLI y hashes hashlib; comandos con
+datos/Le/sin cuerpo, tamaños128/384/3584, respuestas válidas/in-place/error
+interno, todos los bits alterados, padding inválido con MAC válido, TLV
+truncados/no canónicos/duplicados/reordenados, replay/estados/capacidades/nulos,
+overflow y borrado. ASan/UBSan también pasaron con detect_leaks=0: LeakSanitizer
+falló por ptrace del entorno; **no se verificaron fugas**. KDF5/primitivas7/
+helper92/lanzador95/observador162/firma6/operación12 intactos, no repetidos.
+Flake/lock/observador/helper hardware/driver/submódulo sin cambios.
+
+**Siguiente trabajo:** terminar la serialización final CLA/Le de GA y el acuerdo
+efímero local; definir verificación del primer intercambio protegido antes de
+intentar tarjeta. No nuevo D004/PIN/MSE/GA/SM real todavía. Identidad de D004,
+perfil/ruta C_Login y causa VERIFY6982 siguen pendientes; no firma JCOP4 ni
+RSA3072 acreditada. Git autorizado, pero .git montado solo lectura impide
+crear index.lock; no eludirlo. Incluir explícitamente los nuevos archivos
+messages.h, tests/jcop4-channel-messages.c y su lanzador en el commit.
+
 **Última revisión: primitivas AES/CMAC/padding/SSC probadas offline.**
 Principal `e6eaee7`, OpenSC `3dfef6704`, limpios al comenzar. Última tarjeta:
 LbbFD51N/02:22:26Z, punto D004 válido; **no repetir D004 ni estados/inventario**.

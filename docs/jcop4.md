@@ -4226,6 +4226,82 @@ ni ruta runtime durante C_Login. JCOP4/RSA3072/VERIFY6982 siguen pendientes.
 Git add de los archivos concretos falló por .git montado solo lectura; commit
 pendiente, incluyendo los tres archivos nuevos de primitivas/pruebas/lanzador.
 
+## Codec candidato de mensajes protegidos
+
+Principal `98b4f86`, OpenSC `3dfef6704`, limpios al comenzar. Se añadió una
+pieza local para construir y verificar mensajes de la rama AES128/IV0/MAC8
+examinada. No se ejecutaron Idopte, hardware, PIN, GUI ni captura autenticada.
+La última evidencia de tarjeta sigue siendo el punto P-521 válido de D004
+en LbbFD51N; no se repitió su lectura ni consultas de estado/inventario.
+
+### Construcción candidata y alcance
+
+La revisión estática de la preparación243e60 muestra la entrada del MAC:
+SSC siguiente de16 bytes, cabecera protegida rellenada hasta16 y cuerpo87/97.
+Si existe cuerpo, el conjunto lleva padding método2; si no, se calcula sobre
+los32 bytes SSC/cabecera sin añadir otro bloque. La respuesta2436a0 verifica
+el MAC antes de llegar a la etapa de descifrado: entrada con SSC siguiente
+y los objetos anteriores a8E, con padding método2. Esta construcción continúa
+la variante CBC con IV cero de la sección anterior; no acredita su uso por
+C_Login de la tarjeta actual ni una variante formal de CA.
+
+`tools/jcop4-channel-messages.h` usa las primitivas ya probadas y ofrece:
+
+- Contexto con claves, SSC y estados INVALID/IDLE/WAITING. Incrementa SSC antes
+  de comando y respuesta, impide intercalar comandos y rechaza overflow.
+- Constructor de cabecera protegida y cuerpo TLV: acepta CLA básica00,
+  produce0C, cifra datos opcionales en87 con indicador01, codifica Le1..256
+  en97 de un byte y agrega los primeros8 bytes del CMAC en8E.
+- Verificador conservador de respuesta:87/01 cifrado opcional,99 de dos bytes,
+  8E de ocho y SW físico9000. Longitudes canónicas cortas/81/82; sin objetos
+  duplicados, reordenados o adicionales. **85 y otras variantes quedan fuera**.
+- Solo publica datos y SW interno tras comprobar MAC, descifrado, padding y
+  capacidad. Un SW interno autenticado6982 se devuelve como6982, sin convertir
+  el error en éxito. Ninguna respuesta se acepta únicamente por su SW físico.
+
+Una respuesta inválida borra las claves e inutiliza el contexto. Un error
+local de construcción no avanza SSC ni publica salida, pues no hubo envío.
+Después de construir un comando, el futuro llamador debe invalidar ante
+error de transporte y serializar el acceso al contexto. No hay PC/SC, locks,
+login, funciones Idopte ni datos de tarjeta en este componente.
+
+**El constructor no emite una APDU de transporte completa**: quedan pendientes
+Lc/Le exterior, CLA final de GA y fragmentación. El límite local de3584 bytes
+de datos y soporte de longitudes TLV81/82 no prueban capacidad de APDU extendida
+ni RSA3072. Inicializar con claves solo configura un estado local: requiere
+claves nuevas de un establecimiento validado por separado, no demuestra un
+canal ni autentica por sí solo D004. No se integra aún al helper o al driver.
+
+### Pruebas locales
+
+`make test/jcop4-channel-messages` pasó **9 grupos**. Los mensajes esperados
+se ensamblaron separadamente en Python con claves sintéticas00..0f/10..1f,
+SSC1/2 y CBC/CMAC calculados por OpenSSL CLI. Hashes hashlib resumen los
+cuerpos largos; las expectativas no se calculan con el codec sometido a prueba.
+Las primitivas mantienen sus vectores NIST de la sección anterior.
+
+Se verificaron comandos con87/97 y sin cuerpo, longitudes128/384/3584,
+respuesta con datos, decodificación in-place y SW interno de error. Todos
+los bits de una respuesta válida se alteraron por separado: ninguna variante
+publicó datos/SW. También se rechazó un mensaje con **MAC válido y padding
+inválido**, truncamientos, longitudes no canónicas/indefinidas, duplicados,
+reordenamiento, bytes adicionales y85. Pruebas de replay, respuesta no
+solicitada, buffers/punteros, SSC overflow y borrado verifican el estado local.
+
+La misma suite pasó ASan y UBSan con detección de fugas desactivada.
+LeakSanitizer terminó con error por ptrace del entorno; **no se verificó
+ausencia de fugas**. Todos los datos son sintéticos; salida de las pruebas
+solo PASS. KDF5/primitivas7/helper92/lanzador95/observador162/firma6/operación12
+anteriores siguen vigentes, sin repetir suites cuyo código no cambió.
+Flake/lock, helper hardware, observador, driver y submódulo intactos.
+
+**Próximo trabajo:** cerrar la serialización final CLA/Le de GA, preparar el
+acuerdo efímero local y definir la comprobación del primer intercambio
+protegido antes de solicitar una prueba real. No enviar MSE/GA/SM ni pedir
+PIN todavía. El codec probado no resuelve la causa de VERIFY6982 ni acredita
+firma libre JCOP4/RSA3072. Git sigue montado solo lectura; commit pendiente
+incluyendo los tres archivos nuevos del codec, pruebas y lanzador.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño
