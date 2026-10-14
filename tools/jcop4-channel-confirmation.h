@@ -31,13 +31,20 @@ typedef int (*jcop4_ca_exchange)(void *context, const unsigned char *command, si
 		unsigned char *response, size_t capacity, size_t *received);
 
 /* Return0 means exactly one protected READ matched the initial data, not a
- * logged-in token, trusted identity or signing capability. No session keys
- * escape; caller must also end/reset the card-side session on disconnect.
+ * logged-in token, trusted identity or signing capability.
+ * Optional confirmed must be initialized INVALID before entry. An active
+ * destination is refused before I/O and preserved so its owner can close it.
+ * Only after full confirmation does it receive IDLE state and SSC2. It belongs
+ * to this same exclusively owned connection; no reset/reconnect/other client
+ * or plaintext operation may be inserted before continuing. The owner must
+ * wipe it AND end/reset the remote session on every exit/transport failure.
+ * This crypto-only component cannot itself enforce the connection identity.
+ * Without confirmed, this operation remains a probe and always wipes state.
  * Callback returns0 for success, receives capacity258 (including physicalSW).
  * No retries, GET RESPONSE, PIN status, VERIFY or post-probe commands. */
-static int jcop4_ca_confirm_d004(const unsigned char *initial, size_t initial_size,
+static int jcop4_ca_confirm_d004_session(const unsigned char *initial, size_t initial_size,
 		enum jcop4_ca_outer_le outer_le, jcop4_ca_exchange exchange, void *context,
-		struct jcop4_ca_probe_report *report)
+		struct jcop4_ca_probe_report *report, struct jcop4_sm_channel *confirmed)
 {
 	struct jcop4_ca_pending pending = {{0}, {{0}, {0}, {0}}};
 	struct jcop4_sm_channel channel = {{{0}, {0}, {0}}, JCOP4_SM_INVALID};
@@ -47,8 +54,13 @@ static int jcop4_ca_confirm_d004(const unsigned char *initial, size_t initial_si
 	size_t command_size = 0, received = 0, body_size = 0, plain_size = 0;
 	unsigned int inner_sw = 0;
 	int result = 1;
-	if (!report) return 1;
+	if (!report) {
+		if (confirmed && confirmed->phase == JCOP4_SM_INVALID) jcop4_sm_invalidate(confirmed);
+		return 1;
+	}
 	memset(report, 0, sizeof(*report));
+	if (confirmed && confirmed->phase != JCOP4_SM_INVALID) return 1;
+	if (confirmed) jcop4_sm_invalidate(confirmed);
 	if (!initial || initial_size != 137 || initial[2] != 18 || !exchange ||
 			(outer_le != JCOP4_CA_LE_BOUND && outer_le != JCOP4_CA_LE_SHORT_MAX)) goto out;
 	peer[0] = 4; memcpy(peer + 1, initial + 5, 132);
@@ -103,12 +115,22 @@ static int jcop4_ca_confirm_d004(const unsigned char *initial, size_t initial_si
 	}
 	report->outcome = JCOP4_CA_CONTENT_MISMATCH;
 	if (plain_size != initial_size || CRYPTO_memcmp(plain, initial, initial_size)) goto out;
-	report->outcome = JCOP4_CA_READ_CONFIRMED; result = 0;
+	report->outcome = JCOP4_CA_READ_CONFIRMED;
+	if (confirmed) memcpy(confirmed, &channel, sizeof(*confirmed));
+	result = 0;
 out:
 	jcop4_ca_pending_clear(&pending); jcop4_sm_invalidate(&channel);
 	OPENSSL_cleanse(peer, sizeof(peer)); OPENSSL_cleanse(command, sizeof(command));
 	OPENSSL_cleanse(response, sizeof(response)); OPENSSL_cleanse(body, sizeof(body)); OPENSSL_cleanse(plain, sizeof(plain));
 	return result;
+}
+
+/* Existing hardware probe never retains a channel or exposes session keys. */
+static int jcop4_ca_confirm_d004(const unsigned char *initial, size_t initial_size,
+		enum jcop4_ca_outer_le outer_le, jcop4_ca_exchange exchange, void *context,
+		struct jcop4_ca_probe_report *report)
+{
+	return jcop4_ca_confirm_d004_session(initial, initial_size, outer_le, exchange, context, report, NULL);
 }
 
 #endif

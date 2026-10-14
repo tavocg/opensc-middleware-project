@@ -9,6 +9,54 @@ transporte simulado. PIN/GUI también los ejecuta el usuario. Esto sustituye
 la autorización anterior de hardware por el agente; conservar límites de
 cada diagnóstico y privacidad. Git sigue autorizado pero .git solo lectura.
 
+**Última revisión: retención del canal confirmado probada solo en software.**
+Principal `75e3ec5`, OpenSC `3dfef6704`, limpios al comenzar. Última tarjeta
+sigue27daTsCp/05:40:01Z: canal confirmado/READ137 idéntico/cierre0. No repetir
+canal/D004/estado ni pedir PIN. Sin PCSC/hardware/GUI/Idopte ejecutado por agente.
+
+Nuevo jcop4_ca_confirm_d004_session en confirmation.h: salida opcional de estado
+SM solo tras MAC/padding/SW9000/tamaño137/comparación completa. Destino debe
+estar inicializado INVALID; éxito IDLE/SSC2 y keys del acuerdo de esa conexión.
+Fallo deja destino nuevo borrado/INVALID; si ya está IDLE o WAITING, se rechaza
+antes de I/O y se preserva para que su dueño lo cierre (no sobrescribir sesión).
+Dueño conserva misma conexión/lock, invalida tras transporte/reset/reconnect,
+borra keys/SSC y termina sesión remota. Componente cripto no puede imponer
+identidad de conexión. Wrapper anterior confirm_d004 pasaNULL: helper hardware
+sigue sin devolver estado, mismasAPDU/guard/reset; ningún login/VERIFY añadido.
+
+Nuevo make test/jcop4-channel-session: **6 grupos**, peer RFC/software, handoff
+solo confirmado, claves comparadas en memoria con peer independiente, SSC2,
+SELECT cifrado **solo simulado** con ECB/CBC/CMAC independienteSSC3/4,
+interleaving/replay rechazados, fallos setup/transporte/MAC/SW/contenido/IV,
+entrada/nulos/borrado y destinos activos IDLE/WAITING sin I/O, wrapper intacto.
+No determina P1/P2/contexto real del PIN; SELECT del fixture no es comando de
+hardware autorizado/preparado. confirmation7/probe12 pasaron de nuevo por
+refactor, helper real compilado; ASan/UBSan6 pasaron detect_leaks0 (biblioteca
+OpenSSL no instrumentada, no prueba de fugas). Resto de suites sin cambios
+no repetidas, driver/submódulo/observador/flake/lock intactos.
+
+Revisión estática adicional misma libt_ias.so/hash2380540...:
+3a02f0 lee descriptor token+380/campo+8, mismo selector que385530/3fddd0
+(tipos1/2/8, no generaciones JCOP). Ruta3c1bf0/3c1e0c..3c1e46 abre anónimo
+por590 si385530, consulta598=369870 y pasa3c1840->3c11b0. Esta lee referencia,
+para bit80 hace3ac420 antes de consultar5e8=3755c0;375606 llama368b90 ANTES
+de decidir estado cacheado/queryvacío. Rama global puede pasar39cd30->37d690
+retirandoSM por450=384c60. Sin omisión del estado acreditada en esta rama;
+no declarar que la tarjeta la ejecuta ni resolver contradicción aparente por
+conjetura. Faltan tipo/runtime/despacho/ref global/local/contexto efectivo.
+39ce80/39cf08 aplica flag a primerobjeto si tipo8,383b70 usa metadatos;
+tabla4b98e8 índice2->383f39 copia bytes, pero límites/padding/rama de tipo8
+siguen pendientes: no adaptar PIN ni equiparar automáticamente enumsOpenSC.
+Reenvío3c1690..3c16d4 confirmado, no trasladar ni probar PIN fallidos.
+
+**Siguiente trabajo local:** resolver perfil/despacho/contexto/formato y definir
+integración que retengaSSC en la misma conexión, primero probar selección/
+contexto sin PIN si hay precedente aplicable. No nuevo comando hardware aún;
+no reutilizar la sesión del diagnóstico ya cerrada, no ofrecer VERIFY por
+inercia. FirmaJCOP4/RSA3072/causa6982 pendientes. Git solo lectura: commit
+incluye nuevos tests/jcop4-channel-session.c y scripts/test-jcop4-channel-session.sh,
+confirmation.h/Makefile/documentos; sin capturas/binarios/build/submódulo.
+
 **Último resultado: canal JCOP4 confirmado mediante READ protegido íntegro.**
 Principal `d462900`, OpenSC `3dfef6704`. Tres documentos pendientes de la
 revisión interrumpida del intento sin tarjeta; sin cambios de código del usuario.

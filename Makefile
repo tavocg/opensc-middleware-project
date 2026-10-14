@@ -21,6 +21,7 @@
 .PHONY: test/jcop4-channel-agreement
 .PHONY: test/jcop4-channel-confirmation
 .PHONY: inspect/jcop4-channel test/jcop4-channel-probe
+.PHONY: test/jcop4-channel-session
 
 PDF_INPUT ?= doc.pdf
 PDF_OUTPUT ?= local/jcop3-cli.pdf
@@ -84,6 +85,7 @@ help:
 		'make test/jcop4-channel-confirmation Prueba el primer MAC con transporte simulado.' \
 		'make inspect/jcop4-channel READER=0 Diagnóstico experimental del canal anónimo, una secuencia sin PIN.' \
 		'make test/jcop4-channel-probe Prueba límites/transporte/cierre del diagnóstico sin tarjeta.' \
+		'make test/jcop4-channel-session Prueba retención y SSC del canal confirmado, sin tarjeta ni PIN.' \
 		'make test/jcop4-channel-kdf Prueba la derivación candidata AES128 con datos sintéticos, sin tarjeta ni PIN.' \
 		'make test/pcsc-public-observer Comprueba el observador sin lector ni tarjeta.' \
 		'make sign/jcop4-apdu      Firma experimental RSA SHA-256 por APDU y verifica, un intento de PIN.' \
@@ -326,3 +328,6 @@ inspect/jcop4-channel:
 
 test/jcop4-channel-probe:
 	@bash scripts/test-jcop4-channel-probe.sh
+
+test/jcop4-channel-session:
+	@bash scripts/test-jcop4-channel-session.sh

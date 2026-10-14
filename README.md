@@ -337,6 +337,11 @@ El siguiente paso es resolver contexto de login y retención del canal: una
 rama de selección de raíz Idopte retira SM local, por lo que no basta añadir
 SELECT raíz y VERIFY de forma genérica. El agente prepara y revisa; el usuario
 ejecuta todos los comandos de lector/tarjeta. La prueba no usó PIN ni firma.
+Se añadió retención opcional del estado después de confirmar D004 completo:
+`make test/jcop4-channel-session` pasó seis grupos, incluida continuación
+SSC2->3/4 y selección cifrada solo simulada. El diagnóstico de tarjeta conserva
+su cierre y no retiene sesión. Aún falta resolver contexto/perfil de login
+antes de usar la nueva pieza con PIN.
 El driver aún no firma con JCOP4.
 [Evidencia y límites](docs/jcop4.md#canal-confirmado-en-jcop4-sin-pin).
 

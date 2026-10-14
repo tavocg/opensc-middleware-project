@@ -4846,6 +4846,92 @@ tarjeta ni repetición del diagnóstico por ahora. Las29 pruebas y ASan25
 anteriores siguen vigentes, sin repetir suites sin cambios. Driver/submódulo,
 observador, helpers y flake/lock intactos; esta revisión solo cambia documentos.
 
+## Retención de estado tras confirmar D004, sin nueva operación de tarjeta
+
+Principal `75e3ec5`, OpenSC `3dfef6704`, limpios al comenzar. La última prueba
+real sigue siendo27daTsCp: READ protegido íntegro confirmado y cierre completo.
+No PC/SC/hardware/GUI/PIN/Idopte ejecutado por el agente, no nueva captura.
+
+### Ruta de login y selección, alcance de la revisión estática
+
+Se revisó el mismo módulo instalado/hash2380540... mediante desensamblado
+y relocaciones, sin invocar sus funciones. `3a02f0` devuelve el campo+8 del
+descriptor token+380: el selector de selección de raíz es el mismo usado por
+`385530`/`3fddd0` para tipos1/2/8. No son generaciones JCOP ni prueba del valor
+runtime de esta tarjeta.
+
+La rama de usuario de3c1bf0/3c1e0c..3c1e46 consulta385530, abre canal por
+slot590 si corresponde, consulta slot598=369870 y pasa por3c1840 a3c11b0.
+En3c11b0 se extrae la referencia del objeto de autenticación; si tiene bit80
+se llama3ac420 antes de volver al flujo común. Luego se llama slot5e8=3755c0.
+Esta rutina selecciona contexto por368b90 en375606 **antes** de examinar su
+estado cacheado o decidir enviar VERIFY vacío. Por tanto, no está acreditado
+que esa selección se evite simplemente por haber cacheado el estado del PIN.
+La rama global previamente examinada puede retirar la capa por39cd30/37d690/
+slot450=384c60.
+
+Esto delimita una tensión en la ruta estática, no demuestra que Idopte falle
+en la tarjeta que ya firmó: faltan tipo efectivo, despacho/clase activos,
+referencia global/local y contexto. No se resuelve inventando una selección
+o ignorando la consulta; tampoco se afirma que esas ramas se hayan ejecutado.
+
+El formateo39ce80 compara el objeto de PIN con el primer objeto y, para
+tipo8, activa un flag en39cf08..39cf18 antes de383b70. El decoder de la tabla
+relativa4b98e8 confirma que índice interno2 salta a383f39, que copia bytes;
+otros índices llevan a otros formatos. La función usa también límites,
+padding y decisiones por metadatos, incluida la rama de ese flag. No equivale
+a probar formato/codificación completos del PIN de la tarjeta ni permite
+equiparar enums internos con UTF-8 de OpenSC. El reenvío3c1690..3c16d4 vuelve
+a construir VERIFY tras ciertos SW; **no se copia** en un diagnóstico de
+único intento. No se provocan errores de PIN para explorar esa rama.
+
+### Retención opcional, con confirmación completa obligatoria
+
+`tools/jcop4-channel-confirmation.h` añade
+`jcop4_ca_confirm_d004_session`, con salida opcional de
+`struct jcop4_sm_channel`. Solo se transfiere después del READ con MAC/padding
+válidos, SW interno9000 y comparación íntegra de137 bytes. El estado entregado
+es **IDLE/SSC2**, con las claves derivadas de esa sesión; no una credencial de
+login, llave de firma o archivo de claves.
+
+El destino debe estar inicializado INVALID. En fallo queda borrado/INVALID;
+un destino ya IDLE o WAITING se rechaza antes de I/O y se preserva para que
+su dueño pueda cerrar la sesión existente, sin sobrescribirla. El dueño
+mantiene la misma conexión y lock, continúa desde SSC2 e invalida ante error
+de transporte/reset/reconexión. Debe borrar el estado local y terminar/resetear
+el remoto al salir. Esta pieza de criptografía no conoce PC/SC y **no puede
+imponer por sí misma la identidad de conexión o exclusión**; esa comprobación
+corresponde al futuro adaptador.
+
+El wrapper anterior `jcop4_ca_confirm_d004` pasa salidaNULL y siempre borra
+el estado. `make inspect/jcop4-channel` sigue usándolo: mismas APDU,
+permisos del guard, reset y cierre, sin canal reutilizable desde otro proceso.
+No se añade SELECT/VERIFY/login ni se amplía un diagnóstico de hardware.
+
+### Pruebas con peer de software
+
+Nuevo `make test/jcop4-channel-session`, **6 grupos correctos**: handoff solo
+confirmado, claves comparadas en memoria con peer independiente, SSC2; una
+selección cifrada exclusivamente simulada con comandoSSC3/respuestaSSC4;
+interleaving/replay rechazados; fallos de setup/transporte/MAC/SW/tamaño/
+contenido/IV sin sesión utilizable; entrada/nulos y borrado, destinos activos
+IDLE/WAITING rechazados sin I/O y sin perder su estado; wrapper previo intacto.
+El fixture descifra el comando mediante ECB/CBC y calcula CMAC separadamente.
+Su SELECT **no determina la selección/P1/P2 aplicable al PIN de la tarjeta**,
+no constituye un comando de hardware preparado ni se propone enviarlo.
+
+Pasaron de nuevo confirmation7/probe12 por el refactor; helper real compilado.
+ASan/UBSan pasaron los seis grupos nuevos con detect_leaks0; OpenSSL precompilado
+no instrumentado y sin prueba de fugas. Codec/KDF/primitivas/acuerdo/helper
+público/observador y suites de firma sin cambios/no repetidas. Driver/submódulo
+y flake/lock intactos.
+
+**Siguiente trabajo local:** terminar perfil/despacho/contexto/formato y
+diseñar su integración con propiedad de la sesión/SSC. Si hay un precedente
+aplicable, preparar primero una consulta de contexto sin PIN. Por ahora no
+otra operación en tarjeta, relectura de D004 o autenticación por inercia.
+Firma JCOP4/RSA3072 y causa del VERIFY6982 siguen pendientes.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño
