@@ -6,6 +6,52 @@ la tarjeta. El usuario ejecuta las operaciones que requieran PIN o GUI. Esto
 sustituye las restricciones anteriores de no ejecutar Git/hardware/Idopte por
 el agente; conservar límites de cada diagnóstico y privacidad de los registros.
 
+**Último resultado: punto D004 validado; KDF candidata CA/AES128 comprobada offline.**
+Principal `c85aa16`, OpenSC `3dfef6704`, limpios al comenzar. Informe usuario
+`local/jcop4-dh-parameters-LbbFD51N/report.txt`, **2026-10-14T02:22:26Z (13 CR)**:
+build/inventario/conexión/ADF correctos, SELECT/READ0/9000,137/discriminador18.
+**affine_xy_at_offset5/secp521r1/valid_non_infinity/recognized_point_only_no_channel**,
+unlock0/proceso0. Validación matemática confirmada; no autenticidad/variante
+runtime. Helper sin PIN/VERIFY/MSE/GA/SM/firma; no coords/header/raw/hash guardados.
+**No repetir D004, inventario o estados para confirmar este resultado.**
+
+Continuación estática en mismo libt_ias.so/hash: **371ca0 no es solo lector**,
+su rama ECC incluye cálculo/MSE/GA/derivación. **2409a0 copia descriptor/SSC/
+claves** para instalar después; no deriva. EC_POINT_mul, X compartida serializada
+unsignedBE66 (235cf0/2357e0 ceros iniciales). ConstructorMSE37253b:
+002241A4 y800A04007F00070202030202, OID CA/ECDH/AES128. ConstructorGA372740
+CLA10/INS86/P100/P200, punto local no comprimido en80/7C; **codificación final
+CLA/Le/fragmentación pendiente**, no copiar esa CLA ni la00 del ZIP.2278c0 ->
+CP71slot10/3c3f00 ->2a9170 ->objeto transporte. MSE/GA exigen9000; esta rama
+no consume nonce/token de GA para la derivación. SHA1 mediante EVP funciones,
+Kenc=SHA1(Z66||00000001)[:16], Kmac=SHA1(Z66||00000002)[:16], SSC16ceros;
+368190 configura AES1/MAC8 e instala descriptor. OpenSC sm-eac.c:1431 espera
+nonce/token: integración no automática. Fuentes primarias OpenPACE/límites en
+docs/jcop4.md; BSI PDF403 no recuperado, no atribuir texto no leído.
+**No prueba ruta runtime de esta tarjeta ni versiónCA formal/PACE/CAN**;
+C_Login intermedio/tipo interno aún pendientes. Sin ejecutar funciones del
+módulo, login, captura autenticada, hardware, GUI o PIN por el agente.
+
+Nueva pieza **tools/jcop4-channel-kdf.h**, aislada, sin PC/SC/Idopte/PIN/APDU/
+ECDH/SM/firma. Exige66, SHA1/contadoresBE1/2 y primeros16, SSC0; commit conjunto
+de las claves, salida borrada en fallo, temporales borrados/sin fallback.
+No integrado al helper ni driver. Nuevos tests/jcop4-channel-kdf.c y
+scripts/test-jcop4-channel-kdf.sh; **make test/jcop4-channel-kdf** pasó5 grupos:
+3 vectores sintéticos independientes hashlib, ceros iniciales/contadores/
+truncamiento, input intacto/SSC0, tamaños0..67 salvo66/nulos y salida borrada.
+No datos reales/secretos de sesión; salida soloPASS. OpenSSL ya enflake,
+sin lock/inputs/instalaciones. Helper92/lanzador95/observador162/firma6/operación12
+intactos, suites vigentes/no repetidas. Driver/submódulo sin cambios.
+
+**Siguiente trabajo del agente:** resolver serialización final de GA y revisar
+AES/IV/MAC/SSC/padding/respuesta protegida; pruebas locales de acuerdo/ensobrado
+con datos sintéticos y MAC comprobado antes de canal. **No nuevo comando de
+hardware ni PIN solicitado todavía**, no repetir D004 por inercia. Observador
+conserva todos los bloqueos previos. JCOP4/RSA3072/VERIFY6982 pendientes.
+Git autorizado: intento de git add falló por .git montado solo lectura;
+no eludirlo. **Agregar explícitamente los 3 archivos nuevos de KDF/pruebas/
+lanzador**, git add -u no los incluye.
+
 **Último resultado: discriminador P-521 coincide; prefijo04 era supuesto incorrecto.**
 Principal `ab46551`, OpenSC `3dfef6704`, limpios al comenzar. Informe del usuario
 `local/jcop4-dh-parameters-0lUpuwV0/report.txt`, **2026-10-14T02:17:16Z (13 CR)**.

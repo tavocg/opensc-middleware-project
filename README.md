@@ -309,14 +309,14 @@ no PIN/login/firma nuevos. Próximo paso: analizar la ruta C_Login/VERIFY de
 Idopte; firma libre JCOP4 aún pendiente.
 [Evidencia y límites](docs/jcop4.md#inventario-idopte-completo-tras-las-selecciones-de-raíz).
 
-El análisis estático del login encontró dos diferencias candidatas: selección
-de raíz para PIN global y apertura de canal anónimo según el perfil interno.
-**SELECT y READ D004 devolvieron9000; 137 bytes y discriminador P-521 coinciden**.
-La exigencia de prefijo04 era una suposición del diagnóstico; se corrigió
-siguiendo el parser de Idopte, que toma dos coordenadas desde posición5.
-Pasaron92 pruebas del helper; la validación del punto real sigue pendiente.
-Ejecutar `make inspect/jcop4-dh-parameters READER=0`, sin PIN ni abrir canal.
-[Evidencia y límites](docs/jcop4.md#d004-corregir-la-suposición-de-prefijo-sec1).
+**D004 ya se validó:** SELECT/READ9000,137 bytes y coordenadas de un punto P-521
+válido. No repetir la consulta. La ruta anónima de Idopte construye CA/ECDH
+con AES128 y deriva claves con SHA1/contadores1 y2, pero aún falta confirmar
+su aplicación al login y completar el intercambio/mensajes protegidos.
+Se añadió una pieza libre aislada para la derivación y
+`make test/jcop4-channel-kdf`: cinco grupos de pruebas sintéticas pasaron,
+sin tarjeta, Idopte, PIN ni apertura de canal. El driver aún no firma con JCOP4.
+[Evidencia y límites](docs/jcop4.md#punto-d004-validado-y-derivación-candidata-caaes128).
 
 Capturas privadas bajo local/jcop4-idopte-spy-*/; no agregarlas a Git.
 Pasaron previamente **30 comprobaciones del observador/decoder y 40 del

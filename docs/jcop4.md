@@ -4038,6 +4038,104 @@ necesidad del canal o causa6982; analizar estos aspectos antes de MSE/GA/PIN.
 JCOP4/RSA3072 siguen pendientes. Git add -u falló por .git montado solo
 lectura; cambios listos pero sin commit del agente.
 
+## Punto D004 validado y derivación candidata CA/AES128
+
+Principal `c85aa16`, OpenSC `3dfef6704`, limpios al comenzar. Informe del usuario
+`local/jcop4-dh-parameters-LbbFD51N/report.txt`, **2026-10-14T02:22:26Z**
+(13 de octubre CR): inventario/build/conexión/ADF correctos, SELECT y READ
+D0040/9000, control confirmado,137 bytes/discriminador18. Decoder corregido:
+**affine_xy_at_offset5, secp521r1, valid_non_infinity,
+recognized_point_only_no_channel**. Unlock0/proceso0. La interpretación de las
+coordenadas y su validez matemática en P-521 quedan corroboradas en esta tarjeta.
+El helper no envió PIN, VERIFY, MSE, GA, SM ni firma; no registró coordenadas,
+header, hashes ni contenido bruto. **No repetir la lectura D004** para confirmar
+esto. No demuestra autenticidad del punto ni variante efectiva del login.
+
+### La ruta anónima realiza el acuerdo dentro de371ca0
+
+La revisión del mismo libt_ias.so/hash previo continuó hasta372b5b. Importa
+corregir la descripción incompleta anterior: `371ca0` **no es solo lector de
+parámetros**; la rama ECC revisada incluye cálculo local, MSE, GA y derivación.
+`2409a0`, llamado después desde368190, copia el descriptor/SSC/claves derivados
+a la estructura del canal; no es la función que calcula esas claves.
+Todo este contraste fue estático; no se ejecutaron funciones internas ni
+Idopte/login/autenticación por el agente.
+
+- Tras obtener el punto, usa EC_POINT_mul para construir la contribución local
+  y el punto compartido. Extrae la coordenada X del punto compartido y la
+  serializa unsigned big-endian a **66 bytes** para P-521, con ceros iniciales.
+  `235cf0` usa BN_num_bits/BN_bn2bin y `2357e0` rellena a la izquierda.
+- Constructor MSE en37253b: cabecera **00 22 41 A4** y datos
+  **80 0A 04 00 7F 00 07 02 02 03 02 02**. El OID coincide con
+  id-CA-ECDH-AES-CBC-CMAC-128, documentado previamente con fuente OpenPACE.
+  Esta coincidencia no valida la mezcla AES/3DES del ZIP.
+- Constructor GA en372740: **CLA10, INS86, P100, P200**. Construye una
+  contribución local EC en forma no comprimida y la anida en tags80/7C.
+  **Cabecera del constructor, no captura PC/SC**: CLA/Le y fragmentación
+  finales aún deben resolverse en la capa de transporte; no enviar por copia
+  la CLA10 ni asumir la CLA00 del ZIP.2278c0 -> CP71slot10/3c3f00 ->2a9170
+  delega a otro objeto de transporte.
+- Esta rama exige SW9000 en MSE y GA; después de GA destruye el objeto de
+  respuesta sin consumir un nonce/token para esta derivación. No extrapolar
+  el formato de respuesta ni omitir verificaciones MAC en futuros mensajes.
+-37294c..372a82 usan EVP_MD_fetch de SHA1, EVP_DigestInit_ex2/Update/Final:
+  **Kenc=primeros16 de SHA1(Z66 || 00000001)** y
+  **Kmac=primeros16 de SHA1(Z66 || 00000002)**. Los contadores se construyen
+  como bytes big-endian; e50a0 reduce la longitud conservando el prefijo.
+  El tercer resultado se inicializa a **16 bytes cero** (SSC candidato).
+-368190 configura bandera AES=1, longitud MAC=8 y pasa el descriptor/claves
+  a la instalación del canal. La selección AES está respaldada además por
+  la rama de240ae0, que distingue AES de3DES; no por el nombre del ZIP.
+
+Es una ruta CA/ECDH con parámetros compatibles con AES128, sin CAN/PACE en
+esta rama examinada. **No demuestra que esta tarjeta tome esa rama en C_Login**,
+ni identifica definitivamente su versión CA o semántica del perfil. No se
+resolvió la cadena completa C_Login -> T_Login ni el tipo interno runtime.
+No guardar/exponer secretos de sesión ni habilitar logs de Idopte para
+reproducir estos pasos. Las únicas claves de esta revisión son datos sintéticos.
+
+### Primera pieza libre comprobada sin tarjeta
+
+Se añadió `tools/jcop4-channel-kdf.h`: componente independiente de PC/SC,
+Idopte y PIN, candidato para esa derivación. Exige secreto de66 bytes,
+construye los dos contadores, usa SHA1 y entrega juntas Kenc/Kmac/SSC; si falla,
+borra la salida completa, sin claves parciales ni fallback. Borra temporales y
+libera objetos OpenSSL. **No calcula ECDH, construye APDU, abre canal ni firma**;
+no está conectado al helper hardware ni al driver. No permite otras longitudes,
+curvas, nonce, versión o algoritmo por conjetura.
+
+El patrón secreto || nonce opcional || contador big-endian y truncamiento
+está respaldado por las fuentes primarias
+[OpenPACE eac_kdf.c](https://raw.githubusercontent.com/frankmorgner/openpace/master/src/eac_kdf.c)
+y [sus contadores](https://raw.githubusercontent.com/frankmorgner/openpace/master/src/eac_kdf.h).
+Esto corrobora la construcción matemática, no el perfil BCCR ni autenticidad
+de D004. El helper actual OpenSC `src/sm/sm-eac.c:1431` llama GA esperando
+nonce/token y después CA_STEP6_derive_keys: no es sustitución automática de
+la rama examinada. Debe adaptarse o usarse una ruta acorde, con validación SM.
+La fuente BSI Part3 se identificó en búsqueda, pero su PDF devolvió403;
+no atribuirle texto o confirmación de versión que no se recuperó.
+
+Nuevo `make test/jcop4-channel-kdf`, ejecutado por el agente: **5 grupos de
+pruebas pasaron**, compilación contra libcrypto disponible en la sesión.
+Tres vectores sintéticos calculados independientemente con Python hashlib
+(ceros, bytes secuenciales, ceros y01 final) verifican digest/counter/order/
+truncamiento, preservación del secreto y SSC cero; tamaños0..67 salvo66 y
+argumentos nulos verifican rechazo y salida borrada. Vectores incluyen ceros
+iniciales y distinguen el ancho66 de una serialización mínima. Ningún dato
+proviene de tarjeta ni de sesión auténtica. La salida de prueba es solo PASS.
+OpenSSL ya declarado en el flake; sin nuevos inputs/lock ni instalación.
+Helper92/lanzador95/observador162/firma6/operación12 intactos, suites previas
+vigentes; no repetirlas por documentación.
+
+**Siguiente trabajo:** resolver la serialización final de GA y revisar
+cifrado AES/IV, MAC, SSC, padding y respuesta protegida; preparar pruebas
+locales del acuerdo/ensobrado y verificar MAC antes de aceptar un canal.
+No nuevo diagnóstico D004/inventario/status/PIN, ni MSE/GA/SM sobre hardware
+todavía. El observador conserva bloqueos anteriores. Driver/submódulo sin
+cambios; firma libre JCOP4/RSA3072 y causa VERIFY6982 siguen pendientes.
+Se intentó git add con los archivos concretos: .git sigue montado solo lectura
+y no permitió crear index.lock. Commit pendiente con los tres archivos nuevos.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño
