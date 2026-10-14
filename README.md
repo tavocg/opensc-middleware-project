@@ -354,6 +354,11 @@ y estado63C7; acepta ASCII imprimible6..14, sin eco ni registro de credencial.
 Un fallo puede consumir intento: usar el PIN correcto y detenerse si falla.
 Pasaron12 grupos login con PIN/transporte ficticios y22 de regresión del probe.
 [Protocolo y límites](docs/jcop4.md#login-experimental-de-un-único-intento-bajo-sm).
+La primera ejecución de login terminó124 antes del PIN, con login_attempted0
+y cierre completo. Se corrigió el launcher con `timeout --foreground` solo
+para login; una regresión con timeout GNU real y PTY reproduce el bloqueo
+anterior y comprueba prompt, Ctrl+C y restauración de eco. Pasaron13 grupos
+login y22 probe. Reinsertar tras timeout antes de una única nueva ejecución.
 El driver aún no firma con JCOP4.
 [Evidencia y límites](docs/jcop4.md#canal-confirmado-en-jcop4-sin-pin).
 

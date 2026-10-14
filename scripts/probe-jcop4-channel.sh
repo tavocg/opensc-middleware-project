@@ -10,6 +10,7 @@ task_prefix=jcop4-channel
 task_helper_args=("$task_reader")
 task_helper=jcop4-channel-probe
 task_builder_args=()
+task_timeout_args=()
 if (( $# == 2 )) && [[ $2 == --pin-context ]]; then
     task_mode=anonymous_channel_pin_context_no_pin_once
     task_prefix=jcop4-channel-pin-context
@@ -25,6 +26,9 @@ elif (( $# == 2 )) && [[ $2 == --login-once ]]; then
     task_helper=jcop4-channel-login
     task_helper_args+=(--login-once)
     task_builder_args=("" --login-once)
+    # A timeout subprocess group is not the terminal foreground group when
+    # launched from this script: keep terminal access and Ctrl+C on the helper.
+    task_timeout_args=(--foreground)
 elif (( $# > 1 )); then
     printf 'Uso: bash scripts/probe-jcop4-channel.sh [lector] [--pin-context|--login-once]\n' >&2
     exit 2
@@ -79,7 +83,7 @@ env -u OPENSC_API_TRACE_FILE -u OPENSC_DEBUG_FILE -u OPENSC_DEEPBIND \
     -u LIBPCSCLITE_DELEGATE -u LIBPCSCLITE_SPY_DELEGATE \
     -u JCOP4_PUBLIC_DISCOVERY_TRACE -u JCOP4_PUBLIC_SELECT_SPY_TRACE \
     OPENSC_CONF="$task_config" OPENSC_DEBUG=0 \
-    timeout --signal=TERM --kill-after=5s 45s \
+    timeout "${task_timeout_args[@]}" --signal=TERM --kill-after=5s 45s \
     "$task_root/build/opensc/$task_helper" "${task_helper_args[@]}" \
     </dev/null >> "$task_report" 2>&1 || task_status=$?
 printf 'helper_exit_status=%d\n' "$task_status" >> "$task_report"

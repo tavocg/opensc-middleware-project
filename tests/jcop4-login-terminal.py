@@ -3,6 +3,7 @@ import fcntl
 import os
 from pathlib import Path
 import select
+import shutil
 import signal
 import subprocess
 import sys
@@ -11,7 +12,7 @@ import termios
 import time
 
 
-def pty_run(argv, payload=None, interrupt=False, tty_stdout=False, environment=None):
+def pty_run(argv, payload=None, interrupt=False, tty_stdout=False, environment=None, terminal_interrupt=False):
     master, slave = os.openpty()
     original = termios.tcgetattr(slave)
 
@@ -37,6 +38,8 @@ def pty_run(argv, payload=None, interrupt=False, tty_stdout=False, environment=N
             assert b"sin eco" in output
             if interrupt:
                 proc.send_signal(signal.SIGTERM)
+            elif terminal_interrupt:
+                os.write(master, b"\x03")
             else:
                 os.write(master, payload)
         result = proc.wait(timeout=8)
@@ -56,12 +59,37 @@ def pty_run(argv, payload=None, interrupt=False, tty_stdout=False, environment=N
 
 
 binary = sys.argv[1]
+binary = str(Path(binary).resolve())
 for payload, expected in ((b"77777777\n", 0), (b"77777\n", 1), (b"7" * 15 + b"\n", 1), (b"77\xc3\xa177777\n", 1)):
     status, output = pty_run([binary], payload)
     assert status == expected and b"input_result=" in output
 status, output = pty_run([binary], b"", interrupt=True)
 assert status == 1 and b"input_result=1" in output
 print("PASS real terminal input on synthetic PTY hides ASCII input, rejects lengths/non-ASCII and restores echo after success/error/TERM")
+
+# Real GNU timeout must be nested under a shell which stays in the terminal
+# foreground, as in the actual launcher. A direct timeout session leader or
+# an exec-only fake timeout misses the original job-control suspension.
+real_timeout = shutil.which("timeout")
+assert real_timeout
+with tempfile.TemporaryDirectory() as directory:
+    nested = Path(directory) / "nested.sh"
+    nested.write_text('''#!/usr/bin/env bash
+set -u
+"$1" --signal=TERM --kill-after=1s 2s "$2" </dev/null
+task_status=$?
+exit "$task_status"
+''')
+    status, output = pty_run(["bash", str(nested), real_timeout, binary])
+    assert status == 124 and b"sin eco" not in output and b"input_result=1" in output
+    nested.write_text(nested.read_text().replace('"$1" --signal', '"$1" --foreground --signal'))
+    status, output = pty_run(["bash", str(nested), real_timeout, binary], b"77777777\n")
+    assert status == 0 and b"input_result=0" in output
+    status, output = pty_run(["bash", str(nested), real_timeout, binary], b"", terminal_interrupt=True)
+    assert status != 124 and status != 0 and b"input_result=1" in output
+    status, output = pty_run(["bash", str(nested), real_timeout, binary])
+    assert status == 124 and b"sin eco" in output and b"input_result=1" in output
+print("PASS nested real GNU timeout reproduces missing prompt without foreground; foreground enables hidden input, terminal Ctrl+C and clean timeout")
 
 root = Path(__file__).resolve().parents[1]
 with tempfile.TemporaryDirectory() as directory:
@@ -96,6 +124,8 @@ exit "${FIXTURE_HELPER_EXIT:-0}"
     (fixture / "bin/git").write_text("#!/usr/bin/env bash\nexit 0\n")
     (fixture / "bin/timeout").write_text('''#!/usr/bin/env bash
 set -euo pipefail
+[[ $1 == --foreground ]] || exit 94
+shift
 [[ $1 == --signal=TERM && $2 == --kill-after=5s && $3 == 45s ]]
 shift 3
 exec "$@"

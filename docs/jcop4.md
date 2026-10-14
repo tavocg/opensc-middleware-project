@@ -5228,6 +5228,46 @@ PIN correcto solo en prompt del helper, nunca chat. Si falla, detenerse y
 revisar informe/cierre antes de otro intento. Login/firmaJCOP4/RSA3072 y causa
 del antiguo VERIFY6982 siguen pendientes; este test no firma documentos.
 
+### Corrección de timeout y control de trabajos de la terminal
+
+Principal `3d91123`, OpenSC `3dfef6704`, limpios al comenzar. Informe privado
+`local/jcop4-channel-login-m6tjqsjj/report.txt`,2026-10-14T06:54:44Z
+(14Oct00:54CR), ejecución del usuario: canal/MF/query autenticados, después
+input rechazado/login_attempted0. Resetfinal/unlock/disconnect0/guard0,
+10APDU/interrupted1/helper124. No se envió VERIFY con credencial, no demuestra
+PIN incorrecto, consumo de intento ni fallo de canal. Se observó cierre completo.
+
+Se reprodujo el comportamiento local con un PTY y el binario de prueba que
+solo ejecuta la entrada de terminal, sin crear contexto ni conectar tarjeta.
+Desde shell persistente, GNU timeout crea otro grupo de procesos: el helper
+deja de estar en foreground de la terminal, queda en estadoT al acceder a
+ella, no muestra el prompt y termina124. Timeout ejecutado directamente como
+líder de sesión sí funcionaba; el fixture anterior y el mock exec-only omitían
+esta diferencia del launcher. Ctrl+C en terminal apunta al grupo foreground,
+por lo que no alcanzaba directamente al helper suspendido del otro grupo.
+
+El launcher añade `--foreground` exclusivamente a--login-once. Mantiene el
+helper en el grupo que controla el TTY, conserva TERM45s/KILL5s y stdin vacío.
+No altera colector/PIN/guard/APDU/SSC/aceptaciónSW/unintento ni permisos. GNU
+timeout indica en su ayuda local que en este modo no temporiza descendientes;
+el helper no lanza subprocesos de trabajo. Los modos noPIN no cambian.
+
+Pasaron13 grupos login(5nativo+5bootstrap real con lector simulado+3PTY/wrapper)
+y22 probe por launcher compartido. La nueva regresión usa timeout GNU real
+anidado bajo shell: sinforeground124/sinprompt, conforeground PIN ficticio
+oculto/éxito, Ctrl+C real porPTY cancelación sin esperar deadline, ausencia de
+input124 conmetadata y eco restaurado. Wrapper exigeforeground y el plazo
+anterior. Bashsyntax/diffcheck pasaron. No se repiten suites cripto/ASan por
+cambios solo shell/Python/docs; resultados anteriores vigentes. HelperC,
+driver/submódulo/observador/flake/lock intactos. Sin PCSC/lector/tarjeta/PIN real
+ni GUI por agente; ninguna modificación del sistema o servicio PCSC.
+
+**Siguiente intervención:** cerrar otros clientes/reinsertar mismaJCOP4 antes
+de repetir, conforme a la regla previa tras timeout aunque aquí cierre0.
+Una ejecución de login/jcop4-channel, PIN correcto solo cuando aparezca prompt.
+Revisar login_attempted/MAC/innerSW/result/helper/cierre antes de otro intento
+o firma. No repetir por inercia ni interpretar124 como fallo de PIN.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño

@@ -9,7 +9,50 @@ transporte simulado. PIN/GUI también los ejecuta el usuario. Esto sustituye
 la autorización anterior de hardware por el agente; conservar límites de
 cada diagnóstico y privacidad. Git sigue autorizado pero .git solo lectura.
 
-**Última revisión: canal/MF/estado PIN autenticados en tarjeta; login único preparado.**
+**Última revisión: timeout de login antes de PIN; corregido grupo de terminal del lanzador.**
+Principal `3d91123`, OpenSC `3dfef6704`, limpios al comenzar. Informe usuario
+`local/jcop4-channel-login-m6tjqsjj/report.txt`,2026-10-14T06:54:44Z
+(14Oct00:54CR): canal/MF/query autenticados9000/63C7, luego input rechazado,
+login_attempted0/not_confirmed_stop. Resetfinal/unlock/disconnect0, guard0,
+command_count10/interrupted1/helper_exit_status124. **No VERIFY con credencial**
+ni fallo de PIN/canal probado; consulta vacía previa sí se envió. No atribuir
+consumo de intento ni6982. Cierre completo observado, no suponer sesión abierta.
+
+Bug local del launcher: GNU timeout desde shell crea grupo fuera del foreground
+TTY; helper queda suspendido al acceder a terminal antes del prompt/Ctrl+C no
+le llega directamente. Reproducido solo con PTY y binario tests/pin-input que
+no ejecuta su entrypoint de tarjeta: shell persistente -> timeout real anidado,
+helper estadoT/grupo distintoTTY, prompt ausente/eco aún activo/status124.
+Timeout directo como líder de sesión funciona: fixture anterior no reproducía
+el control de trabajos del launcher. Timeout exec simulado también lo omitía.
+No pruebaPCSC ni atribuir la suspensión a lector/tarjeta.
+
+Se añade **--foreground solo en modo--login-once**, conserva TERM45s/KILL5s,
+stdinhelper vacío/inputdevtty/privacidad/guard/APDU/unintento/cierre. Modi noPIN
+conservan su política anterior. Foreground alcanza al helper; GNU documenta
+que no aplica timeout a sus descendientes: helper no lanza subprocesos de
+trabajo. Sin nueva firma/PIN por agente, no cambia formato ni aceptaciónSW.
+
+Pasaron **13 grupos login** (5nativos+5bootstrap lector simulado+3PTY/wrapper)
+y **22 probe** por launcher compartido. Nueva regresión timeout GNU real
+anidado: baseline sinforeground reproduce124/prompt ausente; conforeground
+acepta PIN ficticio oculto, Ctrl+C porTTY cancela antes de timeout, timeout
+sin input sigue124 pero devuelve metadata y restaura eco. Wrapper exigeflag
+foreground junto con límites previos. Bashsyntax/diffcheck pasan; suites
+cripto/ASan previas vigentes, no repetidas por solo launcher/Python/docs.
+Driver/submódulo/helperC/observador/flake/lock intactos. No PCSC/tarjeta/PIN real.
+
+**Siguiente intervención:** cerrar otros clientes y reinsertar mismaJCOP4
+antes de repetir, siguiendo regla previa tras timeout, aunque este informe
+sí muestra cierre0. Luego una sola ejecución:
+`nix develop -c make login/jcop4-channel READER=0`. PIN correcto solo si pide
+helper; ahora debe verse prompt. No repeat si falla/PINincorrecto. Revisar
+login_attempted/MAC/innerSW/result/helper/cierre antes de firmar. Login real/
+firmaJCOP4/RSA3072/antiguo6982 pendientes. Git sololectura: commit AGENTS/
+README/docs, scripts/probe-jcop4-channel.sh, tests/jcop4-login-terminal.py;
+ningún archivo nuevo/captura/build, no eludir restricciónGit.
+
+**Revisión anterior: canal/MF/estado PIN autenticados en tarjeta; login único preparado.**
 Principal `3cdadc1`, OpenSC `3dfef6704`, limpios al comenzar. Informe usuario
 `local/jcop4-channel-pin-context-H3dqRC8j/report.txt`,2026-10-14T06:35:03Z
 (14Oct00:35CR): canal íntegro confirmado, MF9000/MAC válido, query16/status99/
