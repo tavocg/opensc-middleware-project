@@ -7,13 +7,14 @@
 #undef main
 
 static struct sc_context test_ctx;
+static ossl3ctx_t test_provider, alternate_provider;
 static struct sc_card test_card;
 static struct sc_reader test_reader;
 static struct iasecc_private_data test_prv;
 static struct fixture peer;
 static unsigned char initial_saved[137];
 static unsigned int physical, locks, unlocks;
-static int mf_error, mf_bit, reset_on_command;
+static int mf_error, mf_bit, reset_on_command, swap_provider_on_command, restrict_on_command;
 static struct sc_reader_operations reader_ops;
 static struct sc_card_operations card_ops;
 
@@ -70,6 +71,13 @@ static int mf_reply(sc_apdu_t *a)
 	sc_mem_clear(decrypted, sizeof(decrypted)); sc_mem_clear(padded, sizeof(padded)); return SC_SUCCESS;
 }
 
+static void change_provider_after_io(void)
+{
+	if ((int)physical == swap_provider_on_command) test_ctx.ossl3ctx = &alternate_provider;
+	if ((int)physical == restrict_on_command)
+		assert(EVP_set_default_properties(test_provider.libctx, "provider=unavailable") == 1);
+}
+
 static int backend(struct sc_reader *reader, struct sc_apdu *a)
 {
 	unsigned char *wire = NULL, response[258]; size_t size = 0, received = 0;
@@ -82,6 +90,7 @@ static int backend(struct sc_reader *reader, struct sc_apdu *a)
 		assert(size == (a->cse == (SC_APDU_CASE_4_EXT) ? 42u : 38u));
 		if (a->cse == (SC_APDU_CASE_4_EXT)) assert(!memcmp(wire + 4, "\0\0\x21", 3) && !memcmp(wire + 40, "\x01\x23", 2));
 		free(wire); int rv = mf_reply(a);
+		change_provider_after_io();
 		if ((int)physical == reset_on_command) iasecc_card_reader_lock_obtained(&test_card, 1);
 		return rv;
 	}
@@ -90,6 +99,7 @@ static int backend(struct sc_reader *reader, struct sc_apdu *a)
 		assert(received >= 2 && received - 2 <= a->resplen); memcpy(a->resp, response, received - 2);
 		a->resplen = received - 2; a->sw1 = response[received-2]; a->sw2 = response[received-1];
 	} else if (!rv) a->resplen = SIZE_MAX;
+	change_provider_after_io();
 	if ((int)physical == reset_on_command) iasecc_card_reader_lock_obtained(&test_card, 1);
 	return rv;
 }
@@ -100,6 +110,7 @@ static void defaults(void)
 	memset(&test_ctx, 0, sizeof(test_ctx)); memset(&test_card, 0, sizeof(test_card));
 	memset(&test_reader, 0, sizeof(test_reader)); memset(&test_prv, 0, sizeof(test_prv));
 	const struct iasecc_chipdoc_profile *p = iasecc_chipdoc_profile(IASECC_CHIPDOC_CR_RSA2048);
+	test_ctx.ossl3ctx = &test_provider;
 	test_card.ctx = &test_ctx; test_card.reader = &test_reader; test_card.drv_data = &test_prv; test_card.lock_count = 1;
 	test_card.atr.len = p->atr_len; memcpy(test_card.atr.value, p->atr, p->atr_len); test_reader.atr = test_card.atr;
 	test_card.caps = SC_CARD_CAP_APDU_EXT; test_card.max_send_size = 255; test_card.max_recv_size = 291;
@@ -110,14 +121,109 @@ static void defaults(void)
 	struct sc_aid aid = { {0}, 0 }; aid.len = p->aid_len; memcpy(aid.value, p->aid, p->aid_len);
 	struct iasecc_chipdoc_metadata metadata = {SC_ALGORITHM_RSA,0x91,2048,1,0xD004,137,0x18,1,1};
 	assert(iasecc_chipdoc_prepare(&test_prv.chipdoc_session, &test_card, &aid, &metadata) == SC_SUCCESS);
-	physical = locks = unlocks = 0; mf_error = mf_bit = reset_on_command = 0;
+	physical = locks = unlocks = 0; mf_error = mf_bit = reset_on_command = swap_provider_on_command = restrict_on_command = 0;
 	peer.calls = peer.fail_step = peer.bit = peer.ga_template = 0; peer.mode = NORMAL; peer.le = JCOP4_CA_LE_SHORT_MAX;
 	memcpy(peer.initial, initial_saved, sizeof(initial_saved)); jcop4_ca_pending_clear(&peer.derived);
+}
+
+/* Policy isolation is observed with real provider fetches, not mocked crypto. */
+static void provider_checks(void)
+{
+	struct iasecc_chipdoc_channel_report report;
+	OSSL_LIB_CTX *blocked = OSSL_LIB_CTX_new(); assert(blocked);
+	OSSL_PROVIDER *null_provider = OSSL_PROVIDER_load(blocked, "null"); assert(null_provider);
+	alternate_provider.libctx = OSSL_LIB_CTX_new(); assert(alternate_provider.libctx);
+	alternate_provider.defprov = OSSL_PROVIDER_load(alternate_provider.libctx, "default"); assert(alternate_provider.defprov);
+	unsigned char secret[66] = {0}, iv[16] = {0}, input[16] = {1}, output[16], expected[16], tag[16], pub[133];
+	struct jcop4_channel_keys keys, expected_keys;
+	struct jcop4_ca_pending pending;
+	struct jcop4_sm_channel sm = {0}; size_t written = 0;
+	unsigned char header[4], body[64], response[258], plain[137]; unsigned int sw = 0;
+	pub[0] = 4; memcpy(pub + 1, initial_saved + 5, 132);
+	assert(!jcop4_ca_aes128_kdf(secret, 66, &expected_keys));
+	assert(!jcop4_sm_aes128_cbc(1, expected_keys.encryption, iv, input, 16, expected, 16));
+	assert(!jcop4_sm_cmac(expected_keys.mac, input, 16, tag));
+	/* A valid independent response is built before disabling global fetches. */
+	defaults(); assert(!iasecc_chipdoc_channel_open(&test_card, peer.initial, 137, &report));
+	memset(peer.derived.keys.ssc, 0, sizeof(peer.derived.keys.ssc));
+	unsigned char command[19] = {0x0c,0xb0,0,0,13,0x97,1,0x89,0x8e,8};
+	unsigned char auth[48] = {0}, mac[16]; auth[15] = 1;
+	memcpy(auth + 16, "\x0c\xb0\0\0\x80", 5); memcpy(auth + 32, "\x97\x01\x89\x80", 4);
+	cmac(peer.derived.keys.mac, auth, 48, mac); memcpy(command + 10, mac, 8);
+	peer.calls = 2; size_t received = 0;
+	assert(!exchange(&peer, command, sizeof(command), response, sizeof(response), &received));
+	iasecc_chipdoc_invalidate_card(&test_card);
+	assert(EVP_set_default_properties(NULL, "provider=unavailable") == 1);
+	assert(jcop4_ca_aes128_kdf(secret, 66, &keys));
+	assert(!jcop4_ca_aes128_kdf_ex(test_provider.libctx, secret, 66, &keys) && !memcmp(&keys, &expected_keys, sizeof(keys)));
+	assert(!jcop4_sm_aes128_cbc_ex(test_provider.libctx, 1, keys.encryption, iv, input, 16, output, 16) && !memcmp(output, expected, 16));
+	assert(!jcop4_sm_cmac_ex(test_provider.libctx, keys.mac, input, 16, output) && !memcmp(output, tag, 16));
+	assert(!jcop4_sm_verify_mac8_ex(test_provider.libctx, keys.mac, input, 16, tag));
+	assert(!jcop4_ca_prepare_ex(test_provider.libctx, pub, 133, &pending)); jcop4_ca_pending_clear(&pending);
+	assert(!jcop4_sm_init(&sm, &peer.derived.keys));
+	assert(!jcop4_sm_seal_policy_ex(test_provider.libctx, &sm, (unsigned char[]){0,0xb0,0,0}, NULL, 0, 1, 137,
+		header, body, sizeof(body), &written, JCOP4_SM_LE_SHORT) && written == 13);
+	assert(!jcop4_sm_open_report_policy_ex(test_provider.libctx, &sm, response, received, plain, sizeof(plain), &written, &sw, JCOP4_SM_OUTER_9000, NULL));
+	assert(written == 137 && sw == 0x9000 && !memcmp(plain, initial_saved, 137)); jcop4_sm_invalidate(&sm);
+	assert(EVP_set_default_properties(NULL, NULL) == 1);
+	puts("PASS private libctx performs EC/ECDH/KDF/AES/CMAC and protected decode while global provider policy denies algorithms; independent ciphertext/MAC remains valid");
+	for (int policy = 0; policy < 2; policy++) {
+		OSSL_LIB_CTX *ctx = policy ? test_provider.libctx : blocked;
+		if (policy) assert(EVP_set_default_properties(ctx, "provider=unavailable") == 1);
+		memset(&keys, 0xA5, sizeof(keys)); assert(jcop4_ca_aes128_kdf_ex(ctx, secret, 66, &keys));
+		assert(!memcmp(&keys, &(struct jcop4_channel_keys){0}, sizeof(keys)));
+		memset(output, 0xA5, 16); assert(jcop4_sm_aes128_cbc_ex(ctx, 1, expected_keys.encryption, iv, input, 16, output, 16));
+		for (int i = 0; i < 16; i++) assert(output[i] == 0xA5);
+		assert(jcop4_sm_cmac_ex(ctx, expected_keys.mac, input, 16, output));
+		for (int i = 0; i < 16; i++) assert(!output[i]);
+		assert(jcop4_sm_verify_mac8_ex(ctx, expected_keys.mac, input, 16, tag));
+		assert(jcop4_ca_prepare_ex(ctx, pub, 133, &pending));
+		assert(!memcmp(&pending, &(struct jcop4_ca_pending){0}, sizeof(pending)));
+		assert(jcop4_ca_prepare_key_ex(ctx, peer.peer, pub, 133, &pending));
+		defaults(); test_ctx.ossl3ctx = policy ? &test_provider : &(ossl3ctx_t){.libctx = blocked};
+		assert(iasecc_chipdoc_channel_open(&test_card, peer.initial, 137, &report) != 0 && !physical && !report.reset_required);
+		assert(!test_prv.chipdoc_session.channel && test_prv.chipdoc_profile == IASECC_CHIPDOC_CR_RSA2048);
+		if (policy) assert(EVP_set_default_properties(ctx, NULL) == 1);
+		test_ctx.ossl3ctx = &test_provider;
+	}
+	for (int variant = 0; variant < 2; variant++) {
+		defaults(); test_ctx.ossl3ctx = variant ? &(ossl3ctx_t){0} : NULL;
+		assert(iasecc_chipdoc_channel_open(&test_card, peer.initial, 137, &report) != 0 && !physical && !report.reset_required);
+		test_ctx.ossl3ctx = &test_provider;
+	}
+	puts("PASS absent OpenSC libctx, null provider and default-property restrictions stop before setup I/O with no global fallback or partial keys");
+	for (int variant = 0; variant < 4; variant++) {
+		defaults(); assert(!iasecc_chipdoc_channel_open(&test_card, peer.initial, 137, &report));
+		OSSL_LIB_CTX *saved = test_provider.libctx;
+		if (variant == 0) test_ctx.ossl3ctx = &alternate_provider;
+		if (variant == 1) test_provider.libctx = alternate_provider.libctx;
+		if (variant == 2) { static struct sc_context other; other = test_ctx; test_card.ctx = &other; }
+		if (variant == 3) assert(EVP_set_default_properties(saved, "provider=unavailable") == 1);
+		assert(iasecc_chipdoc_channel_select_mf(&test_card, IASECC_CHIPDOC_MF_EXTENDED, &report) != 0 && physical == 3 && report.reset_required);
+		assert(!test_prv.chipdoc_session.channel && !report.authenticated && !report.sw);
+		test_provider.libctx = saved; assert(EVP_set_default_properties(saved, NULL) == 1);
+	}
+	for (int step = 1; step <= 4; step++) for (int restrict_policy = 0; restrict_policy < 2; restrict_policy++) {
+		defaults(); if (restrict_policy) restrict_on_command = step; else swap_provider_on_command = step;
+		int rv = iasecc_chipdoc_channel_open(&test_card, peer.initial, 137, &report);
+		if (step == 4) { assert(!rv); rv = iasecc_chipdoc_channel_select_mf(&test_card, IASECC_CHIPDOC_MF_EXTENDED, &report); }
+		assert(rv != 0 && !test_prv.chipdoc_session.channel && report.reset_required && !report.authenticated && !report.sw);
+		assert(physical == (unsigned)(restrict_policy && step == 1 ? 2 : step));
+		assert(EVP_set_default_properties(test_provider.libctx, NULL) == 1);
+	}
+	puts("PASS context/owner/libctx replacement and changed policy before/during exchange discard the channel without further protected I/O, stale SW or global retry");
+	defaults(); iasecc_chipdoc_invalidate_card(&test_card);
+	OSSL_PROVIDER_unload(null_provider); OSSL_LIB_CTX_free(blocked);
+	OSSL_PROVIDER_unload(alternate_provider.defprov); OSSL_LIB_CTX_free(alternate_provider.libctx);
+	OPENSSL_cleanse(&keys, sizeof(keys)); OPENSSL_cleanse(&expected_keys, sizeof(expected_keys));
+	OPENSSL_cleanse(plain, sizeof(plain)); OPENSSL_cleanse(mac, sizeof(mac)); OPENSSL_cleanse(tag, sizeof(tag));
 }
 
 int main(void)
 {
 	struct iasecc_chipdoc_channel_report report;
+	test_provider.libctx = OSSL_LIB_CTX_new(); assert(test_provider.libctx);
+	test_provider.defprov = OSSL_PROVIDER_load(test_provider.libctx, "default"); assert(test_provider.defprov);
 	init(&peer); memcpy(initial_saved, peer.initial, sizeof(initial_saved));
 	for (int encoding = 0; encoding < 2; encoding++) {
 		defaults(); assert(iasecc_chipdoc_channel_open(&test_card, peer.initial, 137, &report) == 0);
@@ -185,7 +291,9 @@ int main(void)
 	assert(iasecc_chipdoc_channel_open(&test_card, peer.initial, 137, &report) != 0 && test_prv.chipdoc_session.channel == owned && physical == 3 && report.reset_required);
 	test_ctx.debug = 0;
 	assert(iasecc_chipdoc_channel_select_mf(&test_card, 99, &report) != 0 && test_prv.chipdoc_session.channel == owned && physical == 3 && report.reset_required);
+	provider_checks();
 	iasecc_chipdoc_invalidate_card(&test_card); EVP_PKEY_free(peer.peer); jcop4_ca_pending_clear(&peer.derived);
+	OSSL_PROVIDER_unload(test_provider.defprov); OSSL_LIB_CTX_free(test_provider.libctx);
 	puts("PASS invalid profile/lock/debug/SM/capability/limits/point/length/null inputs stop before transport; local duplicate/invalid encoding never replaces a live channel");
 	return 0;
 }

@@ -58,11 +58,13 @@ La integración empezó con el perfil y estado de sesión por tarjeta dentro
 de `iasecc`, incluyendo limpieza en logout/finish y notificaciones de reset.
 Pasaron nueve grupos nuevos de software y las regresiones IAS/JCOP3; OpenSC
 compiló. Ya existe un adaptador interno CA/MF que conserva el canal tras
-verificar su MAC y usa el dispatcher normal, con seis grupos nuevos y
+verificar su MAC y usa el dispatcher normal, con nueve grupos de software y
 ASan/UBSan pasados. Las primitivas ahora tienen una sola implementación en
 el submódulo; los helpers anteriores la reutilizan y sus pruebas pasaron.
-Faltan detección/bootstrap, integración de providers y operaciones PIN/MSE/
-PSO desde el driver público. No hay una nueva prueba con tarjeta ahora.
+El canal ya usa el contexto criptográfico de OpenSC y respeta sus providers
+y restricciones, con pruebas de aislamiento frente al contexto global.
+Faltan detección/bootstrap y operaciones PIN/MSE/PSO desde el driver público;
+el backend nuevo requiere OpenSSL3. No hay otra prueba con tarjeta ahora.
 Los párrafos siguientes conservan los pasos históricos de investigación.
 La selección temporal RSA/SHA-256 obtuvo `9000`; VERIFY vacío devolvió
 `63C7`, con siete intentos disponibles, PIN global 1 y formato UTF-8.

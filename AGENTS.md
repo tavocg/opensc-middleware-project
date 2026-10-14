@@ -9,6 +9,60 @@ transporte simulado. PIN/GUI también los ejecuta el usuario. Esto sustituye
 la autorización anterior de hardware por el agente; conservar límites de
 cada diagnóstico y privacidad. Git sigue autorizado pero .git solo lectura.
 
+**Última revisión: canal ligado al contexto criptográfico de OpenSC, probado sin hardware.**
+Principal `35823ef`, OpenSC `1c3d01ba2`, limpios al comenzar. Firma real
+JnUUiy9x permanece vigente; no repetir canal, lector ni PIN por este cambio.
+Sin PCSC/lector/tarjeta/PIN real/GUI/Idopte ejecutado por el agente.
+
+El adaptador iasecc-chipdoc-sm usa sc-ossl-compat y exige
+ctx->ossl3ctx->libctx no nulo. Core compartido añade variantes _ex que reciben
+OSSL_LIB_CTX: generación efímera EC/P521, validación/importación/ECDH, SHA1,
+AES/CBC/IV y CMAC/verificación. Fetches sin property override respetan las
+propiedades predeterminadas del contexto. No carga providers, modifica
+configuración ni recurre al contexto global cuando falla. Wrappers antiguos
+con NULL conservan la API de los helpers; el driver usa exclusivamente _ex.
+No duplicación de algoritmos, cambios a APDU/SSC/padding/KDF ni permisos.
+
+El contexto real del canal guarda identidad prestada de sc_context, ossl3ctx
+y libctx, además de tarjeta/lector/generación. El propietario debe mantener
+contexto/providers vivos hasta cerrar tarjeta/canal. Comprueba identidad
+antes y después de IO; cambiar cualquiera descarta sesión y no publica SW.
+Ownership/generación se comprueban antes de usar memoria que pudo liberar
+el hook reset. Una política que deja de permitir algoritmos falla en el
+siguiente uso criptográfico, limpia contexto/MSE/cache y requiere cierre
+remoto si ya se intentó setup. Política modificada después de MSE puede
+permitir el GA ya construido antes del siguiente fetch; no READ protegido
+ni fallback posteriores. No implica detectar toda modificación arbitraria
+al libctx ni resolver continuidad del outerlock; el llamador sigue
+responsable de reset/cierre antes de unlock. Contexto ausente o EC denegado
+al inicio detiene antes de APDU; no confundir con rechazo de tarjeta.
+
+**9 grupos** test/iasecc-chipdoc-channel (8 nativos + stub) y ASan/UBSan9
+con detect_leaks=0 pasaron. Tres grupos añadidos usan providers reales:
+core privado funciona con contexto global bloqueado, datos/MAC de peer
+independiente; contexto null-provider/propiedades restrictivas/ausente
+rechaza sin fallback ni claves parciales; cambio de ctx/owner/libctx o
+política antes/durante IO descarta sesión/SW. Transporte sigue simulado con
+dispatcher/serializer real. **123 grupos** previos core/helpers (47+76)
+y suite IAS/JCOP3 pasaron. No prueba de fugas ni instrumentación del
+OpenSC.so/provider precompilados; driver/core/serializer de fixture sí.
+OpenSC/módulo PKCS11 y cuatro helpers reales compilados, no ejecutados.
+
+OpenSSL3 es el único backend implementado. LibreSSL/OpenSSL1/sinOpenSSL
+conservan NOT_SUPPORTED sin IO; stub probado mediante macro, no builds
+reales de esas bibliotecas. No validación FIPS, Windows/macOS ni provider
+alternativo funcional. Perfil público/detección/bootstrap/query/VERIFY/
+MSE/PSO/PKCS15/PKCS11 siguen pendientes, también RSA3072/GUI/consecutivas/
+reinserción JCOP4. Flake/lock/observador/capturas/Makefile/scripts intactos.
+
+**Siguiente trabajo autónomo:** integrar bootstrap/detección optativa desde
+metadatos y operaciones de PIN/firma con transacción/cierre adecuados;
+probar transporte y APIs sintéticos antes de otra intervención física.
+No comando hardware nuevo ahora. Git readonly/no eludir: commit del
+submódulo primero, siete archivos modificados (sm.c/h y cinco headers
+crypto); principal después, puntero vendor, test de canal y cuatro documentos.
+Todos seguidos, ningún archivo nuevo/build/captura para Git.
+
 **Última revisión: adaptador CA/MF con dispatcher normal compilado/probado; PIN/firma/binding pendientes.**
 Principal `ea2b6d0`, OpenSC `0b511757c`, limpios al comenzar. Firma real
 JnUUiy9x sigue verificada; no repetir helper/lector/canal/PIN por inercia.

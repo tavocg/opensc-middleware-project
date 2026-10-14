@@ -251,3 +251,61 @@ Pasaron123 grupos previos del core y helpers tras el traslado (47+76) y la
 suiteIAS/JCOP3 con el nuevo grupo. No se ejecutó hardware/PIN/GUI/Idopte ni
 se alteraron flake/lock/observador/artefactos. La firma real JnUUiy9x sigue
 siendo la evidencia vigente; no repetirla por este traslado.
+
+## Contexto criptográfico de OpenSC y aislamiento de providers
+
+Sobre principal `35823ef` y OpenSC `1c3d01ba2`, el adaptador ahora requiere
+`ctx->ossl3ctx->libctx` no nulo, usando el tipo de `sc-ossl-compat.h`.
+OpenSC crea ese contexto y carga su configuración/providers en `ctx.c`;
+el canal lo toma prestado, sin cargar providers ni alterar propiedades.
+Las variantes privadas `_ex` pasan el mismo `OSSL_LIB_CTX` a generación
+aleatoria EC/P521, controles/importación/ECDH, SHA-1, AES y CMAC, incluyendo
+el cálculo del IV y la verificación del MAC antes de descifrar. La query de
+propiedades es NULL, como en las funciones de compatibilidad OpenSC, para
+conservar la política predeterminada del contexto. No hay fallback al global.
+Las APIs anteriores de los helpers son wrappers con NULL explícito; siguen
+usando el mismo core y mantienen sus vectores y el protocolo observado.
+
+El propietario de sc_context debe conservar libctx/providers hasta cerrar
+su tarjeta/canal. El adaptador guarda identidad de sc_context/ossl3ctx/libctx
+junto a tarjeta/lector/generación y la comprueba antes/después del transporte.
+Una sustitución invalida sesión/MSE/cache sin publicar SW ni continuar con
+un contexto distinto; primero comprueba ownership/generación por el posible
+reset que libere el canal durante IO. Si cambia la política dentro del mismo
+libctx, cada fetch vuelve a respetarla: un algoritmo denegado falla y se
+limpia la sesión. No detecta cualquier cambio arbitrario de configuración ni
+asume que providers pueden liberarse mientras el contexto sigue en uso.
+
+Contexto ausente o EC denegado al preparar no envía APDU. Si el cambio sucede
+tras MSE, el GA ya preparado puede transmitirse antes del próximo fetch;
+la restricción impide construir el READ protegido y exige cierre remoto.
+Cambios posteriores impiden construir MF o autenticar su respuesta; no se
+publican datos/SW ni se reintenta con el global. Se mantienen las obligaciones
+del llamador: transacción exterior continua y reset/cierre antes de unlock,
+incluso si solo queda estado remoto tras un fallo criptográfico.
+
+`make test/iasecc-chipdoc-channel` pasó **nueve grupos**: ocho nativos y uno
+stub. Los tres nuevos cubren aislamiento con providers/fetches reales:
+
+- Contexto privado funcional mientras el global niega algoritmos, incluyendo
+  ECDH/KDF/AES/CMAC y respuesta independiente descifrada/verificada por codec.
+- Null provider, propiedades restrictivas y contexto OpenSC ausente: sin
+  fallback/IO de setup ni claves parciales, con borrado de salidas de error.
+- Sustitución de ctx/owner/libctx y restricción antes/durante IO: pérdida de
+  sesión y ausencia de SW autenticado, sin siguiente intercambio protegido.
+
+ASan/UBSan9 pasó con detect_leaks=0; no prueba de fugas ni instrumentación de
+OpenSC.so/OpenSSL precompilados. Pasaron los **123 grupos** previos (core47,
+helpers76) y la suite IAS/JCOP3. OpenSC/móduloPKCS11 y cuatro helpers reales
+compilaron sin ejecutarse. No PCSC/hardware/PIN/GUI/Idopte del agente; no
+nuevo informe ni repetición de firma real, ni cambios a flake/lock/observador.
+
+Este cambio integra providers con OpenSSL3; no implementa OpenSSL1/LibreSSL.
+El stub sin backend se comprueba por macro, sin builds reales de esos otros
+entornos. No acredita FIPS, otros providers funcionales o Windows/macOS.
+Binding/bootstrap/PIN/MSE/PSO en el driver público siguen pendientes.
+
+Referencias primarias: [contextos EVP de OpenSSL](https://docs.openssl.org/3.5/man3/EVP_PKEY_CTX_new/)
+y [CMAC y cipher subyacente](https://docs.openssl.org/3.5/man7/EVP_MAC-CMAC/).
+Estas APIs permiten seleccionar libctx y sus algoritmos; las pruebas locales
+acreditan el aislamiento de esta implementación, no una certificación.

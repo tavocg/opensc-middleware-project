@@ -6011,3 +6011,32 @@ firma real JnUUiy9x intactos. No repetir tarjeta por este traslado. Siguiente:
 providers/compatibilidad/bootstrap/detección y operaciones PIN/MSE/PSO
 por API con transporte sintético, luego PKCS15/PKCS11 antes de otra firma
 física. [Implementación y límites](jcop4-opensc-integration.md#adaptador-interno-de-canal-y-mf-por-dispatcher-normal).
+
+### Providers del canal integrados en el contexto OpenSC
+
+Principal `35823ef`, OpenSC `1c3d01ba2`, limpios al comenzar. El canal privado
+CA/MF usa ahora el libctx de OpenSC mediante sc-ossl-compat y variantes _ex
+compartidas: generación EC, ECDH/KDF, AES/IV y CMAC. Sin cargar providers,
+cambiar propiedades ni recurrir al contexto global ante un fallo. Los
+helpers conservan sus wrappers globales y protocolo, con una implementación.
+
+La sesión conserva identidad prestada de sc_context/ossl3ctx/libctx y exige
+que su propietario sobreviva a tarjeta/canal. Sustituir esa identidad antes
+o durante IO invalida contexto/MSE/cache. Restricciones de propiedades se
+respetan en cada fetch; el fallo no publica SW ni reintenta. Tras MSE puede
+salir GA ya preparado antes del siguiente fetch, pero no READ protegido si
+se deniega CMAC. Reset remoto/outerlock continuo/cierre siguen a cargo del
+llamador; no se habilita binding, PIN, firma ni APIs PKCS15/PKCS11.
+
+Pasaron nueve grupos de test/iasecc-chipdoc-channel y ASan/UBSan9 con
+detect_leaks=0, sin prueba de fugas/instrumentación de bibliotecas externas.
+Tres grupos nuevos prueban providers reales, aislamiento del global,
+contextos ausentes/restrictivos y cambios durante IO. También pasaron los
+123 grupos core/helpers y la suite IAS/JCOP3. OpenSC/móduloPKCS11 y cuatro
+helpers reales compilados, no ejecutados. Sin hardware/PIN/GUI/Idopte ni
+nuevo informe; firma JnUUiy9x intacta. OpenSSL3 solamente; stub de otros
+backends por macro, no builds reales/FIPS/plataformas/provider alternativo.
+
+Siguiente: bootstrap/detección y operaciones PIN/MSE/PSO con transporte
+sintético, después PKCS15/PKCS11 antes de volver a pedir tarjeta.
+[Detalles y fuentes](jcop4-opensc-integration.md#contexto-criptográfico-de-opensc-y-aislamiento-de-providers).
