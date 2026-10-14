@@ -6,6 +6,60 @@ la tarjeta. El usuario ejecuta las operaciones que requieran PIN o GUI. Esto
 sustituye las restricciones anteriores de no ejecutar Git/hardware/Idopte por
 el agente; conservar límites de cada diagnóstico y privacidad de los registros.
 
+**Última revisión: acuerdo efímero P-521 y MSE/GA candidatos probados offline.**
+Principal `458007f`, OpenSC `3dfef6704`, limpios al comenzar. Última tarjeta:
+LbbFD51N/02:22:26Z, punto D004 válido; no repetir diagnósticos D004/estado/
+inventario por inercia. Sin hardware, Idopte ejecutado, PIN, GUI o captura.
+Hash actual libt_ias.so coincide:2380540cd85316306233aa2baf640019a848606ce72bb5692cbebbb111542dc4.
+
+Revisión estática cierra una ruta de transporte **condicionada al pipe activo**:
+2a8a20 crea adaptador22fec0/vtable5cb640; slot10 ->22ffe0 ->22cd40
+->CCard slot10 (vtable5cb5a0/22d950).22d950 llama serializador227d80;
+22d8a0 entrega ese buffer al backend slot10/22afc0 ->SCardTransmit.
+El serializador copia los cuatro bytes de cabecera sin normalizar CLA.
+Constructor227600 pone Le0; append228530 agrega cuerpo sin cambiarlo:
+en la rama GA372740..37283e **Le ausente**, no Le256. Lc139 cabe en ruta
+corta y en fragmentador2a09a0 si capacidad>=139; entonces CLA10 se conserva.
+**No sustituir por CLA00, añadir Le ni probar ambas por inercia.** Falta confirmar
+el perfil/cadena activos en esta tarjeta; no captura GA ni prueba de éxito.
+Referencias completas y condiciones en docs/jcop4.md.
+
+Nuevo **tools/jcop4-channel-agreement.h** sin PC/SC/Idopte/PIN: valida solo
+SEC1 P-521 no comprimido133 bytes, coordenadas canónicas<p/punto en curva/no
+infinito. Entrada normal genera clave efímera con EVP_EC_gen; importación y
+ECDH mediante EVP, validación completa del peer y par local. Se solicita
+sin KDF del provider/cofactor0/padding1, exige X compartida66 y aplica KDF
+candidata existente. Solo devuelve punto público del terminal y claves
+**pendientes**, no secreto X ni escalar privado; limpia temporales/libera key.
+Error borra toda la salida; sin fallback/reuso/escalares fijos en entrada normal.
+Implementación interna con key inyectada permite vectores solo en pruebas.
+
+Constructores locales candidatos: MSE17/caso3 con OID CA/AES128; GA144/caso3,
+CLA10/Lc139/7C8188/808185/punto133, **sin Le**. No están conectados al hardware
+ni al driver. Preparación/9000 de MSE/GA no prueban canal: exigir posteriormente
+respuesta protegida con MAC correcto antes de habilitar PIN. Aún no hay ese
+orquestador/verificación en tarjeta; identidad de D004 y ruta C_Login pendientes.
+Observador y sus bloqueos anteriores intactos, también READ4141/PIN/MSE/GA/SM.
+
+Nuevo **make test/jcop4-channel-agreement** pasó **8 grupos**: vector ECDH
+RFC5903§8.3 y KDF esperada independiente hashlib, simetría/SSC0, secreto X
+con cero inicial, claves efímeras distintas/acuerdo con peer de software,
+todos los bits de punto alterados/tamaños/encodings/nulos, coordenadas fuera
+de campo y alias x+p/y+p, clave local pública/inconsistente/0/otra curva/tipo,
+provider no disponible, formato/tamaños/capacidad/borrado de MSE/GA locales.
+ASan/UBSan pasaron con detect_leaks=0 (ptrace impide LeakSanitizer, no prueba
+de fugas). KDF5/primitivas7/codec9/helper92/lanzador95/observador162/firma6/
+operación12 intactos/no repetidos. Flake/lock/helper hardware/driver/submódulo
+sin cambios. Fuentes primarias OpenSSL/RFC enlazadas; no atribuir perfilCR alRFC.
+
+**Siguiente trabajo:** comprobar qué pipes/contexto usa el establecimiento
+anónimo y diseñar el diagnóstico sin PIN que valide el primer MAC con una
+consulta conocida. No enviar todavía MSE/GA/SM ni pedir PIN. No variar CLA/Le,
+ampliar observador o repetir tarjeta por inercia. JCOP4/RSA3072/VERIFY6982 siguen
+pendientes. Git autorizado, pero .git montado solo lectura no deja index.lock;
+no eludirlo. Commit debe incluir los tres nuevos archivos agreement.h,
+tests/jcop4-channel-agreement.c y scripts/test-jcop4-channel-agreement.sh.
+
 **Última revisión: codec candidato de mensajes protegidos probado offline.**
 Principal `98b4f86`, OpenSC `3dfef6704`, limpios al comenzar. Última tarjeta:
 LbbFD51N/02:22:26Z, punto D004 válido. No repetir D004, estados ni inventario.

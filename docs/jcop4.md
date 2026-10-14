@@ -4302,6 +4302,113 @@ PIN todavía. El codec probado no resuelve la causa de VERIFY6982 ni acredita
 firma libre JCOP4/RSA3072. Git sigue montado solo lectura; commit pendiente
 incluyendo los tres archivos nuevos del codec, pruebas y lanzador.
 
+## Acuerdo efímero P-521 y transporte candidato de GA
+
+Principal `458007f`, OpenSC `3dfef6704`, limpios al comenzar. Sin hardware,
+ejecución de Idopte, PIN, GUI ni captura autenticada. La última prueba de
+tarjeta sigue siendo LbbFD51N y su punto D004 válido; no se repitieron lectura,
+inventario o estados. El módulo instalado libt_ias.so mantiene SHA256
+`2380540cd85316306233aa2baf640019a848606ce72bb5692cbebbb111542dc4`, por lo que
+la revisión estática corresponde al mismo binario de las secciones anteriores.
+
+### Serialización de una ruta concreta
+
+Se identificó el adaptador que acerca el token al transporte. La función
+`2a8a20` crea un objeto mediante `22fec0`, vtable `5cb640`, y lo inserta en
+el pipe con `228aa0`. Su slot10 apunta a `22ffe0`, que delega a `22cd40` con
+el objeto CCard. Este llama el slot10 de CCard, cuyo objeto base usa vtable
+`5cb5a0` y función `22d950`.
+
+`22d950` llama a `227d80` para serializar y a `22d8a0` para entregar el buffer
+al backend. El slot10 del backend PC/SC apunta a `22afc0`, que adapta los
+argumentos y salta a SCardTransmit. `22d8a0` registra el comando mediante
+`22ec40`, sin transformar el buffer revisado, y lo pasa al backend. Esta
+revisión no ejecutó esos registros ni funciones del módulo.
+
+El serializador `227d80:227dd1..227e04` copia los cuatro bytes de la cabecera
+tal cual; **no convierte CLA10 en00**. `227600` inicializa el campo Le en cero.
+En `372740..37283e`, el constructor GA usa esa función y agrega el cuerpo con
+`228530`, que modifica el buffer de datos sin actualizar Le. No se encontró
+una asignación posterior a Le antes de ese envío. **Cero es aquí Le ausente**;
+no equivale a256, que sería un valor interno distinto y codificado00 en wire.
+
+Para el punto no comprimido P-521 de133 bytes, el cuerpo BER canónico candidato
+tiene139 bytes: `7C 81 88 / 80 81 85 / punto`. En la ruta corta del serializador,
+Lc139/Le ausente producen144 bytes totales, **caso3 corto sin Le final**.
+Lc139 cabe también en el fragmentador `2a09a0` si la capacidad del transporte
+es al menos139: en ese caso delega intacto, conservando CLA10. No se supone
+la capacidad por el nombre del lector ni se acredita fragmentación en tarjeta.
+
+Esto cierra la forma de una ruta de transporte **bajo esas condiciones**.
+No identifica todavía todos los pipes/perfil activos durante el C_Login de
+la JCOP4 actual, ni es una observación de su GA. No cambiar CLA a00, agregar
+Le o probar ambas formas por analogía con OpenPACE/ZIP. Un SW9000 aislado de
+GA no demuestra que el terminal y la tarjeta compartan el mismo canal.
+
+### Preparación libre sin transporte
+
+Nuevo `tools/jcop4-channel-agreement.h`, aislado del helper hardware y del
+driver. Solo admite punto SEC1 no comprimido P-521 de133 bytes. Comprueba
+coordenadas canónicas menores que p, punto en curva y distinto de infinito
+antes de importarlo. No interpreta campos nuevos de D004 ni su origen o ACL.
+
+La entrada normal genera una clave efímera con OpenSSL, deriva X compartida
+de66 bytes y aplica la KDF candidata ya probada. Devuelve solamente el punto
+público del terminal y las claves **pendientes** con SSC cero. El escalar
+privado permanece dentro del objeto EVP local, que se libera al terminar;
+X y resultados temporales se borran. Fallo borra toda la salida. No hay
+escalares fijos, fallback, almacenamiento ni reutilización en esa entrada.
+La función interna que recibe un EVP_PKEY permite pruebas deterministas;
+ningún lanzador ofrece importar claves privadas o ejecutar autenticación.
+
+Se emplean las interfaces de
+[OpenSSL EC](https://docs.openssl.org/3.5/man7/EVP_PKEY-EC/) para generación,
+importación, comprobación del par local y validación pública completa.
+[EVP_PKEY_derive](https://docs.openssl.org/3.5/man3/EVP_PKEY_derive/) valida el
+peer; la configuración solicita ECDH sin KDF del provider, cofactor0 y
+padding1, y exige longitud66 antes de la KDF del perfil.
+[Parámetros ECDH de OpenSSL](https://docs.openssl.org/3.5/man7/EVP_KEYEXCH-ECDH/)
+documenta esa interfaz; la prueba con X de cero inicial verifica el ancho.
+La derivación no acredita identidad de tarjeta ni compatibilidad BCCR.
+
+También se añadieron constructores locales candidatos de MSE y GA. MSE17
+usa `00 22 41 A4` y el OID CA/ECDH/AES128 ya revisado. GA144 conserva CLA10,
+P1/P2 cero, Lc139 y el punto público validado en80/7C; ambos omiten Le.
+**Solo construyen buffers en memoria**: no tienen transporte, no establecen
+un canal y no están conectados al driver ni al observador.
+
+### Validación y trabajo restante
+
+`make test/jcop4-channel-agreement` pasó **8 grupos**. El vector público
+[RFC5903§8.3](https://www.rfc-editor.org/rfc/rfc5903.html#section-8.3) aporta
+los pares P-521 y X compartida; hashlib calcula por separado las claves
+candidatas esperadas. El RFC es precedente matemático de ECDH, **no una
+especificación del protocolo ChipDoc/BCCR ni evidencia de que use IKE**.
+Otro fixture con escalar1 y el generador P-521 verifica X con cero inicial.
+No se conservaron ni utilizaron puntos o secretos de tarjeta.
+
+Las pruebas verifican simetría/SSC cero, generación efímera distinta y acuerdo
+con un peer de software; puntos alterados en cada bit, tamaños/formatos/nulos,
+coordenadas fuera de campo e incluso x+p/y+p que representan el mismo elemento
+pero no una codificación canónica. Se rechazan claves locales públicas,
+inconsistentes, de escalar cero, otra curva o tipo y provider no disponible.
+Los constructores se comprueban contra cabeceras, longitudes y tamaños fijos,
+sin Le añadido y sin salida parcial por capacidad/argumentos incorrectos.
+
+ASan/UBSan pasaron con detect_leaks=0; ptrace del entorno impide LeakSanitizer,
+por lo que no se verificó ausencia de fugas. Suites previas KDF5/primitivas7/
+codec9/helper92/lanzador95/observador162/firma6/operación12 intactas, sin repetir
+código no cambiado. Flake/lock, helper hardware, observador, driver y submódulo
+sin cambios. Se mantiene el bloqueo de MSE/GA/SM/PIN y READ4141 del observador.
+
+**Siguiente trabajo:** comprobar los pipes/contexto usados por la apertura
+anónima y diseñar un diagnóstico sin PIN para verificar el primer MAC con
+una consulta conocida. Solo después de comprobar esa respuesta puede
+considerarse funcional el canal candidato. No enviar todavía MSE/GA/SM ni
+pedir PIN; no probar variantes por inercia. La causa de VERIFY6982 y el soporte
+libre JCOP4/RSA3072 siguen pendientes. Git montado solo lectura impide el
+commit, que debe incluir los tres archivos nuevos de acuerdo/pruebas/lanzador.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño
