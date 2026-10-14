@@ -33,6 +33,7 @@
 .PHONY: test/iasecc-chipdoc-pkcs15
 .PHONY: test/iasecc-chipdoc-routing
 .PHONY: test/iasecc-chipdoc-init
+.PHONY: test/iasecc-chipdoc-pkcs11
 
 PDF_INPUT ?= doc.pdf
 PDF_OUTPUT ?= local/jcop3-cli.pdf
@@ -116,6 +117,7 @@ help:
 		'make test/iasecc-chipdoc-pkcs15 Prueba el frontend PKCS15 nativo/DigestInfo/cache con transporte simulado.' \
 		'make test/iasecc-chipdoc-routing Prueba routing por tarjeta y lifecycle PKCS15 con lector simulado.' \
 		'make test/iasecc-chipdoc-init Prueba configuración/init/bind nativo con lector y ficheros simulados.' \
+		'make test/iasecc-chipdoc-pkcs11 Prueba el módulo PKCS#11 compilado con tarjeta y PIN simulados.' \
 		'make test/jcop4-reader-features Prueba el diagnóstico del lector con PC/SC simulado.' \
 		'make test/jcop4-channel-sign Prueba firma/guard/verificación con transporte y PIN ficticios.' \
 		'make test/jcop4-channel-kdf Prueba la derivación candidata AES128 con datos sintéticos, sin tarjeta ni PIN.' \
@@ -426,3 +428,6 @@ test/iasecc-chipdoc-routing:
 
 test/iasecc-chipdoc-init:
 	@bash scripts/test-iasecc-chipdoc-init.sh
+
+test/iasecc-chipdoc-pkcs11:
+	@bash scripts/test-iasecc-chipdoc-pkcs11.sh

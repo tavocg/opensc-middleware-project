@@ -51,8 +51,8 @@ OpenSSL. Se leyeron PKCS#15 y certificados sin PIN: LlaveDeFirma referencia
 **Ya se obtuvo una firma JCOP4 RSA2048/SHA256/PKCS1v1.5 válida** con el helper
 de diagnóstico: informe JnUUiy9x, 14 de octubre de 2026,10:13 CR. MAC/9000,
 verificación RSA y cierre completo; OpenSSL verificó también los archivos
-guardados y rechazó el mensaje al alterar un bit. Falta integrar esta
-secuencia en el driver OpenSC y probar PKCS#11/firmador. RSA3072 permanece
+guardados y rechazó el mensaje al alterar un bit. La integración en OpenSC
+y PKCS#11 pasó en software; faltan pruebas reales del módulo y firmador. RSA3072 permanece
 sin verificar. [Plan de integración](docs/jcop4-opensc-integration.md).
 La integración empezó con el perfil y estado de sesión por tarjeta dentro
 de `iasecc`, incluyendo limpieza en logout/finish y notificaciones de reset.
@@ -77,7 +77,7 @@ Las APIs privadas también seleccionan el AID y preparan MSE desde
 `sc_security_env`; PSO extendido recibe exclusivamente un digest SHA-256 de
 32 bytes. La salida RSA 2048 se entrega después de comprobar MAC/estado y
 cierre completo. Pasaron seis grupos nuevos con firma RSA de software y
-ASan/UBSan. El backend nuevo requiere OpenSSL3; PKCS#11 sigue pendiente.
+ASan/UBSan. El backend nuevo requiere OpenSSL3.
 Las funciones reales de PKCS#15 ya pasaron pruebas con objetos DER nativos y
 callbacks de transporte simulados: digest SHA-256 y DigestInfo producen la
 misma firma verificable. La política privada exige PIN CHV global sin ruta,
@@ -91,9 +91,15 @@ inicialización y el binding nativo PKCS#15 con ese instalador. Está desactivad
 por defecto y necesita seleccionar `iasecc`, depuración 0, OpenSSL3, T=1 y
 límites declarados del lector suficientes. Desactiva cachés de archivo y PIN;
 solo anuncia RSA2048/PKCS1v1.5/SHA256 para el perfil observado.
-La activación y una firma verificable pasaron con archivos ISO, tarjeta y PIN
-simulados. Falta comprobar mecanismos, objetos y sesiones PKCS#11 antes de
-preparar una prueba real de esa integración.
+El módulo PKCS#11 compilado ya pasó pruebas con contexto, archivos ISO,
+certificado, tarjeta y PIN simulados: firma RSA simple y por partes, consultas
+de tamaño, dos sesiones, nuevo login, logout y cambio de tarjeta. Solo expone
+como llave privada la candidata de firma validada; los mecanismos no anuncian
+descifrado, y el token no anuncia escritura ni PIN-pad. Después de cada firma
+se cierra la reserva y el próximo firmado requiere un login explícito.
+El perfil rechaza las opciones PKCS#11 `atomic` y `lock_login`; usa su propia
+reserva y no conserva credenciales para repetir logins. Falta preparar una
+consulta pública del módulo, sin PIN, antes de probar esta integración real.
 No hay otra prueba con tarjeta ahora.
 Los párrafos siguientes conservan los pasos históricos de investigación.
 La selección temporal RSA/SHA-256 obtuvo `9000`; VERIFY vacío devolvió

@@ -1,7 +1,7 @@
 /* Real config/native bind/post-bind activation, ISO metadata + software CA. */
 #define IASECC_CHIPDOC_ROUTING_FIXTURE
 #include "iasecc-chipdoc-routing.c"
-static struct { unsigned int fid; unsigned char *data; size_t size; } files[5];
+static struct { unsigned int fid; unsigned char *data; size_t size; } files[8];
 static unsigned int selected_fid, metadata_commands, metadata_reads;
 static int missing_pin;
 static int metadata_backend(struct sc_reader *reader, struct sc_apdu *a)
@@ -17,7 +17,7 @@ static int metadata_backend(struct sc_reader *reader, struct sc_apdu *a)
 			assert(a->datalen >= 2); selected_fid = a->data[a->datalen-2]*256+a->data[a->datalen-1];
 		}
 		size_t size = 0;
-		for (size_t i = 0; i < 5; i++) if (files[i].fid == selected_fid) size = files[i].size;
+		for (size_t i = 0; i < sizeof(files)/sizeof(files[0]); i++) if (files[i].fid == selected_fid) size = files[i].size;
 		if (missing_pin && selected_fid == 0x7001) { a->resplen = 0; a->sw1 = 0x6A; a->sw2 = 0x82; return 0; }
 		unsigned char fcp[] = {0x62,11,0x82,1,1,0x83,2,0,0,0x80,2,0,0};
 		fcp[4] = selected_fid == 0x5015 || selected_fid == 0x3F00 ? 0x38 : 1;
@@ -27,7 +27,7 @@ static int metadata_backend(struct sc_reader *reader, struct sc_apdu *a)
 	} else {
 		assert(a->ins == 0xB0 && a->cse == SC_APDU_CASE_2_SHORT && a->le <= 256 && !a->lc); metadata_reads++;
 		const unsigned char *data = NULL; size_t size = 0, offset = a->p1*256+a->p2;
-		for (size_t i = 0; i < 5; i++) if (files[i].fid == selected_fid) { data = files[i].data; size = files[i].size; }
+		for (size_t i = 0; i < sizeof(files)/sizeof(files[0]); i++) if (files[i].fid == selected_fid) { data = files[i].data; size = files[i].size; }
 		assert(data && offset <= size); size -= offset; if (size > a->resplen) size = a->resplen;
 		memcpy(a->resp,data+offset,size); a->resplen = size;
 	}
@@ -45,7 +45,7 @@ static void config(const char *value)
 	test_ctx.conf_blocks[0] = blocks[0]; free(blocks);
 }
 static void free_files(void)
-{ for (size_t i = 0; i < 5; i++) { free(files[i].data); memset(&files[i],0,sizeof(files[i])); } }
+{ for (size_t i = 0; i < sizeof(files)/sizeof(files[0]); i++) { free(files[i].data); memset(&files[i],0,sizeof(files[i])); } }
 static void prepare_files(void)
 {
 	free_files();
@@ -80,6 +80,7 @@ static void finish_initialized(void)
 	free(test_card.algorithms); test_card.algorithms = NULL; test_card.algorithm_count = 0;
 	test_card.drv_data = &test_prv; assert(!reader_reserved);
 }
+#ifndef IASECC_CHIPDOC_INIT_FIXTURE
 int main(void)
 {
 	(void)thread_ops;
@@ -142,3 +143,4 @@ int main(void)
 	OSSL_PROVIDER_unload(test_provider.defprov); OSSL_LIB_CTX_free(test_provider.libctx);
 	OSSL_PROVIDER_unload(alternate_provider.defprov); OSSL_LIB_CTX_free(alternate_provider.libctx); return 0;
 }
+#endif

@@ -9,6 +9,72 @@ transporte simulado. PIN/GUI también los ejecuta el usuario. Esto sustituye
 la autorización anterior de hardware por el agente; conservar límites de
 cada diagnóstico y privacidad. Git sigue autorizado pero .git solo lectura.
 
+**Última revisión: módulo PKCS11 del build probado con contexto/tarjeta sintéticos.**
+Principal `348e37b`, OpenSC `0d1f8bd26`, limpios al comenzar. Firma real
+JnUUiy9x vigente, sin PCSC/hardware/PIN real/GUI/Idopte/captura/informe nuevo.
+No repetir firma/helper real ni estados/D004. Se necesita diagnóstico público
+del módulo sinPIN por usuario después de preparar/probar su lanzador.
+
+Nuevo make test/iasecc-chipdoc-pkcs11: **módulo precompilado local real**,
+dladdr(C_Initialize) exige ruta build; LD_LIBRARY_PATH fijo local. Solo
+APIscontext/create/release/discovery/presence/events/connect/disconnect/cancel
+sustituidas por callbacks software exportados de forma selectiva. No PCSC
+context/readerdriver real; mockconnect llama initializer producción, no
+matchlista/sc_connect_card real. CAPI/framework/PKCS15/bind/ASN1/dispatcher/
+locks del módulo/libOpenSC reales. Contexto/PIN/RSA/certificado/ISOmetadata/
+CA/SMpeer sintéticos, buffers solo memoria. Initfixture reutilizado con
+mainguard/8slotsmetadata. Sin core/preload/audit/APItrace heredados.
+
+Cambios **solo instancia iasecc_chipdoc_configured** en4fuentes PKCS11:
+Framework rechaza atomic/lock_login genéricos antesmetadata (no pila que
+conserva/repitePIN); filtra privadas a candidataRSA2048/ref91 validada;
+RSA2048/ref90adicional nativa no se expone como privadafirmable. Tokenreadonly
+inclusosinREADONLYTokenInfo, no PIN-pad aunquelector lo declare; noRNG ni
+flagsdecrypt/gen/wrap/etc. RSA_PKCS soloDigestInfoSHA256; SHA256_RSA_PKCS
+simple/multipart y verify/digests ensoftware. NoPSS/raw/otroshashesRSA/EC.
+Login solousuario CKU_USER/softwarePIN6..14, nullnoPINpad, SO/contextspecific
+localmente rechazados. GET_INFOvalidaprueba local; falta/error ->PUBLIC y
+borra loginlógico, no UNKNOWNhistórico. SignInit exige prueba/login vivo.
+reset_login_state trasPSO cerrado habilita nuevoLogin explícito, sin cache.
+Framework logout llamasc_logout para propiareserva aunSW_PIN_LOGOUT_ONLY;
+últimasesión cierra aunlogin_user ya=-1 (cardchange/GetSessionInfo); devuelve
+error de cierre **tras liberar handles/operaciones**. Driverownership limita
+reset/unlock. Finalize genérico puedeOK aunfalloteardown; noacredita cierre.
+
+**9 grupos nuevos pasaron**: dladdr/Init/slot/nativebind/DERCDF/certpublickey/
+IDs/token; mecanismos/flags/privada adicionalexcluida; Login/SignDigestInfoRSA
+verificada/size/pequeñobuffer/atributossensibles/roles; nuevologin segunda
+sesión/cerraruna mantieneotra/SHA256simple; multipartSignUpdate/Final/queries;
+invalidmech/payload antesPSO, MACmalos SELECT/MSE/PSO y VERIFY9000sinMAC, output
+intacto/sinreintentos; cambio/remoción simulada inválida ambas ses/lifetime;
+atomic+lock_login sin token/metadatos/credencial; resetfinalfallido en
+CloseAllSessions devuelveerror/handlesfree/cuarentena/nuevoLogin sinVERIFY.
+Peer/counters sintéticos se recrean entrelogins, no estado/bindingproducción.
+Payload localmalo puedeconservarLOGIN vivo antesPSO; Logout explícito cierra.
+Cierre/contexto/canal/PIN fallido no restauranLOGIN ni autoreintentan.
+ASan/UBSan9 detect_leaks0 pasó initializer/fixture/peer/serializer;
+module/framework/PKCS15/ASN1/SM/routing/provider/locks precompilados NO
+instrumentados, nofugasprobadas. Primero se cargó SONAME desdeNix/local
+libOpenSC: noacreditó módulo del build; final exige dladdr/ruta local. Otros
+fallos eran fixtures/headers/linking/ubicaciónpatch y supuestos sobre
+logout/cardchange/estados; contrastados con fuente, no tarjeta/contadorPIN.
+Fixturelegacy session-state añade stubabort pop_all_login_states: ese camino
+nuevo debe ser inalcanzable para sus perfiles. TestChipDoc usa helperreal.
+SuiteIAS/JCOP3 completa pasó **721líneasPASS, no721casos**,66gruposadaptador
+inclstub. OpenSC/móduloPKCS11 compilados, sin nuevos exports privados. Core47/
+helpers76/helpershardware/observador/flake/lock/capturas intactos, no repetidos.
+Sin hardware/GUI/firmador ni otrosbackends/FIPS/plataformas/hilos probados.
+
+**Siguiente autónomo:** preparar diagnóstico público PKCS11 optativo/read-only
+sinPIN/LOGIN/firma con configdebug0/driveriasecc/atomic0/lock_login0/caches0,
+comprobación perfil/ATR/metadatos/lector y report privado acotado; tests del
+lanzador offline. Luego única ejecución del usuario; revisar binding/objetos/
+mecanismos antes de otra credencial. FirmaPKCS11real/GUI/consecutivas/reinserción
+real/RSA3072 pendientes. Git autorizado pero readonly, noeludir: submódulo
+primero4seguidos framework-pkcs15/misc/pkcs11-object/pkcs11-session; principal
+puntero/4docs/Makefile/test-iasecc.sh/initfixture/legacy-sessionfixture y
+**nuevos pkcs11fixture y script**. Nada de builds/capturas aGit.
+
 **Última revisión: config/init optativos y activación por bind nativo probados.**
 Principal `bb29958`, OpenSC `471b4532d`, limpios al comenzar. Firma real
 JnUUiy9x vigente; sin PCSC/hardware/PIN real/GUI/Idopte/captura/informe nuevo.

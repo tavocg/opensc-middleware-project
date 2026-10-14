@@ -12,6 +12,9 @@ static struct sc_pkcs11_slot *fixture_slot;
 
 CK_RV sc_pkcs11_lock(void) { return CKR_OK; }
 void sc_pkcs11_unlock(void) {}
+/* This fixture exercises legacy profiles only; new-profile cleanup must
+ * remain unreachable. The full ChipDoc fixture links the real helper. */
+void pop_all_login_states(struct sc_pkcs11_slot *slot) { (void)slot; abort(); }
 const char *lookup_enum(CK_ULONG type, CK_ULONG value) { return NULL; }
 CK_RV sc_to_cryptoki_error(int rc, const char *ctx) { return CKR_GENERAL_ERROR; }
 CK_RV slot_get_token(CK_SLOT_ID id, struct sc_pkcs11_slot **slot)

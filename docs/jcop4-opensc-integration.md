@@ -1,14 +1,15 @@
 # Integrar el perfil JCOP4 observado en OpenSC
 
 Estado al 14 de octubre de 2026. Base de esta etapa: proyecto
-`bb29958`, submódulo OpenSC `471b4532d`. Este documento describe la integración
-cambio. **Perfil/estado/limpieza, canal/bootstrap/providers y operaciones
+`348e37b`, submódulo OpenSC `0d1f8bd26`. Este documento describe la integración.
+**Perfil/estado/limpieza, canal/bootstrap/providers y operaciones
 PIN/firma privados están implementados. Frontend PKCS15 y routing privado
 instalado por tarjeta pasaron con callbacks de producción y lector simulado.
 Configuración/init y activación automática desde el binding nativo PKCS15
 están implementados para una opción explícita, con firma verificada en
-transporte simulado. Faltan mecanismos, objetos y sesiones PKCS11 antes de
-probar esa integración con la tarjeta.**
+transporte simulado. El módulo PKCS11 del build ya pasó nueve grupos de
+mecanismos, objetos, sesiones y firmas con contexto/lector/PIN sintéticos.
+Falta diagnóstico público sin PIN y prueba real de esta integración.**
 
 ## Evidencia disponible
 
@@ -57,15 +58,16 @@ Los datos públicos de política no acreditan un login ni permiten saltar VERIFY
 | --- | --- | --- |
 | Detección e inicialización | `iasecc_match_card`, `iasecc_init`, `iasecc-chipdoc-init.h` | Opción explícita y ATR exacto seleccionan candidato; inicialización sin APDU ni defaults IAS completos. Activación tras validar directorios nativos. No hay entrada de ATR automática. |
 | Datos de perfil | `iasecc_private_data`, `iasecc-chipdoc.h`, `iasecc_is_chipdoc_signing_key` | Estado/binding independientes por tarjeta implementados, inicialmente inactivos; el selector legacy sigue reconociendo aplicación/ref3 JCOP3. |
-| Canal | `iasecc-chipdoc-sm`, headers privados `jcop4-channel-*` | CA/MF, providers/libctx OpenSSL3 y bootstrap conectados por callbacks de instancia. Quedan otros backends y pruebas PKCS11/reales de esta integración. |
+| Canal | `iasecc-chipdoc-sm`, headers privados `jcop4-channel-*` | CA/MF, providers/libctx OpenSSL3 y bootstrap conectados por callbacks de instancia. Quedan otros backends y pruebas reales de esta integración; PKCS11 pasó con transporte simulado. |
 | PIN | `iasecc_pin_cmd`, `iasecc_pin_verify`, `iasecc_pin_get_info` | VERIFY/consulta protegidos, un intento, sin copia persistente ni cache de PIN; publicar estado solo autenticado y limpiar login tras reset/error. |
-| MSE | `iasecc_set_security_env` | Mapear operación/hash/llave de PKCS#15 al formato probado, manteniendo selección AID bajo SM y orden. |
-| Firma | `iasecc_compute_signature`, `iasecc_compute_signature_dst`, `iasecc_compute_signature_at` | Para este perfil usar la operación PSO probada; no INTERNAL AUTHENTICATE o hashing convencional por semejanza. |
-| Limpieza | `iasecc_logout`, `iasecc_finish`, `card_reader_lock_obtained` | Limpieza de estado/ownership/MSE/cache y hook de reset implementados. Contexto y reserva/reset/cierre privados implementados con lifecycle; quedan remoción real, serialización y wiring al llamador público. |
-| PKCS#15/PKCS#11 | `sc_pkcs15_compute_signature`, algoritmos anunciados | Asegurar paso de digestSHA25632; manejar DigestInfo de CKM_RSA_PKCS conforme a la conversión existente, nunca firmarlo como un digest distinto. |
+| MSE | `iasecc_set_security_env`, routing de instancia | Mapeo de operación/hash/llave y AID protegido implementado, probado desde PKCS11 con tarjeta de software. |
+| Firma | `iasecc_compute_signature`, routing de instancia | PSO medido implementado con entrega después de cierre propio; firmas PKCS11 simple/multipart verificadas en software. Falta tarjeta real con módulo. |
+| Limpieza | `iasecc_logout`, `iasecc_finish`, `card_reader_lock_obtained` | Limpieza de estado/ownership/MSE/cache y hook de reset implementados. Contexto y reserva/reset/cierre privados implementados con lifecycle; logout/última sesión PKCS11 cierran reserva; quedan remoción real y serialización concurrente. |
+| PKCS#15/PKCS#11 | `sc_pkcs15_compute_signature`, algoritmos anunciados | DigestSHA25632, DigestInfo RSA_PKCS y hashing SHA256_RSA_PKCS simple/multipart pasaron con firma verificable de software; queda módulo con tarjeta real. |
 
-La ruta actual de `iasecc` sigue siendo IAS convencional: no contiene este
-establecimientoCA/SSC. No basta añadir un ATR y cambiar un opcode.
+La ruta IAS convencional se conserva. El perfil optativo usa el nuevo
+establecimientoCA/SSC y routing de instancia; no basta añadir un ATR y
+cambiar un opcode.
 
 ## Separación de responsabilidades
 
@@ -863,3 +865,73 @@ La suite IAS/JCOP3 completa pasó 712 líneas PASS, incluyendo los cuatro
 nuevos grupos; son líneas de reporte, no 712 casos independientes. Core47,
 helpers76, helpers hardware/observador/flake/lock/capturas no se modificaron;
 sus suites sin cambios no se repitieron.
+
+### Módulo PKCS11 compilado con contexto y tarjeta sintéticos
+
+`make test/iasecc-chipdoc-pkcs11` carga el módulo construido del proyecto,
+comprueba la ruta de C_Initialize con dladdr y fija LD_LIBRARY_PATH local.
+Sustituye únicamente las APIs de contexto/descubrimiento/conexión/cancelación;
+sc_connect_card simulado llama el initializer real anterior. No crea un
+contexto PCSC, busca lectores reales, abre GUI ni obtiene una credencial real.
+C_Initialize/GetSlotList/binding/framework/operaciones/sesiones son del módulo
+normal precompilado, con PKCS15/ASN1/locks/dispatcher de libOpenSC normal.
+Archivos TokenInfo/ODF/PrKDF/AODF/CDF, certificado/RSA/PIN y peer CA/SM sintéticos.
+El certificado se genera en memoria y solo se compara/verifica en memoria.
+No dump de valores: salida PASS fija, o enums numéricos del fixture en fallo.
+Lanzador sin core dumps/preload/audit/trace API heredados. No es prueba del
+match entre drivers ni de PCSC/hilos/plataformas/GUI/cierre temporal real.
+
+La prueba llevó a cambios **solo para iasecc_chipdoc_configured** en cuatro
+fuentes PKCS11; JCOP3 y otros perfiles conservan la conducta anterior:
+
+- Framework: rechaza atomic/lock_login antes del binding de metadatos. Este
+  perfil tiene reserva propia y no usa la pila genérica que guarda PIN para
+  restaurar logins. Proyección de llaves privadas restringida a RSA2048/ref91,
+  candidata ya validada al bind; una RSA2048/ref90 adicional no aparece como
+  llave privada firmable. Metadatos nativos y certificados públicos se mantienen.
+- Token/mecanismos: token readonly aun sin bit READONLY de TokenInfo y sin
+  PIN-pad aunque el lector simulado declare esa capacidad. RSA_PKCS y
+  SHA256_RSA_PKCS para firma2048; verify/hash son operaciones de software.
+  Sin CKF_DECRYPT/gen/derivación/wrap, otros hashes RSA/PSS/raw/EC. Los hashes
+  genéricos de software son válidos, no algoritmos de hash ejecutados en tarjeta.
+  RSA_PKCS tiene el subconjunto **DigestInfo SHA256**, no payload arbitrario.
+- Login/estado: solo CKU_USER, software PIN6..14; PIN nulo no solicita PIN-pad,
+  rolesSO/CONTEXT_SPECIFIC se rechazan sin credencial. GET_INFO local valida
+  prueba de login; ausencia/error pasa a PUBLIC y borra login lógico, sin
+  asumir que UNKNOWN conserva un login. SignInit exige prueba vigente.
+  Tras PSO cerrado, reset_login_state habilita un nuevo C_Login explícito.
+- Logout/cierre: este framework llama sc_logout para la reserva propia aun
+  con SW_PIN_LOGOUT_ONLY general. Última sesión cierra también si otro flujo
+  ya borró login_user (p.ej. GetSessionInfo con tarjeta cambiada). Propaga el
+  error de cierre después de liberar operaciones/handles. El driver controla
+  ownership/reset/unlock; no se resetea una reserva ajena. C_Finalize genérico
+  puede retornar OK ignorando errores de teardown: **no acredita cierre remoto**.
+
+**Nueve grupos** pasaron: identidad del módulo/Initialize/slot/bind nativo y
+certificado/publickey/IDs/token; mecanismos/flags y exclusión de key adicional;
+login/DigestInfo RSA verificada/size/buffer pequeño/atributos sensibles/roles;
+nuevo login en segunda sesión y cierre de una conservando la otra; SHA256
+simple y multipart con firma verificada; mecanismos/payload inválidos antes
+PSO, MAC malos enSELECT/MSE/PSO y VERIFY9000 sin autenticación, sin output ni
+reintento; cambio/remoción simulados invalidando ambas sesiones y lifecycle;
+atomic/lock_login sin token/PIN/metadata; reset final fallido propagado por
+CloseAllSessions, handles liberados, instancia en cuarentena y otro login
+bloqueado antes de cualquier VERIFY. Se recrea peer/counters del fixture
+entre logins; no se cambia el estado/binding de producción para simular éxito.
+Un payload local inválido anterior a PSO puede conservar login vivo; logout
+explícito sí cierra. Un fallo de canal/PIN/cierre invalida y no restaura login.
+
+ASan/UBSan9 detect_leaks0 pasó sobre initializer/fixture/peer/serializer;
+module/framework/PKCS15/ASN1/SM/routing/provider/locks precompilados sin
+instrumentar. No prueba fugas. La primera ejecución cargó el módulo Nix
+por su SONAME, aunque enlazaba libOpenSC local: no acredita el módulo de
+nuestro build. Se corrigió el lanzador y los resultados finales exigen dladdr
+local. Fallos posteriores fueron supuestos del fixture sobre discoveries,
+logout/cambio y estado, además de dos ubicaciones de patch/headers/linking;
+se contrastaron con fuente/APIs, sin atribuirlos a tarjeta ni contador PIN.
+
+Queda preparar un diagnóstico público del perfil, sin PIN, para que el usuario
+compruebe el binding y certificados/mecanismos reales. Después, una firma
+PKCS11 acotada y verificable; GUI/consecutivas/reinserción reales y RSA3072
+siguen pendientes. Helper JnUUiy9x es la firma real vigente; no nueva captura
+ni PCSC/hardware/PIN real/GUI/Idopte desde esta sesión.

@@ -6273,3 +6273,20 @@ sin prueba de fugas ni biblioteca OpenSC precompilada instrumentada. No hay
 PCSC/hardware/PIN real/GUI/Idopte nuevos. Falta PKCS11 antes de otra tarjeta;
 RSA3072/consecutivas/reinserción reales pendientes.
 [Detalles](jcop4-opensc-integration.md#configuración-optativa-inicialización-y-binding-nativo).
+
+### PKCS11 del build con tarjeta de software
+
+Nueve grupos nuevos verifican el módulo local con dladdr y contexto/lector/
+archivos DER/certificado/RSA/PIN/CA/SM sintéticos. C_Initialize/slot/bind/objetos/
+mecanismos/Login/Sign simple y multipart/sesiones/logout/remoción/cierre reales
+del módulo, sin PCSC. Cambios acotados a la instancia optativa: sin flags de
+descifrado/escritura/PIN-pad, solo llave privada RSA2048/ref91, no atomic ni
+lock_login genéricos/rolesSO/context-specific; login lógico sigue prueba local,
+PSO cerrado permite nuevo login explícito; logout/última sesión cierran reserva
+propia incluso después de invalidar login_user y propagan cierre fallido.
+Reset final fallido deja cuarentena, sin otro VERIFY; Finalize OK no acredita
+cierre remoto. ASan/UBSan9 detect_leaks0 pasó sobre fixture/initializer/peer/
+serializer, sin instrumentar módulo/libOpenSC precompilados ni probar fugas.
+Falta diagnóstico público sin PIN por usuario antes de firma PKCS11 real.
+RSA3072/GUI/consecutivas/reinserción reales pendientes, JnUUiy9x sigue vigente.
+[Detalles](jcop4-opensc-integration.md#módulo-pkcs11-compilado-con-contexto-y-tarjeta-sintéticos).
