@@ -5933,3 +5933,35 @@ Esta revisión modifica solo documentación; suites previas vigentes, no
 repetidas. Sin cambio de código/driver/submódulo/build/flake/lock/observador
 ni nueva prueba de hardware. Todos los comandos PCSC/tarjeta/PIN/GUI siguen
 siendo del usuario; no hay otro comando de tarjeta preparado ahora.
+
+### Base de integración IAS: perfil y estado por tarjeta
+
+Principal `4a06cfc`, submódulo sobre `3dfef6704`; sin otra operación de tarjeta.
+La firma JnUUiy9x permanece verificada. Se implementa en OpenSC el header
+privado iasecc-chipdoc.h y su estado dentro de iasecc_private_data: candidato
+ATR/AID más metadata pública validada de llave/PIN/D004, límites declarados,
+fases y ownership de un futuro contexto crypto, generación sin wrap.
+No añade ATR al binding ni conecta PIN/CA/SM/MSE/PSO; **el driver aún no firma
+JCOP4 por PKCS#11**. Las fases no autentican MAC ni identidad por sí mismas.
+
+Logout/finish y nuevo hook de notificación reset limpian estado; para el
+perfil activo limpian también MSE/cache/security_env. Binding separado de
+sesión evita que su invalidación pueda habilitar una ruta en claro futura.
+LegacyIAS sin perfil activo conserva comportamiento. El futuro adaptador
+deberá invalidar antes de sc_reset explícito; hardware/reset/remoción todavía
+sin comprobar. No cambiar comportamiento del helper exitoso ni repetirlo.
+
+Pasaron nueve grupos nuevos de software y ASan/UBSan9 detect_leaks0, sin
+prueba de fugas ni instrumentación de biblioteca/provider precompilados.
+OpenSC/móduloPKCS11 compilados; suiteIAS/JCOP3 con el grupo nuevo pasó tras
+los cambios finales. Pruebas llaman callbacks reales del driver con estado/
+contexto simulado, sin PCSC/lector/PIN/GUI; no sustituyen una firma por API.
+Detalles y siguientes piezas en
+[la integración OpenSC](jcop4-opensc-integration.md#primera-base-implementada-perfil-ownership-y-estado).
+
+Esta fase modifica cuatro archivos del submódulo (header nuevo, iasecc.h,
+card-iasecc.c, Makefile.am) y agrega script/testC del principal junto con
+Makefile/test-iasecc.sh/documentación. Commit del submódulo primero y luego
+puntero/documentos/tests del principal. No agregar capturas/artefactos/build.
+Todos los comandos PCSC/hardware/PIN/GUI siguen siendo del usuario; no hay
+un nuevo comando de tarjeta que ejecutar ahora.

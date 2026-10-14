@@ -9,7 +9,66 @@ transporte simulado. PIN/GUI también los ejecuta el usuario. Esto sustituye
 la autorización anterior de hardware por el agente; conservar límites de
 cada diagnóstico y privacidad. Git sigue autorizado pero .git solo lectura.
 
-**Última revisión: primera firma JCOP4 RSA2048 verificada; integración OpenSC pendiente.**
+**Última revisión: perfil/estado por tarjeta y limpieza IAS integrados; adaptador criptográfico pendiente.**
+Principal `4a06cfc`, OpenSC `3dfef6704`, limpios al comenzar. La firma real
+JnUUiy9x del14Oct10:13CR permanece verificada; **no repetir firma/helper/
+lector/canal/PIN**. Esta revisión sinPCSC/hardware/PINreal/GUI/Idopte ejecutado.
+
+Nuevo header privado del submódulo **src/libopensc/iasecc-chipdoc.h**:
+datos de perfil separados de control de sesión. ATR+AID exactos solo
+candidato; preparar exige metadata pública RSA nativa/sign/ref91/2048/PIN1/
+D004137/selector18 y límites tarjeta/lectorT1/envío139/recepción291/EXT ya
+declarado. No modifica capabilities ni tamaños para aprobar. eOI puede
+compartir ATR/AID: **no identifica país/perfil solo por esos dos**. No añade
+ATR a match/init, no anuncia algoritmos ni activa PIN/firma/transporte.
+
+Sesión independiente por tarjeta: fases preparada/canal/MF/query/PIN/AID/MSE,
+generaciónuint64 saturada, ownership de contexto opaco con callback que debe
+borrar/liberar claves/SSC. Fallo/stale/orden/status incorrecto elimina todo
+el estado y despega ownership antes de cleanup recursivo/repetido. Sin PIN/
+hash/digest/firma/counterpersistente; query63C7 precondición observada,
+**7 no es máximo inferido**. Valida firma local ref91/2048/SHA256/PKCS1 y
+consume MSE después de firma. **No verifica MAC/CA/crypto por sí mismo**:
+attach/record solo los llamará el futuro adaptador tras verificar MAC,
+padding/contenido/SW. Una fase de control no demuestra autenticación.
+
+iasecc_private_data añade binding persistente separado de sesión efímera,
+ambos inicialmenteNONE. Invalidar sesión no borra binding y no permitirá
+que un dispatcher futuro vuelva a IAS en claro. iasecc_logout/finish limpian
+sesión y, para perfil activo, cache/security_env/key_size/op_method/op_ref.
+Hook **iasecc_card_reader_lock_obtained** registrado: was_reset invalida solo
+perfil activo; lock ordinario/otrosIAS conservan comportamiento. Callback
+probado directamente, **no prueba sc_lock/remoción real**. sc_reset explícito
+no llama ese hook en la base: futuro adaptador debe invocar invalidation
+antes de su reset; remoción/desconexión/SM wrapper aún pendientes. Header
+en noinst_HEADERS/Makefile.am, sin símbolos públicos nuevos ni crypto/UI.
+
+Pasaron **9grupos nuevos** make test/iasecc-chipdoc-profile: candidate/metadata/
+transport/capabilities sin cambios, hashes/refs/tamaños unsupported, errores/
+30órdenes incorrectos/generaciones, cleanup/ownership/overflow, dosestados
+independientes y hooks reales logout/finish/reset/cache/MSE tras sesión ya
+invalidada; transporte prohibido/noAPDU. Incluye card-iasecc.c e iasecc-sdo.c
+reales en fixture, libOpenSC real para utilidades, sin contextoPCSC. Fixture
+inicial falló por símbolos privados SDO retenidos: se añadió fuente real
+SDO, no stubs permisivos. Registro de hook revisado en código/compilación,
+no prueba vtable runtime ni PIN/CA/firma en driver. ASan/UBSan9 pasaron
+detect_leaks0, sin prueba de fugas ni instrumentación deOpenSC.so/provider
+precompilados. OpenSC/móduloPKCS11 compilados; suiteIAS/JCOP3 pasó de nuevo
+tras cambios finales e incluye el grupo nuevo. Helper/codec sin cambios,
+suites previas vigentes/no repetidas. Flake/lock/observador/artefactos intactos.
+
+**Siguiente trabajo autónomo:** conectar primitivas/canal y adaptador de
+APDU con dispatcher normal/SM/capacidades justificadas, metadata validada,
+lock y resets. Luego PIN/MSE/PSO porAPI driver/PKCS15/PKCS11 con transporte
+sintético antes de pedir tarjeta. Compatibilidad OpenSSL/estado de sesiones/
+errors/tamaño3072 pendientes. No hay comando de hardware nuevo ahora.
+Git autorizado pero .gitreadonly, no eludir. Commit primero submódulo:
+Makefile.am/card-iasecc.c/iasecc.h/**nuevo iasecc-chipdoc.h**. Después principal
+documentos4/Makefile/test-iasecc.sh/**nuevo script y test C**/puntero vendor.
+gitadd-u omite nuevos. Submódulo modificado por primera vez en esta fase,
+HEAD aún3dfef6704 hasta commit del usuario. No capturas/build a Git.
+
+**Revisión anterior: primera firma JCOP4 RSA2048 verificada; integración OpenSC pendiente.**
 Principal `0f51c4c`, OpenSC `3dfef6704`, limpios al comenzar. Informe usuario
 `local/jcop4-channel-signature-extended-JnUUiy9x/report.txt`,
 2026-10-14T16:13:02Z (14Oct10:13CR): canal/MF/query63C7/login/SELECTAID/MSE

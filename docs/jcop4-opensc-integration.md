@@ -2,7 +2,8 @@
 
 Estado al 14 de octubre de 2026,10:13 Costa Rica. Base local del proyecto
 `0f51c4c`, submódulo OpenSC `3dfef6704`. Este documento define el siguiente
-cambio; **el adaptador al driver aún no está implementado**.
+cambio. **La base de perfil/estado y limpieza está implementada; el adaptador
+criptográfico/PIN/firma aún no está conectado al driver.**
 
 ## Evidencia disponible
 
@@ -49,13 +50,13 @@ Los datos públicos de política no acreditan un login ni permiten saltar VERIFY
 
 | Pieza | Funciones/estructura actuales | Trabajo necesario |
 | --- | --- | --- |
-| Detección e inicialización | `iasecc_match_card`, `iasecc_init`, `iasecc_init_amos_or_sagem` | Introducir perfil comprobado; no heredar todas las capacidades/algoritmos de defaultsIAS. La tabla actual no tiene una entrada exacta para este ATR. |
-| Datos de perfil | `iasecc_private_data`, `iasecc_is_chipdoc_signing_key` | Estado por tarjeta y discriminación de AID; el selector actual reconoce la aplicación/ref3 JCOP3. |
+| Detección e inicialización | `iasecc_match_card`, `iasecc_init`, `iasecc_init_amos_or_sagem` | Candidato/perfil local definidos; wiring a detección/init aún pendiente. No heredar defaultsIAS completos. La tabla de binding actual no tiene una entrada exacta para este ATR. |
+| Datos de perfil | `iasecc_private_data`, `iasecc-chipdoc.h`, `iasecc_is_chipdoc_signing_key` | Estado/binding independientes por tarjeta implementados, inicialmente inactivos; el selector legacy sigue reconociendo aplicación/ref3 JCOP3. |
 | Canal | Módulos locales `jcop4-channel-agreement`, `confirmation`, `messages` | Extraer primitivas reutilizables y adaptar el transporte OpenSC bajo lock; confirmar respuesta protegida antes de usar credencial. |
 | PIN | `iasecc_pin_cmd`, `iasecc_pin_verify`, `iasecc_pin_get_info` | VERIFY/consulta protegidos, un intento, sin copia persistente ni cache de PIN; publicar estado solo autenticado y limpiar login tras reset/error. |
 | MSE | `iasecc_set_security_env` | Mapear operación/hash/llave de PKCS#15 al formato probado, manteniendo selección AID bajo SM y orden. |
 | Firma | `iasecc_compute_signature`, `iasecc_compute_signature_dst`, `iasecc_compute_signature_at` | Para este perfil usar la operación PSO probada; no INTERNAL AUTHENTICATE o hashing convencional por semejanza. |
-| Limpieza | `iasecc_logout`, `iasecc_finish`, `card_reader_lock_obtained` | Invalidar claves/SSC/login/contexto/cache ante logout/reset/remoción/error; liberar lock/sesión. El driver actual no asigna ese hook de reset. |
+| Limpieza | `iasecc_logout`, `iasecc_finish`, `card_reader_lock_obtained` | Limpieza de estado/ownership/MSE/cache y hook de reset implementados. Quedan el contexto crypto real, reset explícito/remoción y reserva/liberación de sesión. |
 | PKCS#15/PKCS#11 | `sc_pkcs15_compute_signature`, algoritmos anunciados | Asegurar paso de digestSHA25632; manejar DigestInfo de CKM_RSA_PKCS conforme a la conversión existente, nunca firmarlo como un digest distinto. |
 
 La ruta actual de `iasecc` sigue siendo IAS convencional: no contiene este
@@ -120,3 +121,65 @@ las APIsEVP3 disponibles aquí existen en todas las compilaciones de OpenSC.
 No repetir ahora el diagnóstico de firma exitosa, lector o canal. No hay un
 nuevo comando de tarjeta preparado en esta revisión. El siguiente trabajo
 es local y con transporte simulado; no requiere otro PIN.
+
+## Primera base implementada: perfil, ownership y estado
+
+Cambios sobre principal `4a06cfc` y OpenSC `3dfef6704`, sin hardware. El header
+privado `src/libopensc/iasecc-chipdoc.h` separa datos del perfil observado
+del control de sesión. No añade ATR a la tabla de binding, escanea EF.DIR,
+instala SM, declara algoritmos ni activa las rutas de PIN/firma: esas piezas
+se conectarán después. El código está compilado dentro de OpenSC y su header
+figura en noinst_HEADERS para su distribución.
+
+ATR/AID exactos solo producen un **candidato**. eOI puede compartir ambos:
+preparar una sesión exige además metadata pública validada RSA nativa/sign,
+ref91/2048, PIN1, D004/137/selector18. La preparación comprueba también
+T=1, ATR de tarjeta/lector, EXT ya declarado y límites de ambos>=139/291.
+No modifica flags o tamaños para hacer pasar la comprobación; el futuro
+initializer deberá declarar las capacidades justificadas por el perfil.
+Metadata coincidente no autentica identidad de tarjeta ni país emisor.
+
+La sesión almacena generación, fase, referencia/tamaño de MSE y ownership
+de un contexto opaco. No contiene credencial/hash/digest/firma ni contador
+de intentos persistente. El callback de contexto deberá limpiar/liberar
+claves/SSC cuando exista el adaptador crypto. Invalidación despega primero
+ownership y borra control, luego ejecuta cleanup una sola vez; admite cleanup
+recursivo y no permite overflow de generación ni revivir una sesión antigua.
+Reemplazar un contexto activo exige invalidación explícita, sin reintento.
+
+Las transiciones representan el orden probado canal/MF/query63C7/login/AID/
+MSE/firma. Query63C7 es una precondición de este candidato, no una inferencia
+del máximo configurado. Consumir la respuesta de firma borra la autorización
+MSE y exige prepararlo de nuevo. **Estas funciones no verifican MAC/CA ni
+realizan crypto**: attach/record solo serán llamadas por el futuro adaptador
+después de validar MAC, padding, contenido y política SW. Sus errores de
+control tampoco sustituyen el mapping de SW autenticado a errores PKCS#11.
+
+`iasecc_private_data` conserva un binding separado del estado efímero para
+que perder la sesión no permita volver a una ruta IAS en claro. Ambos son
+NONE al inicializar actualmente; ningún caller de producción prepara aún
+la sesión. `iasecc_logout` y `finish` limpian ownership. Para el perfil activo
+también limpian cache/security_env/key_size/op_method/op_ref. El hook nuevo
+`iasecc_card_reader_lock_obtained` hace esa invalidación al recibir was_reset;
+lock ordinario y perfiles legacy conservan sus datos. Incluso con la sesión
+ya invalidada, un binding activo obliga a limpiar MSE/cache en el próximo reset.
+`sc_reset` explícito no llama ese hook en la base local: el adaptador deberá
+invalidar antes de invocarlo. No se ha probado remoción ni reset físicos.
+
+`make test/iasecc-chipdoc-profile` pasó nueve grupos con metadata/objetos
+sintéticos y código real del driver/SDO en el fixture. Cubre mutaciones de
+ATR/AID/metadata, límites/capabilities intactos, hash/ref/tamaño no soportados,
+30órdenes incorrectos, errores/generación/ownership/overflow/cleanuprecursivo,
+dos estados independientes y callbacks reales de logout/finish/reset con
+limpieza MSE/cache. El transporte está prohibido y no se crea contexto PCSC.
+Registro del hook comprobado en código/compilación, sin prueba de vtable
+runtime o de la cadena completa sc_lock/driver/PKCS#11. Un fallo inicial de
+enlace del fixture se resolvió incluyendo el SDO real cuyos símbolos eran
+privados, sin stubs permisivos ni cambio al transporte.
+
+ASan/UBSan pasó los nueve grupos con detect_leaks0; no prueba de fugas ni
+instrumentación de OpenSC.so/provider precompilados. OpenSC/móduloPKCS11
+compilados y suiteIAS/JCOP3 pasó tras los cambios finales, incluyendo este
+nuevo grupo. No cambian helper/codec/flake/lock/observador ni artefactos reales.
+El siguiente parche debe conectar el canal/dispatcher/SM, todavía con pruebas
+offline antes de otra firma física.

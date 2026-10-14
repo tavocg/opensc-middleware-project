@@ -28,6 +28,7 @@
 .PHONY: sign/jcop4-channel sign/jcop4-channel-application sign/jcop4-channel-extended test/jcop4-channel-sign
 .PHONY: inspect/jcop4-reader-features test/jcop4-reader-features
 .PHONY: inspect/jcop4-channel-transport test/jcop4-channel-transport
+.PHONY: test/iasecc-chipdoc-profile
 
 PDF_INPUT ?= doc.pdf
 PDF_OUTPUT ?= local/jcop3-cli.pdf
@@ -102,6 +103,7 @@ help:
 		'make inspect/jcop4-reader-features READER=0 Consulta capacidades del lector, sin PIN ni APDU de tarjeta.' \
 		'make inspect/jcop4-channel-transport READER=0 Prueba MF protegido con DO97/2 y APDU extendida, sin PIN.' \
 		'make test/jcop4-channel-transport Prueba la variante de transporte con lector simulado.' \
+		'make test/iasecc-chipdoc-profile Prueba perfil y ciclo de sesión IAS/ChipDoc, sin tarjeta ni PIN.' \
 		'make test/jcop4-reader-features Prueba el diagnóstico del lector con PC/SC simulado.' \
 		'make test/jcop4-channel-sign Prueba firma/guard/verificación con transporte y PIN ficticios.' \
 		'make test/jcop4-channel-kdf Prueba la derivación candidata AES128 con datos sintéticos, sin tarjeta ni PIN.' \
@@ -385,3 +387,6 @@ inspect/jcop4-channel-transport:
 
 test/jcop4-channel-transport:
 	@bash scripts/test-jcop4-channel-transport.sh
+
+test/iasecc-chipdoc-profile:
+	@bash scripts/test-iasecc-chipdoc-profile.sh

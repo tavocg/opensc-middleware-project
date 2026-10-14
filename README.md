@@ -54,6 +54,11 @@ verificación RSA y cierre completo; OpenSSL verificó también los archivos
 guardados y rechazó el mensaje al alterar un bit. Falta integrar esta
 secuencia en el driver OpenSC y probar PKCS#11/firmador. RSA3072 permanece
 sin verificar. [Plan de integración](docs/jcop4-opensc-integration.md).
+La integración empezó con el perfil y estado de sesión por tarjeta dentro
+de `iasecc`, incluyendo limpieza en logout/finish y notificaciones de reset.
+Pasaron nueve grupos nuevos de software y las regresiones IAS/JCOP3; OpenSC
+compiló. El canal seguro y las llamadas PIN/MSE/PSO todavía deben conectarse
+al driver. No hay una nueva prueba con tarjeta para esta revisión.
 Los párrafos siguientes conservan los pasos históricos de investigación.
 La selección temporal RSA/SHA-256 obtuvo `9000`; VERIFY vacío devolvió
 `63C7`, con siete intentos disponibles, PIN global 1 y formato UTF-8.
