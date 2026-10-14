@@ -456,7 +456,8 @@ reinicio del contador y no transforma9000 en login o permiso de saltar PIN.
 Respuestas inválidas no publican SW y dejan tries_left=-1. Un fallo real
 limpia el canal, manteniendo obligación de close; argumentos/duplicados
 locales preservan el propietario y no envían otra consulta o usan cache.
-No se implementa aún VERIFY con credencial; ningún test nuevo lee PIN real.
+Esta etapa solo consulta estado; VERIFY con credencial se añade en la etapa
+siguiente. Ningún test lee PIN real.
 
 `make test/iasecc-chipdoc-transaction` pasó **siete grupos**: sc_lock/reset/
 unlock y dispatcher reales de libOpenSC, con lector/locks del backend/peer
@@ -479,5 +480,59 @@ Sin PCSC/lector/tarjeta/PIN real/GUI/Idopte del agente, ni captura o informe.
 Los efectos reales de reset/query sobre intentos no se acreditan mediante
 esta prueba software. Tampoco concurrencia de hilos/procesos, bloqueo temporal
 acotado de PCSC o remoción física. Firma JnUUiy9x vigente; no repetir ahora.
-Sigue VERIFY desde argumentos de API, luego AID/MSE/PSO, activación pública
-optativa con capacidades/serialización justificadas y pruebas PKCS15/PKCS11.
+La siguiente etapa añade VERIFY desde argumentos de API; AID/MSE/PSO,
+activación pública optativa y pruebas PKCS15/PKCS11 siguen pendientes.
+
+### VERIFY privado desde argumentos OpenSC
+
+Principal `c58d485`, OpenSC `1f36a170d`, limpios al comenzar. Se añade
+`iasecc_chipdoc_channel_verify_pin(card,data,tries,report)`; API privada,
+sin cambiar PIN_CMD/match/init/vtable públicos. La metadata decodificada
+ahora copia exclusivamente formato/flags/límites públicos del PIN asociado.
+Transaction_begin exige global1/UTF8/min6/max14/flags0x11 antes de lock/reset
+y conserva esa política, sin leer credencial/cache/logged_in/intentos.
+
+El argumento es `const sc_pin_cmd_data`: solo VERIFY, flags0, SC_AC_CHV,
+referencia1, encodingASCII0, sin PUK/customAPDU/segundoPIN. Rechaza PIN-pad,
+cambio/desbloqueo/query/padding antes de transporte. Los límites opcionales
+del llamador no pueden cambiar6/14. `pad_length` suministrado por PKCS15 se
+ignora cuando no se solicita padding. UTF8 admite por ahora exclusivamente
+ASCII imprimible0x20..0x7E de6..14 bytes, sin conversión/trim/hash/truncamiento.
+No leer prompt ni cache/counter/login del argumento. **SC_AC_AUT8 no se
+reinterpreta como PIN**: el wiring futuro debe justificar el método de los
+objetos nativos; esta API privada no resuelve por sí sola esa integración.
+
+Exige reserva propia, fasePIN_AVAILABLE después de63C7, mismo card/reader/
+generation/provider y SM_IDLE/SSC6 antes de leer los bytes. Toma prestado el
+buffer del llamador y no conserva copia. Seal limpia sus temporales; caller
+debe limpiar su entrada. Un único VERIFY protegido: global1/CLA0C,
+DO87 cifrado16+DO8E/MAC8/Lc29, CASE4 corto/frame35/Le256, sin DO97 ni padding
+de credencial (sí padding criptográfico método2). SSC7 comando/8 respuesta.
+Dispatcher normal con NO_RETRY_WL/NO_GET_RESP/NO_SM, sin 6C/61/repetición.
+
+MAC antes de publicar SW, exterior9000 o63Cx idéntico al DO99 autenticado,
+plaintext vacío obligatorio. Solo9000 avanza LOGGED_IN; no se infiere contador
+reiniciado/max7 y tries permanece-1.63Cx autenticado publica0..15:0 blocked,
+otros PIN_CODE_INCORRECT;6983 blocked/tries-1,6982 security status, otros
+CARD_CMD_FAILED. MAC/forma/contexto/IO/criptografía o SW de fallo invalida
+canal sin reenviar el PIN. Reserva permanece para close; pérdida de reserva
+requiere recuperación sin reset/unlock ajenos. Argumentos locales inválidos
+y duplicados no transmiten y preservan dueño; repeat tras login no reautentica.
+
+`make test/iasecc-chipdoc-verify` usa lector/peer y PIN ficticios, dispatcher,
+serializer y locks reales. Se comprueban6..14 bytes/frame35 con descifrado y
+CMAC independientes, argumento/entrada intactos, política previa a lock,
+22 variantes locales, todos64bitsMAC/replay/forma/61/6C/transporte y counters
+sintéticos0..15, reset/reattach/remoción/provider/cierre fallido. Nunca intenta
+PIN real ni afirma efectos sobre su contador. No hardware/Idopte/GUI/nuevas
+capturas. Firma real JnUUiy9x sigue vigente. Siguen selecciónAID/MSE/PSO,
+wiring público/PKCS15/PKCS11 y validación optativa con tarjeta; RSA3072 no
+acreditada.
+
+Pasaron **seis grupos nuevos**, ASan/UBSan6 con detect_leaks0, treinta grupos
+previos y la suite IAS/JCOP3 completa (691líneasPASS, no691casos distintos).
+Sin fugas verificadas o instrumentación de libOpenSC/provider/locks/ASN1
+precompilados. Stub del backend no soportado probado por macro con VERIFY
+sinIO ni cambios de estado; no builds reales de esos backends. OpenSC y
+módulo PKCS11 compilados, sin exports nuevos. Core47/helpers76 y helpers
+reales sin cambios, resultados anteriores vigentes/no repetidos.

@@ -73,6 +73,8 @@ static void transaction_defaults(void)
 	reader_ops.lock = reader_lock; reader_ops.unlock = reader_unlock; reader_ops.reset = reader_reset;
 	reader_ops.transmit = transaction_backend;
 	reader_locks = reader_unlocks = resets = 0; lock_fail = unlock_fail = reset_fail_at = 0;
+	pin_info.attrs.pin.min_length = 6; pin_info.attrs.pin.max_length = 14;
+	pin_info.attrs.pin.flags = SC_PKCS15_PIN_FLAG_CASE_SENSITIVE | SC_PKCS15_PIN_FLAG_INITIALIZED;
 	query_mode = query_bit = 0; query_sw = 0x63C7; query_outer = 0x9000;
 }
 static void begin(void)
@@ -92,6 +94,7 @@ static void close_transaction(void)
 	assert(!test_prv.chipdoc_session.channel && !test_prv.chipdoc_transaction.active && !test_card.lock_count && !reader_reserved);
 	assert(resets == 2 && reader_unlocks == 1);
 }
+#ifndef IASECC_CHIPDOC_TRANSACTION_FIXTURE
 int main(void)
 {
 	test_provider.libctx = OSSL_LIB_CTX_new(); assert(test_provider.libctx);
@@ -226,3 +229,5 @@ int main(void)
 	OSSL_PROVIDER_unload(alternate_provider.defprov); OSSL_LIB_CTX_free(alternate_provider.libctx);
 	return 0;
 }
+
+#endif

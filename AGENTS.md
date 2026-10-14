@@ -9,6 +9,58 @@ transporte simulado. PIN/GUI también los ejecuta el usuario. Esto sustituye
 la autorización anterior de hardware por el agente; conservar límites de
 cada diagnóstico y privacidad. Git sigue autorizado pero .git solo lectura.
 
+**Última revisión: VERIFY privado con argumentos OpenSC y PIN ficticio implementado.**
+Principal `c58d485`, OpenSC `1f36a170d`, limpios al comenzar. Firma real
+JnUUiy9x vigente. Sin PCSC/lector/tarjeta/PIN real/GUI/Idopte ejecutado ni
+captura/informe nuevo. No pedir otra prueba con tarjeta ahora.
+
+Nueva API privada **channel_verify_pin(card,const sc_pin_cmd_data*,tries,report)**,
+sin wiring PIN_CMD/match/init/vtable público. Metadata PKCS15 copia política
+pública min/max/type/flags; transaction_begin exige global1/UTF8/6..14/flags
+0x11 CASE_SENSITIVE|INITIALIZED ANTES de lock/reset y guarda solo esa política.
+No lee credential/cache/logged_in/contador. Bootstrap sin credencial conserva
+sus límites anteriores; la política nueva se exige en controlador gestionado.
+
+VERIFY solo cmdVERIFY/flags0/SC_AC_CHV/ref1/encodingASCII0, sin PUK/customAPDU/
+segundoPIN/PIN-pad/padding/cambio/desbloqueo. Bounds opcionales0 o6/14; ignora
+pad_length cuando padding no solicitado (PKCS15 sí lo suministra). Por ahora
+solo ASCII imprimible0x20..7E,6..14bytes, subconjunto de UTF8 observado; no
+trim/conversión/hash/truncamiento ni almacenamiento de credencial/prompt.
+**SC_AC_AUT8 no se reinterpreta como PIN**: justificar ese método nativo en
+futuro wiring, no dar por integrada API PKCS15 con este prototipo privado.
+
+Requiere reserva propia/PIN_AVAILABLE después63C7/provider/generación/SM_IDLE/
+SSC6 antes de leer PIN prestado. Un VERIFY frame35/CASE4 corto/global1/Le256,
+Lc29/DO87 cifrado16/DO8E MAC8, sinDO97; SSC7/8. NO_RETRY_WL/NO_GET_RESP/NO_SM.
+Código limpia temporales, caller sigue dueño y limpia entrada. Solo respuesta
+vacía con MAC válido/9000 avanza LOGIN; tries=-1, no inferir máximo/reinicio.
+63Cx autenticado cuenta0..15:0 blocked/resto PIN_CODE_INCORRECT;6983 blocked,
+6982 security, otrosCARD_CMD_FAILED. Transporte/forma/MAC/crypto/contexto/SW
+fallido invalida canal, **sin retransmitir**. Reserva exige close; pérdida
+marca recuperación sin reset/unlock ajenos. Args/duplicados locales noIO y
+preservan dueño. Repeat tras login no reautentica. Query previa sin cambios.
+
+**6 grupos nuevos** test/iasecc-chipdoc-verify: peer/PIN ficticios con AES/CBC/
+CMAC independientes, frame/SSC6..14/input intacto, política previa a lock,
+22 args inválidos,64bitsMAC/replay/61/6C/forma/counters0..15/erroresautenticados,
+reset/reattach/remoción/provider/cleanup. ASan/UBSan6 pasó detect_leaks0,
+sin fugas verificadas ni instrumentación de libOpenSC/provider/locks/ASN1
+precompilados. Treinta grupos previos y suiteIAS/JCOP3 pasaron de nuevo:
+691líneasPASS total, NO691testcases distintos. Backend no soportado por macro
+también incluye VERIFY sinIO/statechanges; no builds reales otros backends.
+OpenSC/móduloPKCS11 compilados, sin exports nuevos. Core47/helpers76 intactos/
+vigentes/no repetidos; helpers reales intactos/no reconstruidos. Flake/lock/
+observador/capturas intactos; efectos reales sobre contador no probados.
+
+**Siguiente trabajo autónomo:** AID/MSE/PSO protegidos desde argumentos de
+API/llave validada; luego wiring optativo, método PIN nativo, serialización,
+PKCS15/PKCS11 y capacidades justificadas antes de tarjeta. RSA3072/JCOP4 GUI/
+consecutivas/reinserción/plataformas/FIPS pendientes. Git readonly/no eludir:
+submódulo primero5modificados (chipdoc.h,pkcs15.h,sm.c/h,iasecc.h); principal
+después puntero/4docs/Makefile/test-iasecc.sh/transaction+unavailable fixtures
+y **nuevo tests/iasecc-chipdoc-verify.c/scripts/test-iasecc-chipdoc-verify.sh**.
+No build/capturas a Git.
+
 **Última revisión: reserva/reset/cierre privados y consulta PIN autenticada implementados.**
 Principal `5e59f0a`, OpenSC `0710faaf1`, limpios al comenzar. Firma real
 JnUUiy9x vigente. Sin PCSC/lector/tarjeta/PIN real/GUI/Idopte ejecutado;

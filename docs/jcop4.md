@@ -6109,3 +6109,33 @@ nuevo. No hardware/PIN real/GUI/Idopte/nuevas capturas del agente ni efecto
 sobre intentos probado. Firma JnUUiy9x vigente. Sigue VERIFY protegido desde
 API y luego AID/MSE/PSO, serialización/wiring público/PKCS11 antes de tarjeta.
 [Detalles](jcop4-opensc-integration.md#reserva-del-lector-cierre-y-consulta-de-pin-autenticada).
+
+### VERIFY privado con argumentos OpenSC y credencial ficticia
+
+Principal `c58d485`, OpenSC `1f36a170d`, limpios al comenzar. API privada
+channel_verify_pin recibe const sc_pin_cmd_data y cifra los bytes prestados;
+no guarda PIN ni lee prompt/cache/tries/logged_in del argumento. Controlador
+exige metadata pública global1/UTF8/6..14/flags0x11 antes de lock/reset.
+Acepta cmdVERIFY/SC_AC_CHV/ref1/encoding0/flags0 y, inicialmente, ASCII
+imprimible6..14 sin conversión/padding de credencial. SC_AC_AUT8 no se
+interpreta como PIN: justificar método nativo al conectar PKCS15 después.
+
+Tras query63C7/SSC6/reserva propia, un solo VERIFY: frame35/CASE4 corto,
+DO87 cifrado16/DO8E MAC8/Lc29/Le256, SSC7/8. MAC antes de SW, respuesta
+vacía9000 requerida para LOGIN; no inferir contador máximo o reinicio.
+63Cx autenticado mantiene error con contador reportado; otros errores de
+PIN/contexto/crypto/IO/forma/MAC invalidan canal sin retransmitir. Reserva
+exige close, con recuperación explícita si se perdió. Args locales y
+duplicados noIO/preservan dueño. Sin wiring público PIN_CMD/init/match.
+
+Seis grupos nuevos+ASan/UBSan6 detect_leaks0 pasaron, con PIN/reader/peer de
+software y dispatcher/serializer/locks reales. Cubren bytes6..14/AES/CMAC
+independientes/política/22args inválidos/status0..15/64bitsMAC/replay/61/6C/
+reset/reattach/remoción/provider/cierre. Treinta grupos previos y suiteIAS/
+JCOP3 pasaron:691líneasPASS, no691casos distintos. Stub no soportado incluye
+VERIFY sinIO/estado; no builds reales otros backends/FIPS. Sin fugas probadas
+ni instrumentación de bibliotecas externas. OpenSC/móduloPKCS11 compilados,
+sin exports nuevos; core47/helpers76/helpers reales intactos/no repetidos.
+Sin PCSC/hardware/PIN real/GUI/Idopte ni capturas del agente. Firma JnUUiy9x
+vigente; sigue AID/MSE/PSO y wiring PKCS15/PKCS11 antes de otra tarjeta.
+[Detalles](jcop4-opensc-integration.md#verify-privado-desde-argumentos-opensc).

@@ -27,6 +27,9 @@ int main(void)
 	int tries = 123; memset(&report, 0xA5, sizeof(report));
 	assert(iasecc_chipdoc_channel_query_pin(&card, 1, &tries, &report) == SC_ERROR_NOT_SUPPORTED);
 	assert(tries == -1 && !memcmp(&report, &empty, sizeof(report)) && !memcmp(&prv, &before, sizeof(prv)));
+	tries = 123; memset(&report, 0xA5, sizeof(report));
+	assert(iasecc_chipdoc_channel_verify_pin(&card, NULL, &tries, &report) == SC_ERROR_NOT_SUPPORTED);
+	assert(tries == -1 && !memcmp(&report, &empty, sizeof(report)) && !memcmp(&prv, &before, sizeof(prv)));
 	assert(iasecc_chipdoc_channel_open(NULL, NULL, 0, NULL) == SC_ERROR_NOT_SUPPORTED);
 	puts("PASS unavailable crypto backend returns not-supported with zero reports and unchanged driver/card/session state, no crypto/transport/PIN");
 	return 0;
