@@ -6214,3 +6214,45 @@ lock/capturas intactos, resultados anteriores vigentes/no repetidos. Sin
 PCSC/PIN real/GUI/Idopte del agente; firma JnUUiy9x vigente. Sigue routing
 optativo/lifetime/init/capacidades/GET_INFO/guardas y mecanismosPKCS11 antes
 de tarjeta. [Detalles](jcop4-opensc-integration.md#contrato-de-operaciones-y-frontend-pkcs15-nativo).
+
+### Routing privado por tarjeta y lifecycle PKCS15
+
+Principal `d458d4d`, OpenSC `55a3c314a`, limpios al comenzar. Nuevo header
+iasecc-chipdoc-routing.h distribuido e incluido para compilación; install
+privado explícito, aún no llamado por config/init/bind. Valida owner/metadata/
+política/cache/estado/contexto/T1/EXT/límites existentes y tabla estrecha de
+algoritmosRSA2048/PAD_TYPE01|SHA256/capsEXT/FCI_AC/PIN_INFO. No cambia esas
+capacidades ni acepta defaultsIAS amplios o tablaops global. Instala solo
+la tabla de esa instancia y conserva referenciasprestadas/tablaoriginal/
+clearoriginal; caller mantienevida/serializa, un owner porcard.
+
+Metadata original soloidle; durantecanal callbacks medidos de PIN/SELECT/
+MSE/PSO/logout, resto de operaciones ajenas bloqueadas. GET_INFO local
+verifica prueba de login/SSC/provider/owner, tries=-1/max0/política pública,
+sin queryAPDU/cache de credencial. Error/contexto viejo cierra reserva (puede
+reset/unlock). Tras PSO otra firma exige nuevoLOGIN, sin replay/cachefallback.
+Límites de API driver, no sandbox para transmitir rawAPDU/PCSC directamente.
+
+Remove cierra reserva y borra owner/key/PIN antesfree, restaura clear y
+mantiene cache0/filtro/marcador hasta desconexión. No retorno a plaintextIAS.
+Fallo cierre/pérdida conserva recuperación sin reset/unlock ajenos. Clear
+PKCS15 encadena original una vez; finish libera routing antes drv_data y
+restaura tabla original solo para destruir. close.complete solo propia
+reserva; PKCS15 libera su lock exterior después. Owner debe liberarse antes
+de destruircard; no liberar/reemplazar contextos/objetos por fuera del contrato.
+
+Seis grupos nuevos con callbacks instalados **de producción** y peer/reader/
+PIN/RSA software, DER/PKCS15/dispatcher/locks reales: con/sinAID/RSAverificada/
+2login+firma/sinLOGINfallido, statuslocal/metadataidle/bloqueoactivo,10fallos
+install/globalops/caps/algos/owner, erroresporfase/PIN/unVERIFY/sin cache,
+reset/unlock/pérdida/cambio metadata/cache/provider/membership, **free PKCS15
+real** heap+clear original+freeobjetos/cierre fallido y callbacks posteriores.
+ASan/UBSan6 detect_leaks0 y47gruposprevios/suiteIAS/JCOP3 pasaron:708líneas
+PASS, no708casosdistintos; sin fugasverificadas/instrumentación de librerías
+externas. OpenSC/móduloPKCS11 compilados, sin nuevos exports; macrostub
+install/status noIO/estado, no otrosbackends/FIPS/plataformas/hilos reales.
+Core47/helpers76/helpershardware/observador/flake/lock/capturas intactos,
+resultados anteriores vigentes/no repetidos. Sin hardware/PIN real/GUI/Idopte
+del agente; firma JnUUiy9x vigente. Siguen config/init/bind optativos y
+PKCS11/mecanismos/sesiones antes de otra tarjeta. RSA3072 no acreditada.
+[Detalles](jcop4-opensc-integration.md#instalación-explícita-del-routing-y-liberación-de-objetos).

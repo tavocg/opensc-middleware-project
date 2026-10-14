@@ -9,6 +9,78 @@ transporte simulado. PIN/GUI también los ejecuta el usuario. Esto sustituye
 la autorización anterior de hardware por el agente; conservar límites de
 cada diagnóstico y privacidad. Git sigue autorizado pero .git solo lectura.
 
+**Última revisión: routing privado por instancia instalado y lifetime PKCS15 probado.**
+Principal `d458d4d`, OpenSC `55a3c314a`, limpios al comenzar. Firma real
+JnUUiy9x vigente. Sin PCSC/hardware/PIN real/GUI/Idopte/captura/informe nuevo.
+No pedir otra firma con tarjeta. Config/init/bind público aún no activan nada.
+
+Nuevo **iasecc-chipdoc-routing.h**: install(p15,key) explícito tras native
+metadata, API privada/header distribuidoMakefile.am e incluido en
+pkcs15-iasecc.c solo para compilación; **no llamado automáticamente**.
+Valida política/objetos/cachenulo/magic/estado/contextoOpenSSL3/debug0/T1/
+EXT/límites139/291 y callbackslock/reset/unlock/hook/finish. Exige tabla
+existente deUNAentrada RSA2048/PAD_TYPE01|SHA256, caps soloEXT/FCI_AC/PIN_INFO;
+rechaza defaultsRNG/gen/raw/otros hashes, no modifica caps/algos/límites.
+No tablaops global driver.ops; malloc/validación antes de mutación. Falla
+sinIO/cambios. Un ownerp15/key/PIN porcard, referenciasprestadas/caller serial.
+
+Instala solo tablaops de instancia, snapshotoriginal/clearoriginal, cache0
+y hookclear. Antes de operaciones comprueba identidadcard/reader/context/
+table, pertenencia obj_list acotada ANTES de derefkey/PIN, metadata/cache0.
+Cambio detectado invalida/cierra y bloquea binding. Metadata read/select/
+record/get_data original soloidle/sinrecovery. Durantecanal select_file solo
+PATHlen0/AIDexacto sinFCI->SELECTprotegido. PIN_CMD VERIFY medido+GET_INFO
+local, MSE/PSO medidos/loginvivo, logout/finish. Resto deopsNULL (RNG/GET/
+descifrado/admin/write/control/etc), purecheckSW/FCI y hookreset conservados.
+Restricción de API driver, no sandbox contra rawAPDU/PCSC directo.
+
+Nuevo SM supported/status privados sinIO. GET_INFO válido verifica
+fase/SSC8/10/12/provider/owner/generation y publica solo loginvivo/política
+6..14/ASCII, tries=-1/max0. No queryextra/max7/cachePIN/hash/login histórico.
+Estado viejo/error invalida/cierra (cierre sí puede reset/unlock, sinAPDU).
+VERIFY args/ASCII validados antesstartup; un begin/query/credencial. Error
+de cualquieretapa cierra reserva sin reintento; reporteinmemoria enum/result/
+startup/channel/close numéricos, no PIN/longitudreal/digest/firma/secretos.
+Tras PSO LOGGED_OUT; otra firma sinLOGIN falla sinPSO/cache-revalidate.
+Nuevo login explícito abre canalnuevo sobre mismo binding.
+
+Remove(card,owner,report) cierra/reset propiareserva, restaura clearoriginal,
+cache0 y borra p15/key/PIN ANTES de free. Filtro+marcador desvinculado quedan
+propiedadcard hasta finish; no plaintextIAS/metadata/reinstall/fallback.
+Idempotente; falloreset/unlock/pérdida conserva recovery, sin reset/unlock
+ajenos. Hookclear remove+originalclear una vez en lifecycle normal. Finish
+remove/freebinding/restauratabla solo para destrucción/callfinishoriginal,
+propaga cierre fallido. Objetos/owner liberados antes de destruircard; no
+reemplazar driverdata/table ni liberarowners/contextos por fuera del contrato.
+close.complete acredita propiareserva/reset, no unlock exterior PKCS15.
+
+**6 grupos nuevos** test/iasecc-chipdoc-routing con **callbacks de producción
+instalados** (ya no los de frontendfixture), DER/PKCS15/dispatcher/locks reales,
+peer/reader/PIN/RSA/metadataidle sintéticos. AmbasrutasAID/RSAverificada,
+2 ciclos login/firma explícitos y sinLOGINsegundoPSOfallido, GET_INFOlocal,
+idlemetadata/bloqueoactivo/logout/remove/tombstone,10instalacionesfallidas/
+sinmutación/globalops/owner/caps/algos; errorespor3etapas/PIN/unVERIFY/sin
+cache/output, reset/unlock/pérdida/cambio metadata/cache/provider/membership.
+**sc_pkcs15_card_free real** con ownerheap/clear original/objetosfreed y
+reset fallido; después callbacks no derefownerfreed, finish libera routing
+y drv_dataoriginales. ASan/UBSan6 detect_leaks0 pasó, no fugasverificadas ni
+instrumentación de libOpenSC/PKCS15/ASN1/provider/locks precompilados.
+47gruposprevios+suiteIAS/JCOP3 pasaron:708líneasPASS, NO708casosdistintos.
+OpenSC/móduloPKCS11 compilados; sin nuevos exports. Stubmacro install/status
+noIO/statechange, no buildsreales otrosbackends/FIPS/plataformas/hilos.
+Core47/helpers76/helperhardware/observador/flake/lock/capturas intactos/
+vigentes/no repetidos. Fallos iniciales solo fixtures/linker y peer default
+Le172 al reiniciar; corregido a política256 deldriver, NO variante hardware.
+
+**Siguiente autónomo:** config/init/activación optativa desdebind/parse con
+objetosnativos/caps justificadas, cerrar antesde que otrasops pub interfieran,
+PKCS11/mecanismos/objetos/tokens/multi-sesión. Luego hardwareusuario. RSA3072/
+JCOP4GUI/consecutivas/reinserción real pendientes. Git readonly/noeludir:
+submódulo primero5modificados Makefile.am/sm.c/h/iasecc.h/pkcs15-iasecc.c y
+**nuevo iasecc-chipdoc-routing.h**; principal después puntero/4docs/Makefile/
+test-iasecc.sh/pkcs15+unavailable fixtures y **nuevo test+lanzadorrouting**.
+No builds/capturas a Git.
+
 **Última revisión: contrato de operación y frontend PKCS15 nativo probados.**
 Principal `8dc88cd`, OpenSC `b391a94b3`, limpios al comenzar. Firma real
 JnUUiy9x vigente. Sin PCSC/hardware/PIN real/GUI/Idopte ni captura/informe

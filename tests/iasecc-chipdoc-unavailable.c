@@ -1,6 +1,7 @@
 /* Compile-time unavailable backend: no OpenSSL3 implementation executed. */
 #define IASECC_CHIPDOC_NO_CRYPTO
 #include "libopensc/iasecc-chipdoc-sm.c"
+#include "libopensc/iasecc-chipdoc-routing.h"
 #include <assert.h>
 #include <stdio.h>
 int main(void)
@@ -41,6 +42,12 @@ int main(void)
 	assert(iasecc_chipdoc_channel_verify_pin(&card, NULL, &tries, &report) == SC_ERROR_NOT_SUPPORTED);
 	assert(tries == -1 && !memcmp(&report, &empty, sizeof(report)) && !memcmp(&prv, &before, sizeof(prv)));
 	assert(iasecc_chipdoc_channel_open(NULL, NULL, 0, NULL) == SC_ERROR_NOT_SUPPORTED);
+	int logged_in = 99;
+	assert(iasecc_chipdoc_channel_supported(&card) == SC_ERROR_NOT_SUPPORTED);
+	assert(iasecc_chipdoc_channel_pin_status(&card, &logged_in) == SC_ERROR_NOT_SUPPORTED && logged_in == SC_PIN_STATE_UNKNOWN);
+	struct sc_pkcs15_card p15 = {.card = &card}; p15.opts.use_pin_cache = 1;
+	assert(iasecc_chipdoc_routing_install(&p15, NULL) == SC_ERROR_NOT_SUPPORTED && p15.opts.use_pin_cache == 1);
+	assert(!memcmp(&prv, &before, sizeof(prv)));
 	puts("PASS unavailable crypto backend returns not-supported with zero reports and unchanged driver/card/session state, no crypto/transport/PIN");
 	return 0;
 }

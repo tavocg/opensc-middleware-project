@@ -83,7 +83,11 @@ Las funciones reales de PKCS#15 ya pasaron pruebas con objetos DER nativos y
 callbacks de transporte simulados: digest SHA-256 y DigestInfo producen la
 misma firma verificable. La política privada exige PIN CHV global sin ruta,
 SDO sin archivo y cache de PIN desactivado, para evitar revalidaciones
-automáticas. Estos callbacks todavía no se instalan en el driver público.
+automáticas. Ya existe un instalador privado del routing por tarjeta: sus
+callbacks reales pasaron firma, consultas locales de estado y liberación de
+objetos PKCS#15 con lector simulado. Retirar el vínculo cierra la sesión y
+mantiene la tarjeta restringida hasta desconectarla. Falta conectar ese
+instalador a la configuración e inicialización optativas y probar PKCS#11.
 No hay otra prueba con tarjeta ahora.
 Los párrafos siguientes conservan los pasos históricos de investigación.
 La selección temporal RSA/SHA-256 obtuvo `9000`; VERIFY vacío devolvió

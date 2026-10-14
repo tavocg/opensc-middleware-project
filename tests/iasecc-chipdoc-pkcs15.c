@@ -99,6 +99,7 @@ static void verify_rsa(const unsigned char output[256])
 	assert(EVP_PKEY_verify_init(ctx) > 0 && EVP_PKEY_CTX_set_rsa_padding(ctx,RSA_PKCS1_PADDING) > 0);
 	assert(EVP_PKEY_CTX_set_signature_md(ctx,EVP_sha256()) > 0 && EVP_PKEY_verify(ctx,output,256,digest,32) == 1); EVP_PKEY_CTX_free(ctx);
 }
+#ifndef IASECC_CHIPDOC_PKCS15_FIXTURE
 int main(void)
 {
 	(void)thread_ops;
@@ -176,3 +177,4 @@ int main(void)
 	OSSL_PROVIDER_unload(test_provider.defprov); OSSL_LIB_CTX_free(test_provider.libctx);
 	OSSL_PROVIDER_unload(alternate_provider.defprov); OSSL_LIB_CTX_free(alternate_provider.libctx); return 0;
 }
+#endif

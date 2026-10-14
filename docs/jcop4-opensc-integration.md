@@ -2,12 +2,11 @@
 
 Estado al 14 de octubre de 2026,10:13 Costa Rica. Base local del proyecto
 `0f51c4c`, submódulo OpenSC `3dfef6704`. Este documento define el siguiente
-cambio. **Perfil/estado/limpieza y adaptador interno CA/MF están implementados;
-metadata/bootstrap/providers/reserva/cierre/consulta PIN privados también
-implementados; activación optativa y VERIFY/firma aún no están conectados
-al driver público. Las APIs privadas de PIN/firma también están implementadas;
-el frontend PKCS15 se probó con callbacks software explícitos, sin instalación
-automática del routing.**
+cambio. **Perfil/estado/limpieza, canal/bootstrap/providers y operaciones
+PIN/firma privados están implementados. Frontend PKCS15 y routing privado
+instalado por tarjeta pasaron con callbacks de producción y lector simulado.
+Faltan configuración/init y activación desde el binding PKCS15 público;
+el instalador sigue siendo explícito, sin activación automática.**
 
 ## Evidencia disponible
 
@@ -703,4 +702,101 @@ acreditar; firma real JnUUiy9x sigue vigente, no repetida.
 Pasaron42 grupos previos y suiteIAS/JCOP3 completa:702líneasPASS (no702casos
 distintos). OpenSC/móduloPKCS11 compilados, sin nuevos exports. Core47,
 helpers76 y helpers de hardware/observador/flake/lock/capturas intactos,
+resultados anteriores vigentes/no repetidos.
+
+### Instalación explícita del routing y liberación de objetos
+
+Principal `d458d4d`, OpenSC `55a3c314a`, limpios al comenzar. Nuevo header
+privado `iasecc-chipdoc-routing.h`, distribuido por Makefile.am e incluido
+en pkcs15-iasecc.c para compilación. **No se llama automáticamente al
+instalador** desde configuración, match/init/parse/bind; caller debe optar
+explícitamente con objetos nativos ya decodificados y contexto válido.
+
+`iasecc_chipdoc_routing_install(p15,key)` valida el contrato estricto de
+operación, ausencia de cachePIN, magic/owner, estado inactivo/sin recovery,
+plataforma quieta OpenSSL3/T1/capsEXT/límites existentes139/291 y callbacks
+reset/lock/unlock/finish/hook. Exige tabla de algoritmos existente de una
+entradaRSA2048/PAD_TYPE01|SHA256 y caps acotadas a EXT/USE_FCI_AC/PIN_INFO.
+No heredar RNG/generación/raw/otros hashes ni modificar esos límites/tablas
+para habilitar el routing. El initializer futuro debe justificarlos.
+Rechaza una tablaops que sea la global card.driver.ops. Valida y asigna
+memoria antes de mutar; fallo no cambia opciones/ops/objetos ni envía IO.
+
+Asocia un único p15/key/PIN a una tarjeta, guarda su tablaops original y
+original_clear, cambia cache0, hookclear y solo esa tabla de instancia.
+Struct propio de tarjeta mantiene referencias prestadas; caller mantiene
+tarjeta/contexto/lector/owner vivos y serializa las APIs. Antes de usar
+objetos, comprueba pertenencia de key/PIN en obj_list acotada, identidad
+card/reader/context/table, metadata y opcióncache0. Un cambio detectado
+invalida canal y bloquea esa asociación, intentando cerrar reserva propia.
+No prueba acceso concurrente/identidad mediante canal anónimo/timeoutPCSC.
+
+Tabla filtrada conserva selección/read_binary/read_record/get_data para
+metadata solo cuando está inactiva y sin recuperación. Durante canal
+solo select_file de SDO (PATH/len0/AID exacto, sin FCI solicitado) va a
+SELECT AID protegido. PIN_CMD admite VERIFY medido y GET_INFO local.
+MSE/PSO son privados medidos; antes de esos callbacks se exige login vivo.
+Logout cierra nuestra reserva. Deshabilita RNG/GET_RESPONSE/descifrado/
+admin/escrituras/controles y otros callbacks ajenos. Check_SW/FCI puros y
+hookreset de la tabla original se conservan. La restricción corresponde
+a APIs del driver; no es sandbox de llamadas raw sc_transmit_apdu/PCSC.
+
+VERIFY valida referencia/método/flags/encoding/bounds/ASCII antes de iniciar;
+una transacción, query y credencial una vez. Respuestas fallidas cierran
+reserva, incluso error anterior a PSO. GET_INFO válido no transmite: política
+pública6..14/ASCII, logged_in solo de prueba local vigente y SSC/fase/provider
+correctos, tries=-1/maxtries0. No queryPIN extra/max7/cache hash o credencial.
+Un estado viejo o metadata/contexto inválidos no publican login y cierran
+reserva (ese cierre puede hacer reset/unlock). No inferir login de opts o
+de un mensaje de éxito previo. Tras PSO/reset pasa a LOGGED_OUT. Firma sin
+otro login falla antes de PSO; login nuevo explícito abre canal nuevo.
+
+`iasecc_chipdoc_routing_remove(card,owner,report)` cierra reserva propia y
+restaura clear original, deja cache0 y borra p15/key/PIN **antes** de liberar
+objetos. Mantiene filtro y marcador de desvinculación de propiedad de tarjeta
+hasta finish: ningún fallback a IAS en claro, metadata o nuevo install.
+Idempotente; recovery persiste si reset/unlock/pérdida fallan. La falta de
+propiedad impide reset/unlock ajenos. Reporte en memoria contiene solo enum,
+resultado y metadata de canal/startup/cierre; snapshot privado disponible por
+routing_last_report, sin buffers/PIN/longitud real/hash/digest/firma/claves.
+
+Hook clear de PKCS15 ejecuta remove y luego original_clear una sola vez en
+lifecycle normal. `sc_pkcs15_card_free` llama ese hook antes de objetos/app.
+Finish de routing desvincula si aún hay owner, libera struct propia, restaura
+tabla original exclusivamente para destruir y llama finish original. Propaga
+fallo del cierre, aun si ese finish tiene éxito. Card/context/driver data
+siguen el orden de vida OpenSC: PKCS15 owner debe liberarse antes de destruir
+la tarjeta. No reemplazar tabla/driver data ni liberar contexto/objetos a
+espaldas de esa asociación. close.complete se refiere a nuestra reserva;
+PKCS15 libera su lock exterior posteriormente, como en la etapa previa.
+
+`make test/iasecc-chipdoc-routing` pasó **seis grupos**. Aquí los callbacks
+instalados son de producción, no el routing anterior del fixture. Transporte,
+lector, metadata idle y RSA/PIN son sintéticos; funciones reales nativas
+DER/PKCS15 y dispatcher/locks. Prueba ambas rutas con/sin AID, RSA verificado,
+segunda firma bloqueada sin nuevo login y dos login/firma explícitos sobre
+el mismo binding, GET_INFO local/live/logout, lectura idle/bloqueo activo,
+10 fallos install/globalops/caps/algos/owner y no mutación, error real de
+cada etapa/unVERIFY/nocache/output, reset/unlock/pérdida/recuperación, cambio
+metadata/cache/provider/pertenencia y **sc_pkcs15_card_free real** con owner
+en heap, clear original y cierre fallido. Callbacks tras free no acceden a
+objetos liberados; finish libera estado de routing y drv_data originales.
+
+ASan/UBSan6 detect_leaks0 pasó: driver/codec/serializer/routing/fixture
+instrumentados, bibliotecas PKCS15/ASN1/provider/locks precompiladas no;
+sin prueba de fugas. Stub de crypto ausente rechaza install/status sin IO/
+mutación; no builds reales otros backends/FIPS/plataformas. Fallos iniciales
+de pruebas fueron enlazar el stub sin crypto con funciones de lifecycle,
+usar un helper de app no exportado y reiniciar peer con políticaLe172 por
+default; se corrigieron exclusivamente en fixture/stub. Ningún resultado
+de esos fallos corresponde a tarjeta/PIN ni justifica variar Le real.
+
+Sin PCSC/hardware/PIN real/GUI/Idopte/capturas nuevas. Firma JnUUiy9x vigente.
+Siguen configuración/init/binding optativos/capacidades justificadas,
+algoritmos/objetos/mecanismos y sesiones PKCS11; luego prueba real autorizada
+por el usuario. RSA3072/JCOP4 GUI/consecutivas/reinserción real pendientes.
+
+Pasaron47 grupos previos y suiteIAS/JCOP3 completa:708líneasPASS (no708casos
+distintos). OpenSC/móduloPKCS11 compilados, sin nuevos exports. Core47,
+helpers76/helpers hardware/observador/flake/lock/capturas intactos y sus
 resultados anteriores vigentes/no repetidos.
