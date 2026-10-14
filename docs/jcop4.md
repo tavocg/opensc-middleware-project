@@ -4932,6 +4932,114 @@ aplicable, preparar primero una consulta de contexto sin PIN. Por ahora no
 otra operación en tarjeta, relectura de D004 o autenticación por inercia.
 Firma JCOP4/RSA3072 y causa del VERIFY6982 siguen pendientes.
 
+## Consulta de contexto MF y PIN vacío bajo SM
+
+Principal `81d68ae`, OpenSC `3dfef6704`, limpios al comenzar. Última tarjeta:
+27daTsCp, primer READ protegido íntegro confirmado y cierre0. Esta revisión
+solo analiza el binario instalado y compila/prueba software con transporte
+simulado: no PC/SC/hardware/GUI/PIN/Idopte ejecutado por el agente.
+
+### Elección acotada, pendiente de prueba en la tarjeta
+
+La fábrica3fbf98..3fc493 distingue una categoría en cache+48; categoría1
+elige constructor CP71 en3fc469. Ese campo **no es** el selector de perfil
+descriptor+8/token+380 que gobierna selección/login. La rama3bd69d..3bd727
+del shift JCOP3 parte de selector4 y crea8 según presencia de objetos.
+No identifica la categoría/perfil activos de esta JCOP4 ni acredita que su
+login ejecute la retirada de SM. La contradicción aparente del login estático
+no se resuelve equiparando esos números con generaciones de tarjeta.
+
+Se prepara en cambio una comprobación libre de protocolo, sin credencial,
+basada en dos operaciones **ya observadas en esta misma JCOP4**:
+
+- SELECT MF con cabecera00A40000, datos3F00, caso4/Le256, aceptado9000 en
+  la consulta pública Idopte post-auth-mf documentada antes.
+- Consulta de PIN global1 mediante VERIFY vacío, sin datos/Le, aceptada63C7;
+  los metadatos de PIN indican referencia global1/ruta vacía.
+
+El canal anónimo ya se confirmó bajo el AID conocido. **No se ha probado aún
+que ambas operaciones funcionen bajo ese SM y mantengan su estado**. Esa es
+la duda específica de la nueva consulta; no se infiere por las respuestas
+plaintext ni se pretende reproducir automáticamente el login de Idopte.
+Se usa exclusivamente P1/P2=00/00 para MF con ese precedente; no variantes
+04/08, otro AID o formatos de PIN. Esta fase no autentica ni permite firmar.
+
+### Nuevo modo explícito y secuencia
+
+`make inspect/jcop4-channel-pin-context READER=0` llama al lanzador/helper con
+`--pin-context`. El target anterior de canal conserva su secuencia/cierre y
+no retiene estado ni permite estas operaciones; una variable de entorno no
+activa el modo. No cambios en los permisos del observador Idopte.
+
+Repite el establecimiento de una **sesión nueva con propósito de continuación**,
+porque la prueba anterior borró claves y reseteó la sesión remota. Mantiene
+misma conexión/lock, ATR/AID/D004 y política T=1/APDU corta/Le exterior256.
+Solo después de MAC/padding/SW9000 y D004137 idéntico se conserva IDLE/SSC2:
+
+1. SELECT MF interior00A40000, datos3F00, Le256. Se cifra como DO87 y DO97,
+   con MAC; CLA0C, cuerpo32, wire38, Le exterior256. ComandoSSC3/respuestaSSC4.
+   El control de archivo, si aparece, se verifica criptográficamente pero
+   permanece opaco y no se registra. SW interno distinto9000 detiene.
+2. Tras respuesta MF autenticada9000, consulta interior00200001/caso1,
+   **sin credencial ni Le interior**. Exterior CLA0C, cuerpo solo8E/08/MAC8,
+   wire16/Le256; no DO87 ni DO97. ComandoSSC5/respuestaSSC6. Exige respuesta
+   autenticada sin datos y SW9000 o63Cx con x>0.63C0/6983/otro SW detienen.
+
+9000 se registra como estado reportado sin PIN suministrado, no como login
+efectuado por el programa;63Cx como disponibilidad no verificada. No máximos,
+decrementos, resets de intentos o certeza de la causa de VERIFY6982 a partir
+de esos SW. No hay prompt/stdin leído, credencial incorrecta o intento real.
+
+El guard valida fase, flag, ATR/T1/límites y presupuesto total24 APDU. Para
+estas dos fases compara el frame completo con el construido localmente,
+incluidos ciphertext/MAC, además de cabecera/longitud/tags/refs fijos. Así no
+se permite otro archivo o VERIFY con datos mediante una cabecera parecida.
+Consulta exige MF autenticado previamente. Sin controles de PIN, reenvíos,
+GET RESPONSE/6C, selección alternativa, downgrade aplain, read posterior,
+objetos/certificados, cambios, PSO o firma. Primer fallo detiene; no reabre SM.
+
+Fin borra keys/SSC/buffers, intenta reset final, unlock y desconexión, incluidos
+los fallos. Timeout45s TERM+5s kill/core0 como antes: reset ausente/fallido o
+timeout exige cerrar clientes/reinsertar tarjeta antes de otra operación.
+Son resets de sesión PC/SC, no cambios administrativos del contador de PIN.
+
+### Informe y comprobaciones
+
+`local/jcop4-channel-pin-context-*/report.txt`, directorio0700/archivos0600.
+Conserva metadatos del canal y añade context_select_transport/response/sw/result,
+pin_query_transport/response/sw/result y pin_context_result. No control de MF,
+bytes cifrados/descifrados, MAC, keys, PIN, hashes o identificadores personales.
+Stdin vacío/debug0, variables de traza/preload/delegate eliminadas. Un marcador
+de canal confirmado no equivale a éxito del contexto: revisar las dos respuestas
+autenticadas, SW, pin_context_result, helper_exit_status0 y cierre completo0.
+
+`make test/jcop4-channel-probe` pasó **20 grupos**: nativos11, OpenSC real
+bootstrap/formato/transmit3 y lanzador6, siempre con contexto/lector simulados.
+Peer comprueba CBC/ECB/CMAC de los comandos independientemente, MF3F00 exacto,
+consulta sin datos y SSC3/4/5/6; setup/control/gating de D004 impiden seguir
+si no se confirmó el canal. Fallos de transporte/MAC/SW, datos inesperados,
+contadores cero/bloqueo/estado desconocido detienen sin otro comando. Guards
+rechazan antes del backend cambios de referencia/cabecera/Le/ciphertext/tags,
+DO87 de PIN, falta de flag o MF autenticado. Legacy sin follow-up, modo y
+permisos privados explícitos, timeout/error sin fallback y env opt-in ignorado.
+Fixtures usan11 APDU nativas/10 con bootstrap real; no se exige ese número al
+hardware, el presupuesto sigue24. ASan/UBSan pasaron14 grupos nativos con
+detect_leaks0; bibliotecas precompiladas no instrumentadas/no prueba de fugas.
+Helper real compilado. Componentes cripto/session, driver/submódulo, observador,
+flake/lock y suites sin cambios intactos; no se repiten por documentación.
+
+**Siguiente intervención del usuario:** misma JCOP4 y otros clientes/firmador
+cerrados, una sola vez, sin introducir PIN:
+
+```sh
+nix develop -c make inspect/jcop4-channel-pin-context READER=0
+```
+
+Es la prueba nueva de contexto/encrypted-command; no repetir el target de canal
+anterior. Revisar primero MF/query autenticados y cierre antes de preparar
+VERIFY con credencial. Tipo exacto Idopte/formato de PIN, login/firma JCOP4,
+causa del antiguo6982 y soporte RSA3072 siguen pendientes.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño

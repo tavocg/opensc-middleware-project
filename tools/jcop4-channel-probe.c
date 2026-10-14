@@ -17,13 +17,15 @@
 static const unsigned char probe_atr[] = {0x3B,0xD5,0x18,0xFF,0x81,0x91,0xFE,0x1F,0xC3,0x80,0x73,0xC8,0x21,0x10,0x0A};
 static const unsigned char probe_aid[] = {0xE8,0x28,0xBD,0x08,0x0F,0xA0,0,0,3,0x63,0x64,0x79,0x6E,0x69,0x64};
 static volatile sig_atomic_t probe_interrupted;
-enum probe_phase { PROBE_STOP, PROBE_DIR, PROBE_APP, PROBE_D004, PROBE_INITIAL, PROBE_MSE, PROBE_GA, PROBE_READ };
+enum probe_phase { PROBE_STOP, PROBE_DIR, PROBE_APP, PROBE_D004, PROBE_INITIAL, PROBE_MSE, PROBE_GA, PROBE_READ, PROBE_CONTEXT_MF, PROBE_PIN_QUERY };
 static struct {
 	const struct sc_reader_operations *original;
 	sc_reader_t *reader;
 	enum probe_phase phase;
 	unsigned int commands, binary_reads, next_record;
 	int root, directory, blocked, called, ended;
+	int context_mode, context_selected;
+	unsigned char expected[38]; size_t expected_size;
 } probe_guard;
 
 static void probe_signal(int sig) { (void)sig; probe_interrupted = 1; }
@@ -77,6 +79,19 @@ static int probe_apdu_allowed(sc_apdu_t *a)
 	else if (probe_guard.phase == PROBE_READ)
 		return a->cla == 0x0C && a->ins == 0xB0 && !a->p1 && !a->p2 && a->le == 256 &&
 			a->cse == SC_APDU_CASE_4_SHORT && a->lc == 13 && !memcmp(a->data, "\x97\x01\x89\x8e\x08", 5);
+	else if (probe_guard.context_mode && (probe_guard.phase == PROBE_CONTEXT_MF || probe_guard.phase == PROBE_PIN_QUERY)) {
+		/* Match the whole locally built frame, including ciphertext/MAC.
+		 * The only plaintexts used by this mode are MF3F00 and empty VERIFY1. */
+		int query = probe_guard.phase == PROBE_PIN_QUERY;
+		if (!probe_guard.expected_size || (query && !probe_guard.context_selected) || a->cla != 0x0C ||
+			a->ins != (query ? 0x20 : 0xA4) || a->p1 || a->p2 != (query ? 1 : 0) ||
+			a->cse != SC_APDU_CASE_4_SHORT || a->le != 256 || a->lc != (query ? 10 : 32)) return 0;
+		if (query ? memcmp(a->data, "\x8e\x08", 2) :
+			(memcmp(a->data, "\x87\x11\x01", 3) || memcmp(a->data + 19, "\x97\x01\0\x8e\x08", 5))) return 0;
+		return probe_guard.expected_size == a->lc + 6 &&
+			!memcmp(probe_guard.expected, query ? "\x0c\x20\0\x01\x0a" : "\x0c\xa4\0\0\x20", 5) &&
+			!memcmp(a->data, probe_guard.expected + 5, a->lc);
+	}
 	return 0;
 }
 static int probe_guard_transmit(sc_reader_t *reader, sc_apdu_t *apdu)
@@ -118,6 +133,9 @@ static int probe_exchange(void *context, const unsigned char *wire, size_t size,
 	if (size == 17 && probe_guard.phase == PROBE_INITIAL) { probe_phase_set(PROBE_MSE); cse = SC_APDU_CASE_3_SHORT; }
 	else if (size == 144 && probe_guard.phase == PROBE_MSE) { probe_phase_set(PROBE_GA); cse = SC_APDU_CASE_3_SHORT; }
 	else if (size == 19 && probe_guard.phase == PROBE_GA) { probe_phase_set(PROBE_READ); cse = SC_APDU_CASE_4_SHORT; }
+	else if (probe_guard.context_mode &&
+		((probe_guard.phase == PROBE_CONTEXT_MF && size == 38) || (probe_guard.phase == PROBE_PIN_QUERY && size == 16)) &&
+		probe_guard.expected_size == size && !memcmp(wire, probe_guard.expected, size)) cse = SC_APDU_CASE_4_SHORT;
 	else { probe_guard.blocked = 1; return SC_ERROR_NOT_ALLOWED; }
 	sc_format_apdu(card, &a, cse, wire[1], wire[2], wire[3]); a.cla = wire[0];
 	a.data = wire + 5; a.lc = a.datalen = wire[4];
@@ -131,21 +149,75 @@ static int probe_exchange(void *context, const unsigned char *wire, size_t size,
 	*received = a.resplen + 2; return 0;
 }
 
+/* Separate no-credential mode. Never copies the Idopte teardown/retry branch. */
+static int probe_pin_context(sc_card_t *card, struct jcop4_sm_channel *channel)
+{
+	const unsigned char mf_header[4] = {0, 0xA4, 0, 0}, query_header[4] = {0, 0x20, 0, 1}, mf[2] = {0x3F, 0};
+	unsigned char header[4] = {0}, body[32] = {0}, wire[38] = {0}, response[258] = {0}, plain[256] = {0};
+	unsigned char expected_ssc[16] = {0}; size_t body_size, wire_size, received, plain_size;
+	unsigned int sw; int rv, result = 1;
+	if (!probe_guard.context_mode || probe_guard.phase != PROBE_READ || !probe_guard.called ||
+		probe_guard.blocked || probe_interrupted || !probe_transport_ready(card) || channel->phase != JCOP4_SM_IDLE) goto out;
+	expected_ssc[15] = 2;
+	if (CRYPTO_memcmp(channel->keys.ssc, expected_ssc, 16)) goto out;
+	for (int step = 0; step < 2; step++) {
+		const char *label = step ? "pin_query" : "context_select";
+		if (jcop4_sm_seal(channel, step ? query_header : mf_header, step ? NULL : mf, step ? 0 : 2,
+			!step, step ? 0 : 256, header, body, sizeof(body), &body_size) || body_size != (step ? 10u : 32u)) goto out;
+		memcpy(wire, header, 4); wire[4] = (unsigned char)body_size; memcpy(wire + 5, body, body_size);
+		wire_size = body_size + 6; wire[wire_size - 1] = 0; /* Outer Le256 even for no-Le inner query. */
+		probe_phase_set(step ? PROBE_PIN_QUERY : PROBE_CONTEXT_MF);
+		memcpy(probe_guard.expected, wire, wire_size); probe_guard.expected_size = wire_size;
+		received = 0; memset(response, 0, sizeof(response));
+		rv = probe_exchange(card, wire, wire_size, response, sizeof(response), &received);
+		OPENSSL_cleanse(probe_guard.expected, sizeof(probe_guard.expected)); probe_guard.expected_size = 0;
+		printf("%s_transport=%d\n", label, rv); if (rv) goto out;
+		plain_size = 0; sw = 0;
+		if (received > sizeof(response) || jcop4_sm_open(channel, response, received, plain, sizeof(plain), &plain_size, &sw)) {
+			printf("%s_response=invalid_stop\n", label); goto out;
+		}
+		printf("%s_response=authenticated\n%s_sw=%04X\n", label, label, sw);
+		if (!step) {
+			/* SELECT returns control data, which remain opaque and unlogged. */
+			if (sw != 0x9000) goto out;
+			probe_guard.context_selected = 1;
+			printf("context_select_result=mf_selected_under_sm_no_login\n");
+		} else {
+			/* Empty VERIFY has no DO87/credential or inner Le. No replay, follow-up or prompt. */
+			if (plain_size) { printf("pin_query_result=unexpected_data_stop\n"); goto out; }
+			if (sw == 0x9000) printf("pin_query_result=status_9000_no_pin_supplied\n");
+			else if ((sw & 0xFFF0) == 0x63C0 && (sw & 15)) printf("pin_query_result=available_unverified\n");
+			else { printf("pin_query_result=blocked_or_unexpected_stop\n"); goto out; }
+		}
+		OPENSSL_cleanse(plain, sizeof(plain));
+	}
+	result = 0;
+out:
+	jcop4_sm_invalidate(channel); OPENSSL_cleanse(header, sizeof(header)); OPENSSL_cleanse(body, sizeof(body));
+	OPENSSL_cleanse(wire, sizeof(wire)); OPENSSL_cleanse(response, sizeof(response)); OPENSSL_cleanse(plain, sizeof(plain));
+	OPENSSL_cleanse(probe_guard.expected, sizeof(probe_guard.expected)); probe_guard.expected_size = 0;
+	printf("pin_context_result=%s\n", result ? "not_confirmed_stop" : "status_observed_no_pin_no_login");
+	return result;
+}
+
 int main(int argc, char **argv)
 {
 	sc_context_t *ctx = NULL; sc_reader_t *reader = NULL; sc_card_t *card = NULL;
 	sc_context_param_t params; struct sc_reader_operations guarded_ops; sc_path_t path;
 	unsigned char control[256] = {0}, initial[137] = {0}; sc_apdu_t a;
 	struct jcop4_ca_probe_report report;
+	struct jcop4_sm_channel confirmed = {{{0}, {0}, {0}}, JCOP4_SM_INVALID};
 	const char *unsafe_env[] = {"OPENSC_API_TRACE_FILE", "OPENSC_DEBUG_FILE", "OPENSC_DEEPBIND", "LD_PRELOAD", "LD_AUDIT",
 		"LIBPCSCLITE_DELEGATE", "LIBPCSCLITE_SPY_DELEGATE", "JCOP4_PUBLIC_DISCOVERY_TRACE", "JCOP4_PUBLIC_SELECT_SPY_TRACE"};
 	unsigned long index; char *end; int rv, status = 1, locked = 0, session = 0, announced = 0;
-	if (argc != 2 || !argv[1][0] || strspn(argv[1], "0123456789") != strlen(argv[1])) return 2;
+	int context_mode = argc == 3 && !strcmp(argv[2], "--pin-context");
+	if ((argc != 2 && !context_mode) || !argv[1][0] || strspn(argv[1], "0123456789") != strlen(argv[1])) return 2;
 	errno = 0; index = strtoul(argv[1], &end, 10); if (errno || *end || index > UINT_MAX) return 2;
 	for (size_t i = 0; i < sizeof(unsafe_env)/sizeof(unsafe_env[0]); i++) if (getenv(unsafe_env[i])) return 2;
 	if (getenv("OPENSC_DEBUG") && strcmp(getenv("OPENSC_DEBUG"), "0")) return 2;
 	if (!getenv("OPENSC_CONF")) return 2;
 	memset(&probe_guard, 0, sizeof(probe_guard)); probe_guard.next_record = 1; probe_interrupted = 0;
+	probe_guard.context_mode = context_mode;
 	signal(SIGINT, probe_signal); signal(SIGTERM, probe_signal);
 	memset(&params, 0, sizeof(params)); params.app_name = "jcop4-channel-probe";
 	rv = sc_context_create(&ctx, &params); printf("context_result=%d\n", rv); if (rv < 0) goto out;
@@ -185,7 +257,9 @@ int main(int argc, char **argv)
 	a.flags |= SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP | SC_APDU_FLAGS_NO_SM;
 	rv = sc_transmit_apdu(card, &a); printf("d004_read_transport=%d\nd004_read_sw=%02X%02X\n", rv, a.sw1, a.sw2);
 	if (rv < 0 || a.sw1 != 0x90 || a.sw2 || a.resplen != sizeof(initial)) goto out;
-	status = jcop4_ca_confirm_d004(initial, sizeof(initial), JCOP4_CA_LE_SHORT_MAX, probe_exchange, card, &report);
+	status = context_mode ? jcop4_ca_confirm_d004_session(initial, sizeof(initial), JCOP4_CA_LE_SHORT_MAX,
+		probe_exchange, card, &report, &confirmed) :
+		jcop4_ca_confirm_d004(initial, sizeof(initial), JCOP4_CA_LE_SHORT_MAX, probe_exchange, card, &report);
 	printf("channel_stage=%d\nchannel_outcome=%d\nchannel_transport=%d\nchannel_sw=%04X\nchannel_authenticated_response=%d\n",
 		report.stage, report.outcome, report.transport, report.sw, report.authenticated_response);
 	if (report.authenticated_response && report.sw == 0x9000) {
@@ -195,8 +269,11 @@ int main(int argc, char **argv)
 				report.content_first_block_equal, report.content_tail_equal);
 	}
 	printf("channel_result=%s\n", status ? "not_confirmed_stop" : "protected_d004_read_confirmed_no_login");
+	if (!status && context_mode) status = probe_pin_context(card, &confirmed);
 out:
 	probe_guard.phase = PROBE_STOP;
+	jcop4_sm_invalidate(&confirmed); OPENSSL_cleanse(probe_guard.expected, sizeof(probe_guard.expected));
+	probe_guard.expected_size = 0;
 	OPENSSL_cleanse(control, sizeof(control)); OPENSSL_cleanse(initial, sizeof(initial));
 	if (session) { rv = sc_reset(card, 0); printf("final_reset_result=%d\n", rv); if (rv < 0) status = 1; }
 	if (locked) { rv = sc_unlock(card); printf("unlock_result=%d\n", rv); if (rv < 0) status = 1; }

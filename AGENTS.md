@@ -9,6 +9,61 @@ transporte simulado. PIN/GUI también los ejecuta el usuario. Esto sustituye
 la autorización anterior de hardware por el agente; conservar límites de
 cada diagnóstico y privacidad. Git sigue autorizado pero .git solo lectura.
 
+**Última revisión: consulta MF/PIN vacío bajo canal preparada, aún sin hardware.**
+Principal `81d68ae`, OpenSC `3dfef6704`, limpios al comenzar. Última evidencia
+de tarjeta sigue27daTsCp/READ137 íntegro/cierre0. No repetir ese diagnóstico.
+Sin PCSC/hardware/GUI/PIN/Idopte ejecutado por el agente; análisis estático y
+software. Tipo/despacho exactos de Idopte siguen pendientes: categoría fábrica
+cache+48 (1->constructorCP71 en3fc469) NO es descriptor perfil+8/token+380.
+La rama de shift3bd69d..3bd727 parte de tipo4 y crea8 según objetos; no prueba
+tipo de esta JCOP4 ni que su login retireSM. No usar esos números como JCOP.
+
+Nuevo **make inspect/jcop4-channel-pin-context READER=0**, flag explícito
+--pin-context en helper/lanzador; no se activa por env, target antiguo intacto.
+Diagnóstico alternativo libre, no réplica de rama interna Idopte. Precedentes
+reales en esta misma tarjeta: SELECT MF00A40000/data3F00/caso4/Le2569000 en
+captura pública post-auth-mf, VERIFY vacío1/63C7 y metadatos referencia global1.
+Tras canal confirmado/D004137 idéntico, conserva conexión/lock/keysSSC2 y
+envía solo SELECT MF cifrado (SSC3/4), luego VERIFY1 **sin credencial/DO87/DO97**
+(SSC5/6) si la respuesta MF está autenticada y SW interno9000. Esta combinación
+bajoSM aún no está probada: es la duda nueva, no se infiere por el precedente
+plaintext ni por tipo Idopte. No elegir/barrer P2 ni reabrir canal/fallback.
+
+SELECT inner00A40000/data3F00/Le256 ->CLA0C/cuerpo32/wire38/outerLe256;
+query inner00200001/caso1 ->CLA0C/solo8E08MAC8/wire16/outerLe256.
+Guard exige flag/fase/ATR/T1/límites/budget24 y comparación exacta del frame
+local (también ciphertext/MAC), forma/tags/refs fijos. MAC/padding antes de
+SW/control, MF non9000/61xx/6Cxx/transporte/MAC/error detienen antes de query.
+Control MF opaco/no registrado. Query debe devolver cero datos y SW9000 o
+63Cx con x>0;63C0/6983/otros detienen.9000 se registra como status_9000_no_pin_
+supplied, no prueba de login efectuado por helper. No PIN real/cambio/reenvío,
+otrosSELECT/reads/objetos/firma ni downgrade aplain. No imprime contadores como
+máximos ni afirma reset por firma. Fin siempre borra estado y reset/unlock/
+disconnect; timeout/reset ausente/fallido requiere reinsertar antes de otro uso.
+
+Reporte privado **local/jcop4-channel-pin-context-*/report.txt**0700/0600:
+metadata actual más context_select_transport/response/sw/result,
+pin_query_transport/response/sw/result y pin_context_result. Sin control,
+ciphertext/plaintext/MAC/keys/identificadores, stdin vacío/debug0/trace aislada,
+timeout45sTERM+5s kill/core0. Channel confirmado por sí solo no basta para
+éxito de contexto: exigir pin_context_result positivo/helper0 y cierre0.
+
+Pasaron **20 grupos probe**: nativos11+OpenSCreal bootstrap/transmit3+wrapper6,
+software peer con CBC/ECB/CMAC independiente, SSC3/4/5/6/orden, gatingD004,
+fallos/status/datos inesperados y guard antes de backend. Fixtures usan11
+APDU nativas/10 realbootstrap; máximo24 sigue, no exigir ese número en tarjeta.
+ASan/UBSan14 pasaron detect_leaks0; libs precompiladas no instrumentadas/no
+prueba de fugas. Helper real compilado; componentes cripto/session y suites
+sin cambios vigentes/no repetidas. Driver/submódulo/observador/flake/lock intactos.
+
+**Siguiente intervención:** misma JCOP4, firmador/otros clientes cerrados:
+`nix develop -c make inspect/jcop4-channel-pin-context READER=0`, una sola vez,
+**sin introducir PIN**. No ejecutar el target previo de canal por inercia.
+Revisar MF/query autenticados/SW/cierre antes de ofrecer login real. Consulta
+vacía no autentica ni determina formato PIN/causa6982. JCOP4/RSA3072 pendientes.
+Git solo lectura: commit Makefile/helper/lanzador/tests2/AGENTS/README/docs;
+ningún archivo nuevo/captura/build/submódulo. No hardware por el agente.
+
 **Última revisión: retención del canal confirmado probada solo en software.**
 Principal `75e3ec5`, OpenSC `3dfef6704`, limpios al comenzar. Última tarjeta
 sigue27daTsCp/05:40:01Z: canal confirmado/READ137 idéntico/cierre0. No repetir

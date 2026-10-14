@@ -17,7 +17,12 @@ BUILD
 cat > "$task_tmp/helper" <<'HELPER'
 #!/usr/bin/env bash
 set -euo pipefail
-[[ $# == 1 && $1 == 0 && $OPENSC_DEBUG == 0 && $(stat -c %a "$OPENSC_CONF") == 600 ]] || exit 91
+[[ $1 == 0 && $OPENSC_DEBUG == 0 && $(stat -c %a "$OPENSC_CONF") == 600 ]] || exit 91
+if [[ ${FIXTURE_EXPECT_CONTEXT:-0} == 1 ]]; then
+    [[ $# == 2 && $2 == --pin-context ]] || exit 91
+else
+    [[ $# == 1 ]] || exit 91
+fi
 for task_name in OPENSC_API_TRACE_FILE OPENSC_DEBUG_FILE OPENSC_DEEPBIND LD_PRELOAD LD_AUDIT LD_LIBRARY_PATH \
     LIBPCSCLITE_DELEGATE LIBPCSCLITE_SPY_DELEGATE JCOP4_PUBLIC_DISCOVERY_TRACE JCOP4_PUBLIC_SELECT_SPY_TRACE; do
     [[ ! -v $task_name ]] || exit 92
@@ -43,7 +48,8 @@ export FIXTURE_ROOT="$task_tmp"
 export PATH="$task_tmp/bin:$PATH"
 run_fixture() {
     local task_expected=$1 task_status=0
-    printf 'SYNTHETIC_INPUT_SHOULD_NOT_BE_READ\n' | bash "$task_tmp/scripts/probe-jcop4-channel.sh" 0 > "$task_tmp/stdout" 2> "$task_tmp/stderr" || task_status=$?
+    shift
+    printf 'SYNTHETIC_INPUT_SHOULD_NOT_BE_READ\n' | bash "$task_tmp/scripts/probe-jcop4-channel.sh" 0 "$@" > "$task_tmp/stdout" 2> "$task_tmp/stderr" || task_status=$?
     [[ $task_status == "$task_expected" ]]
     task_report=$(sed -n 's/^Informe: //p' "$task_tmp/stdout")
     [[ -f $task_report && $(stat -c %a "$task_report") == 600 && $(stat -c %a "${task_report%/*}") == 700 ]]
@@ -74,3 +80,19 @@ if bash "$task_tmp/scripts/probe-jcop4-channel.sh" -1 > /dev/null 2>&1; then exi
 if bash "$task_tmp/scripts/probe-jcop4-channel.sh" 0 extra > /dev/null 2>&1; then exit 1; fi
 [[ $(wc -l < "$task_tmp/invocations") == 3 ]]
 printf 'PASS invalid reader/extra argument is rejected before execution\n'
+unset FIXTURE_BUILD_FAIL
+export FIXTURE_HELPER_EXIT=0 FIXTURE_EXPECT_CONTEXT=1
+run_fixture 0 --pin-context
+[[ $(wc -l < "$task_tmp/invocations") == 4 && $task_report == *'/jcop4-channel-pin-context-'* ]]
+rg -q '^mode=anonymous_channel_pin_context_no_pin_once$' "$task_report"
+printf 'PASS explicit context flag selects isolated private report and helper argument, still with empty stdin and no inherited tracing\n'
+export FIXTURE_HELPER_EXIT=1
+run_fixture 1 --pin-context
+[[ $(wc -l < "$task_tmp/invocations") == 5 ]]
+rg -q '^helper_exit_status=1$' "$task_report"
+unset FIXTURE_EXPECT_CONTEXT
+export FIXTURE_HELPER_EXIT=0 JCOP4_CHANNEL_PIN_CONTEXT=1
+run_fixture 0
+[[ $(wc -l < "$task_tmp/invocations") == 6 ]]
+rg -q '^mode=anonymous_channel_no_pin_once$' "$task_report"
+printf 'PASS failed context run is never retried and an environment flag alone cannot enable the opt-in mode\n'

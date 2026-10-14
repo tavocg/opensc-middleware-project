@@ -18,16 +18,68 @@ static struct {
 	int missing_reader, bad_atr, bad_protocol, short_send, short_receive, missing_app;
 	int connect_error, lock_error, reset_error, select_error, bad_control, bad_initial, bootstrap_attack, bad_app_count;
 	int connects, locks, unlocks, resets, disconnects, releases, physical;
+	int context_fail, followups; unsigned int query_sw;
 } test_state;
 static char output[8192];
 static int test_lock_depth;
 
 static int backend_reset(sc_reader_t *r, int cold) { assert(r == &test_reader && !cold); return 0; }
+static int context_reply(sc_apdu_t *a)
+{
+	unsigned char auth[64] = {0}, tag[16], reply[64] = {0}, iv[32] = {0}, plain[32] = {0}, ssc[16] = {0};
+	int query = probe_guard.phase == PROBE_PIN_QUERY, count, final;
+	unsigned int sw = query ? test_state.query_sw : test_state.context_fail == 3 ? 0x6982 : 0x9000;
+	size_t body_size = 0, auth_size; EVP_CIPHER_CTX *cipher = EVP_CIPHER_CTX_new(); assert(cipher);
+	test_state.followups++;
+	assert(test_state.followups == (query ? 2 : 1) && a->cla == 0x0C && !a->p1 && a->p2 == (query ? 1 : 0));
+	assert(a->ins == (query ? 0x20 : 0xA4) && a->le == 256 && a->lc == (query ? 10 : 32));
+	auth[15] = (unsigned char)(query ? 5 : 3); auth[16] = 0x0C; auth[17] = (unsigned char)a->ins;
+	auth[19] = (unsigned char)a->p2; auth[20] = 0x80;
+	if (query) {
+		assert(!memcmp(a->data, "\x8e\x08", 2));
+		cmac(test_flow.derived.keys.mac, auth, 32, tag); assert(!memcmp(tag, a->data + 2, 8));
+	} else {
+		assert(!memcmp(a->data, "\x87\x11\x01", 3) && !memcmp(a->data + 19, "\x97\x01\0\x8e\x08", 5));
+		memcpy(auth + 32, a->data, 22); auth[54] = 0x80;
+		cmac(test_flow.derived.keys.mac, auth, 64, tag); assert(!memcmp(tag, a->data + 24, 8));
+		ssc[15] = 3;
+		assert(EVP_EncryptInit_ex(cipher, EVP_aes_128_ecb(), NULL, test_flow.derived.keys.encryption, NULL) == 1);
+		assert(EVP_CIPHER_CTX_set_padding(cipher, 0) == 1 && EVP_EncryptUpdate(cipher, iv, &count, ssc, 16) == 1);
+		assert(EVP_EncryptFinal_ex(cipher, iv + count, &final) == 1 && count + final == 16);
+		assert(EVP_DecryptInit_ex(cipher, EVP_aes_128_cbc(), NULL, test_flow.derived.keys.encryption, iv) == 1);
+		assert(EVP_CIPHER_CTX_set_padding(cipher, 0) == 1 && EVP_DecryptUpdate(cipher, plain, &count, a->data + 3, 16) == 1);
+		assert(EVP_DecryptFinal_ex(cipher, plain + count, &final) == 1 && count + final == 16);
+		assert(!memcmp(plain, "\x3f\0\x80", 3)); for (int i = 3; i < 16; i++) assert(!plain[i]);
+	}
+	if (test_state.context_fail == (query ? 4 : 1)) { EVP_CIPHER_CTX_free(cipher); return -7; }
+	if (query && test_state.context_fail == 6) {
+		/* Correctly authenticated unexpected query data must remain unlogged/rejected. */
+		memset(plain, 0, sizeof(plain)); memcpy(plain, "PRIVATE_QUERY", 13); plain[13] = 0x80; ssc[15] = 6;
+		assert(EVP_EncryptInit_ex(cipher, EVP_aes_128_ecb(), NULL, test_flow.derived.keys.encryption, NULL) == 1);
+		assert(EVP_CIPHER_CTX_set_padding(cipher, 0) == 1 && EVP_EncryptUpdate(cipher, iv, &count, ssc, 16) == 1);
+		assert(EVP_EncryptFinal_ex(cipher, iv + count, &final) == 1 && count + final == 16);
+		memcpy(reply, "\x87\x11\x01", 3);
+		assert(EVP_EncryptInit_ex(cipher, EVP_aes_128_cbc(), NULL, test_flow.derived.keys.encryption, iv) == 1);
+		assert(EVP_CIPHER_CTX_set_padding(cipher, 0) == 1 && EVP_EncryptUpdate(cipher, reply + 3, &count, plain, 16) == 1);
+		assert(EVP_EncryptFinal_ex(cipher, reply + 3 + count, &final) == 1 && count + final == 16); body_size = 19;
+	}
+	reply[body_size++] = 0x99; reply[body_size++] = 2;
+	reply[body_size++] = (unsigned char)(sw >> 8); reply[body_size++] = (unsigned char)sw;
+	memset(auth, 0, sizeof(auth)); auth[15] = (unsigned char)(query ? 6 : 4);
+	memcpy(auth + 16, reply, body_size); auth[16 + body_size] = 0x80; auth_size = (16 + body_size + 16) / 16 * 16;
+	cmac(test_flow.derived.keys.mac, auth, auth_size, tag);
+	if (test_state.context_fail == (query ? 5 : 2)) tag[0] ^= 1;
+	reply[body_size++] = 0x8E; reply[body_size++] = 8; memcpy(reply + body_size, tag, 8); body_size += 8;
+	assert(a->resplen >= body_size); memcpy(a->resp, reply, body_size); a->resplen = body_size;
+	EVP_CIPHER_CTX_free(cipher); OPENSSL_cleanse(iv, sizeof(iv)); OPENSSL_cleanse(plain, sizeof(plain));
+	OPENSSL_cleanse(tag, sizeof(tag)); return 0;
+}
 static int backend_transmit(sc_reader_t *r, sc_apdu_t *a)
 {
 	const unsigned long flags = SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP | SC_APDU_FLAGS_NO_SM;
 	assert(r == &test_reader && (a->flags & flags) == flags && test_state.locks == 1 && !test_state.unlocks);
 	test_state.physical++; a->sw1 = 0x90; a->sw2 = 0;
+	if (probe_guard.phase == PROBE_CONTEXT_MF || probe_guard.phase == PROBE_PIN_QUERY) return context_reply(a);
 	if (probe_guard.phase >= PROBE_MSE) {
 		unsigned char wire[264], reply[258]; size_t size = 5 + a->lc, received = 0;
 		wire[0] = (unsigned char)a->cla; wire[1] = (unsigned char)a->ins;
@@ -153,6 +205,7 @@ int sc_enum_apps(sc_card_t *card)
 static void defaults(void)
 {
 	memset(&test_state, 0, sizeof(test_state)); memset(&test_ctx, 0, sizeof(test_ctx));
+	test_state.query_sw = 0x63C7;
 	test_lock_depth = 0;
 	memset(&test_reader, 0, sizeof(test_reader)); memset(&test_card, 0, sizeof(test_card)); memset(&test_app, 0, sizeof(test_app));
 	test_reader.ops = &test_ops; test_reader.ctx = &test_ctx; test_reader.name = "PRIVATE_IDENTIFIER_DO_NOT_LOG";
@@ -167,15 +220,16 @@ static void defaults(void)
 	test_flow.mode = NORMAL; test_flow.fail_step = test_flow.calls = test_flow.ga_template = 0; test_flow.le = JCOP4_CA_LE_SHORT_MAX;
 	memcpy(test_flow.initial, test_initial, 137); jcop4_ca_pending_clear(&test_flow.derived);
 }
-static int invoke(void)
+static int invoke_mode(int context_mode)
 {
-	char *args[] = {"jcop4-channel-probe", "0"}; int result, saved = dup(STDOUT_FILENO); FILE *capture = tmpfile();
+	char *args[] = {"jcop4-channel-probe", "0", "--pin-context"}; int result, saved = dup(STDOUT_FILENO); FILE *capture = tmpfile();
 	assert(saved >= 0 && capture); fflush(stdout); assert(dup2(fileno(capture), STDOUT_FILENO) >= 0);
-	result = channel_probe_main(2, args); fflush(stdout); rewind(capture);
+	result = channel_probe_main(context_mode ? 3 : 2, args); fflush(stdout); rewind(capture);
 	size_t len = fread(output, 1, sizeof(output)-1, capture); output[len] = 0;
-	assert(!strstr(output, "PRIVATE_IDENTIFIER") && !strstr(output, "Sending:") && !strstr(output, "Received"));
+	assert(!strstr(output, "PRIVATE_IDENTIFIER") && !strstr(output, "PRIVATE_QUERY") && !strstr(output, "Sending:") && !strstr(output, "Received"));
 	assert(dup2(saved, STDOUT_FILENO) >= 0); close(saved); fclose(capture); return result;
 }
+static int invoke(void) { return invoke_mode(0); }
 int main(void)
 {
 	init(&test_flow); memcpy(test_initial, test_flow.initial, 137); setenv("OPENSC_CONF", "/tmp/synthetic-config", 1); setenv("OPENSC_DEBUG", "0", 1);
@@ -200,6 +254,9 @@ int main(void)
 		assert(probe_guard_transmit(&test_reader, &a) < 0 && !test_state.physical && probe_guard.blocked);
 	}
 	puts("PASS absolute EF.DIR allowance does not allow other files, relative paths, channels, lengths or P2");
+	defaults(); assert(invoke_mode(1) == 0 && test_state.physical == 10 && test_state.followups == 2 && test_state.resets == 2);
+	assert(strstr(output, "pin_query_sw=63C7") && strstr(output, "pin_context_result=status_observed_no_pin_no_login"));
+	puts("PASS context mode also uses real OpenSC bootstrap/transmit and software MF/PIN status peer without reader access");
 #else
 	defaults(); assert(invoke() == 0 && test_flow.calls == 3 && test_state.physical == 9 && test_state.resets == 2);
 	assert(test_state.unlocks == 1 && test_state.disconnects == 1 && test_state.releases == 1);
@@ -282,6 +339,69 @@ int main(void)
 		assert(probe_guard_transmit(&test_reader, &a) < 0 && test_state.physical == 1);
 	}
 	puts("PASS guard rejects PIN/change/write/control/SFI/offset/length/chaining/extended/budget/repeated commands before physical transport");
+	defaults(); assert(invoke_mode(1) == 0 && test_state.physical == 11 && test_state.followups == 2 && test_state.resets == 2);
+	assert(strstr(output, "context_select_result=mf_selected_under_sm_no_login") && strstr(output, "pin_query_sw=63C7"));
+	assert(strstr(output, "pin_context_result=status_observed_no_pin_no_login") && test_state.unlocks == 1 && test_state.disconnects == 1);
+	puts("PASS opt-in context mode confirms D004 first, encrypts MF SELECT at SSC3/4, queries empty VERIFY1 at SSC5/6 and closes");
+	for (int fail = 1; fail <= 6; fail++) {
+		defaults(); test_state.context_fail = fail;
+		assert(invoke_mode(1) == 1 && test_state.followups == (fail <= 3 ? 1 : 2) && test_state.resets == 2);
+		assert(test_state.unlocks == 1 && test_state.disconnects == 1 && !strstr(output, "pin_context_result=status_observed"));
+		if (fail <= 3) assert(!strstr(output, "pin_query_"));
+	}
+	for (int which = 0; which < 4; which++) {
+		defaults(); test_state.query_sw = which == 0 ? 0x63C0 : which == 1 ? 0x6983 : which == 2 ? 0x6982 : 0x6100;
+		assert(invoke_mode(1) == 1 && test_state.followups == 2 && test_state.resets == 2);
+	}
+	defaults(); test_state.query_sw = 0x9000; assert(invoke_mode(1) == 0 && strstr(output, "pin_query_result=status_9000_no_pin_supplied"));
+	defaults(); test_state.query_sw = 0x63CF; assert(invoke_mode(1) == 0 && strstr(output, "pin_query_result=available_unverified"));
+	puts("PASS context transport/MAC/SW/unexpected data failures stop; counter zero/block/unknown SW fail and no maximum or reset is inferred");
+	defaults(); test_flow.mode = BAD_MAC; assert(invoke_mode(1) == 1 && !test_state.followups && test_state.resets == 2);
+	defaults(); test_flow.mode = WRONG_CONTENT; assert(invoke_mode(1) == 1 && !test_state.followups);
+	defaults(); assert(invoke() == 0 && !test_state.followups && !strstr(output, "pin_query_"));
+	puts("PASS no context/PIN query before full D004 confirmation; legacy mode still blocks the entire follow-up sequence");
+	{
+		for (int mutation = 0; mutation < 8; mutation++) {
+			sc_apdu_t a; unsigned char reply[256], wire[16] = {0x0C,0x20,0,1,10,0x8E,8};
+			defaults(); test_state.locks = 1; memset(&probe_guard, 0, sizeof(probe_guard));
+			probe_guard.reader = &test_reader; probe_guard.original = &test_ops; probe_guard.context_mode = 1;
+			probe_guard.context_selected = 1; probe_guard.phase = PROBE_PIN_QUERY;
+			memcpy(probe_guard.expected, wire, sizeof(wire)); probe_guard.expected_size = sizeof(wire);
+			sc_format_apdu(&test_card, &a, SC_APDU_CASE_4_SHORT, 0x20, 0, 1); a.cla = 0x0C;
+			a.data = wire + 5; a.lc = a.datalen = 10; a.le = a.resplen = 256; a.resp = reply;
+			if (mutation == 0) a.p2 = 3;
+			if (mutation == 1) a.ins = 0x24;
+			if (mutation == 2) a.cla = 0;
+			if (mutation == 3) wire[5] = 0x87;
+			if (mutation == 4) wire[7] ^= 1;
+			if (mutation == 5) probe_guard.context_selected = 0;
+			if (mutation == 6) probe_guard.context_mode = 0;
+			if (mutation == 7) a.le = 172;
+			assert(probe_guard_transmit(&test_reader, &a) < 0 && !test_state.physical && probe_guard.blocked);
+		}
+	}
+	puts("PASS context guard refuses PIN data/DO87, changed MAC/header/ref/Le, missing authenticated MF or missing opt-in before backend");
+	{
+		for (int mutation = 0; mutation < 7; mutation++) {
+			sc_apdu_t a; unsigned char reply[256], wire[38] = {0x0C,0xA4,0,0,32,0x87,0x11,1};
+			memcpy(wire + 24, "\x97\x01\0\x8e\x08", 5);
+			defaults(); test_state.locks = 1; memset(&probe_guard, 0, sizeof(probe_guard));
+			probe_guard.reader = &test_reader; probe_guard.original = &test_ops; probe_guard.context_mode = 1;
+			probe_guard.phase = PROBE_CONTEXT_MF;
+			memcpy(probe_guard.expected, wire, sizeof(wire)); probe_guard.expected_size = sizeof(wire);
+			sc_format_apdu(&test_card, &a, SC_APDU_CASE_4_SHORT, 0xA4, 0, 0); a.cla = 0x0C;
+			a.data = wire + 5; a.lc = a.datalen = 32; a.le = a.resplen = 256; a.resp = reply;
+			if (mutation == 0) a.p2 = 4;
+			if (mutation == 1) a.p1 = 4;
+			if (mutation == 2) wire[8] ^= 1;
+			if (mutation == 3) wire[24] = 0x87;
+			if (mutation == 4) a.cla = 0;
+			if (mutation == 5) probe_guard.expected_size = 0;
+			if (mutation == 6) probe_guard.context_mode = 0;
+			assert(probe_guard_transmit(&test_reader, &a) < 0 && !test_state.physical && probe_guard.blocked);
+		}
+	}
+	puts("PASS MF guard binds exact encrypted frame and excludes alternative P1/P2/ciphertext/tags/plaintext or unarmed/non-opt-in transport");
 #endif
 	EVP_PKEY_free(test_flow.peer); jcop4_ca_pending_clear(&test_flow.derived); return 0;
 }

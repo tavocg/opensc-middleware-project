@@ -342,6 +342,12 @@ Se añadió retención opcional del estado después de confirmar D004 completo:
 SSC2->3/4 y selección cifrada solo simulada. El diagnóstico de tarjeta conserva
 su cierre y no retiene sesión. Aún falta resolver contexto/perfil de login
 antes de usar la nueva pieza con PIN.
+Nuevo `make inspect/jcop4-channel-pin-context READER=0`: confirma el canal y
+prueba SELECT MF seguido de consulta PIN1 vacía bajo SM, en la misma conexión.
+Es un diagnóstico separado **sin introducir PIN, login ni firma**, con parada
+ante error y cierre de sesión. Pasaron20 grupos de software; pendiente de una
+única ejecución del usuario. No habilita credenciales ni modifica el observador
+Idopte. [Protocolo y límites](docs/jcop4.md#consulta-de-contexto-mf-y-pin-vacío-bajo-sm).
 El driver aún no firma con JCOP4.
 [Evidencia y límites](docs/jcop4.md#canal-confirmado-en-jcop4-sin-pin).
 
