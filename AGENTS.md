@@ -6,6 +6,57 @@ la tarjeta. El usuario ejecuta las operaciones que requieran PIN o GUI. Esto
 sustituye las restricciones anteriores de no ejecutar Git/hardware/Idopte por
 el agente; conservar límites de cada diagnóstico y privacidad de los registros.
 
+**Última revisión: diagnóstico real de canal preparado, sin APDU desde esta sesión.**
+Principal `3d4a0ba`, OpenSC `3dfef6704`, limpios al comenzar. Nuevo
+`make inspect/jcop4-channel READER=0`: helper separado, driver default,
+debug0, sin Idopte/binding/PIN/VERIFY/login/firma. Observador y driver intactos.
+Exige ATR conocido en lector/tarjeta, T=1 y límites declarados envío>=139,
+recepción>=256; son límites OpenSC, no prueba empírica/PIN-pad. Política propia
+corta T=1 Le exterior256, DO97137, sin alternar172/256/copiar ReaderNames.
+Lock, reset inicial, MF/EF.DIR/AID conocidos, SELECT D004/control/READ137 en
+memoria, MSE/GA CLA10 sinLe y un READ protegido. Nueva lectura tiene propósito
+de obtener punto efímero: no raw real conservado. No repetir D004 aislado.
+Guard de transmisión por fase/ATR/protocolo, máximo24 APDU; bloquea antes del
+backend PIN/cambios/escrituras/desconocidos/chaining/extended/offsets/SFI.
+NO_RETRY_WL/NO_GET_RESP/NO_SM en todos los comandos. Primer bloqueo definitivo,
+sin fallback. Exige MAC antes de descifrar, SW interno9000 y mismo contenido.
+No devuelve sesión/claves; limpieza y reset final bajo lock, unlock/disconnect.
+Confirmación solo válida con cierre completo/helper0; no prueba identidad,
+permiso de PIN ni capacidad de firmar. No efecto probado sobre intentos PIN.
+
+Lanzador una invocación, stdin vacío, sin debug/trace/preload/delegates heredados,
+core dumps desactivados; timeout45s TERM+5s kill. Bloqueo PCSC puede impedir
+cierre: ante timeout/reset final ausente o fallido, cerrar clientes y reinsertar
+tarjeta antes de otra operación; no repetir ni PIN por inercia. Report/config
+0600, directorio0700, solo metadatos; no datos/punto/claves/inventario personal.
+
+**Única ejecución real intentada:** `local/jcop4-channel-6LvDBFn7/report.txt`,
+2026-10-14T05:03:26Z (13Oct CR), build/context/driver0,
+reader_result=missing_or_unsupported, guard_blocked0, command_count0, helper1.
+No connect/APDU/reset/PIN; no rechazo de tarjeta/canal. Ese resultado agrupa
+ausencia de lector/backend; futuras versiones separan not_found/unsupported.
+Policy inicial es intención, no prueba de que T=1/límites pasaron.
+Usuario sugirió enumeración para activar socket: pcsc_scan -r acotado devolvió
+Service not available; socket existe pero conexión directa errno1/Operation
+not permitted, sin PCSCLITE_CSOCK_NAME. Bus systemd también bloqueado. No
+determina estado del servicio ni activación desde terminal del usuario. No
+alterar sistema/eludir restricción/repetir canal desde esta sesión por inercia.
+
+Pasaron **10 grupos adaptador/lanzador** (6 nativos+4 wrapper), transporte
+simulado/software peer, guard/cierre/errores/timeout/permisos; timeout simulado,
+no prueba temporal PCSC. ASan/UBSan6 detect_leaks0, no prueba de fugas.
+Helper real compilado. Validador control D004 extraído a dh-control.h compartido;
+las **92 comprobaciones helper público** pasaron de nuevo. Suites anteriores
+sin cambios/no repetidas; submódulo/driver/observador/flake/lock intactos.
+
+**Siguiente intervención:** misma JCOP4, otros clientes/firmador cerrados,
+`nix develop -c make inspect/jcop4-channel READER=0` desde terminal del usuario,
+una sola vez, sin PIN. Revisar primer fallo/etapa y cierre antes de decidir
+otros comandos. Canal real aún no confirmado; JCOP4/RSA3072/VERIFY6982 pendientes.
+Git autorizado pero .git solo lectura: no eludir; dar comando de commit con
+los siete archivos nuevos (dh-control.h, channel-probe.c, tres scripts y dos
+tests), Makefile/dh-info.h y documentos. No capturas/build a Git.
+
 **Última revisión: secuencia de confirmación probada con transporte sintético.**
 Principal `e9951da`, OpenSC `3dfef6704`, limpios al comenzar. Sin hardware,
 Idopte ejecutado, PIN, GUI ni nuevas capturas. D004 real LbbFD51N sigue vigente;

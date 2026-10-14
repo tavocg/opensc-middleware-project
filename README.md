@@ -309,7 +309,7 @@ no PIN/login/firma nuevos. Próximo paso: analizar la ruta C_Login/VERIFY de
 Idopte; firma libre JCOP4 aún pendiente.
 [Evidencia y límites](docs/jcop4.md#inventario-idopte-completo-tras-las-selecciones-de-raíz).
 
-**D004 ya se validó:** punto P-521 válido, sin necesidad de repetir la lectura.
+**D004 ya se validó:** punto P-521 válido; no repetir esa consulta aislada.
 La ruta estática Idopte aporta CA/ECDH/AES128, KDF y una variante CBC con IV cero.
 Hay componentes libres aislados para KDF, primitivas, mensajes protegidos y
 acuerdo efímero P-521. Pasaron cinco grupos de KDF, siete de primitivas,
@@ -318,11 +318,19 @@ y vectores públicos.
 `make test/jcop4-channel-agreement` verifica la derivación y los constructores
 candidatos MSE/GA. La ruta estática de transporte conserva CLA10 y Le ausente
 en GA. `make test/jcop4-channel-confirmation` prueba MSE/GA y el primer READ
-autenticado con una tarjeta simulada. El Le exterior de ese READ depende de
-compatibilidad del lector; falta justificarlo y preparar el adaptador real
-antes de probar el canal en esta tarjeta.
-Sin nuevas pruebas de tarjeta o PIN; el driver aún no firma con JCOP4.
-[Evidencia y límites](docs/jcop4.md#confirmación-del-primer-intercambio-con-transporte-sintético).
+autenticado con una tarjeta simulada.
+`make inspect/jcop4-channel READER=0` prepara ahora una única secuencia real,
+sin PIN: comprueba ATR/AID/D004, intenta MSE/GA y verifica un READ protegido.
+El adaptador exige T=1 y límites declarados suficientes para APDU cortas;
+elige Le exterior256, sin alternarlo ni copiar la tabla de lectores de Idopte.
+Mantiene el bloqueo de la conexión y resetea la sesión al finalizar.
+Pasaron diez grupos del adaptador/lanzador y las 92 comprobaciones del helper
+público. Desde la sesión del agente, el diagnóstico se detuvo antes de conectar,
+con cero APDU; una enumeración posterior encontró el acceso al socket PC/SC
+bloqueado por el entorno. Falta ejecutar el diagnóstico desde la terminal del
+usuario, con la misma JCOP4 y otros clientes cerrados. El driver aún no firma
+con JCOP4.
+[Evidencia y límites](docs/jcop4.md#diagnóstico-real-acotado-del-canal-sin-pin).
 
 Capturas privadas bajo local/jcop4-idopte-spy-*/; no agregarlas a Git.
 Pasaron previamente **30 comprobaciones del observador/decoder y 40 del

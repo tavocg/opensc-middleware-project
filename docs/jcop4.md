@@ -4513,6 +4513,122 @@ lock intactos. JCOP4/RSA3072 y causa de VERIFY6982 pendientes. Git montado
 solo lectura impide commit; incluir los tres archivos nuevos de confirmación,
 tests y lanzador.
 
+## Diagnóstico real acotado del canal sin PIN
+
+Principal `3d4a0ba`, OpenSC `3dfef6704`, limpios al comenzar esta revisión.
+Se añade `make inspect/jcop4-channel READER=0`, con un helper independiente
+del driver de firma y del observador Idopte. No carga Idopte, hace binding
+PKCS#15, pide PIN ni llama VERIFY/login/firma. Los bloqueos del observador
+anterior siguen intactos. Este diagnóstico intenta un **canal candidato**;
+una respuesta9000 de MSE o GA no bastaría para confirmarlo.
+
+### Transporte, secuencia y cierre
+
+Se fuerza el driver default de OpenSC, debug0 y una conexión propia. Antes
+de las APDU se exigen ATR conocido tanto en tarjeta como lector, protocolo
+activo T=1 y límites declarados de envío al menos139 y recepción al menos256
+en ambos. Son límites configurados/anunciados en OpenSC, no una prueba
+empírica de todas las capacidades del lector ni de presencia de PIN-pad.
+
+La política elegida es **APDU corta bajo T=1, Le exterior256**; DO97 conserva
+137. No se copia la tabla ReaderNames de Idopte ni se alterna Le172/256.
+En el código local de OpenSC, `src/libopensc/apdu.c` conserva Le en caso4
+corto bajo T=1; `src/libopensc/reader-pcsc.c` define límites cortos por defecto
+255/256 y reserva el espacio de SW en la respuesta PC/SC. El helper comprueba
+los campos públicos de límites del lector y tarjeta antes del canal.
+
+Mantiene `sc_lock` durante toda la operación y hace un reset inicial de
+sesión. Enumera exclusivamente MF/EF.DIR para confirmar que el AID conocido
+está anunciado, selecciona ese AID y D004, comprueba su control previamente
+observado y lee exactamente137 bytes en memoria. Esta lectura tiene el nuevo
+propósito de obtener el punto para un acuerdo efímero; no se conservó el
+punto bruto de la consulta anterior. No sigue rutas de objetos ni interpreta
+atributos propietarios de seguridad.
+
+Genera un par efímero P-521 nuevo y ejecuta una vez MSE, una vez GA CLA10
+sin Le y una vez READ protegido de D004. Exige la respuesta de setup prevista,
+MAC válido antes de descifrar, padding correcto, SW interno9000 y los mismos
+137 bytes. Nonce/token/payload inesperado detiene; no se ignora ni sigue con
+otro comando. No devuelve claves o sesión para login.
+
+Un filtro en la función de transmisión del lector valida fase, ATR/protocolo
+y forma de cada APDU antes del backend. Presupuesto máximo24 APDU incluyendo
+el bootstrap, sin VERIFY aunque vacío, cambios de PIN, escrituras, archivos
+desconocidos, SFI, otros offsets, chaining o APDU extendidas. Todas reciben
+NO_RETRY_WL/NO_GET_RESP/NO_SM antes del transporte. Un bloqueo/error detiene
+definitivamente; cambiar fase no lo rehabilita. No se ensayan alternativas
+de comando, reintentos6C, GET RESPONSE ni consultas de estado de PIN.
+
+Al terminar, borra datos/claves locales, intenta reset final bajo el lock,
+unlock y desconexión. Estos son resets de sesión PC/SC; no se atribuye un
+efecto sobre contadores de intentos de PIN. El marcador de MAC confirmado
+por sí solo no demuestra cierre satisfactorio: deben constar
+`final_reset_result=0`, `unlock_result=0`, `disconnect_result=0` y
+`helper_exit_status=0`.
+
+El lanzador ejecuta el helper una sola vez con stdin vacío, timeout45s y
+TERM seguido de kill tras5s; desactiva core dumps y elimina variables de
+traza/preload/delegate, LD_LIBRARY_PATH y debug heredado. Un PC/SC bloqueado
+puede impedir completar el cierre antes del kill. **Ante timeout o reset final
+ausente/fallido, cerrar los clientes y reinsertar la tarjeta antes de cualquier
+operación posterior**, sin repetir por inercia ni introducir PIN.
+
+Informe privado `local/jcop4-channel-*/report.txt`, directorio0700 y archivos
+0600. Solo etapas/resultados/transporte/SW/booleanos y estados de cierre;
+sin buffers, punto, claves, inventario de objetos o identificadores personales.
+No pcsc-spy ni su FIFO global.
+
+### Verificación sin hardware
+
+`make test/jcop4-channel-probe` pasó **10 grupos**: seis del helper con
+transporte simulado y cuatro del lanzador. Peer de software con respuesta
+MAC/CBC independiente, secuencia y cierre, ATR/protocolo/límites, errores de
+bootstrap/control/transporte/MAC/reset, variables heredadas y exclusión antes
+del backend de APDU fuera del permiso. El éxito del fixture usa nueve APDU;
+no se impone ese número al bootstrap real. El lanzador prueba invocación
+única, permisos, stdin vacío, propagación de error/timeout y fallo de compilación;
+el timeout se simula y no demuestra comportamiento temporal de PC/SC real.
+
+ASan/UBSan pasaron seis grupos nativos, con detect_leaks0 por la limitación
+ptrace previamente documentada; no prueba ausencia de fugas. El helper real
+compiló contra OpenSC local. Se extrajo el validador de control D004 compartido
+a `tools/jcop4-dh-control.h`, sin cambiar su interpretación; pasaron de nuevo
+las **92 comprobaciones** del helper público. Componentes criptográficos,
+observador, driver/submódulo y flake/lock sin cambios.
+
+### Única ejecución desde el agente y acceso a PC/SC
+
+`local/jcop4-channel-6LvDBFn7/report.txt`, **2026-10-14T05:03:26Z** (13 de
+octubre en Costa Rica): compilación0, context0 y driver0;
+`reader_result=missing_or_unsupported`, `command_count=0`, helper1. Esa versión
+agrupaba lector ausente/backend no soportado; las ejecuciones futuras distinguen
+ambos. No llegó a connect ni envió APDU/reset/PIN: no fue rechazo de tarjeta
+o del canal. La línea inicial policy es intención del lanzador, no evidencia
+de que se haya superado el control T=1/límites.
+
+Tras la sugerencia del usuario de activar pcscd mediante enumeración, se
+ejecutó una vez `pcsc_scan -r` acotado: SCardEstablishContext devolvió
+«Service not available». Existe `/run/pcscd/pcscd.comm`, pero una conexión
+directa desde esta sesión recibió errno1/«Operation not permitted», sin
+PCSCLITE_CSOCK_NAME heredado. El acceso al bus de systemd también se rechazó.
+Esto acredita una restricción de esta sesión; **no determina si pcscd está
+activo, si necesita activación o si una enumeración desde la terminal del
+usuario lo despertaría**. No se alteraron servicios/permisos ni se volvió
+a ejecutar el diagnóstico de canal. Las pruebas simuladas no dependen de
+pcscd y ya pasaron.
+
+**Siguiente intervención:** misma JCOP4 y firmador/otros clientes cerrados,
+ejecutar una sola vez desde la terminal con acceso al lector:
+
+```sh
+nix develop -c make inspect/jcop4-channel READER=0
+```
+
+No introducir PIN. Revisar reporte de etapas, primer fallo y cierre antes de
+decidir otro comando. Confirmar un READ protegido no probaría identidad de
+tarjeta, condición de VERIFY, autenticación o firma. JCOP4/RSA3072 y el rechazo
+VERIFY6982 siguen pendientes. No nuevas variantes por inercia.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño
