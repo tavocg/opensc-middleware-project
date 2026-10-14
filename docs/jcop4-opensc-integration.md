@@ -1,7 +1,7 @@
 # Integrar el perfil JCOP4 observado en OpenSC
 
 Estado al 14 de octubre de 2026. Base de esta etapa: proyecto
-`82ab080`, submódulo OpenSC `52057cc6a`. Este documento describe la integración.
+`7bb9661`, submódulo OpenSC `52057cc6a`. Este documento describe la integración.
 **Perfil/estado/limpieza, canal/bootstrap/providers y operaciones
 PIN/firma privados están implementados. Frontend PKCS15 y routing privado
 instalado por tarjeta pasaron con callbacks de producción y lector simulado.
@@ -10,7 +10,8 @@ están implementados para una opción explícita, con firma verificada en
 transporte simulado. El módulo PKCS11 del build ya pasó nueve grupos de
 mecanismos, objetos, sesiones y firmas con contexto/lector/PIN sintéticos.
 El diagnóstico público y una firma SHA256_RSA_PKCS ya pasaron en la JCOP4
-real. El lanzador del firmador está preparado; falta una firma PDF real.**
+real. El firmador produjo un PDF CAdES y dos sellos RFC3161 verificados offline;
+faltan dos firmas consecutivas y reinserción en la GUI.**
 
 ## Evidencia disponible
 
@@ -1152,3 +1153,69 @@ ni segunda firma todavía. Ante error detenerse, conservar informe/API y no
 repetir PIN porinercia. Luego revisar mecanismos/llave/login/firma/cierre
 numéricos y verificar CMS/ByteRange del PDF offline sin mostrar identidad.
 Consecutivas/reinserción/JCOP4RSA3072/otrasplataformas/upstream pendientes.
+
+## Primer PDF del firmador verificado offline
+
+Proyecto7bb9661/OpenSC52057cc6a, limpios al comenzar. Informe usuario
+`local/jcop4-firmador-api-2VJ372cf/report.txt`,2026-10-14T23:10:42Z (17:10CR),
+exitGUI0 y127eventos API. Una C_Login0, C_SignInit0/CKM_SHA256_RSA_PKCS0x40,
+C_SignUpdate0, SIGN_KEY0/ref0x91/RSA2048, KEY_SELECT0/MSE0, KEY_COMPUTE0x100
+(longitud256 positiva, no CKR), C_SignFinal0. Logout0x101 anteslogin fue sobre
+sesiónpública/no autenticada. Tres GetSessionInfo0/USER antesfirma. No
+C_GetSessionInfo después de firma ni evento C_Finalize. Ocho OpenSession y
+cinco CloseSession0; no inferir fuga o limpieza completa de ese desfase: la
+traza no registra todas las etapas del teardown. CARD_RESET no se registra
+paraChipDoc porque el logger existente de sc_reset está limitado aAMOS.
+No contar resets/VERIFY/PSO de esta GUI desde ausencia de eventos; el driver
+entrega256 solo tras verificar SM y cierre de su reserva.
+
+El archivo esperado local/jcop4-firmador-first.pdf no apareció; el resultado
+nuevo fue doc-firmado.pdf en raíz, mtime2026-10-14T23:11:00Z,80454bytes. Se
+conservó una copia privada junto al original6967bytes para no depender de
+posteriores sobrescrituras. Informe offline:
+`local/jcop4-pdf-verification-z4w35w5c/report.json`. Directorio0700/archivos0600,
+originales intactos; no datos identificables en el resumen mostrado. Mutool
+resolvió los dos diccionarios de firma activos desde AcroForm; sin NSS/pdfsig
+ni módulos PKCS11/PCSC. OpenSSL ejecutado con entorno limpio/OPENSSL_CONF
+/dev/null, CMS -binary -noverify, sin red/consulta de confianza/OCSP/lector/PIN.
+
+| Objeto | Rangos ByteRange | Resultado |
+| --- | --- | --- |
+| CAdES tarjeta | [0,7343,33969,4430] | CMS/SHA256 válido, RSA2048, certificado DER idéntico al observado para JCOP4 |
+| Sello documento RFC3161 | [0,60468,79414,1040] | CMS válido e imprint SHA512 coincide con esos rangos; revisión final80454 |
+
+Cada hueco corresponde exactamente a Contents, longitud DER y relleno nulo
+validados; rangos positivos/dentroarchivo/sin solaparse y contenidos activos
+coinciden con los originales. La firma CAdES cubre revisión38399, no los
+incrementos posteriores; el sello de documento cubre el archivo final.
+Los6967bytes originales permanecen como prefijo y están dentro del primer
+rango de ambas firmas. Alterar un bit del contenido CAdES causa rechazo de
+CMS. Además se verificó el token RFC3161 de atributo unsigned
+signatureTimeStampToken del CAdES: CMS válido/imprintSHA512 coincide con los
+256bytes SignatureValue. Son dos sellos válidos matemáticamente, no validación
+de confianza/revocación/identidad/tiempo jurídico. No se comparó render de
+páginas; la conservación comprobada es de bytes originales cubiertos.
+
+Esto acredita una firma PDF real y multipart SHA256_RSA_PKCS con ese módulo,
+firmador2.0.0/Java21 y JCOP4. No prueba aún consecutivas/reinserción/otras
+llaves/tarjetas/lectores/RSA3072. No cambios de código ni nuevas regresiones
+software en esta revisión; pruebas anteriores vigentes. No PCSC/hardware/
+PINreal/GUI/Idopte/red poragente, solo análisis de archivos y crypto offline.
+
+Siguiente intervención: dos firmas en una misma instancia para comprobar
+que Java y PKCS11 renuevan login después del cierre del primer PSO. Se
+prepararon dos copias0600 idénticas del doc.pdf original en
+`local/jcop4-consecutive-rwva61gm/primero.pdf` y `segundo.pdf`,directorios0700.
+Esta preparación no accedió a tarjeta/lector ni modifica originales.
+
+1. Clientescerrados/mismaJCOP4: `nix develop -c make firmador/jcop4`.
+2. Abrir primero.pdf, seleccionar LlaveDeFirma, firmar y conservar
+   primero-firmado.pdf en ese directorio.
+3. Sin cerrar GUI ni retirar tarjeta, abrir segundo.pdf y firmar hacia
+   segundo-firmado.pdf. Se firman originales distintos con los mismos bytes,
+   no el resultado de la primera firma.
+4. Cerrar GUI después; detenerse ante primer error sin repetir PIN.
+
+Introducir PIN correcto solo cuando lo solicite; registrar si lo pide de nuevo.
+No anticipar éxito/cantidad de logins del cliente: se revisará la traza y cada
+CMS posteriormente. Reinserción será otra prueba después de estos resultados.

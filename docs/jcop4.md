@@ -6342,3 +6342,27 @@ firma hacia local/jcop4-firmador-first.pdf y cerrar GUI. Ante error detenerse
 sin repetirPIN. Falta verificación PDF/CMS offline y pruebasconsecutivas/
 reinserción/RSA3072, no deducir éxito del exitGUI.
 [Detalles](jcop4-opensc-integration.md#firma-pkcs11-real-confirmada-y-lanzador-gui).
+
+### Firma del firmador y PDF confirmados; consecutivas pendientes
+
+2VJ372cf/2026-10-14T23:10:42Z: C_Login0, SignInit0x40/SHA256_RSA_PKCS0,
+SignUpdate0, llave0x91/RSA2048, KEY_COMPUTE256 y SignFinal0,127eventos/exitGUI0.
+El resultado quedó en doc-firmado.pdf (80454bytes), no en el nombre sugerido.
+Copia+reporte privados en local/jcop4-pdf-verification-z4w35w5c/: CMS CAdES
+SHA256 válido con certificado exactoJCOP4, revisión38399; dos sellosRFC3161
+CMSválidos/imprintSHA512 correcto (SignatureValue y ByteRange final80454).
+Original6967bytespreservado/cubierto; bitalterado rechazado. Rangos/Contents/
+DER/rellenovalidados con diccionarios activosMutool/OpenSSLoffline/envlimpio;
+sin NSS/red/lector/PIN/GUI poragente. No confianza/revocación/renderverificados.
+Traza sin Finalize ni resetsChipDoc (loggerresetsoloAMOS): no inferir cierre
+físico/resetcount/fugas de sesiones desde8Open/5Close. Driverentrega256 tras
+cierrepropio. Sin código nuevo/regresiones repetidas, resultados previos vigentes.
+
+Se prepararon local/jcop4-consecutive-rwva61gm/primero.pdf y segundo.pdf,
+copias idénticas0600 del original. Próximo usuario: mismaGUI/mismaJCOP4,
+make firmador/jcop4, firmar primero y luego segundo SINcerrarGUI/reinsertar;
+conservar primero-firmado.pdf y segundo-firmado.pdf, luego cerrarGUI. Dos
+originales, no segunda firma del primerresultado. Anteprimererror detenerse
+sin repetirPIN; observar si pidePINdenuevo. Luego verificar ambos CMS/API
+antes reinserción. RSA3072/otrasplataformas/upstream siguenpendientes.
+[Detalles](jcop4-opensc-integration.md#primer-pdf-del-firmador-verificado-offline).

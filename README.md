@@ -104,17 +104,28 @@ del módulo ya pasó en la JCOP4 real: dos certificados y dos llaves públicas,
 Z5agqf5n corresponde al 14 de octubre de 2026, 16:40 CR. La firma PKCS11 real
 también pasó: v0hqHrzR, 16:59 CR, RSA/SHA256 verificada y texto alterado
 rechazado, un login/VERIFY/PSO y cierre correcto. No repetir estos controles
-como primer paso. La siguiente prueba, con la misma JCOP4 y otros clientes
-cerrados, usa el firmador:
+como primer paso. El firmador también produjo un PDF verificado: ejecución
+2VJ372cf del 14 de octubre, 17:10 CR, guardado en `doc-firmado.pdf`. La firma
+CAdES RSA2048/SHA256 coincide con el certificado de la JCOP4; los dos sellos
+RFC3161 y sus huellas verifican, y los bytes originales están conservados y
+firmados. Se rechazó una alteración de un bit. Esta comprobación fue offline
+y no evalúa confianza ni revocación. Informe privado:
+`local/jcop4-pdf-verification-z4w35w5c/report.json`.
+
+La siguiente prueba son dos firmas consecutivas en la misma GUI, con la
+misma JCOP4 y otros clientes cerrados:
 
 ```bash
 nix develop -c make firmador/jcop4
 ```
 
-Abre `doc.pdf`, elige `LlaveDeFirma`, firma una sola vez y guarda como
-`local/jcop4-firmador-first.pdf`; después cierra la GUI. El PIN se introduce
-en el firmador. Esta primera prueba no incluye reinserción ni otra firma.
-Si falla, detenerse y revisar el informe antes de repetir el PIN. El lanzador
+Hay dos copias idénticas de `doc.pdf` en `local/jcop4-consecutive-rwva61gm/`.
+Abre `primero.pdf`, elige `LlaveDeFirma`, firma y conserva su resultado como
+`primero-firmado.pdf`. Mantén la GUI abierta y la tarjeta insertada; abre
+`segundo.pdf`, firma y conserva `segundo-firmado.pdf`. Después cierra la GUI.
+Se firman dos originales, sin añadir otra firma al primer resultado. Introduce
+el PIN en la GUI cuando lo solicite. Si falla, detenerse y revisar el informe
+antes de repetir el PIN. El lanzador
 selecciona el módulo y libOpenSC locales, activa el perfil optativo, desactiva
 cachés/PIN-pad/PACE y los modos genéricos atomic/lock_login. Conserva el entorno
 del escritorio y elimina diagnósticos heredados. Registra únicamente eventos

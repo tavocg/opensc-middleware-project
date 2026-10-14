@@ -9,6 +9,50 @@ transporte simulado. PIN/GUI también los ejecuta el usuario. Esto sustituye
 la autorización anterior de hardware por el agente; conservar límites de
 cada diagnóstico y privacidad. Git sigue autorizado pero .git solo lectura.
 
+**Último resultado: primer PDF JCOP4 del firmador verificado offline.**
+Principal `7bb9661`, OpenSC `52057cc6a`, limpios al comenzar. Usuario
+local/jcop4-firmador-api-2VJ372cf/report.txt/2026-10-14T23:10:42Z (17:10CR):
+127APIeventos/exitGUI0;1Login0/SignInit0(0x40SHA256_RSA_PKCS)/SignUpdate0,
+SIGN_KEYref0x91/RSA2048/MSE0/KEY_COMPUTE0x100=256bytespositivo/SignFinal0.
+Logout0x101 anteslogin sobrePUBLIC esperado. GetSessionInfo3 USERantesfirma,
+ninguno posterior. Open8/Close5, sin Finalize: no inferir fuga/cierrecompleto
+del desfase. Resetloggercard.c soloAMOS, noChipDoc; no inferir reset/VERIFY/PSO
+counts deausenciaeventos. Driverdevuelve256 tras SM/cierrepropio verificados.
+
+Resultado nuevo doc-firmado.pdf en raíz, mtime2026-10-14T23:11:00Z/80454bytes;
+local/jcop4-firmador-first.pdf ausente. Copiasoriginal6967+firmado y reporte
+privados local/jcop4-pdf-verification-z4w35w5c/report.json (dir0700/files0600).
+Mutoolresolvió2dictsigactivosAcroForm, rangos/Contents/DER/relleno0validados.
+OpenSSLcmsbinary/noverify/envlimpio/OPENSSL_CONF/dev/null, sinNSS/PKCS11/red/
+PCSC/hardware/PINreal/GUI/Idopte poragente. CAdES [0,7343,33969,4430], revisión
+38399, CMS SHA256/RSA2048 válido/certDERigualal observadoJCOP4; bitnegativo
+rechazado. TokenRFC3161unsignedsignatureTimeStampToken: CMS válido/imprint
+SHA512 coincide conSignatureValue256. DocTS [0,60468,79414,1040], revisión
+final80454/CMSválido/imprintSHA512 coincide. Dos sellos verifican crypto,
+NOconfianza/revocación/identidad/tiempolegal. Originalprefijo6967cubierto por
+primerosrangos. No rendercomparado. ActualfirmaPDF/multipartJCOP4confirmados;
+consecutivas/reinserción/RSA3072/otroslectores/plataformas/upstream pendientes.
+
+No código/tests modificados, suitesanterioresvigentes/no repetidas;
+driver/submódulo/flake/lock/helpers/observador intactos. No repetir firmas/
+enumeración/estado/D004 porinercia. Siguiente propósito: nuevaautenticación
+enGUItrascierrePSO sinrecrearinstancia; confirmar siJavarenuevalogin.
+
+**Preparación realizada sin tarjeta:** local/jcop4-consecutive-rwva61gm/
+primero.pdf y segundo.pdf, copias idénticas0600 del doc.pdf original/dir0700.
+preparation.json fija modo/igualdad/tamaño/sinhardware, no identidades/hashes.
+**Siguiente intervención usuario:** mismaJCOP4 y otrosclientescerrados,
+`nix develop -c make firmador/jcop4`. Abrir primero.pdf de esedir, LlaveDeFirma,
+firmar y conservar primero-firmado.pdf. SINcerrarGUI/retirarcard, abrir
+segundo.pdf y firmar, conservar segundo-firmado.pdf. Dosoriginales, no firmar
+encimadel resultado. CerrarGUI después; anteprimererror detenerse sinrepetir
+PIN. Introducir PINcorrecto cuando lo solicite, observar si lo pide denuevo;
+no anticipar cantidadloginséxito. Revisar nuevolog/API+verificarambosCMS después
+antes reinserción. RecordarGUIsin guard/cuota/namespace/timeouts del helper.
+Gitautorizado: git add falló creando index.lock por .gitRO, noeludir.
+Commit soloAGENTS/README/docs, ninguna captura/
+PDF/build/local/preparation/scriptprivado aGit.
+
 **Último resultado: firma PKCS11 real válida; lanzador GUI preparado.**
 Principal `82ab080`, OpenSC `52057cc6a`, limpios al comenzar. Informe usuario
 local/jcop4-pkcs11-sign-v0hqHrzR/report.txt/2026-10-14T22:59:50Z (16:59CR):
