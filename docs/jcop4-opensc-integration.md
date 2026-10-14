@@ -1,12 +1,14 @@
 # Integrar el perfil JCOP4 observado en OpenSC
 
-Estado al 14 de octubre de 2026,10:13 Costa Rica. Base local del proyecto
-`0f51c4c`, submódulo OpenSC `3dfef6704`. Este documento define el siguiente
+Estado al 14 de octubre de 2026. Base de esta etapa: proyecto
+`bb29958`, submódulo OpenSC `471b4532d`. Este documento describe la integración
 cambio. **Perfil/estado/limpieza, canal/bootstrap/providers y operaciones
 PIN/firma privados están implementados. Frontend PKCS15 y routing privado
 instalado por tarjeta pasaron con callbacks de producción y lector simulado.
-Faltan configuración/init y activación desde el binding PKCS15 público;
-el instalador sigue siendo explícito, sin activación automática.**
+Configuración/init y activación automática desde el binding nativo PKCS15
+están implementados para una opción explícita, con firma verificada en
+transporte simulado. Faltan mecanismos, objetos y sesiones PKCS11 antes de
+probar esa integración con la tarjeta.**
 
 ## Evidencia disponible
 
@@ -53,9 +55,9 @@ Los datos públicos de política no acreditan un login ni permiten saltar VERIFY
 
 | Pieza | Funciones/estructura actuales | Trabajo necesario |
 | --- | --- | --- |
-| Detección e inicialización | `iasecc_match_card`, `iasecc_init`, `iasecc_init_amos_or_sagem` | Validación nativa PKCS15 y bootstrap privados implementados; wiring a detección/init aún pendiente. No heredar defaultsIAS completos. La tabla de binding actual no tiene una entrada exacta para este ATR. |
+| Detección e inicialización | `iasecc_match_card`, `iasecc_init`, `iasecc-chipdoc-init.h` | Opción explícita y ATR exacto seleccionan candidato; inicialización sin APDU ni defaults IAS completos. Activación tras validar directorios nativos. No hay entrada de ATR automática. |
 | Datos de perfil | `iasecc_private_data`, `iasecc-chipdoc.h`, `iasecc_is_chipdoc_signing_key` | Estado/binding independientes por tarjeta implementados, inicialmente inactivos; el selector legacy sigue reconociendo aplicación/ref3 JCOP3. |
-| Canal | `iasecc-chipdoc-sm`, headers privados `jcop4-channel-*` | Implementación compartida y APIs internas CA/MF por dispatcher normal completadas. Providers/libctx OpenSSL3 y bootstrap privados completados. Quedan otros backends y wiring al driver público. |
+| Canal | `iasecc-chipdoc-sm`, headers privados `jcop4-channel-*` | CA/MF, providers/libctx OpenSSL3 y bootstrap conectados por callbacks de instancia. Quedan otros backends y pruebas PKCS11/reales de esta integración. |
 | PIN | `iasecc_pin_cmd`, `iasecc_pin_verify`, `iasecc_pin_get_info` | VERIFY/consulta protegidos, un intento, sin copia persistente ni cache de PIN; publicar estado solo autenticado y limpiar login tras reset/error. |
 | MSE | `iasecc_set_security_env` | Mapear operación/hash/llave de PKCS#15 al formato probado, manteniendo selección AID bajo SM y orden. |
 | Firma | `iasecc_compute_signature`, `iasecc_compute_signature_dst`, `iasecc_compute_signature_at` | Para este perfil usar la operación PSO probada; no INTERNAL AUTHENTICATE o hashing convencional por semejanza. |
@@ -800,3 +802,64 @@ Pasaron47 grupos previos y suiteIAS/JCOP3 completa:708líneasPASS (no708casos
 distintos). OpenSC/móduloPKCS11 compilados, sin nuevos exports. Core47,
 helpers76/helpers hardware/observador/flake/lock/capturas intactos y sus
 resultados anteriores vigentes/no repetidos.
+
+### Configuración optativa, inicialización y binding nativo
+
+La opción `card_driver iasecc { chipdoc_profile = cr-rsa2048; }` está
+comentada en el ejemplo de configuración. No hay activación por defecto ni
+nueva entrada ATR automática. La selección de driver debe mantener `iasecc`;
+el ATR/AID compartidos con eOI no distinguen por sí solos aplicaciones.
+El match optativo reconoce solo un candidato; el binding exige los objetos
+nativos y el bootstrap posterior comprueba D004 antes del primer PIN.
+
+`iasecc-chipdoc-init.h` implementa la rama nueva de `iasecc_init`, separada
+del init IAS convencional. Requiere ATR exacto, contexto OpenSSL3 con libctx,
+debug0, sin otro wrapper SM, T=1, ATR del lector coincidente y límites
+declarados suficientes. Inicialización sin APDU/reset/consulta PIN:
+asigna una tabla de instancia con selección ISO y lectura pública, checkSW/FCI,
+finish/reset-hook, PIN bloqueado y logout vacío. Firma/admin/RNG no disponibles
+hasta activar el binding. No hereda EF.ATR, serial ni algoritmos amplios IAS.
+
+Anuncia exactamente RSA2048/PAD_TYPE01/SHA256, sin generación ni exponente
+supuesto. EXT y PIN_INFO permiten la operación extendida y el estado local.
+Los techos de tarjeta139/291 son límites operativos justificados por GA y PSO
+ya observados, no máximos físicos descubiertos ni soporte RSA3072. No aumenta
+un techo explícito de tarjeta/lector menor. Las lecturas públicas se limitan
+a256 por llamada ISO; el bucle normal continúa por los bytes devueltos.
+No se habilita READ extendido por anunciar el tamaño de respuesta del PSO.
+
+`sc_pkcs15_bind` detecta solo esta instancia optativa. Fuerza cachés de
+archivo/PIN desactivadas y bind nativo, incluso con emulación-first configurada;
+un error no vuelve a emulación IAS. La nueva unidad privada
+`iasecc-chipdoc-bind.c` enumera RSA y PIN nativos con límite32, exige una única
+llave candidata ref91 y delega la validación completa al instalador. Solo
+entonces activa callbacks de producción. Metadata incompleta deja PIN/firma
+bloqueados. Los demás perfiles/drivers conservan su ruta anterior.
+La unidad separada evita arrastrar routing SM al emulador IAS convencional.
+
+`make test/iasecc-chipdoc-init` pasó **cuatro grupos** con config real,
+initializer de producción, serializer/dispatcher/locks y `sc_pkcs15_bind`
+reales; solo lector, archivos DER/ISO, credencial y peer/RSA son sintéticos.
+Casos negativos de configuración/ATR/debug/protocolo/límites sin mutación/IO;
+init mínimo sin APDU y PIN bloqueado; bind nativo de TokenInfo/ODF/PrKDF/AODF,
+activación automática sin installer del fixture, un login/firma RSA verificada,
+cache/emulación-first sobreescritos, PIN ausente rechazado; READ500 mediante
+256+244 cortos. No ejecuta `sc_connect_card` ni la búsqueda entre drivers,
+C_Initialize/C_Login/C_Sign, hardware o GUI. ASan/UBSan con detect_leaks0 cubre
+initializer/fixture/peer/serializer instrumentados; biblioteca OpenSC con
+bind/parser/routing/SM/provider/locks precompilados sin instrumentar. No prueba
+fugas. Errores iniciales: TokenInfo sintético sin flags/OID inicializados y
+fixture devolviendo FCP sin buffer en SELECT caso3; corregidos en tests, no
+rechazos de tarjeta. El primer enlace de regresiones retuvo callbacks nuevos
+al incluir el emulador fuente; se resolvió separando la unidad de activación.
+
+Falta comprobar objetos/certificados, mecanismos y estado entre sesiones de
+PKCS11 antes de pedir una prueba real del perfil. El éxito con helper JnUUiy9x
+sigue siendo la única firma real de esta secuencia; no se repite hardware.
+RSA3072, GUI, consecutivas/reinserción y otros backends/plataformas pendientes.
+
+OpenSC/módulo PKCS11 compilados y sin nuevos símbolos privados exportados.
+La suite IAS/JCOP3 completa pasó 712 líneas PASS, incluyendo los cuatro
+nuevos grupos; son líneas de reporte, no 712 casos independientes. Core47,
+helpers76, helpers hardware/observador/flake/lock/capturas no se modificaron;
+sus suites sin cambios no se repitieron.

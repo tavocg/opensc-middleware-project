@@ -9,6 +9,56 @@ transporte simulado. PIN/GUI también los ejecuta el usuario. Esto sustituye
 la autorización anterior de hardware por el agente; conservar límites de
 cada diagnóstico y privacidad. Git sigue autorizado pero .git solo lectura.
 
+**Última revisión: config/init optativos y activación por bind nativo probados.**
+Principal `bb29958`, OpenSC `471b4532d`, limpios al comenzar. Firma real
+JnUUiy9x vigente; sin PCSC/hardware/PIN real/GUI/Idopte/captura/informe nuevo.
+No otra firma con tarjeta ahora. Falta PKCS11 antes de hardwareusuario.
+
+Opción experimental `card_driver iasecc { chipdoc_profile = cr-rsa2048; }`,
+comentada/defaultoff; selección driver `card_drivers = iasecc` para no entrar
+primero a eOI con ATR compartido. Match ATR exacto solo candidato, no prueba
+identidad/perfil. Nuevo tipoCHIPDOC; `iasecc-chipdoc-init.h` separa init IAS.
+QuietOpenSSL3/libctx/debug0/sinotroSM/T1/ATRlector/límites declarados suficientes.
+Init sinAPDU/reset/queryPIN/EFATR/serial: drvdata propia, tabla instancia con
+ISOselect/read/checkSW/FCI/finish/hook, PIN bloqueado/logoutnoop. Sin firma,
+admin/RNG ni gen/raw/otros hashes. Algoritmo único RSA2048/PAD_TYPE01/SHA256.
+CapsEXT/PIN_INFO y techos139/291 justificados por GA/PSO real, no máximos
+físicos/EFATR/RSA3072; jamás elevar techo explícito menor. READ público <=256
+por llamadaISO; buclecore avanza bytes reales (500->256+244), no READ extendido.
+
+Solo instancia configurada en sc_pkcs15_bind: cachesarchivo/PIN forzados0,
+bindnativo aunqueemu-firstyes, sinfallbackIAS si falla. Nueva unidad privada
+**iasecc-chipdoc-bind.c** enumera PRKEY_RSA/AUTH_PIN límite32, exige candidato
+único ref91 y delega policycompleta/routing_install. Incompleto sigue prebind
+PIN/firma bloqueado. Resto drivers/perfiles sin cambio. Routing separado del
+emulador pkcs15-iasecc.c; se retira su include routing ya innecesario.
+
+**4 grupos nuevos test/iasecc-chipdoc-init**: config/init producción, ISO/DER/
+serializer/dispatcher/locks/sc_pkcs15_bind reales, lector/archivos/peer/PIN/RSA
+sintéticos. Negativos sinmutación/IO; initmínimo sinAPDU; bindTokenInfo/ODF/
+PrKDF/AODF y activación automática sininstallerfixture, login/RSAverificada/
+cache0/emu-firstignorados/PINausenterechazado; READ500corto. No sc_connect_card,
+búsquedaentre drivers, C_Initialize/C_Login/C_Sign o hardware. ASan/UBSan4
+con detect_leaks0 pasó: initializer/fixture/peer/serializer instrumentados;
+libOpenSC/bind/ASN1/routing/SM/provider/locks precompilados sininstrumentar;
+no fugasverificadas. Fallos iniciales soloTokenInfofixture sin flags/OID,
+SELECTcaso3sinbufferFCP y enlacelegacyincluyendo callbacks nuevos; separados
+unitbind/corregidosfixtures, no tarjeta/PIN. No fixtureslegacy modificados.
+SuiteIAS/JCOP3 (scripts/test-iasecc.sh) pasó **712 líneasPASS, no712casos**,
+57gruposadaptador inclstub. OpenSC/móduloPKCS11 compilados/sin nuevos exports;
+configejemplo comentada, no configusuario lanzada ni descubrimientopcsc.
+Core47/helpers76/helperhardware/observador/flake/lock/capturas intactos,
+suites sin cambios no repetidas. RSA3072/GUI/consecutivas/reinserción reales
+pendientes; no otrosbackends/FIPS/plataformas/hilos probados.
+
+**Siguiente autónomo:** fixturePKCS11 con transporte/metadata/certificados
+sintéticos, revisar algoritmos/mecanismos/objetos y tokens/sesiones/login
+tras PSO/resets, antes de proponer hardwareusuario. Git autorizado/readonly,
+noeludir: submódulo primero7seguidos (etcconfig/Makefile.am/card-iasecc/cards/
+iasecc/pkcs15-iasecc/pkcs15) y **nuevos init.h y bind.c**; principal después
+puntero/4docs/Makefile/test-iasecc.sh/routingfixture y **nuevos initfixture y
+lanzador**. Sin builds/capturas aGit. No usar git add -u solo para nuevos.
+
 **Última revisión: routing privado por instancia instalado y lifetime PKCS15 probado.**
 Principal `d458d4d`, OpenSC `55a3c314a`, limpios al comenzar. Firma real
 JnUUiy9x vigente. Sin PCSC/hardware/PIN real/GUI/Idopte/captura/informe nuevo.

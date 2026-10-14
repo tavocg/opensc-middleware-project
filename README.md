@@ -77,8 +77,7 @@ Las APIs privadas también seleccionan el AID y preparan MSE desde
 `sc_security_env`; PSO extendido recibe exclusivamente un digest SHA-256 de
 32 bytes. La salida RSA 2048 se entrega después de comprobar MAC/estado y
 cierre completo. Pasaron seis grupos nuevos con firma RSA de software y
-ASan/UBSan. Falta la activación optativa desde el driver público y conectar
-PKCS#15/PKCS#11; el backend nuevo requiere OpenSSL3.
+ASan/UBSan. El backend nuevo requiere OpenSSL3; PKCS#11 sigue pendiente.
 Las funciones reales de PKCS#15 ya pasaron pruebas con objetos DER nativos y
 callbacks de transporte simulados: digest SHA-256 y DigestInfo producen la
 misma firma verificable. La política privada exige PIN CHV global sin ruta,
@@ -86,8 +85,15 @@ SDO sin archivo y cache de PIN desactivado, para evitar revalidaciones
 automáticas. Ya existe un instalador privado del routing por tarjeta: sus
 callbacks reales pasaron firma, consultas locales de estado y liberación de
 objetos PKCS#15 con lector simulado. Retirar el vínculo cierra la sesión y
-mantiene la tarjeta restringida hasta desconectarla. Falta conectar ese
-instalador a la configuración e inicialización optativas y probar PKCS#11.
+mantiene la tarjeta restringida hasta desconectarla. La opción experimental
+`card_driver iasecc { chipdoc_profile = cr-rsa2048; }` ya conecta la
+inicialización y el binding nativo PKCS#15 con ese instalador. Está desactivada
+por defecto y necesita seleccionar `iasecc`, depuración 0, OpenSSL3, T=1 y
+límites declarados del lector suficientes. Desactiva cachés de archivo y PIN;
+solo anuncia RSA2048/PKCS1v1.5/SHA256 para el perfil observado.
+La activación y una firma verificable pasaron con archivos ISO, tarjeta y PIN
+simulados. Falta comprobar mecanismos, objetos y sesiones PKCS#11 antes de
+preparar una prueba real de esa integración.
 No hay otra prueba con tarjeta ahora.
 Los párrafos siguientes conservan los pasos históricos de investigación.
 La selección temporal RSA/SHA-256 obtuvo `9000`; VERIFY vacío devolvió

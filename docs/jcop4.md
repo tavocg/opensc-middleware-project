@@ -6256,3 +6256,20 @@ resultados anteriores vigentes/no repetidos. Sin hardware/PIN real/GUI/Idopte
 del agente; firma JnUUiy9x vigente. Siguen config/init/bind optativos y
 PKCS11/mecanismos/sesiones antes de otra tarjeta. RSA3072 no acreditada.
 [Detalles](jcop4-opensc-integration.md#instalación-explícita-del-routing-y-liberación-de-objetos).
+
+### Inicialización optativa y activación por binding nativo
+
+La opción experimental `card_driver iasecc { chipdoc_profile = cr-rsa2048; }`
+conecta match/init con el binding nativo para el candidato observado. Sin
+activación por defecto/entrada ATR automática. Initializer sin APDU ni
+consulta PIN, solo metadata ISO de lectura y PIN bloqueado; tabla única
+RSA2048/PAD_TYPE01/SHA256, techos operativos139/291, no máximos físicos.
+El binding fuerza cachés archivo/PIN desactivadas y evita emulación de
+fallback; una unidad privada separada valida objetos antes de instalar routing.
+Cuatro grupos de software verifican configuración, init, bind público nativo,
+login/firma RSA verificada con callbacks de producción y rechazo de metadata
+incompleta; READ500 se divide en256+244 cortos. ASan/UBSan detect_leaks0 pasó,
+sin prueba de fugas ni biblioteca OpenSC precompilada instrumentada. No hay
+PCSC/hardware/PIN real/GUI/Idopte nuevos. Falta PKCS11 antes de otra tarjeta;
+RSA3072/consecutivas/reinserción reales pendientes.
+[Detalles](jcop4-opensc-integration.md#configuración-optativa-inicialización-y-binding-nativo).

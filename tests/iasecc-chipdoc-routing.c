@@ -45,6 +45,7 @@ static void destroy_routing(void)
 	if (reader_reserved) assert(!sc_unlock(&test_card)); /* Simulated teardown of a lost reader lock. */
 	assert(!reader_reserved); test_card.drv_data = &test_prv; memset(&test_prv,0,sizeof(test_prv));
 }
+#ifndef IASECC_CHIPDOC_ROUTING_FIXTURE
 int main(void)
 {
 	(void)thread_ops;
@@ -168,3 +169,4 @@ int main(void)
 	OSSL_PROVIDER_unload(test_provider.defprov); OSSL_LIB_CTX_free(test_provider.libctx);
 	OSSL_PROVIDER_unload(alternate_provider.defprov); OSSL_LIB_CTX_free(alternate_provider.libctx); return 0;
 }
+#endif
