@@ -324,12 +324,15 @@ sin PIN: comprueba ATR/AID/D004, intenta MSE/GA y verifica un READ protegido.
 El adaptador exige T=1 y límites declarados suficientes para APDU cortas;
 elige Le exterior256, sin alternarlo ni copiar la tabla de lectores de Idopte.
 Mantiene el bloqueo de la conexión y resetea la sesión al finalizar.
-Pasaron diez grupos del adaptador/lanzador y las 92 comprobaciones del helper
-público. Desde la sesión del agente, el diagnóstico se detuvo antes de conectar,
-con cero APDU; una enumeración posterior encontró el acceso al socket PC/SC
-bloqueado por el entorno. Falta ejecutar el diagnóstico desde la terminal del
-usuario, con la misma JCOP4 y otros clientes cerrados. El driver aún no firma
-con JCOP4.
+Pasaron doce grupos del adaptador/lanzador, incluidos dos con las funciones
+reales de OpenSC y lector simulado, y las 92 comprobaciones previas del helper
+público. La ejecución del usuario conectó y superó los límites de transporte,
+pero el filtro bloqueó la primera selección de EF.DIR, con cero APDU y cierre
+correcto. Se corrigió la forma absoluta `2F00`/P1=08 que OpenSC construye al
+eliminar el MF de la ruta. Falta ejecutar de nuevo desde la terminal del usuario,
+con la misma JCOP4 y otros clientes cerrados. El agente prepara y revisa estos
+diagnósticos; el usuario ejecuta todos los comandos de lector/tarjeta.
+El driver aún no firma con JCOP4.
 [Evidencia y límites](docs/jcop4.md#diagnóstico-real-acotado-del-canal-sin-pin).
 
 Capturas privadas bajo local/jcop4-idopte-spy-*/; no agregarlas a Git.

@@ -1,10 +1,50 @@
 # libjcop3p11: contexto para continuar
 
-**Autorización vigente del usuario:** el agente ejecuta los comandos de Git y
-los comandos que no requieran PIN ni GUI, incluidos diagnósticos acotados con
-la tarjeta. El usuario ejecuta las operaciones que requieran PIN o GUI. Esto
-sustituye las restricciones anteriores de no ejecutar Git/hardware/Idopte por
-el agente; conservar límites de cada diagnóstico y privacidad de los registros.
+**Autorización vigente del usuario:** el agente ejecuta Git y trabajo local
+sin lector/tarjeta/PIN/GUI. **Por instrucción nueva del usuario, todos los
+comandos que accedan a PC/SC, al lector o a la tarjeta quedan para el usuario**,
+incluidas enumeraciones para activar pcscd y diagnósticos sin PIN. El agente
+prepara comandos, revisa informes privados y ejecuta compilación/pruebas con
+transporte simulado. PIN/GUI también los ejecuta el usuario. Esto sustituye
+la autorización anterior de hardware por el agente; conservar límites de
+cada diagnóstico y privacidad. Git sigue autorizado pero .git solo lectura.
+
+**Última revisión: corregida forma absoluta de SELECT EF.DIR del diagnóstico.**
+Principal `278c54f`, OpenSC `3dfef6704`, limpios al comenzar. Informe nuevo
+`local/jcop4-channel-6sS5ottZ/report.txt`, 2026-10-14T05:17:53Z (13Oct CR):
+build/context/driver/connect0, ATR conocido, política T=1/límites superada,
+lock/reset inicial0, directory_result=-1209, guard_blocked1, command_count0,
+reset final/unlock/disconnect0, helper1. **Bloqueo local antes de transporte**,
+no rechazo de tarjeta ni MSE/GA/SM/PIN/VERIFY. Hubo resets de sesión PCSC,
+no APDU. Informe anterior ewlMTV5g/05:17:31Z build1 sin ejecución del helper;
+compilación0 en el informe posterior, no atribuir causa del primero sin evidencia.
+
+Fuente local iso7816.c:685..696 elimina MF3F00 de SC_PATH_TYPE_PATH;
+sc_enum_apps(dir.c) solicita3F002F00 y el backend recibe P1=08/data2F00.
+Guard aceptaba solo ruta completa3F002F00/P1=08, por eso negó la primera APDU.
+Se añade exclusivamente SELECT absoluto2F00/P1=08, no selección relativa
+sin MF ni archivos nuevos. Resto de límites/etapas/cierre/permisos intactos.
+
+Pasaron **12 grupos** de make test/jcop4-channel-probe: seis nativos previos,
+dos nuevos con sc_enum_apps/sc_select_file/read/FCI/ASN.1/format/transmit reales
+de la biblioteca local y lector/contexto simulados, cuatro del lanzador.
+El fixture real reproduce la ruta abreviada, llega a confirmación y comprueba
+exclusión de otros FID/P1/canal/longitud/P2. Fallo inicial de ese fixture fue
+mantener sc_transmit_apdu simulado sin normalizar CASE_2 a corto; al usar la
+función real pasó, sin ampliar permisos de producción. Helper real compilado;
+ASan/UBSan pasaron los ocho grupos nativos/integración, detect_leaks0; no
+prueba de fugas ni instrumentación de la biblioteca OpenSC precompilada.
+no PCSC/hardware/Idopte/PIN/GUI por el agente. Helper público/cripto/observador/
+driver/submódulo/flake/lock intactos, suites sin cambios no repetidas.
+
+**Siguiente intervención:** misma JCOP4 y otros clientes/firmador cerrados,
+`nix develop -c make inspect/jcop4-channel READER=0`, una sola vez desde
+terminal del usuario, sin PIN. Repetición justificada por corregir el bloqueo
+anterior con0 APDU, no variante MSE/GA/Le ni reintento autenticado. Revisar
+etapa/primer fallo/cierre antes de otro comando. Canal real/JCOP4/RSA3072/
+VERIFY6982 pendientes. Commit del principal con AGENTS.md/README.md/docs,
+tools/jcop4-channel-probe.c, tests/jcop4-channel-probe.c y su script; ningún
+archivo nuevo/captura/build/submódulo. No eludir Git solo lectura.
 
 **Última revisión: diagnóstico real de canal preparado, sin APDU desde esta sesión.**
 Principal `3d4a0ba`, OpenSC `3dfef6704`, limpios al comenzar. Nuevo

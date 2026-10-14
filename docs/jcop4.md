@@ -4617,6 +4617,53 @@ usuario lo despertaría**. No se alteraron servicios/permisos ni se volvió
 a ejecutar el diagnóstico de canal. Las pruebas simuladas no dependen de
 pcscd y ya pasaron.
 
+### Ejecución del usuario: bloqueo local de SELECT EF.DIR corregido
+
+Principal `278c54f`, OpenSC `3dfef6704`, limpios al comenzar.
+`local/jcop4-channel-6sS5ottZ/report.txt`, **2026-10-14T05:17:53Z**:
+compilación/contexto/driver/conexión0, ATR conocido, política de transporte
+superada, lock y reset inicial0. `directory_result=-1209`,
+`guard_blocked=1`, **command_count=0**, helper1. Reset final/unlock/desconexión0.
+El filtro impidió transmitir la primera selección; no es respuesta de tarjeta
+ni fallo MSE/GA/SM/VERIFY. Hubo resets de sesión PC/SC, no APDU o PIN.
+El informe inmediatamente anterior `ewlMTV5g`,05:17:31Z, build1 sin helper;
+el posterior compiló correctamente. No se atribuye una causa al primer fallo.
+
+En `src/libopensc/dir.c`, `sc_enum_apps` solicita la ruta absoluta `3F002F00`.
+En `iso7816_select_file`, `src/libopensc/iso7816.c`, el caso
+SC_PATH_TYPE_PATH asigna P1=08 y elimina el prefijo MF3F00 cuando hay otra
+parte de la ruta. El APDU resultante selecciona **2F00 desde MF**, con P1=08;
+el guard previo solo admitía P1=08 con los cuatro bytes3F002F00, o una
+selección relativa2F00 después de confirmar MF. Se añade exclusivamente la
+forma abreviada absoluta de ese mismo EF. No se habilitan otros archivos,
+selecciones relativas sin contexto, otra autenticación o variantes del canal.
+
+`make test/jcop4-channel-probe` pasó ahora **12 grupos**: seis nativos,
+dos de integración con el código real de OpenSC y cuatro del lanzador.
+La integración mantiene contexto/lector/reset/lock simulados, pero utiliza
+`sc_enum_apps`, `sc_select_file`, lectura, control/ASN.1, formato y transmisión
+de la biblioteca real: no crea un contexto PC/SC real ni accede a hardware.
+El backend sintético valida la selección absoluta abreviada y entrega EF.DIR,
+D004 y la respuesta del peer de software; se alcanza la confirmación y cierre.
+Otro grupo comprueba que FID distinto, P1 relativo09, otro canal, longitud o
+P2 distinto se bloquean antes del backend. El fixture usa ocho APDU frente
+a las nueve del fixture anterior; no se impone ese número al hardware.
+
+Durante la preparación, el fixture real conservaba una sustitución de
+`sc_transmit_apdu` que omitía la normalización de caso2 a caso2 corto de OpenSC;
+por eso bloqueó su READ simulado. Se usa ahora también la transmisión real.
+No fue error de tarjeta ni requirió ampliar el permiso del READ de producción.
+ASan/UBSan pasaron los ocho grupos nativos/integración con detect_leaks0;
+la biblioteca OpenSC precompilada no está instrumentada, ni se prueba ausencia
+de fugas.
+Helper real compilado; componentes criptográficos, helper público, observador,
+driver/submódulo y flake/lock intactos. No se repiten suites sin cambios.
+
+**Instrucción nueva del usuario:** todos los comandos de PC/SC/lector/tarjeta,
+incluidas enumeraciones sin PIN, los ejecuta el usuario. El agente continúa
+compilación, pruebas de software y revisión privada de informes. No volver
+a intentar despertar el socket desde la sesión del agente.
+
 **Siguiente intervención:** misma JCOP4 y firmador/otros clientes cerrados,
 ejecutar una sola vez desde la terminal con acceso al lector:
 

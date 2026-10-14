@@ -18,4 +18,13 @@ env -u OPENSC_API_TRACE_FILE -u OPENSC_DEBUG_FILE -u OPENSC_DEEPBIND \
     -u LD_PRELOAD -u LD_AUDIT -u LIBPCSCLITE_DELEGATE -u LIBPCSCLITE_SPY_DELEGATE \
     -u JCOP4_PUBLIC_DISCOVERY_TRACE -u JCOP4_PUBLIC_SELECT_SPY_TRACE \
     "$task_build/jcop4-channel-probe-regression" </dev/null
+"${CC:-cc}" -std=c99 -D_GNU_SOURCE -DHAVE_CONFIG_H -DTEST_REAL_BOOTSTRAP -Wall -Wextra -Werror \
+    -I"$task_build" -I"$task_root/vendor/opensc/src" "${task_crypto_cflags_array[@]}" \
+    "$task_root/tests/jcop4-channel-probe.c" \
+    -L"$task_build/src/libopensc/.libs" -Wl,-rpath,"$task_build/src/libopensc/.libs" \
+    -lopensc "${task_crypto_libs_array[@]}" -o "$task_build/jcop4-channel-bootstrap-regression"
+env -u OPENSC_API_TRACE_FILE -u OPENSC_DEBUG_FILE -u OPENSC_DEEPBIND \
+    -u LD_PRELOAD -u LD_AUDIT -u LIBPCSCLITE_DELEGATE -u LIBPCSCLITE_SPY_DELEGATE \
+    -u JCOP4_PUBLIC_DISCOVERY_TRACE -u JCOP4_PUBLIC_SELECT_SPY_TRACE \
+    "$task_build/jcop4-channel-bootstrap-regression" </dev/null
 bash "$task_root/tests/jcop4-channel-launcher.sh"

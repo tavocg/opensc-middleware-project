@@ -49,6 +49,9 @@ static int probe_apdu_allowed(sc_apdu_t *a)
 			if (a->lc == 2 && !memcmp(a->data, "\x3f\0", 2) && a->p1 == 0) return 1;
 			if (a->lc == 2 && !memcmp(a->data, "\x2f\0", 2) && a->p1 == 0 && probe_guard.root) return 1;
 			if (a->lc == 2 && !memcmp(a->data, "\x2f\0", 2) && a->p1 == 2 && probe_guard.root) return 1;
+			/* ISO default removes the leading MF from an absolute path.
+			 * P1=08 still addresses exactly EF.DIR from MF, not a relative EF. */
+			if (a->lc == 2 && !memcmp(a->data, "\x2f\0", 2) && a->p1 == 8) return 1;
 			if (a->lc == 4 && !memcmp(a->data, "\x3f\0\x2f\0", 4) && a->p1 == 8) return 1;
 		}
 		if (probe_guard.directory && !probe_guard.ended && !a->lc && a->cse == SC_APDU_CASE_2_SHORT && a->le) {

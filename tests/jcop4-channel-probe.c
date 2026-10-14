@@ -20,6 +20,7 @@ static struct {
 	int connects, locks, unlocks, resets, disconnects, releases, physical;
 } test_state;
 static char output[8192];
+static int test_lock_depth;
 
 static int backend_reset(sc_reader_t *r, int cold) { assert(r == &test_reader && !cold); return 0; }
 static int backend_transmit(sc_reader_t *r, sc_apdu_t *a)
@@ -46,6 +47,22 @@ static int backend_transmit(sc_reader_t *r, sc_apdu_t *a)
 	} else if (probe_guard.phase == PROBE_INITIAL) {
 		assert(a->resplen == 137); memcpy(a->resp, test_flow.initial, 137); a->resplen = test_state.bad_initial ? 136 : 137;
 	} else {
+#ifdef TEST_REAL_BOOTSTRAP
+		if (probe_guard.phase == PROBE_DIR) {
+			/* Only the reader backend is synthetic; OpenSC builds/parses
+			 * the absolute EF.DIR SELECT, file control and directory. */
+			if (a->ins == 0xA4) {
+				static const unsigned char fci[] = {0x62,11,0x82,1,1,0x83,2,0x2F,0,0x80,2,0,19};
+				assert(a->p1 == 8 && a->lc == 2 && !memcmp(a->data, "\x2f\0", 2));
+				assert(a->resplen >= sizeof(fci)); memcpy(a->resp, fci, sizeof(fci)); a->resplen = sizeof(fci);
+			} else {
+				assert(a->ins == 0xB0 && !a->p1 && !a->p2 && a->le == 19 && a->resplen >= 19);
+				a->resp[0] = 0x61; a->resp[1] = 17; a->resp[2] = 0x4F; a->resp[3] = sizeof(probe_aid);
+				memcpy(a->resp + 4, probe_aid, sizeof(probe_aid)); a->resplen = 19;
+			}
+			return 0;
+		}
+#endif
 		a->resplen = 0;
 		if (probe_guard.phase == PROBE_APP && test_state.select_error) { a->sw1 = 0x69; a->sw2 = 0x82; }
 	}
@@ -74,14 +91,33 @@ int sc_connect_card(sc_reader_t *reader, sc_card_t **card)
 	if (test_state.connect_error) return SC_ERROR_CARD_NOT_PRESENT;
 	*card = &test_card; return 0;
 }
-int sc_lock(sc_card_t *card) { assert(card == &test_card); test_state.locks++; return test_state.lock_error ? -7 : 0; }
-int sc_unlock(sc_card_t *card) { assert(card == &test_card); test_state.unlocks++; return 0; }
-int sc_disconnect_card(sc_card_t *card) { assert(card == &test_card); test_state.disconnects++; return 0; }
+int sc_lock(sc_card_t *card)
+{
+	assert(card == &test_card);
+	if (!test_lock_depth) test_state.locks++;
+	if (test_state.lock_error) return -7;
+	test_lock_depth++; return 0;
+}
+int sc_unlock(sc_card_t *card)
+{
+	assert(card == &test_card && test_lock_depth > 0);
+	if (!--test_lock_depth) test_state.unlocks++;
+	return 0;
+}
+int sc_disconnect_card(sc_card_t *card)
+{
+	assert(card == &test_card); test_state.disconnects++;
+#ifdef TEST_REAL_BOOTSTRAP
+	sc_free_apps(card);
+#endif
+	return 0;
+}
 int sc_reset(sc_card_t *card, int cold)
 {
 	assert(card == &test_card && !cold && test_state.locks == 1 && !test_state.unlocks);
 	test_state.resets++; return test_state.reset_error == test_state.resets ? -7 : card->reader->ops->reset(card->reader, cold);
 }
+#ifndef TEST_REAL_BOOTSTRAP
 void sc_format_apdu(sc_card_t *card, sc_apdu_t *a, int cse, int ins, int p1, int p2)
 {
 	assert(card == &test_card); memset(a, 0, sizeof(*a)); a->cse = cse; a->ins = ins; a->p1 = p1; a->p2 = p2;
@@ -90,6 +126,8 @@ int sc_transmit_apdu(sc_card_t *card, sc_apdu_t *a)
 {
 	assert(card == &test_card); return card->reader->ops->transmit(card->reader, a);
 }
+#endif
+#ifndef TEST_REAL_BOOTSTRAP
 int sc_select_file(sc_card_t *card, const sc_path_t *path, sc_file_t **file)
 {
 	sc_apdu_t a; assert(!file && path->type == SC_PATH_TYPE_DF_NAME && path->len == sizeof(probe_aid));
@@ -111,15 +149,20 @@ int sc_enum_apps(sc_card_t *card)
 	card->app_count = test_state.bad_app_count ? SC_MAX_CARD_APPS + 1 : test_state.missing_app ? 0 : 1;
 	card->app[0] = &test_app; return 0;
 }
+#endif
 static void defaults(void)
 {
 	memset(&test_state, 0, sizeof(test_state)); memset(&test_ctx, 0, sizeof(test_ctx));
+	test_lock_depth = 0;
 	memset(&test_reader, 0, sizeof(test_reader)); memset(&test_card, 0, sizeof(test_card)); memset(&test_app, 0, sizeof(test_app));
 	test_reader.ops = &test_ops; test_reader.ctx = &test_ctx; test_reader.name = "PRIVATE_IDENTIFIER_DO_NOT_LOG";
 	test_reader.active_protocol = SC_PROTO_T1; test_reader.max_send_size = 255; test_reader.max_recv_size = 256;
 	test_reader.atr.len = sizeof(probe_atr); memcpy(test_reader.atr.value, probe_atr, sizeof(probe_atr));
 	test_card.ctx = &test_ctx; test_card.reader = &test_reader; test_card.atr = test_reader.atr;
 	test_card.max_send_size = 255; test_card.max_recv_size = 256;
+#ifdef TEST_REAL_BOOTSTRAP
+	test_card.ops = sc_get_iso7816_driver()->ops;
+#endif
 	test_app.aid.len = sizeof(probe_aid); memcpy(test_app.aid.value, probe_aid, sizeof(probe_aid)); test_app.label = "PRIVATE_IDENTIFIER_DO_NOT_LOG";
 	test_flow.mode = NORMAL; test_flow.fail_step = test_flow.calls = test_flow.ga_template = 0; test_flow.le = JCOP4_CA_LE_SHORT_MAX;
 	memcpy(test_flow.initial, test_initial, 137); jcop4_ca_pending_clear(&test_flow.derived);
@@ -136,6 +179,28 @@ static int invoke(void)
 int main(void)
 {
 	init(&test_flow); memcpy(test_initial, test_flow.initial, 137); setenv("OPENSC_CONF", "/tmp/synthetic-config", 1); setenv("OPENSC_DEBUG", "0", 1);
+#ifdef TEST_REAL_BOOTSTRAP
+	defaults(); int result = invoke();
+	if (result) fputs(output, stderr); /* Synthetic metadata only. */
+	assert(result == 0 && test_flow.calls == 3 && test_state.physical == 8 && test_state.resets == 2);
+	assert(test_state.unlocks == 1 && test_state.disconnects == 1 && test_state.releases == 1 && !test_lock_depth);
+	assert(strstr(output, "directory_result=0") && strstr(output, "application_announced=1"));
+	puts("PASS real OpenSC enum/select/read/FCI/ASN.1 and APDU formatting reach channel confirmation with a synthetic reader only");
+	for (int mutation = 0; mutation < 5; mutation++) {
+		sc_apdu_t a; unsigned char response[256]; defaults(); test_state.locks = 1;
+		memset(&probe_guard, 0, sizeof(probe_guard)); probe_guard.reader = &test_reader;
+		probe_guard.original = &test_ops; probe_guard.phase = PROBE_DIR;
+		sc_format_apdu(&test_card, &a, SC_APDU_CASE_4_SHORT, 0xA4, 8, 0);
+		a.data = (const unsigned char *)"\x2f\0"; a.lc = a.datalen = 2; a.le = a.resplen = 256; a.resp = response;
+		if (mutation == 0) a.data = (const unsigned char *)"\x41\x41";
+		if (mutation == 1) a.p1 = 9;
+		if (mutation == 2) a.cla = 1;
+		if (mutation == 3) a.lc = a.datalen = 1;
+		if (mutation == 4) a.p2 = 4;
+		assert(probe_guard_transmit(&test_reader, &a) < 0 && !test_state.physical && probe_guard.blocked);
+	}
+	puts("PASS absolute EF.DIR allowance does not allow other files, relative paths, channels, lengths or P2");
+#else
 	defaults(); assert(invoke() == 0 && test_flow.calls == 3 && test_state.physical == 9 && test_state.resets == 2);
 	assert(test_state.unlocks == 1 && test_state.disconnects == 1 && test_state.releases == 1);
 	assert(strstr(output, "channel_result=protected_d004_read_confirmed_no_login") && strstr(output, "final_reset_result=0"));
@@ -209,5 +274,6 @@ int main(void)
 		assert(probe_guard_transmit(&test_reader, &a) < 0 && test_state.physical == 1);
 	}
 	puts("PASS guard rejects PIN/change/write/control/SFI/offset/length/chaining/extended/budget/repeated commands before physical transport");
+#endif
 	EVP_PKEY_free(test_flow.peer); jcop4_ca_pending_clear(&test_flow.derived); return 0;
 }
