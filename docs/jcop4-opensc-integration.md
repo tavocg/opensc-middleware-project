@@ -1,7 +1,7 @@
 # Integrar el perfil JCOP4 observado en OpenSC
 
 Estado al 14 de octubre de 2026. Base de esta etapa: proyecto
-`6a22c7a`, submódulo OpenSC `52057cc6a`. Este documento describe la integración.
+`82ab080`, submódulo OpenSC `52057cc6a`. Este documento describe la integración.
 **Perfil/estado/limpieza, canal/bootstrap/providers y operaciones
 PIN/firma privados están implementados. Frontend PKCS15 y routing privado
 instalado por tarjeta pasaron con callbacks de producción y lector simulado.
@@ -9,8 +9,8 @@ Configuración/init y activación automática desde el binding nativo PKCS15
 están implementados para una opción explícita, con firma verificada en
 transporte simulado. El módulo PKCS11 del build ya pasó nueve grupos de
 mecanismos, objetos, sesiones y firmas con contexto/lector/PIN sintéticos.
-El diagnóstico público sin PIN ya pasó en la JCOP4 real. La siguiente prueba
-de firma PKCS11 está preparada y probada en software; falta su ejecución real.**
+El diagnóstico público y una firma SHA256_RSA_PKCS ya pasaron en la JCOP4
+real. El lanzador del firmador está preparado; falta una firma PDF real.**
 
 ## Evidencia disponible
 
@@ -1088,3 +1088,67 @@ write; se corrigieron antes de intervenir la tarjeta. Submódulo, driver y
 helpers autenticados previos intactos. No hardware/PIN real/GUI/Idopte por
 el agente; firma PKCS11 real/firmador/PDF/consecutivas/reinserción/RSA3072
 siguen pendientes.
+
+## Firma PKCS11 real confirmada y lanzador GUI
+
+`local/jcop4-pkcs11-sign-v0hqHrzR/report.txt`,2026-10-14T22:59:50Z (16:59CR),
+principal82ab080/OpenSC52057cc6a: módulo local, fase pública válida, login/
+SignInit/Sign/session-state0, RSA2048/SHA256 válida y mensaje conbit cambiado
+rechazado. Un C_Login,12APDU autenticadas, un VERIFY con credencial y un PSO.
+Total91 llamadas backend (79 públicas anteriores+12 autenticadas),guard0, sin
+primer fallo; reset inicial/final intentados una vez y0,11locks/11unlocks,
+tarjeta/lector/contexto desconectados/liberados una vez con0, sesión/finalize/
+helper0. C_Logout257 (0x101,CKR_USER_NOT_LOGGED_IN) es esperado: el driver cerró
+la reserva después de PSO y la sesión ya era pública, comprobado anteslogout.
+No equivale al fallo de login CKR_USER_NOT_LOGGED_IN previo de JCOP3.
+
+Esto acredita C_Login y una C_Sign CKM_SHA256_RSA_PKCS reales del módulo local
+y la correspondencia criptográfica de esa firma con la llave pública del
+certificado seleccionado enmemoria. No se guardaron firma/certificado/PIN,
+no se valida confianza/revocación/identidad. No demuestra aún CKM_RSA_PKCS,
+multipart/tamaño, consecutivas, reinserción, PDF o firmador reales. No repetir
+esta firma ni el diagnóstico público como primer paso.
+
+Nuevo `make firmador/jcop4`: lanzador GUI únicamente, sin CLI/PIN desde
+shell/spy/Idopte/debug APDU. El wrapper instalado firmador2.0.0 respeta
+LIBASEP11; su wrapper interior ejecuta Java21 sin modificar el entorno. Se
+leyeron ambos scripts, sin ejecutar Java. LIBASEP11 señala el módulo local y
+LD_LIBRARY_PATH fija libOpenSC local. Usa perfil cr-rsa2048/iasecc,
+use_file_caching/use_pin_caching/try_emulation_first desactivados,
+atomic/lock_login desactivados, un slot por tarjeta, PIN-pad/PACE desactivados
+y políticas PCSC leave para no añadir resets al cerrar locks ordinarios.
+La reserva/reset explícitos del driver permanecen activos. No cambios de
+Java/firmador/driver/módulo ni perfil JCOP3.
+
+Entorno vacío con lista de variables de escritorio/sesión/home/locale/trust
+stores, PATH y rutas locales; elimina preloads/audit/PCSC delegates/debug/
+experimentos JCOP3 y JAVA_TOOL_OPTIONS/_JAVA_OPTIONS/JDK_JAVA_OPTIONS heredados.
+No captura stdout/stderr ni contenido del documento. OPENSC_API_TRACE_FILE
+propio habilita el logger existente de enums y números: eventos, handles,
+CKR, mecanismos y referencias/tamaños de llave; no PIN, longitud PIN, APDU,
+atributos, documentos, certificados o hashes. Fuente api-trace.h y callsites
+revisados. Config/api.log/report0600, directorio0700, umask077/core0. Informe
+de fecha/HEAD/modo y exit del programa; exit0 no acredita firmado/cierre físico.
+La GUI usa el módulo directamente, **sin el filtro de transporte, namespace
+de un lector, cuota de intentos o timeout de los helpers**. Cada login del
+perfil sigue el camino de producción probado y no conserva PIN para reintento;
+las decisiones de la GUI/usuario pueden iniciar operaciones adicionales.
+
+Cuatro grupos nuevos de software pasaron: configuración real mediante parser
+OpenSC/load_pkcs11_parameters, entorno GUI preservado/diagnósticos descartados,
+módulo/core locales y permisos; fakefirmador sin args/lectura PIN con exit17
+propagado y sin asumir firma;11mutaciones de perfil/driver/cache/emulación/
+atomic/lock_login/slots/PIN-pad/PACE/reconnect rechazadas por checker real;
+args/módulo core ausente detienen antes GUI. El checker compartido añade modo
+chipdoc conservando interfaz previa; once grupos JCOP3 anteriores repetidos
+y pasaron. No context create/PCSC/Java/GUI/PIN/hardware reales por el agente;
+resto de suites sin cambios no repetidas, submódulo intacto.
+
+Siguiente intervención: mismaJCOP4, otrosclientes/firmador cerrados,
+`nix develop -c make firmador/jcop4`. Abrir doc.pdf original, seleccionar
+LlaveDeFirma, firmar una sola vez con PIN correcto y guardar
+local/jcop4-firmador-first.pdf con nombre nuevo, cerrar GUI. Sin reinserción
+ni segunda firma todavía. Ante error detenerse, conservar informe/API y no
+repetir PIN porinercia. Luego revisar mecanismos/llave/login/firma/cierre
+numéricos y verificar CMS/ByteRange del PDF offline sin mostrar identidad.
+Consecutivas/reinserción/JCOP4RSA3072/otrasplataformas/upstream pendientes.

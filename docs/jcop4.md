@@ -6320,3 +6320,25 @@ precompiladas sin instrumentar/nofugasprobadas) y7grupos públicos repetidos.
 Sin hardware/PIN real/GUI/Idopte del agente. No es PDF/firmador ni prueba
 RSA3072/consecutivas/reinserción; ante error revisar informe antes de repetir.
 [Detalles](jcop4-opensc-integration.md#enumeración-pkcs11-real-y-siguiente-firma-de-prueba).
+
+### Primera firma PKCS11 real correcta; siguiente prueba PDF
+
+v0hqHrzR/2026-10-14T22:59:50Z (16:59CR): C_Login/SignInit/C_Sign0 mediante
+módulo local, RSA2048/SHA256 válida y mensajealterado rechazado.12APDU
+autenticadas, un VERIFY y un PSO,91backend/guard0, resetinicio/final0,
+11locks/11unlocks, tarjeta/lector/contexto cerrados0 y helper0. Logout257
+(0x101,CKR_USER_NOT_LOGGED_IN) esperado porque PSO ya dejó sesiónpública.
+No repetir la prueba técnica ni la consulta pública porinercia.
+
+Está listo `make firmador/jcop4`, GUI con módulo/core locales/perfil
+cr-rsa2048/cache0/atomic0/lock_login0/PIN-pad-PACE0 y logger API solo enums/
+números en archivos0600/dir0700. Entorno GUI preservado, diagnósticos heredados
+limpios; sin filtro/cuota/namespace/timeout del helper.4grupos nuevos de
+lanzador/config real+11regresiónJCOP3 pasaron con fakefirmador y sin PCSC/Java/
+GUI/PIN/hardware poragente; driver/submódulo intactos.
+
+Usuario: mismaJCOP4 y clientescerrados, abrir doc.pdf, LlaveDeFirma, una sola
+firma hacia local/jcop4-firmador-first.pdf y cerrar GUI. Ante error detenerse
+sin repetirPIN. Falta verificación PDF/CMS offline y pruebasconsecutivas/
+reinserción/RSA3072, no deducir éxito del exitGUI.
+[Detalles](jcop4-opensc-integration.md#firma-pkcs11-real-confirmada-y-lanzador-gui).

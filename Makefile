@@ -36,6 +36,7 @@
 .PHONY: test/iasecc-chipdoc-pkcs11
 .PHONY: inspect/jcop4-pkcs11 test/jcop4-pkcs11-public
 .PHONY: sign/jcop4-pkcs11 test/jcop4-pkcs11-sign
+.PHONY: firmador/jcop4 test/jcop4-firmador-launcher
 
 PDF_INPUT ?= doc.pdf
 PDF_OUTPUT ?= local/jcop3-cli.pdf
@@ -124,6 +125,8 @@ help:
 		'make test/jcop4-pkcs11-public Prueba el diagnóstico público y su lanzador con lector simulado.' \
 		'make sign/jcop4-pkcs11 READER=0 Una firma PKCS#11 de texto técnico; PIN interactivo, sin reintentos.' \
 		'make test/jcop4-pkcs11-sign Prueba firma, fallos y terminal con tarjeta/PIN simulados.' \
+		'make firmador/jcop4       Abre la GUI con el perfil JCOP4 RSA2048 y metadatos API privados.' \
+		'make test/jcop4-firmador-launcher Prueba configuración/entorno GUI sin Java, lector ni PIN.' \
 		'make test/jcop4-reader-features Prueba el diagnóstico del lector con PC/SC simulado.' \
 		'make test/jcop4-channel-sign Prueba firma/guard/verificación con transporte y PIN ficticios.' \
 		'make test/jcop4-channel-kdf Prueba la derivación candidata AES128 con datos sintéticos, sin tarjeta ni PIN.' \
@@ -451,3 +454,9 @@ sign/jcop4-pkcs11:
 test/jcop4-pkcs11-sign:
 	@bash scripts/test-jcop4-pkcs11-sign.sh
 	@python3 tests/jcop4-pkcs11-sign-launcher.py
+
+firmador/jcop4:
+	@bash scripts/firmador-jcop4.sh
+
+test/jcop4-firmador-launcher:
+	@bash scripts/test-jcop4-firmador-launcher.sh

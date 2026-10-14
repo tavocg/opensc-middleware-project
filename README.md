@@ -101,25 +101,28 @@ El perfil rechaza las opciones PKCS#11 `atomic` y `lock_login`; usa su propia
 reserva y no conserva credenciales para repetir logins. La consulta pública
 del módulo ya pasó en la JCOP4 real: dos certificados y dos llaves públicas,
 79 llamadas al backend, sin PIN ni bloqueos y cierre correcto. El informe
-Z5agqf5n corresponde al 14 de octubre de 2026, 16:40 CR. No repetir esa consulta
-como primer paso. La siguiente prueba, desde la terminal del usuario, con la
-misma JCOP4 y otros clientes cerrados:
+Z5agqf5n corresponde al 14 de octubre de 2026, 16:40 CR. La firma PKCS11 real
+también pasó: v0hqHrzR, 16:59 CR, RSA/SHA256 verificada y texto alterado
+rechazado, un login/VERIFY/PSO y cierre correcto. No repetir estos controles
+como primer paso. La siguiente prueba, con la misma JCOP4 y otros clientes
+cerrados, usa el firmador:
 
 ```bash
-nix develop -c make sign/jcop4-pkcs11 READER=0
+nix develop -c make firmador/jcop4
 ```
 
-Ejecutarla una sola vez. Firmará un texto técnico fijo mostrado en la terminal,
-con un único login y PIN introducido sin eco; no firma un PDF ni usa Idopte.
-Verifica la firma RSA y rechaza el mismo mensaje con un bit alterado, en memoria.
-El binario público sigue sin login; esta variante separada limita además la
-secuencia autenticada a doce APDU, un VERIFY con credencial y un PSO extendido,
-sin reintentos. Los certificados y el PIN no se guardan en el informe, que
-contiene resultados, conteos y cierre. Si falla o vence el timeout, revisar el
-informe antes de otra operación; no repetir el PIN por inercia. El lanzador
-restaura la terminal incluso si necesita matar el helper. Pasaron siete grupos
-de software y la regresión del diagnóstico público; todavía falta esta firma
-PKCS11 real antes de probar el firmador y PDFs.
+Abre `doc.pdf`, elige `LlaveDeFirma`, firma una sola vez y guarda como
+`local/jcop4-firmador-first.pdf`; después cierra la GUI. El PIN se introduce
+en el firmador. Esta primera prueba no incluye reinserción ni otra firma.
+Si falla, detenerse y revisar el informe antes de repetir el PIN. El lanzador
+selecciona el módulo y libOpenSC locales, activa el perfil optativo, desactiva
+cachés/PIN-pad/PACE y los modos genéricos atomic/lock_login. Conserva el entorno
+del escritorio y elimina diagnósticos heredados. Registra únicamente eventos
+y números PKCS11 en archivos privados, sin PIN, APDU ni certificados.
+La GUI no tiene el filtro/cuota/timeout del helper de texto técnico; salir con
+estado0 no acredita firma ni cierre. El PDF se verificará offline después.
+Pasaron cuatro grupos nuevos del lanzador/configuración y once de regresión
+JCOP3, sin ejecutar Java, PCSC, GUI o PIN reales.
 Los párrafos siguientes conservan los pasos históricos de investigación.
 La selección temporal RSA/SHA-256 obtuvo `9000`; VERIFY vacío devolvió
 `63C7`, con siete intentos disponibles, PIN global 1 y formato UTF-8.

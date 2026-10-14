@@ -9,6 +9,56 @@ transporte simulado. PIN/GUI también los ejecuta el usuario. Esto sustituye
 la autorización anterior de hardware por el agente; conservar límites de
 cada diagnóstico y privacidad. Git sigue autorizado pero .git solo lectura.
 
+**Último resultado: firma PKCS11 real válida; lanzador GUI preparado.**
+Principal `82ab080`, OpenSC `52057cc6a`, limpios al comenzar. Informe usuario
+local/jcop4-pkcs11-sign-v0hqHrzR/report.txt/2026-10-14T22:59:50Z (16:59CR):
+público válido, C_Login/SignInit/Sign/session-state0, RSA2048/SHA256 válida y
+mensajeconbit cambiado rechazado. Una C_Login/12APDUauth/1VERIFY/1PSO;91backend
+(79públicas+12auth),guard0/sinprimerfallo. Resetinicio/final1vez/0,11locks/
+11unlocks;1disconnect tarjeta/lector+1releasecontext/tresresultados0, sesión/
+Finalize/helper0. Logout257=0x101CKR_USER_NOT_LOGGED_IN esperado: trasPSO ya
+cerró reserva y GetSessionInfo comprobó PUBLIC. No fallo de login.
+
+Confirma una C_Sign SHA256_RSA_PKCS real y vínculo criptográfico con certificado
+enmemoria, noconfianza/revocación/identidad. No artifacts/PIN/firmacert guardados.
+No CKM_RSA_PKCS/multipart/queries/consecutivas/reinserción/PDF/GUI real todavía.
+EnumZ5agqf5n y firmahelperJnUUiy9x previos vigentes; no repetirlos/estado/D004
+porinercia. Sin PCSC/hardware/PINreal/Java/GUI/Idopte poragente esta sesión.
+
+Nuevo `make firmador/jcop4`: scriptGUI solo, LIBASEP11 módulo local y
+LD_LIBRARY_PATH módulo/libOpenSC locales. Wrappers firmador2.0.0/Java21
+instalados leídosestáticamente, respetan LIBASE y no cambianLD. Perfil
+cr-rsa2048/iasecc/debug0/cachearchivo-PIN0/tryemu0/atomic0/lock_login0/slots1/
+PIN-pad-PACE0/accionesPCSCleave. Usa driver/reserva/reset de producción;
+**GUI sin filtro/namespacelector/cuota/timeout del helper**; usuario/GUI pueden
+iniciar otras operaciones. Env-i+allowlistdesk/home/locale/truststores/PATH,
+sin preloads/audit/delegates/debug/experimentosJCOP3/opcionesJavaheredadas.
+PIN exclusivamenteGUI, no Bash/argv/env/pipeline. stdout/stderr no capturados.
+Logger API existente revisado: enums+números (handles/CKR/mecanismos/keyref/
+bits), nuncaPIN/lenPIN/APDU/atributos/PDF/cert/hash. Config/API/report0600,
+dir0700/umask077/core0, fecha/HEAD/modo/appExit. ExitGUI0 no prueba firma/cierre.
+
+**4grupos nuevos** pasaron make test/jcop4-firmador-launcher: fakefirmador
+sinargs niPIN, desktop+envlimpio/módulo-corelocales/permisos/config conparser
+OpenSC/loadparams reales, exit17propagado sin tratarlo como firma;11mutaciones
+perfil/driver/cache/tryemu/atomic/lock/slots/PINpad/PACE/reconnect rechazadas;
+args/coreausente paran antesGUI. Checker compartido añademodoChipDoc conserva
+interfaz; **11grupos legacyJCOP3** repetidos/pasaron. Sin contextcreate real/
+PCSC/Java/GUI/hardware/PINreal. No driver/submódulo/flake/lock/helpers/
+observador/capturas modificados; suitesintactas no repetidas.
+
+**Siguiente intervención:** mismaJCOP4 y otrosclientes/firmadorcerrados,
+`nix develop -c make firmador/jcop4`. Abrir doc.pdf original, elegirLlaveDeFirma,
+firmaruna vez conPINcorrecto y guardar local/jcop4-firmador-first.pdf (nombre
+nuevo), cerrarGUI. No reinserción/segunda firma todavía. Anteerror parar,
+revisar report/api antesotroPIN. Después validar CMS/ByteRange/PDF offline sin
+identidades y revisar númerosAPI/mecanismo/llave/login/sign/cierre. PDF/GUI/
+consecutivas/reinserción/RSA3072/otrasplataformas/upstream pendientes.
+Gitautorizado, git add falló creando index.lock por .gitRO: no eludir.
+Commitraíz incluye2scriptsnuevos firmador-jcop4/
+test-jcop4-firmador-launcher, checkerPKCS11config/Makefile y docs/README/AGENTS.
+Ningún archivo privado/PDF/captura/build/submódulo.
+
 **Último resultado: enumeración PKCS11 real correcta; firma integrada preparada.**
 Principal `6a22c7a`, OpenSC `52057cc6a`, limpios al comenzar. Informe usuario
 local/jcop4-pkcs11-public-Z5agqf5n/report.txt/2026-10-14T22:40:33Z (16:40CR):
