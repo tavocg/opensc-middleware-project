@@ -6173,3 +6173,44 @@ agente. Firma JnUUiy9x vigente; sigue wiring optativo/args y métodoPIN nativos/
 capacidades/mecanismos/PKCS15/PKCS11 antes de tarjeta. Controlar revalidación
 de PIN cacheado de use_key para no introducir intentos automáticos. RSA3072
 no acreditada. [Detalles](jcop4-opensc-integration.md#aid-mse-y-pso-privados-desde-argumentos-opensc).
+
+### Frontend PKCS15 nativo y política contra revalidación automática
+
+Principal `8dc88cd`, OpenSC `b391a94b3`, limpios al comenzar. El informe
+previo pMGzFYNL y decoder AODF confirman que PIN usa CHV1 y path vacío;
+AUT8 corresponde a authKey, sin necesidad de conversión. SDO ref91 no tiene
+FID; decoder PrKDF añade AID del DDO. No releer tarjeta por esta aclaración.
+
+Contrato privado pkcs15_operation valida la metadata/paths/método/política
+ya medidos y rechaza cachePIN presente sin leer/borrar contenido. Opt-in
+privado pkcs15_disable_pin_cache valida todo, después cambia exclusivamente
+opts.use_pin_cache0; fallo no muta. Begin exige contrato/cache0 antes de
+lock/reset/APDU. Bootstrap sin autenticación no cambia. Vista de objetos
+prestada solo válida mientras viven; no nuevo binding/capacidad/algoritmo.
+
+API privada select_application permite que select_file de use_key haga
+SELECT AID bajo SM tras login/SSC8, avanzando APPLICATION/SSC10; MSE desde
+esa fase manda solo MSE. Si no hubo selección de PKCS15, set_security_env
+conserva SELECT+MSE medidos. Nunca duplica selección ni amplía paths/APDU.
+
+Cinco grupos nuevos prueban **frontend real libOpenSC con routing/driver
+callbacks del fixture**, sin instalación pública/configuración/bind ni
+PKCS11. DER AODF/PrKDF reales, VERIFY y compute_signature: SHA256digest32
+y DigestInfoSHA25651 se convierten a mismos32/flags correctos y verifican
+RSA software con/sin AID. NocachePIN; revalidate de use_key ante fallos
+security status porSELECT/MSE/PSO se detiene antes de otro PIN, sin repetir
+operación o entregar output. ErroresPIN sintéticos/contadores/paths/cache/
+formatos y malDigestInfo/hash/PSS fallan sin retry; cierre fallido visible.
+Build sin ENABLE_NOTIFY; test rechaza notificaciones para no activar GUI.
+
+PSO cierra/reset reserva propia, deja el lock exterior de use_key para su
+frontend. close.complete no acredita el unlock ajeno posterior. Caller
+serializa/mantieneobjetosvivos/cache0; no nueva garantía de concurrencia/
+timeout/retirada real. ASan/UBSan5 detect_leaks0 y42grupos previos/suiteIAS/
+JCOP3 pasaron:702líneasPASS, no702casos distintos. Sin fugas verificadas ni
+instrumentación de bibliotecas externas. OpenSC/móduloPKCS11 compilados,
+sin nuevos exports. Core47/helpers76/helpers hardware/observador/flake/
+lock/capturas intactos, resultados anteriores vigentes/no repetidos. Sin
+PCSC/PIN real/GUI/Idopte del agente; firma JnUUiy9x vigente. Sigue routing
+optativo/lifetime/init/capacidades/GET_INFO/guardas y mecanismosPKCS11 antes
+de tarjeta. [Detalles](jcop4-opensc-integration.md#contrato-de-operaciones-y-frontend-pkcs15-nativo).

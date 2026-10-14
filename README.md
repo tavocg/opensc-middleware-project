@@ -78,7 +78,13 @@ Las APIs privadas también seleccionan el AID y preparan MSE desde
 32 bytes. La salida RSA 2048 se entrega después de comprobar MAC/estado y
 cierre completo. Pasaron seis grupos nuevos con firma RSA de software y
 ASan/UBSan. Falta la activación optativa desde el driver público y conectar
-PKCS#15/PKCS#11; el backend nuevo requiere OpenSSL3. No hay otra prueba con tarjeta ahora.
+PKCS#15/PKCS#11; el backend nuevo requiere OpenSSL3.
+Las funciones reales de PKCS#15 ya pasaron pruebas con objetos DER nativos y
+callbacks de transporte simulados: digest SHA-256 y DigestInfo producen la
+misma firma verificable. La política privada exige PIN CHV global sin ruta,
+SDO sin archivo y cache de PIN desactivado, para evitar revalidaciones
+automáticas. Estos callbacks todavía no se instalan en el driver público.
+No hay otra prueba con tarjeta ahora.
 Los párrafos siguientes conservan los pasos históricos de investigación.
 La selección temporal RSA/SHA-256 obtuvo `9000`; VERIFY vacío devolvió
 `63C7`, con siete intentos disponibles, PIN global 1 y formato UTF-8.

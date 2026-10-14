@@ -75,6 +75,8 @@ static void transaction_defaults(void)
 	reader_locks = reader_unlocks = resets = 0; lock_fail = unlock_fail = reset_fail_at = 0;
 	pin_info.attrs.pin.min_length = 6; pin_info.attrs.pin.max_length = 14;
 	pin_info.attrs.pin.flags = SC_PKCS15_PIN_FLAG_CASE_SENSITIVE | SC_PKCS15_PIN_FLAG_INITIALIZED;
+	pin_info.auth_method = SC_AC_CHV;
+	key_info.path.len = 0; key_info.path.aid = app.aid; /* Observed native SDO, not an EF. */
 	query_mode = query_bit = 0; query_sw = 0x63C7; query_outer = 0x9000;
 }
 static void begin(void)

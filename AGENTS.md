@@ -9,6 +9,74 @@ transporte simulado. PIN/GUI también los ejecuta el usuario. Esto sustituye
 la autorización anterior de hardware por el agente; conservar límites de
 cada diagnóstico y privacidad. Git sigue autorizado pero .git solo lectura.
 
+**Última revisión: contrato de operación y frontend PKCS15 nativo probados.**
+Principal `8dc88cd`, OpenSC `b391a94b3`, limpios al comenzar. Firma real
+JnUUiy9x vigente. Sin PCSC/hardware/PIN real/GUI/Idopte ni captura/informe
+nuevo. No pedir otra tarjeta/firma todavía; routing público no instalado.
+
+Metadata previa pMGzFYNL: PIN auth_type0/**auth_method1 CHV**, global1,
+UTF8/6..14/flags17 y path vacío; llaveRSA2048/ref91/uso12 nativa, sin FID.
+DecoderAODF asigna CHV1 para PIN y AUT8 solo authKey. **No hay que convertir
+AUT8 a PIN**; incertidumbre histórica sobre el método del PIN se resuelve
+sin releer tarjeta. PrKDF añade AID del DDO aunque path de SDO no tengaFID.
+No confundir esto con tipos internos Idopte. No identidades/credenciales
+mostradas, no datos reales nuevos en fixtures.
+
+Header privado nuevo contrato **pkcs15_operation(p15,key,operation)**: vista
+prestada del PIN asociado, flagsPKCS1_TYPE01|SHA256 y needsAIDselect. Exige
+metadata existente/SDO pathlen0/AID ausente o conocido/typePATH y PIN_CHV
+global sinpath/AID/UTF8/6..14/flags0x11. Rechaza cualquier objetoPIN con
+content puntero/tamaño presente, sin leer/borrar bytes. Error borra salida.
+NoIO/discovery/certificados/binding/algoritmos. No retiene vista en drv_data.
+**pkcs15_disable_pin_cache** valida todo y después cambia solo opts.use_pin_cache
+a0; fallo no muta nada. Caller serializa/objetos vivos/cache0 durante todo
+login/firma. Transaction_begin exige contrato+cache0 ANTES de lock/reset.
+Bootstrap sin credencial conserva su metadata/validación anteriores.
+
+**channel_select_application** privado extraído: LOGIN/SSC8 ->SELECT AID
+fijo confirmado porbootstrap/frame35/SSC9/10/vacío9000 ->APPLICATION.
+Set_security_env permite LOGIN/SSC8 (SELECT+MSE2APDU) o APPLICATION/SSC10
+(soloMSE1APDU) tras esa selección protegida. No duplicados/otros paths/fases/
+SSC ni nuevas variantes/Le/CLA/reintentos. Esto permite select_file de use_key
+sin seleccionar en claro o enviar AID otra vez. Stub macro sinIO/statechange.
+
+**5 grupos nuevos** test/iasecc-chipdoc-pkcs15: funciones reales libOpenSC
+sc_pkcs15_verify_pin/compute_signature, DER native AODF/PrKDF, conversion
+DigestInfo/use_key/cache; **callbacks/routing del driver exclusivos del
+fixture**, llaman APIs privadas de producción. No prueba init/bind/detección/
+configuración pública, PKCS11 o middleware real. Build sin ENABLE_NOTIFY;
+fixture rechaza notificaciones habilitadas para no invocar GUI. No contexto
+PCSC creado. DigestSHA25632 y DigestInfoSHA25651, AID presente/ausente, ambos
+RSAverificables/frame/SSC/environmentref91/2048/flagsKEY|ALG. Input intacto.
+Sin PINcache en ninguna de las llamadas core a pincache_add; use_key ante
+security status porSELECT/MSE/PSO entra a revalidate pero se detiene antes
+de enviarPIN. UnVERIFY/sin otra selección/MSE/PSO. Incorrecto/bloqueado
+sintéticos cuenta6/0 propagada, no efectos reales inferidos. Cache/método8/
+path/formato/padding inválidos previos a mutación/IO; malDigestInfo/hash/PSS
+previos a firmar; reset gestionado fallido no entrega salida.
+
+Reserva propia añadida dentro del lock exterior VERIFY, retenida tras su
+unlock. PSO cierra/reset propia reserva y conserva lock exterior use_key,
+que el frontend libera después. **close.complete solo acredita nuestra
+reserva/reset, no el unlock ajeno posterior**. No modificar/reportar generic
+use_key/sc_unlock upstream ni inventar garantías de concurrencia/timeout.
+
+ASan/UBSan5 detect_leaks0 pasó, sin fugas verificadas/instrumentación de
+libOpenSC/PKCS15/ASN1/provider/locks precompilados; driver/codec/serializer/
+fixture instrumentados.42grupos previos+suiteIAS/JCOP3 pasaron:702líneasPASS,
+NO702testcases distintos. OpenSC/móduloPKCS11 compilados, sin nuevos exports.
+Core47/helpers76/helperhardware/observador/flake/lock/capturas intactos/
+vigentes/no repetidos. Otrosbackends/FIPS/plataformas/hilos no acreditados.
+
+**Siguiente autónomo:** install/uninstall optativo del routing y lifetime
+p15/objetos, init/capacidades, GET_INFO/guardas sobre otras ops públicas
+durante canal, mecanismos/PKCS11. Antes de tarjeta probar sesiones/reset/
+remoción/disable/closefailure software. RSA3072/GUI/consecutivas/reinserción
+siguen pendientes. Git readonly/noeludir: submódulo primero3modificados
+pkcs15.h/sm.c/h; principal después puntero/4docs/Makefile/test-iasecc.sh/
+transaction+sign+unavailable fixtures y **nuevo tests/iasecc-chipdoc-pkcs15.c
+y scripts/test-iasecc-chipdoc-pkcs15.sh**. No builds/capturas a Git.
+
 **Última revisión: AID/MSE/PSO privados desde argumentos OpenSC implementados.**
 Principal `f15feb4`, OpenSC `6d149ac38`, limpios al comenzar. Firma real
 JnUUiy9x vigente. Sin PCSC/lector/tarjeta/PIN real/GUI/Idopte ejecutado ni

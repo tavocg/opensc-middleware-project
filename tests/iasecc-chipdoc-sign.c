@@ -129,6 +129,7 @@ static void release_failed(void)
 	if (reader_reserved) { watched_output = NULL; assert(!sc_unlock(&test_card)); } /* Fake teardown only. */
 	assert(!reader_reserved && !test_prv.chipdoc_session.channel);
 }
+#ifndef IASECC_CHIPDOC_SIGN_FIXTURE
 int main(void)
 {
 	(void)thread_ops;
@@ -236,3 +237,4 @@ int main(void)
 	OSSL_PROVIDER_unload(alternate_provider.defprov); OSSL_LIB_CTX_free(alternate_provider.libctx);
 	return 0;
 }
+#endif

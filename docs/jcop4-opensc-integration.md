@@ -5,7 +5,9 @@ Estado al 14 de octubre de 2026,10:13 Costa Rica. Base local del proyecto
 cambio. **Perfil/estado/limpieza y adaptador interno CA/MF están implementados;
 metadata/bootstrap/providers/reserva/cierre/consulta PIN privados también
 implementados; activación optativa y VERIFY/firma aún no están conectados
-al driver público.**
+al driver público. Las APIs privadas de PIN/firma también están implementadas;
+el frontend PKCS15 se probó con callbacks software explícitos, sin instalación
+automática del routing.**
 
 ## Evidencia disponible
 
@@ -617,3 +619,88 @@ Pasaron también36 grupos previos y la suite IAS/JCOP3 completa con el nuevo
 target:697líneasPASS (no697casos distintos). OpenSC/móduloPKCS11 compilados;
 sin exports nuevos. Core47/helpers76/helpers de hardware, flake/lock/
 observador/capturas sin cambios; resultados anteriores vigentes/no repetidos.
+
+### Contrato de operaciones y frontend PKCS15 nativo
+
+Principal `8dc88cd`, OpenSC `b391a94b3`, limpios al comenzar. Revisión local
+de metadata ya disponible `jcop4-pin-policy-pMGzFYNL/report.txt`: PIN
+auth_type0/auth_method1/global1/flags17/UTF8/6..14, sin path; llave145/ref91
+RSA2048 nativa/uso12, sin path de archivo. No se muestra auth_id ni identidad,
+credencial, contenido de certificado o bytes personales. `pkcs15-pin.c`
+decode_aodf_entry asigna CHV1 a la alternativa PIN y AUT8 solo a authKey;
+el 8 observado en inventarios de autenticación no exige convertirlo a PIN.
+PrKDF añade el AID del DDO al path del SDO incluso si no hay archivo. Son
+campos distintos de los tipos internos de Idopte; no reinterpretar esos tipos.
+
+El header privado añade `iasecc_chipdoc_pkcs15_operation(p15,key,operation)`:
+vista prestada del único PIN asociado, flagsPKCS1_TYPE01|SHA256 y booleano de
+selecciónAID. Valida metadata existente, SDO sin archivo y AID ausente o
+conocido/typePATH; PIN_CHV global sin path/AID, UTF8/6..14/flags0x11.
+Rechaza presencia de contenido cacheado en cualquier objetoPIN, mirando
+solo puntero/tamaño, sin leer ni borrar credencial. No modifica metadata,
+descubre objetos, lee certificado, envía APDU o instala driver/capacidades.
+Un fallo borra toda la salida. Vista válida solo mientras objetos viven.
+
+`iasecc_chipdoc_pkcs15_disable_pin_cache` es opt-in **privado y explícito**:
+primero valida todo, después cambia exclusivamente opts.use_pin_cache a0.
+Un fallo conserva opciones/objetos. Transaction_begin ahora exige ese
+contrato y cache desactivado antes de lock/reset/APDU; el llamador mantiene
+esa opción durante toda operación y serializa acceso. No guardar credencial
+para recuperarla ni vaciar cache existente en silencio. Bootstrap sin
+autenticación conserva su validación anterior; no exige contrato de operación.
+
+Se extrae `channel_select_application(card,report)` como API privada para
+el callback select_file de use_key: solo LOGIN/SSC8 -> SELECT AID conocido
+protegido, frame35/SSC9/10/vacío9000 ->APPLICATION. MSE acepta LOGIN/SSC8 y
+selecciona entonces, o APPLICATION/SSC10 ya confirmado por esa API y envía
+solo MSE. Nunca repetir SELECT para el segundo caso. Duplicados/fases/SSC
+viejos siguen rechazados; no aceptación de archivos/MF/path arbitrario.
+Ninguna nueva variante APDU, CLA/Le o seguimiento autenticado.
+
+`make test/iasecc-chipdoc-pkcs15` pasó **cinco grupos**, con funciones reales
+de libOpenSC `sc_pkcs15_verify_pin`, `sc_pkcs15_compute_signature`, native
+DER AODF/PrKDF, conversión DigestInfo y use_key/pincache. **Los callbacks del
+driver son routing explícito exclusivo del fixture**, que llama APIs privadas
+de producción; no prueba configuración/detección/init/bind reales ni PKCS11.
+No sc_context_create/PCSC, hardware, PIN real, GUI o Idopte; build actual
+sin ENABLE_NOTIFY, fixture rechaza esa opción para no activar notificaciones.
+
+Prueba cuatro rutas positivas: digestSHA25632 o DigestInfoSHA25651,
+con o sin AID de SDO. Perfil de algoritmos de fixture anuncia únicamente
+RSA2048/PAD_TYPE01|SHA256, sin raw/hashnone/onboard gen. El núcleo PKCS15
+quita el DigestInfo de CKM_RSA_PKCS y entrega exactamente32/flagsSHA256,
+sin cambiar el input original; caller hace hash antes (no prueba mecanismos
+PKCS11 completos). Todos producen frames/SSC medidos y RSA verificable.
+La selecciónAID opcional queda protegida y ocurre una sola vez; environment
+real tiene flagsALG_PRESENT|KEY_REF_PRESENT, ref91/bits2048, sin FILE_REF.
+
+Cache desactivado impide ambas llamadas a pincache_add durante VERIFY y
+también la de su wrapper. Ante security status en SELECT/MSE/PSO, use_key
+intenta su ruta existente de revalidate, que devuelve error antes de llamar
+al PIN. Se verifica un único VERIFY, sin segunda selección/MSE/PSO y sin
+output. PIN incorrecto/bloqueado autenticado se propaga con contador6/0 de
+fixtures sintéticos, sin cache/firma/reintento. No prueba ni infiere los
+contadores reales. Mal DigestInfo/otrohash/PSS fallan antes de firmar. Método
+AUT8/path/formato/padding/cache presente se rechazan antes de mutación/IO.
+
+La reserva propia se añade dentro del lock de VERIFY del frontend y queda
+retenida tras su unlock. PSO cierra/reset la reserva gestionada, conserva el
+lock exterior de use_key; ese frontend lo libera después de devolver el
+callback. **close.complete acredita nuestra reserva/reset, no el unlock
+ajeno posterior**, cuya responsabilidad sigue en el llamador. No se cambia
+el comportamiento genérico de sc_unlock/use_key ni se presenta un reporte
+upstream. Un reset final gestionado fallido impide output y marca recuperación.
+No nueva garantía de hilos/concurrencia/timeout/retirada física.
+
+ASan/UBSan5 detect_leaks0 pasó, sin fugas verificadas/instrumentación de
+libOpenSC/PKCS15/ASN1/provider/locks precompilados; driver privado/codec/
+serializer y routing del fixture sí instrumentados. Quedan install/uninstall
+del binding optativo, lifetime de objetos/cache/borrowing, init/capacidades,
+GET_INFO y otras operaciones públicas bloqueadas durante canal, mecanismos
+PKCS11 y pruebas de sesiones/remoción antes de pedir tarjeta. RSA3072 sin
+acreditar; firma real JnUUiy9x sigue vigente, no repetida.
+
+Pasaron42 grupos previos y suiteIAS/JCOP3 completa:702líneasPASS (no702casos
+distintos). OpenSC/móduloPKCS11 compilados, sin nuevos exports. Core47,
+helpers76 y helpers de hardware/observador/flake/lock/capturas intactos,
+resultados anteriores vigentes/no repetidos.
