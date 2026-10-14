@@ -1,6 +1,7 @@
 /* Offline synthetic fixtures, independently assembled in Python with the
  * OpenSSL CLI (enc -aes-128-cbc -nopad; mac CMAC cipher:AES-128-CBC).
- * Kenc=00..0f, Kmac=10..1f, IV=0, SSCcmd=1, SSCresponse=2, ISO method2 padding.
+ * Kenc=00..0f, Kmac=10..1f, IV=AES-ECB(Kenc,SSC), SSCcmd=1, SSCresponse=2.
+ * ISO method2 padding; reproduced by jcop4-channel-vectors.py (CLI only).
  * Command MAC: SSC||pad(header), with pad(body concatenation) only when body
  * is present; response MAC: pad(SSC||87(optional)||99). First eight MAC bytes.
  * Long command fixtures use data[i]=i mod256, header00DA0000, Le256;
@@ -59,8 +60,19 @@ int main(void)
 	size_t written, response_size; unsigned int sw;
 	for (int i = 0; i < 16; i++) { fixture_keys.encryption[i] = (unsigned char)i; fixture_keys.mac[i] = (unsigned char)(i + 16); }
 	{
+		unsigned char ssc[16] = {0}, iv[16];
+		ssc[15] = 1; assert(jcop4_sm_ssc_iv(fixture_keys.encryption, ssc, iv) == 0);
+		assert(hex(expected, "7346139595c0b41e497bbde365f42d0a") == 16 && !memcmp(iv, expected, 16));
+		ssc[15] = 2; assert(jcop4_sm_ssc_iv(fixture_keys.encryption, ssc, iv) == 0);
+		assert(hex(expected, "49d68753999ba68ce3897a686081b09d") == 16 && !memcmp(iv, expected, 16));
+		assert(hex(ssc, "00112233445566778899aabbccddeeff") == 16);
+		assert(jcop4_sm_ssc_iv(fixture_keys.encryption, ssc, iv) == 0);
+		assert(hex(expected, "69c4e0d86a7b0430d8cdb78070b4c55a") == 16 && !memcmp(iv, expected, 16));
+		puts("PASS independent ECB fixtures verify data IV derives from the full current command/response SSC");
+	}
+	{
 		const unsigned char select[4] = {0, 0xA4, 2, 0}, data[2] = {0x3F, 0};
-		size_t size = hex(expected, "871101b1007bb97d86ab8fd872cea2401e24e79701008e08b2c9b82ca77f4701");
+		size_t size = hex(expected, "8711013bbf9cd5615d6032c4352411f1470a7a9701008e08749289750306b0c1");
 		assert(jcop4_sm_init(&channel, &fixture_keys) == 0);
 		assert(jcop4_sm_seal(&channel, select, data, 2, 1, 256, header, body, sizeof(body), &written) == 0);
 		assert(written == size && !memcmp(body, expected, size));
@@ -78,9 +90,9 @@ int main(void)
 	{
 		const unsigned char data_header[4] = {0, 0xDA, 0, 0};
 		const size_t sizes[] = {128, 384, 3584}, body_sizes[] = {161, 418, 3618};
-		const char *digests[] = {"1c70041ff2808ffd0e8c640ee0c1ecef0c7781ac620378c6ec9769aa92375e19",
-			"1a1a04af47a3434c3a0dd6da335441823b49e1545a19ecbbd90996c4ed463444",
-			"267b864592725f403aa1e4cbe9cb1c09e404b395e8ff0cc611c2c11497b11ee6"};
+		const char *digests[] = {"c3f1d0f7bf16e5cc5cab0258118b3cde34f9701715fa434e8896d17ab1a05e68",
+			"fa015332f64cf4e1827a0ec0b507cd98b7b62e3e6c8b9a8f5ffca4c9dafd1f85",
+			"c8ccf948fbb8902078cbbb93283eb6bf32dca08af3ae8718f98d95f4fd97e359"};
 		for (size_t i = 0; i < sizeof(plain); i++) plain[i] = (unsigned char)i;
 		for (size_t i = 0; i < 3; i++) {
 			unsigned char digest[32]; unsigned int digest_size = 0;
@@ -92,7 +104,7 @@ int main(void)
 		}
 		puts("PASS independent long-body hashes cover canonical81/82 lengths and the local3584-byte data limit");
 	}
-	response_size = hex(response, "871101657c8e4ab0d61d6dc57232817bffbb7f990290008e0834a63af6815184259000");
+	response_size = hex(response, "8711019ed6592dc829d148dbd14a1c59540f5d990290008e08547a8f908b0f4c679000");
 	{
 		waiting(&channel); memset(plain, 0xAA, sizeof(plain));
 		assert(jcop4_sm_open(&channel, response, response_size, plain, sizeof(plain), &written, &sw) == 0);
@@ -113,7 +125,7 @@ int main(void)
 			memcpy(altered, response, response_size); altered[i] ^= (unsigned char)(1 << bit);
 			rejected(altered, response_size, 64);
 		}
-		written = hex(altered, "871101c6a13b37878f5b826f4f8162a1c8d879990290008e083495a0ac9db801779000");
+		written = hex(altered, "871101e3c1f4c496796d62d17b573c668e7754990290008e081fd5616e56e24f499000");
 		rejected(altered, written, 64); /* Valid MAC, plaintext has no ISO80 padding marker. */
 		puts("PASS every changed response bit and valid-MAC/invalid-padding fixture fail without exposing plaintext or SW and wipe keys");
 	}

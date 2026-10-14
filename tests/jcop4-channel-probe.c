@@ -204,6 +204,8 @@ int main(void)
 	defaults(); assert(invoke() == 0 && test_flow.calls == 3 && test_state.physical == 9 && test_state.resets == 2);
 	assert(test_state.unlocks == 1 && test_state.disconnects == 1 && test_state.releases == 1);
 	assert(strstr(output, "channel_result=protected_d004_read_confirmed_no_login") && strstr(output, "final_reset_result=0"));
+	assert(strstr(output, "channel_content_size=137") && strstr(output, "channel_content_first_block_equal=1") &&
+		strstr(output, "channel_content_tail_equal=1"));
 	puts("PASS native adapter verifies the first protected read and resets/unlocks/disconnects without identifiers or raw APDU logs");
 	for (int scenario = 0; scenario < 7; scenario++) {
 		defaults();
@@ -237,6 +239,12 @@ int main(void)
 	}
 	defaults(); test_flow.mode = BAD_MAC; test_flow.bit = 10;
 	assert(invoke() == 1 && test_flow.calls == 3 && strstr(output, "channel_authenticated_response=0"));
+	assert(!strstr(output, "channel_content_"));
+	defaults(); test_flow.mode = INNER_ERROR;
+	assert(invoke() == 1 && strstr(output, "channel_sw=6982") && !strstr(output, "channel_content_"));
+	defaults(); test_flow.mode = ZERO_DATA_IV;
+	assert(invoke() == 1 && strstr(output, "channel_content_size_equal=1") &&
+		strstr(output, "channel_content_first_block_equal=0") && strstr(output, "channel_content_tail_equal=1"));
 	defaults(); test_state.reset_error = 2;
 	assert(invoke() == 1 && test_flow.calls == 3 && strstr(output, "final_reset_result=-7") && test_state.disconnects == 1);
 	puts("PASS setup/read/MAC failures and final-reset failure never report a successful process or skip cleanup");

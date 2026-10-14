@@ -188,6 +188,12 @@ int main(int argc, char **argv)
 	status = jcop4_ca_confirm_d004(initial, sizeof(initial), JCOP4_CA_LE_SHORT_MAX, probe_exchange, card, &report);
 	printf("channel_stage=%d\nchannel_outcome=%d\nchannel_transport=%d\nchannel_sw=%04X\nchannel_authenticated_response=%d\n",
 		report.stage, report.outcome, report.transport, report.sw, report.authenticated_response);
+	if (report.authenticated_response && report.sw == 0x9000) {
+		printf("channel_content_size=%zu\nchannel_content_size_equal=%d\n", report.content_size, report.content_size_equal);
+		if (report.content_size_equal)
+			printf("channel_content_first_block_equal=%d\nchannel_content_tail_equal=%d\n",
+				report.content_first_block_equal, report.content_tail_equal);
+	}
 	printf("channel_result=%s\n", status ? "not_confirmed_stop" : "protected_d004_read_confirmed_no_login");
 out:
 	probe_guard.phase = PROBE_STOP;

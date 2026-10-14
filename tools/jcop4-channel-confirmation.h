@@ -1,5 +1,5 @@
-/* Candidate no-PIN confirmation sequence, currently exercised only with a
- * synthetic transport. No PC/SC, reader discovery, Idopte or credential API.
+/* Candidate no-PIN confirmation sequence, transport supplied by the caller.
+ * No PC/SC, reader discovery, Idopte or credential API in this component.
  * Caller must have selected the known ADF/D004 and validated its control and
  * initial137-byte read in the same exclusively owned connection. */
 #ifndef JCOP4_CHANNEL_CONFIRMATION_H
@@ -24,6 +24,8 @@ struct jcop4_ca_probe_report {
 	int transport;
 	unsigned int sw;
 	int authenticated_response;
+	size_t content_size;
+	int content_size_equal, content_first_block_equal, content_tail_equal;
 };
 typedef int (*jcop4_ca_exchange)(void *context, const unsigned char *command, size_t command_size,
 		unsigned char *response, size_t capacity, size_t *received);
@@ -91,6 +93,14 @@ static int jcop4_ca_confirm_d004(const unsigned char *initial, size_t initial_si
 	report->authenticated_response = 1; report->sw = inner_sw;
 	report->outcome = JCOP4_CA_INNER_SW_FAILED;
 	if (inner_sw != 0x9000) goto out;
+	/* Fixed D004 comparisons only after MAC/padding and inner SW pass.
+	 * No raw bytes, hashes, differing offsets or acceptance of partial data. */
+	report->content_size = plain_size;
+	report->content_size_equal = plain_size == initial_size;
+	if (report->content_size_equal) {
+		report->content_first_block_equal = !CRYPTO_memcmp(plain, initial, 16);
+		report->content_tail_equal = !CRYPTO_memcmp(plain + 16, initial + 16, initial_size - 16);
+	}
 	report->outcome = JCOP4_CA_CONTENT_MISMATCH;
 	if (plain_size != initial_size || CRYPTO_memcmp(plain, initial, initial_size)) goto out;
 	report->outcome = JCOP4_CA_READ_CONFIRMED; result = 0;

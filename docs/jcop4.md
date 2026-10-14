@@ -4155,9 +4155,11 @@ respuesta revisada analiza85/87,99 y8E. Esto no es aún un decoder completo
 ni una política para aceptar todas esas alternativas en el perfil actual.
 
 En la rama cifrada del comando,244083 asigna16 ceros y pasa ese buffer como
-IV a245720 ->23ec10: **CBC con IV cero** en la ruta examinada, sin una
-transformación visible del SSC en ese IV. SSC y padding participan en la
-entrada del MAC; no asumir que el IV sea AES(SSC) como en otra variante.
+IV a245720 ->23ec10. **Corrección posterior:** esa operación cifra
+SSC||pad(datos) y se descarta el primer bloque; el IV efectivo del dato es
+AES(Kenc,SSC). La interpretación inicial de IV cero para los datos fue
+incompleta; ver la sección «Primer MAC real y corrección del IV de datos».
+SSC y padding también participan en la entrada del MAC.
 El MAC246370 genera subclaves por245900, desplazamiento y reducción87,
 compatible con **AES-CMAC**;246ba0 entrega el resultado y la configuración
 actual pide8 bytes. Se identifica la construcción por sus operaciones, no
@@ -4242,8 +4244,9 @@ Si existe cuerpo, el conjunto lleva padding método2; si no, se calcula sobre
 los32 bytes SSC/cabecera sin añadir otro bloque. La respuesta2436a0 verifica
 el MAC antes de llegar a la etapa de descifrado: entrada con SSC siguiente
 y los objetos anteriores a8E, con padding método2. Esta construcción continúa
-la variante CBC con IV cero de la sección anterior; no acredita su uso por
-C_Login de la tarjeta actual ni una variante formal de CA.
+la variante CBC cuya interpretación inicial de IV cero se corrigió más abajo;
+no acredita por sí sola su uso por C_Login de la tarjeta actual ni una variante
+formal de CA.
 
 `tools/jcop4-channel-messages.h` usa las primitivas ya probadas y ofrece:
 
@@ -4675,6 +4678,95 @@ No introducir PIN. Revisar reporte de etapas, primer fallo y cierre antes de
 decidir otro comando. Confirmar un READ protegido no probaría identidad de
 tarjeta, condición de VERIFY, autenticación o firma. JCOP4/RSA3072 y el rechazo
 VERIFY6982 siguen pendientes. No nuevas variantes por inercia.
+
+## Primer MAC real y corrección del IV de datos
+
+Principal `6ab901f`, OpenSC `3dfef6704`, limpios al comenzar.
+`local/jcop4-channel-NY1kGaJQ/report.txt`, **2026-10-14T05:23:31Z** (13Oct CR):
+compilación/contexto/driver/conexión/lock/reset inicial0, ATR conocido y
+política de transporte superada, directory0 y AID anunciado1. Selección de
+aplicación0, SELECT D004/control correcto y READ inicial0/9000.
+
+La secuencia alcanzó **stage4/READ**, outcome7/CONTENT_MISMATCH,
+transporte0, **SW interno9000 y authenticated_response1**. Ocho APDU, guard
+sin bloqueo, reset final/unlock/desconexión0, helper1. MSE/GA pasaron las
+condiciones de respuesta previstas; el codec verificó MAC, descifrado y padding
+del primer READ protegido. Falló después por longitud o comparación de datos.
+El informe no registra longitud ni regiones comparadas: **no permite afirmar
+que recibió137 bytes, que cambió solo el primer bloque o que D004 sea mutable**.
+No se conservaron plaintext, ciphertext o claves para reanalizar esta sesión.
+No PIN/VERIFY/login/firma; este informe demuestra verificación del primer MAC,
+no todavía igualdad de D004, identidad de tarjeta o permiso de autenticación.
+
+### Revisión estática: el cero pertenece a una operación previa
+
+Se revisó el mismo módulo instalado, SHA256
+`2380540cd85316306233aa2baf640019a848606ce72bb5692cbebbb111542dc4`, sin
+cargarlo ni ejecutar funciones internas. Las direcciones pertenecen a este
+binario; los nombres próximos que objdump imprime no nombran estas rutinas.
+
+- En respuesta2436a0 se incrementa primero el SSC guardado en objeto+20.
+  Tras verificar el MAC,243c9b..243cde prepara buffers de16 ceros, copia ese
+  SSC y llama245720 con objeto+58 para **cifrarlo**. El resultado de16 bytes
+  es el IV pasado en243cf5..243d0e a2456a0 con objeto+70 para descifrar datos.
+- 245720 conduce a23ec10 (cifrado);2456a0 a23ed60 (descifrado).
+  La inicialización243130/2432f1..243345 instala la misma Kenc del descriptor+21
+  en objetos+58 y+70, y la Kmac del descriptor+41 en+88.
+- En comando243ed6..243f25 se toma e incrementa el SSC.244009..2440a9 copia
+  **SSC||pad(datos)** y lo cifra CBC con IV cero.2440b6..2440e6 elimina los
+  primeros16 bytes del cifrado antes de construir DO87. El primer bloque
+  descartado es AES(Kenc,SSC), que encadena el bloque de datos siguiente.
+
+Por tanto, el **IV efectivo para datos es AES-ECB(Kenc,SSC actual)**, equivalente
+a cifrar un único bloque SSC en CBC con IV cero. La documentación y el codec
+anteriores confundieron ese IV cero de la operación previa con el IV final
+del dato. Se corrige la interpretación, sin deducir otro perfil, probar
+alternativas o atribuir todavía la causa exacta del mismatch real a este error.
+Un MAC correcto no valida automáticamente el modo de descifrado: CBC con IV
+equivocado puede alterar solo el primer bloque y conservar el padding de
+un mensaje largo. No se acepta por ello una comparación parcial.
+
+### Corrección y evidencia de software
+
+`jcop4-channel-messages.h` deriva el IV del SSC **siguiente de cada mensaje**
+antes de CBC de datos; en respuesta lo hace después de verificar MAC. Limpia
+el IV temporal y conserva el orden MAC/padding/SW/comparación. El READ del
+diagnóstico no tiene datos en el comando, por lo que su cabecera/DO97/MAC/Le
+no cambian con esta corrección. MSE, GA, política Le256 y permisos del guard
+quedan iguales. Sigue exigiéndose tamaño137 y coincidencia completa.
+
+Reporte de confirmación añade `content_size`, `content_size_equal` y, solo
+con tamaño137, `content_first_block_equal`/`content_tail_equal` para regiones
+fijas16/resto. Se calculan/publican únicamente tras MAC/padding y SW interno
+9000; no para errores de MAC o SW. No registra bytes, hashes, punto ni ubicación
+variable de diferencias. Los campos del helper llevan prefijo channel_.
+
+Pasaron **10 grupos del codec, 7 de confirmación y 12 del adaptador/lanzador**.
+`tests/jcop4-channel-vectors.py` reproduce los fixtures sintéticos usando
+OpenSSL CLI ECB/CBC/CMAC y hashlib, sin importar código de producción ni
+conectar a PC/SC. Incluye IV con SSC1/2 y un SSC de16 bytes distintos, comandos,
+respuesta y padding inválido con MAC válido, hashes de cuerpos largos.
+El peer de software obtiene el IV por EVP AES-ECB independiente del helper.
+Un peer simulado que cifra con IV de datos cero conserva MAC/padding válido
+en su respuesta137 pero se rechaza; reporta primer bloque distinto/resto igual.
+Esa prueba **no es evidencia del patrón de diferencias en NY1kGaJQ**.
+Los tests comprueban que campos de contenido no se publican sin MAC o con
+SW interno de error. ASan/UBSan pasaron25 grupos nativos (10/7/6/2),
+detect_leaks0; bibliotecas OpenSC/OpenSSL precompiladas no instrumentadas,
+no prueba de fugas. Helper real compilado; driver/submódulo/observador,
+helper público, KDF/primitivas/acuerdo y flake/lock intactos.
+
+**Siguiente intervención:** misma JCOP4, firmador/otros clientes cerrados:
+
+```sh
+nix develop -c make inspect/jcop4-channel READER=0
+```
+
+Una sola secuencia, sin PIN. Se justifica por la corrección del descifrado y
+los metadatos antes omitidos, sin variantes de APDU/Le ni reintento autenticado.
+El usuario ejecuta todos los comandos de lector/tarjeta. Revisar confirmación,
+regiones/tamaño si falla y cierre antes de otra operación; no ignorar campos
+para convertir el resultado en éxito. JCOP4/RSA3072 y VERIFY6982 pendientes.
 
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 

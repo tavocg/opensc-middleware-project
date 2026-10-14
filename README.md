@@ -310,10 +310,10 @@ Idopte; firma libre JCOP4 aún pendiente.
 [Evidencia y límites](docs/jcop4.md#inventario-idopte-completo-tras-las-selecciones-de-raíz).
 
 **D004 ya se validó:** punto P-521 válido; no repetir esa consulta aislada.
-La ruta estática Idopte aporta CA/ECDH/AES128, KDF y una variante CBC con IV cero.
+La ruta estática Idopte aporta CA/ECDH/AES128, KDF y CBC con IV derivado del SSC.
 Hay componentes libres aislados para KDF, primitivas, mensajes protegidos y
 acuerdo efímero P-521. Pasaron cinco grupos de KDF, siete de primitivas,
-nueve del codec, ocho de acuerdo y seis de confirmación, con datos sintéticos
+diez del codec, ocho de acuerdo y siete de confirmación, con datos sintéticos
 y vectores públicos.
 `make test/jcop4-channel-agreement` verifica la derivación y los constructores
 candidatos MSE/GA. La ruta estática de transporte conserva CLA10 y Le ausente
@@ -324,16 +324,18 @@ sin PIN: comprueba ATR/AID/D004, intenta MSE/GA y verifica un READ protegido.
 El adaptador exige T=1 y límites declarados suficientes para APDU cortas;
 elige Le exterior256, sin alternarlo ni copiar la tabla de lectores de Idopte.
 Mantiene el bloqueo de la conexión y resetea la sesión al finalizar.
-Pasaron doce grupos del adaptador/lanzador, incluidos dos con las funciones
-reales de OpenSC y lector simulado, y las 92 comprobaciones previas del helper
-público. La ejecución del usuario conectó y superó los límites de transporte,
-pero el filtro bloqueó la primera selección de EF.DIR, con cero APDU y cierre
-correcto. Se corrigió la forma absoluta `2F00`/P1=08 que OpenSC construye al
-eliminar el MF de la ruta. Falta ejecutar de nuevo desde la terminal del usuario,
-con la misma JCOP4 y otros clientes cerrados. El agente prepara y revisa estos
-diagnósticos; el usuario ejecuta todos los comandos de lector/tarjeta.
+La última ejecución llegó al primer READ protegido: **MAC válido y SW interno
+9000**, pero tamaño/contenido no coincidió con D004. Cerró correctamente.
+La revisión estática posterior corrigió el IV: el cero pertenece al cifrado
+previo del SSC; los datos usan **AES(Kenc,SSC)** como IV. El codec se corrigió
+y mantiene comparación completa, sin ignorar diferencias. Pasaron diez grupos
+del codec, siete de confirmación y doce del adaptador/lanzador, incluidos dos
+con las funciones reales de OpenSC y lector simulado. Nuevos informes añaden
+solo tamaño y booleanos de comparación, sin datos o hashes. Falta comprobar
+esta corrección con la misma JCOP4 y otros clientes cerrados. El agente prepara
+y revisa; el usuario ejecuta todos los comandos de lector/tarjeta.
 El driver aún no firma con JCOP4.
-[Evidencia y límites](docs/jcop4.md#diagnóstico-real-acotado-del-canal-sin-pin).
+[Evidencia y límites](docs/jcop4.md#primer-mac-real-y-corrección-del-iv-de-datos).
 
 Capturas privadas bajo local/jcop4-idopte-spy-*/; no agregarlas a Git.
 Pasaron previamente **30 comprobaciones del observador/decoder y 40 del

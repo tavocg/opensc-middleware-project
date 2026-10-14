@@ -6,7 +6,7 @@
 #include <stdint.h>
 #include <stdio.h>
 enum mode { NORMAL, TRANSPORT_ERROR, BAD_SW, TOO_LARGE, SETUP_PAYLOAD, PHYSICAL_ONLY,
-	BAD_MAC, BAD_PADDING, INNER_ERROR, WRONG_CONTENT, SHORT_CONTENT, EMPTY_CONTENT };
+	BAD_MAC, BAD_PADDING, INNER_ERROR, WRONG_CONTENT, SHORT_CONTENT, EMPTY_CONTENT, ZERO_DATA_IV };
 struct fixture {
 	unsigned char initial[137]; EVP_PKEY *peer; struct jcop4_ca_pending derived;
 	int calls, fail_step, bit, ga_template; enum mode mode;
@@ -76,6 +76,13 @@ static int exchange(void *context, const unsigned char *command, size_t size,
 		int count = 0, final = 0; unsigned int sw = f->mode == INNER_ERROR ? 0x6982 : 0x9000;
 		if (f->mode != INNER_ERROR && f->mode != EMPTY_CONTENT) {
 			EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new(); assert(ctx);
+			/* Independent IV construction using ECB, not the production helper. */
+			unsigned char response_ssc[16] = {0}; response_ssc[15] = 2;
+			if (f->mode != ZERO_DATA_IV) {
+				assert(EVP_EncryptInit_ex(ctx, EVP_aes_128_ecb(), NULL, f->derived.keys.encryption, NULL) == 1);
+				assert(EVP_CIPHER_CTX_set_padding(ctx, 0) == 1 && EVP_EncryptUpdate(ctx, iv, &count, response_ssc, 16) == 1);
+				assert(EVP_EncryptFinal_ex(ctx, iv + count, &final) == 1 && count + final == 16);
+			}
 			memcpy(padded, f->initial, plain_size); padded[plain_size] = f->mode == BAD_PADDING ? 0 : 0x80;
 			if (f->mode == WRONG_CONTENT) padded[0] ^= 1;
 			assert(EVP_EncryptInit_ex(ctx, EVP_aes_128_cbc(), NULL, f->derived.keys.encryption, iv) == 1);
@@ -136,6 +143,15 @@ int main(void)
 	const enum mode modes[] = {WRONG_CONTENT, SHORT_CONTENT, EMPTY_CONTENT};
 	for (size_t i = 0; i < 3; i++) { f.mode = modes[i]; assert(run(&f, &report) == 1 && report.authenticated_response && report.sw == 0x9000 && report.outcome == JCOP4_CA_CONTENT_MISMATCH); }
 	puts("PASS authenticated inner error and wrong/short/missing content remain failed confirmations");
+	f.mode = ZERO_DATA_IV;
+	assert(run(&f, &report) == 1 && report.authenticated_response && report.sw == 0x9000);
+	assert(report.outcome == JCOP4_CA_CONTENT_MISMATCH && report.content_size == 137 && report.content_size_equal);
+	assert(!report.content_first_block_equal && report.content_tail_equal);
+	f.mode = NORMAL;
+	assert(run(&f, &report) == 0 && report.content_first_block_equal && report.content_tail_equal);
+	f.mode = SHORT_CONTENT; assert(run(&f, &report) == 1 && report.content_size == 136 && !report.content_size_equal);
+	f.mode = BAD_MAC; assert(run(&f, &report) == 1 && !report.content_size && !report.content_first_block_equal && !report.content_tail_equal);
+	puts("PASS zero-data-IV peer shows authenticated first-block mismatch; fixed comparison metadata never exposes unverified data");
 	{
 		f.calls = 0; const size_t sizes[] = {0, 136, 138, SIZE_MAX};
 		for (size_t i = 0; i < 4; i++) {

@@ -9,6 +9,55 @@ transporte simulado. PIN/GUI también los ejecuta el usuario. Esto sustituye
 la autorización anterior de hardware por el agente; conservar límites de
 cada diagnóstico y privacidad. Git sigue autorizado pero .git solo lectura.
 
+**Última revisión: primer MAC real verificado; corregido IV derivado del SSC.**
+Principal `6ab901f`, OpenSC `3dfef6704`, limpios al comenzar. Informe del usuario
+`local/jcop4-channel-NY1kGaJQ/report.txt`, 2026-10-14T05:23:31Z (13Oct CR):
+build/context/driver/connect/lock/reset inicial0, ATR/política correctos,
+directory0/AID anunciado1/select aplicación0, SELECT y READ D0040/9000.
+channel_stage4(READ), outcome7(CONTENT_MISMATCH), transporte0, SW interno9000,
+**authenticated_response1**, guard_blocked0, command_count8, reset final/
+unlock/disconnect0, helper1. MSE/GA pasaron sin payload inesperado y se verificó
+MAC/padding de la respuesta protegida, pero tamaño o contenido no coincidió.
+**El informe no distingue tamaño/contenido ni localiza diferencias**, no
+afirmar137 recibidos, solo primer bloque cambiado o D004 mutable. No PIN/VERIFY/
+firma. Evidencia de primer MAC, no confirmación completa/identidad/login.
+
+Revisión estática del mismo /usr/lib/SCMiddleware/libt_ias.so/hash2380540...
+corrige interpretación anterior **IV0**: respuesta243c9b..243cde cifra SSC
+actual por245720 con IV cero, obtiene16 bytes;243cf5..243d0e usa ese resultado
+como IV de2456a0/23ed60 para datos.243130 instala la misma Kenc en+58/+70;
+245720->23ec10 cifra,2456a0->23ed60 descifra. Comando244009..2440a9 cifra
+SSC||pad(datos) con cero;2440b6..2440e6 descarta primer bloque, equivalente
+a **IV de datos=AES-ECB(Kenc,SSC actual)**. SSC incrementado antes de cada
+mensaje. El cero visto era IV de esa operación previa, no el IV final del dato.
+No ejecutar funciones del binario; no nuevo protocolo ni fallback.
+
+Codec ahora deriva IV en comando cifrado/respuesta, después de verificar MAC
+en respuesta, limpia IV temporal. READ actual no tiene datos en comando:
+su cabecera/DO97/MAC/Le no cambian por esta corrección; MSE/GA/guard intactos.
+Comparación completa137 sigue obligatoria; no ignorar header/primer bloque.
+Report añade solo tamaño/size_equal y dos booleanos de comparación fija
+primer16/resto, solo tras MAC/padding/SW interno9000, con comparación de regiones
+solo para tamaño137. Sin bytes/hashes/offsets variables; no dato no verificado.
+
+Pasaron codec10/confirmation7/probe12 grupos. Nuevos vectores CLI ECB/CBC/CMAC
+reproducibles en **tests/jcop4-channel-vectors.py**, sintéticos, sin código
+producción/PCSC/Idopte. Peer usa ECB EVP independiente para IV de respuesta.
+Peer con IV cero/MAC válido se rechaza y muestra primer bloque distinto/resto
+igual en fixture137; esa es una simulación, no evidencia del patrón real previo.
+ASan/UBSan pasaron25 grupos nativos (10/7/6/2), detect_leaks0; bibliotecas
+OpenSC/OpenSSL precompiladas no instrumentadas, no prueba de fugas. Helper real
+compilado. KDF/primitivas/acuerdo/helper público/observador/driver/submódulo/
+flake/lock intactos, suites sin cambios no repetidas. No hardware/PIN/GUI/Idopte
+ejecutado por el agente. JCOP4/RSA3072/VERIFY6982 pendientes.
+
+**Siguiente intervención:** misma JCOP4, firmador/otros clientes cerrados,
+`nix develop -c make inspect/jcop4-channel READER=0`, una sola vez, sin PIN.
+Justificada por IV de descifrado corregido y campos antes omitidos; misma
+secuencia, no variar CLA/Le ni relajar comparación. Revisar contenido/etapa/
+cierre antes de continuar. Git solo lectura: dar commit concreto, incluyendo
+nuevo generador de vectores; no capturas/build/Idopte/submódulo a Git.
+
 **Última revisión: corregida forma absoluta de SELECT EF.DIR del diagnóstico.**
 Principal `278c54f`, OpenSC `3dfef6704`, limpios al comenzar. Informe nuevo
 `local/jcop4-channel-6sS5ottZ/report.txt`, 2026-10-14T05:17:53Z (13Oct CR):

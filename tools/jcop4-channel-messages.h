@@ -1,4 +1,4 @@
-/* Offline candidate codec for the reviewed AES128/IV0/MAC8 branch.
+/* Candidate codec for the reviewed AES128/IV=AES(Kenc,SSC)/MAC8 branch.
  * Does not serialize transport Lc/Le, perform card I/O or establish a channel.
  * Initialize only with fresh session keys after a separately verified setup. */
 #ifndef JCOP4_CHANNEL_MESSAGES_H
@@ -29,6 +29,14 @@ static int jcop4_sm_init(struct jcop4_sm_channel *channel, const struct jcop4_ch
 	memcpy(&channel->keys, keys, sizeof(*keys));
 	channel->phase = JCOP4_SM_IDLE;
 	return 0;
+}
+
+/* One CBC block with zero input IV equals AES-ECB(Kenc, current SSC).
+ * This is the IV for the message data, not a zero data IV. */
+static int jcop4_sm_ssc_iv(const unsigned char key[16], const unsigned char ssc[16], unsigned char iv[16])
+{
+	const unsigned char zero[16] = {0};
+	return jcop4_sm_aes128_cbc(1, key, zero, ssc, 16, iv, 16);
 }
 
 static int jcop4_sm_append_tlv(unsigned char *out, size_t capacity, size_t *size,
@@ -99,6 +107,7 @@ static int jcop4_sm_seal(struct jcop4_sm_channel *channel, const unsigned char h
 	if (jcop4_sm_pad(local_header, 4, authenticated + 16, sizeof(authenticated) - 16, &padded_size)) goto out;
 	if (data_size) {
 		if (jcop4_sm_pad(data, data_size, padded, sizeof(padded), &padded_size) ||
+				jcop4_sm_ssc_iv(channel->keys.encryption, next, iv) ||
 				jcop4_sm_aes128_cbc(1, channel->keys.encryption, iv, padded, padded_size,
 					encrypted + 1, sizeof(encrypted) - 1)) goto out;
 		encrypted[0] = 1;
@@ -122,6 +131,7 @@ static int jcop4_sm_seal(struct jcop4_sm_channel *channel, const unsigned char h
 	result = 0;
 out:
 	OPENSSL_cleanse(next, sizeof(next)); OPENSSL_cleanse(mac, sizeof(mac));
+	OPENSSL_cleanse(iv, sizeof(iv));
 	OPENSSL_cleanse(padded, sizeof(padded)); OPENSSL_cleanse(encrypted, sizeof(encrypted));
 	OPENSSL_cleanse(candidate, sizeof(candidate)); OPENSSL_cleanse(authenticated, sizeof(authenticated));
 	return result;
@@ -158,7 +168,8 @@ static int jcop4_sm_open(struct jcop4_sm_channel *channel, const unsigned char *
 	if (jcop4_sm_pad(authenticated, 16 + auth_end, authenticated, sizeof(authenticated), &auth_size) ||
 			jcop4_sm_verify_mac8(channel->keys.mac, authenticated, auth_size, tag)) goto out;
 	/* Nothing reaches the caller before MAC, padding and capacity all pass. */
-	if (cipher_size && (jcop4_sm_aes128_cbc(0, channel->keys.encryption, iv, ciphertext,
+	if (cipher_size && (jcop4_sm_ssc_iv(channel->keys.encryption, next, iv) ||
+			jcop4_sm_aes128_cbc(0, channel->keys.encryption, iv, ciphertext,
 			cipher_size, decrypted, sizeof(decrypted)) || jcop4_sm_unpad(decrypted, cipher_size, &plain_size))) goto out;
 	if (plain_size > JCOP4_SM_DATA_LIMIT || plain_size > capacity) goto out;
 	inner_sw = (unsigned int)status[0] * 256 + status[1];
@@ -171,6 +182,7 @@ static int jcop4_sm_open(struct jcop4_sm_channel *channel, const unsigned char *
 out:
 	if (result) jcop4_sm_invalidate(channel);
 	OPENSSL_cleanse(next, sizeof(next)); OPENSSL_cleanse(authenticated, sizeof(authenticated));
+	OPENSSL_cleanse(iv, sizeof(iv));
 	OPENSSL_cleanse(decrypted, sizeof(decrypted));
 	return result;
 }
