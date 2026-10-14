@@ -3,6 +3,34 @@
 #define JCOP4_CHANNEL_SIGN_H
 #include "jcop4-response-collector.h"
 
+/* One explicit application-context experiment, never a retry after PSO.
+ * The AID is the same known/announced application used during bootstrap. */
+static int probe_signature_application(sc_card_t *card, struct jcop4_sm_channel *channel)
+{
+	const unsigned char select[4] = {0,0xA4,4,0x0C};
+	unsigned char header[4], body[29], wire[35], response[258], plain[1];
+	size_t size, received = 0, written; unsigned int sw; int rv, result = 1;
+	struct jcop4_sm_decode_report decoded;
+	if (jcop4_sm_seal(channel, select, probe_aid, sizeof(probe_aid), 0, 0, header, body, sizeof(body), &size) || size != 29) goto out;
+	memcpy(wire, header, 4); wire[4] = 29; memcpy(wire + 5, body, 29); wire[34] = 0;
+	probe_phase_set(PROBE_SIGNATURE_APP); memcpy(probe_guard.expected, wire, 35); probe_guard.expected_size = 35;
+	rv = probe_exchange(card, wire, 35, response, sizeof(response), &received);
+	OPENSSL_cleanse(probe_guard.expected, sizeof(probe_guard.expected)); probe_guard.expected_size = 0;
+	printf("signature_application_transport=%d\n", rv); if (rv || received > sizeof(response)) goto out;
+	rv = jcop4_sm_open_report(channel, response, received, plain, sizeof(plain), &written, &sw, &decoded);
+	printf("signature_application_decode_result=%s\nsignature_application_mac_check=%s\n",
+		jcop4_sm_decode_name(decoded.result), decoded.mac == JCOP4_SM_MAC_VERIFIED ? "verified" :
+		decoded.mac == JCOP4_SM_MAC_FAILED ? "failed" : "not_checked");
+	if (rv) goto out;
+	printf("signature_application_sw=%04X\n", sw); if (sw != 0x9000 || written) goto out;
+	probe_guard.signature_application_verified = 1; result = 0;
+out:
+	printf("signature_application_result=%s\n", result ? "not_confirmed_stop" : "selected_under_sm_login_not_rechecked");
+	OPENSSL_cleanse(header, sizeof(header)); OPENSSL_cleanse(body, sizeof(body)); OPENSSL_cleanse(wire, sizeof(wire));
+	OPENSSL_cleanse(response, sizeof(response)); OPENSSL_cleanse(plain, sizeof(plain));
+	return result;
+}
+
 static int probe_signature_get(void *context, const unsigned char *wire, size_t size,
 		unsigned char *response, size_t capacity, size_t *received)
 {
@@ -25,6 +53,7 @@ static int probe_sign_once(sc_card_t *card, struct jcop4_sm_channel *channel)
 	if (!probe_guard.sign_mode || !probe_guard.login_authenticated || probe_guard.phase != PROBE_LOGIN_VERIFY ||
 		!probe_guard.called || probe_guard.blocked || probe_interrupted || !probe_transport_ready(card) ||
 		channel->phase != JCOP4_SM_IDLE || CRYPTO_memcmp(channel->keys.ssc, expected_ssc, 16)) goto out;
+	if (probe_guard.signature_application_mode && probe_signature_application(card, channel)) goto out;
 	for (int step = 0; step < 2; step++) {
 		const char *label = step ? "signature_pso" : "signature_mse";
 		if (jcop4_sm_seal(channel, step ? pso_header : mse_header, step ? probe_signature.digest : mse_data,
@@ -47,7 +76,8 @@ static int probe_sign_once(sc_card_t *card, struct jcop4_sm_channel *channel)
 				first[0] == 0x85 ? "unsupported85" : first[0] == 0x99 ? "status99" : "other_uninterpreted");
 			if (received == 16 && first[0] == 0x99 && first[14] == 0x6A && first[15] == 0x82) {
 				/* Authenticate this observed terminal error directly at the pending
-				 * SSC12. It cannot authorize GET RESPONSE, another PSO or success. */
+				 * SSC12 (14 after the explicit application selection). It cannot
+				 * authorize GET RESPONSE, another PSO or success. */
 				response_policy = JCOP4_SM_OUTER_PSO_STATUS_6A82;
 				printf("signature_response_policy=status_only_matching_6A82\nsignature_collection=not_attempted_status_only\nsignature_get_count=0\n");
 			} else {

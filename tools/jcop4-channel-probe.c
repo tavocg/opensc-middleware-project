@@ -23,7 +23,7 @@ static const unsigned char probe_atr[] = {0x3B,0xD5,0x18,0xFF,0x81,0x91,0xFE,0x1
 static const unsigned char probe_aid[] = {0xE8,0x28,0xBD,0x08,0x0F,0xA0,0,0,3,0x63,0x64,0x79,0x6E,0x69,0x64};
 static volatile sig_atomic_t probe_interrupted;
 enum probe_phase { PROBE_STOP, PROBE_DIR, PROBE_APP, PROBE_D004, PROBE_INITIAL, PROBE_MSE, PROBE_GA, PROBE_READ, PROBE_CONTEXT_MF, PROBE_PIN_QUERY,
-	PROBE_LOGIN_VERIFY, PROBE_SIGNATURE_MSE, PROBE_SIGNATURE_PSO, PROBE_SIGNATURE_GET };
+	PROBE_LOGIN_VERIFY, PROBE_SIGNATURE_APP, PROBE_SIGNATURE_MSE, PROBE_SIGNATURE_PSO, PROBE_SIGNATURE_GET };
 static struct {
 	const struct sc_reader_operations *original;
 	sc_reader_t *reader;
@@ -33,6 +33,7 @@ static struct {
 	int context_mode, context_selected;
 	int login_mode; unsigned int context_query_sw;
 	int sign_mode, login_authenticated, signature_mse_verified;
+	int signature_application_mode, signature_application_verified;
 	unsigned int signature_pending_sw, signature_gets;
 	unsigned char expected[70]; size_t expected_size;
 } probe_guard;
@@ -110,10 +111,20 @@ static int probe_apdu_allowed(sc_apdu_t *a)
 	}
 #endif
 #ifdef JCOP4_SIGN_DIAGNOSTIC
+	else if (probe_guard.sign_mode && probe_guard.signature_application_mode && probe_guard.login_authenticated &&
+		probe_guard.phase == PROBE_SIGNATURE_APP) {
+		return !probe_guard.signature_application_verified && probe_guard.expected_size == 35 &&
+			!memcmp(probe_guard.expected, "\x0c\xa4\x04\x0c\x1d", 5) &&
+			a->cla == 0x0C && a->ins == 0xA4 && a->p1 == 4 && a->p2 == 0x0C &&
+			a->cse == SC_APDU_CASE_4_SHORT && a->le == 256 && a->lc == 29 &&
+			!memcmp(a->data, "\x87\x11\x01", 3) && !memcmp(a->data + 19, "\x8e\x08", 2) &&
+			!memcmp(probe_guard.expected + 5, a->data, 29);
+	}
 	else if (probe_guard.sign_mode && probe_guard.login_authenticated &&
 		(probe_guard.phase == PROBE_SIGNATURE_MSE || probe_guard.phase == PROBE_SIGNATURE_PSO)) {
 		int pso = probe_guard.phase == PROBE_SIGNATURE_PSO;
-		return (!pso || probe_guard.signature_mse_verified) && probe_guard.expected_size == (pso ? 70u : 35u) &&
+		return (!probe_guard.signature_application_mode || probe_guard.signature_application_verified) &&
+			(!pso || probe_guard.signature_mse_verified) && probe_guard.expected_size == (pso ? 70u : 35u) &&
 			!memcmp(probe_guard.expected, pso ? "\x0c\x2a\x9e\x9a\x40" : "\x0c\x22\x81\xb6\x1d", 5) &&
 			a->cla == 0x0C && a->ins == (pso ? 0x2A : 0x22) &&
 			a->p1 == (pso ? 0x9E : 0x81) && a->p2 == (pso ? 0x9A : 0xB6) && a->cse == SC_APDU_CASE_4_SHORT && a->le == 256 &&
@@ -189,7 +200,8 @@ static int probe_exchange(void *context, const unsigned char *wire, size_t size,
 #endif
 #ifdef JCOP4_SIGN_DIAGNOSTIC
 	else if (probe_guard.sign_mode &&
-		((probe_guard.phase == PROBE_SIGNATURE_MSE && size == 35) || (probe_guard.phase == PROBE_SIGNATURE_PSO && size == 70)) &&
+		((probe_guard.phase == PROBE_SIGNATURE_APP && size == 35) ||
+		 (probe_guard.phase == PROBE_SIGNATURE_MSE && size == 35) || (probe_guard.phase == PROBE_SIGNATURE_PSO && size == 70)) &&
 		probe_guard.expected_size == size && !memcmp(wire, probe_guard.expected, size)) cse = SC_APDU_CASE_4_SHORT;
 	else if (probe_guard.sign_mode && probe_guard.phase == PROBE_SIGNATURE_GET && size == 5 &&
 		probe_guard.expected_size == size && !memcmp(wire, probe_guard.expected, size)) cse = SC_APDU_CASE_2_SHORT;
@@ -296,7 +308,8 @@ int main(int argc, char **argv)
 	int context_mode = argc == 3 && !strcmp(argv[2], "--pin-context");
 #ifdef JCOP4_LOGIN_DIAGNOSTIC
 #ifdef JCOP4_SIGN_DIAGNOSTIC
-	int sign_mode = argc == 5 && !strcmp(argv[2], "--sign-once");
+	int signature_application_mode = argc == 5 && !strcmp(argv[2], "--sign-application-once");
+	int sign_mode = signature_application_mode || (argc == 5 && !strcmp(argv[2], "--sign-once"));
 	int login_mode = sign_mode;
 #else
 	int login_mode = argc == 3 && !strcmp(argv[2], "--login-once");
@@ -320,6 +333,7 @@ int main(int argc, char **argv)
 #endif
 #ifdef JCOP4_SIGN_DIAGNOSTIC
 	probe_guard.sign_mode = sign_mode;
+	probe_guard.signature_application_mode = signature_application_mode;
 #endif
 #ifdef JCOP4_LOGIN_DIAGNOSTIC
 	/* Interrupt terminal read so TERM/INT can restore echo before closing. */

@@ -5513,3 +5513,106 @@ Revisar signature_pso_decode_result/mac_check/sw y cierre antes de decidir
 otro cambio. No repetir por inercia ni cambiar contexto/referencia/hash
 sin esa evidencia. Firma real, causa del error, integración OpenSC yRSA3072
 siguen pendientes.
+
+### Error PSO autenticado y experimento de contexto de aplicación
+
+Principal `bbfc323`, OpenSC `3dfef6704`, limpios al comenzar. Informe privado
+`local/jcop4-channel-signature-6OxIbJvG/report.txt`,2026-10-14T08:04:59Z
+(14Oct02:04CR), ejecución del usuario. Login y MSE pasaron con transporte0,
+decoderaccepted, MACverified e inner9000. PSO devolvió16bytes/status99/
+exterior6A82; la política exclusiva verificó el MAC y devolvió **inner6A82**.
+No hubo GET RESPONSE: error terminal autenticado, sin firma guardada.
+Guard0,13APDU,interrupted0, helper1, reset final/unlock/disconnect0.
+Esto resuelve la incertidumbre del sobre; no determina por sí solo cuál
+objeto/contexto faltó ni prueba una referencia o algoritmo alternativos.
+No repetir el diagnóstico anterior para confirmar ese resultado.
+
+Revisión estática del mismo `/usr/lib/SCMiddleware/libt_ias.so`, con SHA256
+2380540cd85316306233aa2baf640019a848606ce72bb5692cbebbb111542dc4 comprobado.
+T_Sign282fd2 despacha CP71slot3c8: reloc5d1030 resuelve39ac50, que usa la
+operación en token+168 y su slot118. La conexión de ese objeto con la rama
+RSA371570 en runtime sigue sin cerrar; no se ejecutó Idopte ni su login.
+
+En371570 se calcula la longitud RSA en bytes y se analiza DigestInfo por
+36a040. Las siete entradas de5c9bc0 corresponden a identificadores de
+algoritmo; el SHA256 AlgorithmIdentifier de49fa70 se asocia a28 mediante
+4b98b4. Esta ruta elimina el encabezado DigestInfo antes de PSO. La rama
+especial condicionada por token+148=13 tiene otra selección para PSS;
+no se aplica al candidato actual ni demuestra su perfil efectivo.
+3716d9..37171a construye plantilla9102, algoritmo identificado y referencia
+OR80.37189d..3718d9 construye PSO002A9E9A, datos y Le=tamañoRSA.
+
+**Pista de contexto:**3716ab llama368b90 antes del MSE con la referencia
+y el padre asociado a la llave. Para bit80 se pasa por3ac4a0->3ac420->3ab8e0.
+Cuando el descriptor del padre contiene AID,3a6530 construye SELECT
+00A4040C con ese AID y después se procesa la ruta del descriptor.
+No se conocen aún el padre/perfil/objeto de operación efectivos de Idopte.
+Los metadatos públicos anteriores asocian LlaveDeFirma/91/ruta vacía a
+la aplicación PKCS#15 anunciada; **ruta vacía no acredita que MF sea su
+contexto de firma**. Nuestro helper había permanecido en MF tras el login.
+Esta diferencia fundamenta un experimento de contexto, no una causa probada.
+
+El driver eOI local remapea referencias PrKDF aA1/A2 según orden de objetos
+(pkcs15-eoi.c:108..132); por tanto tampoco se puede trasladar su mapping a
+Costa Rica. No se cambian ni prueban referencias alternativas. La
+[guía ANS/CPS4](https://industriels.esante.gouv.fr/sites/default/files/media/document/ANS_CPSV4_0011_Guide_De_R%C3%A9f%C3%A9rence_v1_03.pdf)
+documenta6A82 en PSO, pero es otra personalización y no identifica aquí el
+objeto que falló. Referencia91/algoritmo28/digest32/Le256 se conservan.
+
+Nuevo `make sign/jcop4-channel-application READER=0`, flag explícito
+`--sign-application-once` del mismo helper separado de firma. No cambia
+`sign/jcop4-channel` ni permite activar la variante mediante entorno.
+Tras el canal, MF, query63C7 y único VERIFY1 conocidos, retiene SSC8 y:
+
+1. Envía una sola selección protegida del AID conocido, ya exigido y anunciado
+   en bootstrap. Interior00A4040C/data15/sinLe; SSC9/10, body29/wire35,
+   Le exterior256. Exige MAC verificado, inner9000 y ausencia de datos.
+2. Solo después envía los MSE/PSO anteriores, ahora con SSC11..14.
+   No modifica algoritmo, referencia, hash, Le o número de intentos PIN.
+3. Verifica matemáticamente la firma como antes, y guarda únicamente tras
+   reset/unlock/disconnect completos. Cualquier fallo termina sin reVERIFY,
+   reSELECT, rePSO ni retorno automático a MF. Si vuelve6A82 en el primer PSO,
+   autentica el error en SSC14 y termina, sin GET RESPONSE.
+
+La selección de aplicación **puede cambiar el estado de autenticación**;
+su9000/MAC no demuestra conservar el login. No se hace consulta vacía ni
+segunda presentación de PIN después del SELECT; si la operación deja de
+estar autorizada, se informa el fallo y se cierra. No se habilita un driver
+JCOP4 ni soporte RSA3072 por este experimento.
+
+Guard exige modo explícito/login anterior y compara el frame completo de
+SELECT: CLA0C, INS A4, P1=04, P2=0C, longitud29, sinDO97, Le exterior256,
+ciphertext/MAC exactos. Bloquea selección en otros modos, repetición y MSE
+sin marca de aplicación autenticada en esta variante, antes del backend.
+Presupuesto24, ATR/T1, lock/reset, timeout45s+5s, debug0, bloqueo de trazas,
+entrada sin eco y guardado exclusivo permanecen. No se leen archivos nuevos
+ni se permiten nombres/AID/ref arbitrarios.
+
+Reporte privado `local/jcop4-channel-signature-application-*/report.txt`,
+directorio0700/archivos0600. Campos fijos signature_application_transport,
+decode_result, mac_check, sw (solo tras decoder válido) y result.
+Éxito del SELECT se etiqueta selected_under_sm_login_not_rechecked.
+No PIN, longitud, datos, MAC, claves, serial, identidad de certificado ni
+firma hexadecimal registrados.
+
+Pasaron18 grupos de firma (9nativos+9bootstrap OpenSC con lector simulado),
+15login/PTY/lanzador y22probe. Peer comprueba AES/CBC/CMAC del SELECT de forma
+independiente, AID exacto/SSC9/10, MSE/PSO11..14, firma RSA de software y
+respuestas directas293/0..3GET. Transporte/MAC/replay/SW/datos inesperados/
+bare9000/61 en SELECT bloquean MSE; login fallido bloqueaSELECT; PSO6A82
+autenticado no reintenta login. Guard comprueba ausencia de opt-in/login,
+alteración de ciphertext/P1/P2/Le, repetición y MSE sin confirmación.
+PTY verifica flag explícito/prefix/terminal/permisos/foreground y estados
+0/1/124, una llamada. ASan/UBSan18firma pasaron detect_leaks0; bibliotecas
+precompiladas sin instrumentar, no prueba de fugas. Tres helpers compilados
+sin ejecutarlos; bashsyntax/diffcheck0. Suites crypto/collector sin cambios,
+vigentes/no repetidas. Agente sin PCSC/hardware/PIN real/GUI/Idopte ejecutado.
+Driver/submódulo/observador/flake/lock intactos.
+
+Siguiente intervención: mismaJCOP4 RSA2048, otros clientes cerrados,
+`nix develop -c make sign/jcop4-channel-application READER=0`, una sola vez,
+PIN correcto solo al prompt tras revisar el texto técnico. Revisar SELECT,
+MSE, PSO, MAC, verificación RSA y cierre antes de otro comando. No repetir
+baseline ni barrer variantes/ref/hash. Tras timeout/reset final ausente o
+fallido, reinsertar antes de otra operación. El estado1 sigue siendo fallo,
+no una indicación para volver a introducir el PIN por inercia.

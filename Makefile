@@ -25,7 +25,7 @@
 .PHONY: inspect/jcop4-channel-pin-context
 .PHONY: login/jcop4-channel test/jcop4-channel-login
 .PHONY: test/jcop4-response-collector
-.PHONY: sign/jcop4-channel test/jcop4-channel-sign
+.PHONY: sign/jcop4-channel sign/jcop4-channel-application test/jcop4-channel-sign
 
 PDF_INPUT ?= doc.pdf
 PDF_OUTPUT ?= local/jcop3-cli.pdf
@@ -95,6 +95,7 @@ help:
 		'make test/jcop4-channel-login Prueba login/cierre con PIN y transporte sintéticos, sin tarjeta.' \
 		'make test/jcop4-response-collector Prueba recolección acotada de respuesta con GET RESPONSE simulado.' \
 		'make sign/jcop4-channel READER=0 Firma y verifica un texto técnico RSA2048/SHA256 bajo SM, un PIN.' \
+		'make sign/jcop4-channel-application READER=0 Prueba el AID conocido bajo SM después del login, antes de firmar.' \
 		'make test/jcop4-channel-sign Prueba firma/guard/verificación con transporte y PIN ficticios.' \
 		'make test/jcop4-channel-kdf Prueba la derivación candidata AES128 con datos sintéticos, sin tarjeta ni PIN.' \
 		'make test/pcsc-public-observer Comprueba el observador sin lector ni tarjeta.' \
@@ -356,6 +357,9 @@ test/jcop4-response-collector:
 
 sign/jcop4-channel:
 	@bash scripts/probe-jcop4-channel.sh "$(READER)" --sign-once
+
+sign/jcop4-channel-application:
+	@bash scripts/probe-jcop4-channel.sh "$(READER)" --sign-application-once
 
 test/jcop4-channel-sign:
 	@bash scripts/test-jcop4-channel-sign.sh

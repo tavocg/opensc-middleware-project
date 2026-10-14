@@ -9,7 +9,67 @@ transporte simulado. PIN/GUI también los ejecuta el usuario. Esto sustituye
 la autorización anterior de hardware por el agente; conservar límites de
 cada diagnóstico y privacidad. Git sigue autorizado pero .git solo lectura.
 
-**Última revisión: login/MSE confirmados; PSO exterior 6A82 aún sin autenticar.**
+**Última revisión: PSO6A82 autenticado; variante de contexto de aplicación preparada.**
+Principal `bbfc323`, OpenSC `3dfef6704`, limpios al comenzar. Informe usuario
+`local/jcop4-channel-signature-6OxIbJvG/report.txt`,2026-10-14T08:04:59Z
+(14Oct02:04CR): login/MSE transporte0/decoderaccepted/MACverified/inner9000;
+PSO16/status99/exterior6A82, política acotada status_only_matching_6A82,
+decoderaccepted/MACverified/**inner6A82**. GET0, guard0,13APDU, helper1,
+interrupted0/resetfinal/unlock/disconnect0, sin firma/artefactos. Error real
+autenticado de PSO, no fallo de PIN/codec/colección. **No repetir baseline.**
+
+Investigación estática mismo libt_ias.so/hash comprobado, sin ejecución.
+T_Sign282fd2 ->CP71slot3c8/reloc5d1030=39ac50 ->operación token+168 slot118;
+no cerrado despacho del objeto de operación hasta ramaRSA371570 en runtime.
+Rama371570 calcula bytesRSA desdebits, identifica DigestInfo por36a040:
+tabla4b98b4 y strings5c9bc0 contienen SHA256 AlgorithmIdentifier ->28.
+3716ab llama368b90 con referencia y padre asociado antesMSE. Para bit80
+entra3ac4a0->3ac420->3ab8e0; si descriptor de padre contiene AID,3a6530
+construye00A4040C/datosAID y después procesa ruta. 3716d9..37171a arma
+9102/algoritmo/refOR80;37189d..3718d9 PSO002A9E9A/datos/Le=tamañoRSA.
+Son condiciones estáticas; no prueba padre/perfil/objeto activos. PKCS15
+real previo asocia LlaveDeFirma91/ruta vacía a aplicación anunciada; ruta
+vacía no acredita contextoMF. eOI remapea refs por ordenA1/A2, pero es otro
+perfil: no copiar ese mapping. Algoritmo/ref no cambiados por conjetura.
+
+Nuevo **make sign/jcop4-channel-application READER=0** / flag explícito
+--sign-application-once, mismo helper separado de firma, reporte privado
+jcop4-channel-signature-application-*. Mismo canal/MF/query63C7/VERIFY1
+probados; después del loginSSC8 envía un solo SELECT protegido del AID
+conocido/anunciado, interior00A4040C/data15/sinLe. SSC9/10, body29/wire35,
+exteriorLe256. Exige MAC/inner9000/datos0; solo entonces MSE/PSO originales
+con SSC11..14. **No acredita conservar login con SELECT**: PSO puede devolver
+6982 y se termina sin reVERIFY/fallback. Informe application_transport/
+decode_result/mac_check/sw/result=selected_under_sm_login_not_rechecked.
+Guard exacto/opt-in/login/unaAPDU, MSE exige marca de aplicación confirmada
+solo en variante. Otros modos/baseline/codec/collector/ref/hash/Le/budget24/
+timeout/lock/cierre/persistencia/privacidad intactos. No AID alternativos,
+leer archivos nuevos o capturar autenticado. Error6A82 trasPSO se autentica
+una vez en SSC14 y sigue fallo, sinGET. Ninguna firma real todavía.
+
+Pasaron **18firma**(9nativos+9bootstrap/lector simulado), **15login** con
+PTY/lanzador variante y **22probe**. Nuevos tests decrypt/CMAC independiente
+del SELECT/AID/SSC9/10, RSA matemática11..14/direct293/0..3GET, transporte/
+MAC/replay/SW/datos inesperados/bare9000/61 enSELECT sinMSE, login fallido
+sinSELECT, PSO6A82 autenticado sinrelogin, guard plaintext/bytes/P1/P2/Le/
+optin/login/repetición y MSE sin marca. Wrapper exige terminal/report0700/
+0600/debug0/stdin vacío/foreground, propaga0/1/124/una llamada. ASan/UBSan
+18firma0, detect_leaks0; libs precompiladas sin instrumentar/no pruebafugas.
+Treshelpers compilados/bashexplicado/diffcheck0. Otros suites sin cambios
+vigentes/no repetidos. Agente sinPCSC/tarjeta/PINreal/GUI/Idopte ejecutado;
+driver/submódulo/observador/flake/lock intactos.
+
+**Siguiente intervención:** mismaJCOP4 RSA2048, otros clientes cerrados,
+`nix develop -c make sign/jcop4-channel-application READER=0`, una sola vez,
+texto técnico y PIN correcto solo al prompt. Es experimento acotado de
+contexto, no repetir baseline ni probar referencias/algoritmos por barrido.
+Revisar SELECT/MSE/PSO/MAC/RSA y cierre antesotro comando; no repetir tras
+fallo. Timeout/resetfinal ausente/fallido exige reinserción. Si SELECT pasa
+peroPSO falla, no asumir necesidad de otroPIN ni reintentar automáticamente.
+Gitreadonly: commit diez archivos seguidos, documentos3/Makefile/scripts1/
+tests3/tools2, sincapturas/build y sin eludirrestricción.
+
+**Revisión anterior: login/MSE confirmados; PSO exterior 6A82 aún sin autenticar.**
 Principal `3d8a515`, OpenSC `3dfef6704`, limpios al comenzar. Informe usuario
 `local/jcop4-channel-signature-KuqlCvbf/report.txt`, 2026-10-14T07:53:24Z
 (14Oct01:53CR): canal/MF/query63C7/login9000 autenticados; MSE transporte0,

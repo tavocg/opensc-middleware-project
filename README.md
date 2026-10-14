@@ -368,6 +368,12 @@ Se preparó la autenticación acotada de ese error, sin cambiar comandos ni
 reintentar: solo16bytes/99+8E, MAC válido y estado interno igual a6A82, después
 parada. Pasaron14 grupos de firma y13 de codec offline; todavía falta verificar
 la respuesta de error real. Ante error, detenerse y revisar antes de repetir.
+La ejecución posterior6OxIbJvG verificó el MAC y el estado interno6A82 de PSO,
+con login/MSE9000 y cierre completo. No fue un error de autenticación del PIN.
+Se preparó `make sign/jcop4-channel-application READER=0`, variante explícita
+que selecciona una vez el AID conocido bajo SM después del login y antes del
+MSE, sin cambiar llave/hash ni reintentar el PIN. Es una hipótesis de contexto,
+no una corrección validada en tarjeta. Pasaron18 grupos de firma simulada.
 [Protocolo y límites](docs/jcop4.md#diagnóstico-de-firma-rsa2048sha256-bajo-sm).
 El driver aún no firma con JCOP4.
 [Evidencia y límites](docs/jcop4.md#canal-confirmado-en-jcop4-sin-pin).
