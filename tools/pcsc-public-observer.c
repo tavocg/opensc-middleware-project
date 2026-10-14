@@ -43,6 +43,9 @@ static int connection_boundary_stop, boundary_operation_recorded;
 static SCARDHANDLE second_mf_handle;
 static int second_mf_connect_seen, second_mf_ready;
 static unsigned int second_mf_calls;
+static int compare_auth_status, auth_status_ready;
+static SCARDHANDLE auth_status_handle;
+static unsigned int auth_status_calls;
 static SCARDHANDLE trace_handle;
 static pthread_mutex_t trace_mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -150,6 +153,14 @@ __attribute__((constructor)) static void observer_init(void)
 			if (dprintf(trace_fd, "comparison_second_mf=select_once_no_followup_permissions\n") < 0) stopped = 1;
 		}
 	}
+	path = getenv("JCOP4_DIAGNOSTIC_AUTH_STATUS");
+	if (path) {
+		if (strcmp(path, "1") || !compare_second_mf || trace_fd < 0) stopped = 1;
+		else {
+			compare_auth_status = 1;
+			if (dprintf(trace_fd, "comparison_auth_status=case1_ref03_once_sw_only\n") < 0) stopped = 1;
+		}
+	}
 	path = getenv("JCOP4_PUBLIC_SELECT_SPY_TRACE");
 	if (path) {
 		select_spy_fd = open(path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
@@ -239,7 +250,7 @@ done:
 static void drop_card_context(void)
 {
 	pthread_mutex_lock(&trace_mutex);
-	selected_public_file = selected_mf = selected_app = pending_response = second_mf_ready = 0;
+	selected_public_file = selected_mf = selected_app = pending_response = second_mf_ready = auth_status_ready = 0;
 	comparison_atr_ok = pin_status_result_valid = 0;
 	/* Do not continue an unknown-file read across a connection/reset boundary. */
 	if (read4141_calls) {
@@ -416,7 +427,45 @@ static LONG transmit_second_mf(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pc
 	dprintf(trace_fd, "second_mf_sw=%04X\n", sw);
 	if (sw != 0x9000) { dprintf(trace_fd, "second_mf_result=status_stopped\n"); return SCARD_E_NOT_TRANSACTED; }
 	memcpy(response, control, size); *response_len = size;
-	dprintf(trace_fd, "second_mf_result=selected_still_stopped\n");
+	if (dprintf(trace_fd, "second_mf_result=selected_still_stopped\n") >= 0 && compare_auth_status && !auth_status_calls) {
+		auth_status_handle = card; auth_status_ready = 1;
+	}
+	return SCARD_S_SUCCESS;
+}
+
+/* ISO 7816-4 7.5.4 and installed CP71 GetAuthRemainingAttempts precedent.
+ * One exact observed case-1 query, immediately after the checked MF SELECT.
+ * Never lifts stopped, logs data, supplies a credential or follows a challenge. */
+static LONG transmit_auth_status(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
+		const unsigned char *cmd, DWORD len, SCARD_IO_REQUEST *recv_pci,
+		unsigned char *response, DWORD *response_len)
+{
+	typedef LONG (*transmit_fn)(SCARDHANDLE, const SCARD_IO_REQUEST *, const unsigned char *,
+			DWORD, SCARD_IO_REQUEST *, unsigned char *, DWORD *);
+	unsigned char status[2]; DWORD size = sizeof(status);
+	auth_status_ready = 0;
+	if (!compare_auth_status || auth_status_calls || !second_mf_calls || card != auth_status_handle ||
+			!cmd || len != 4 || memcmp(cmd, "\x00\x82\x00\x03", 4) ||
+			!response || !response_len || *response_len < 2) return SCARD_E_NOT_TRANSACTED;
+	if (++events > 128) return SCARD_E_NOT_TRANSACTED;
+	auth_status_calls++;
+	if (dprintf(trace_fd, "auth_status_query=case1_ref03_once_sw_only\nauth_status_header=00820003\n") < 0)
+		return SCARD_E_NOT_TRANSACTED;
+	transmit_fn transmit = (transmit_fn)dlsym(RTLD_NEXT, "SCardTransmit");
+	if (!transmit) return SCARD_E_NOT_TRANSACTED;
+	LONG rv = transmit(card, send_pci, cmd, len, recv_pci, status, &size);
+	if (dprintf(trace_fd, "auth_status_transport=%ld\n", (long)rv) < 0) return SCARD_E_NOT_TRANSACTED;
+	if (rv != SCARD_S_SUCCESS || size != sizeof(status)) {
+		dprintf(trace_fd, "auth_status_result=response_unavailable_or_invalid\n");
+		return rv == SCARD_S_SUCCESS ? SCARD_E_INSUFFICIENT_BUFFER : rv;
+	}
+	unsigned int sw = ((unsigned int)status[0] << 8) | status[1];
+	if (dprintf(trace_fd, "auth_status_sw=%04X\n", sw) < 0) return SCARD_E_NOT_TRANSACTED;
+	if (sw != 0x9000 && (sw & 0xFFF0) != 0x63C0) {
+		dprintf(trace_fd, "auth_status_result=status_stopped\n"); return SCARD_E_NOT_TRANSACTED;
+	}
+	if (dprintf(trace_fd, "auth_status_result=returned_still_stopped\n") < 0) return SCARD_E_NOT_TRANSACTED;
+	memcpy(response, status, sizeof(status)); *response_len = sizeof(status);
 	return SCARD_S_SUCCESS;
 }
 
@@ -678,6 +727,10 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
 	pthread_mutex_lock(&trace_mutex);
 	if (trace_fd < 0) goto out;
 	if (stopped) {
+		if (auth_status_ready) {
+			rv = transmit_auth_status(card, send_pci, cmd, len, recv_pci, response, response_len);
+			if (rv == SCARD_S_SUCCESS || auth_status_calls) goto out;
+		}
 		if (second_mf_ready) {
 			rv = transmit_second_mf(card, send_pci, cmd, len, recv_pci, response, response_len);
 			if (rv == SCARD_S_SUCCESS || second_mf_calls) goto out;
@@ -905,7 +958,7 @@ LONG SCardControl(SCARDHANDLE card, DWORD code, const void *send, DWORD send_len
 	if (returned) *returned = 0;
 	if (trace_fd < 0) goto out;
 	if (stopped) {
-		second_mf_ready = 0;
+		second_mf_ready = auth_status_ready = 0;
 		if (begin_boundary_record("reader_control"))
 			dprintf(trace_fd, "boundary_blocked_control_code=%08lX\nboundary_control_kind=%s\n", (unsigned long)code,
 					code == CM_IOCTL_GET_FEATURE_REQUEST ? (send_len ? "feature_request_unsupported" : "feature_request_empty") : "unknown");
@@ -947,7 +1000,7 @@ LONG SCardSetAttrib(SCARDHANDLE card, DWORD attribute, const unsigned char *data
 {
 	(void)card; (void)attribute; (void)data; (void)len;
 	pthread_mutex_lock(&trace_mutex);
-	if (stopped) { second_mf_ready = 0; begin_boundary_record("reader_attribute"); }
+	if (stopped) { second_mf_ready = auth_status_ready = 0; begin_boundary_record("reader_attribute"); }
 	if (trace_fd >= 0 && !stopped)
 		dprintf(trace_fd, "blocked=reader_attribute\n");
 	stopped = 1;

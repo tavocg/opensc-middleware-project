@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 umask 077
-unset JCOP4_DIAGNOSTIC_READ4141 JCOP4_DIAGNOSTIC_READ4109 JCOP4_DIAGNOSTIC_AODF JCOP4_DIAGNOSTIC_PRKDF JCOP4_DIAGNOSTIC_PUKDF JCOP4_DIAGNOSTIC_CDF JCOP4_DIAGNOSTIC_PIN_STATUS JCOP4_DIAGNOSTIC_SELECT_DF0F JCOP4_DIAGNOSTIC_READ_DF0F JCOP4_DIAGNOSTIC_CERT_B001 JCOP4_DIAGNOSTIC_CERT_B002 JCOP4_DIAGNOSTIC_SECOND_MF
+unset JCOP4_DIAGNOSTIC_READ4141 JCOP4_DIAGNOSTIC_READ4109 JCOP4_DIAGNOSTIC_AODF JCOP4_DIAGNOSTIC_PRKDF JCOP4_DIAGNOSTIC_PUKDF JCOP4_DIAGNOSTIC_CDF JCOP4_DIAGNOSTIC_PIN_STATUS JCOP4_DIAGNOSTIC_SELECT_DF0F JCOP4_DIAGNOSTIC_READ_DF0F JCOP4_DIAGNOSTIC_CERT_B001 JCOP4_DIAGNOSTIC_CERT_B002 JCOP4_DIAGNOSTIC_SECOND_MF JCOP4_DIAGNOSTIC_AUTH_STATUS
 task_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 # Dependency failures must stop before compilation, including failed flag lookup.
 (
@@ -126,13 +126,13 @@ int run_fixture(int mode)
     if (mode == 18) { assert(rv != 0); return 0; }
     assert(rv == 0 && protocol == SCARD_PROTOCOL_T1);
     assert(SCardReconnect(card, SCARD_SHARE_SHARED, SCARD_PROTOCOL_T1, SCARD_LEAVE_CARD, &protocol) == 0);
-    if (mode == 17 || mode == 19 || mode == 20 || mode == 21 || mode == 22 || mode == 23 || mode == 24 || mode == 25 || mode == 26 || mode == 27 || mode == 28 || mode == 29 || mode == 30 || mode == 31) {
+    if (mode == 17 || mode == 19 || mode == 20 || mode == 21 || mode == 22 || mode == 23 || mode == 24 || mode == 25 || mode == 26 || mode == 27 || mode == 28 || mode == 29 || mode == 30 || mode == 31 || mode == 32) {
         assert(SCardTransmit(card, 0, app, sizeof(app), 0, response, &len) == 0);
         len = sizeof(response);
         assert(SCardTransmit(card, 0, target, sizeof(target), 0, response, &len) == 0);
         len = sizeof(response);
         assert(SCardTransmit(card, 0, read, sizeof(read), 0, response, &len) == 0);
-        if (mode == 19 || mode == 20 || mode == 21 || mode == 22 || mode == 23 || mode == 24 || mode == 25 || mode == 26 || mode == 27 || mode == 28 || mode == 29 || mode == 30 || mode == 31) {
+        if (mode == 19 || mode == 20 || mode == 21 || mode == 22 || mode == 23 || mode == 24 || mode == 25 || mode == 26 || mode == 27 || mode == 28 || mode == 29 || mode == 30 || mode == 31 || mode == 32) {
             const unsigned char next[] = { 0, 0xA4, 2, 0, 2, 0x41, 0x09, 0 };
             const unsigned char small[] = { 0, 0xB0, 0, 0, 17 };
             len = sizeof(response);
@@ -140,7 +140,7 @@ int run_fixture(int mode)
             len = sizeof(response);
             assert(SCardTransmit(card, 0, small, sizeof(small), 0, response, &len) == 0 && len == 19);
         }
-        if (mode == 20 || mode == 21 || mode == 22 || mode == 23 || mode == 24 || mode == 25 || mode == 26 || mode == 27 || mode == 28 || mode == 29 || mode == 30 || mode == 31) {
+        if (mode == 20 || mode == 21 || mode == 22 || mode == 23 || mode == 24 || mode == 25 || mode == 26 || mode == 27 || mode == 28 || mode == 29 || mode == 30 || mode == 31 || mode == 32) {
             const unsigned char aodf[] = { 0, 0xA4, 2, 0, 2, 0x70, 1, 0 };
             const unsigned char all[] = { 0, 0xB0, 0, 0, 0, 1, 0x2C };
             len = sizeof(response);
@@ -148,28 +148,28 @@ int run_fixture(int mode)
             len = sizeof(response);
             assert(SCardTransmit(card, 0, all, sizeof(all), 0, response, &len) == 0 && len == 302);
         }
-        if (mode == 21 || mode == 22 || mode == 23 || mode == 24 || mode == 25 || mode == 26 || mode == 27 || mode == 28 || mode == 29 || mode == 30 || mode == 31) {
+        if (mode == 21 || mode == 22 || mode == 23 || mode == 24 || mode == 25 || mode == 26 || mode == 27 || mode == 28 || mode == 29 || mode == 30 || mode == 31 || mode == 32) {
             const unsigned char prkdf[] = { 0, 0xA4, 2, 0, 2, 0x70, 2, 0 };
             len = sizeof(response);
             assert(SCardTransmit(card, 0, prkdf, sizeof(prkdf), 0, response, &len) == 0);
             len = sizeof(response);
             assert(SCardTransmit(card, 0, read, sizeof(read), 0, response, &len) == 0 && len == 258);
         }
-        if (mode == 22 || mode == 23 || mode == 24 || mode == 25 || mode == 26 || mode == 27 || mode == 28 || mode == 29 || mode == 30 || mode == 31) {
+        if (mode == 22 || mode == 23 || mode == 24 || mode == 25 || mode == 26 || mode == 27 || mode == 28 || mode == 29 || mode == 30 || mode == 31 || mode == 32) {
             const unsigned char pukdf[] = { 0, 0xA4, 2, 0, 2, 0x70, 4, 0 };
             len = sizeof(response);
             assert(SCardTransmit(card, 0, pukdf, sizeof(pukdf), 0, response, &len) == 0);
             len = sizeof(response);
             assert(SCardTransmit(card, 0, read, sizeof(read), 0, response, &len) == 0 && len == 258);
         }
-        if (mode == 23 || mode == 24 || mode == 25 || mode == 26 || mode == 27 || mode == 28 || mode == 29 || mode == 30 || mode == 31) {
+        if (mode == 23 || mode == 24 || mode == 25 || mode == 26 || mode == 27 || mode == 28 || mode == 29 || mode == 30 || mode == 31 || mode == 32) {
             const unsigned char cdf[] = { 0, 0xA4, 2, 0, 2, 0x70, 5, 0 };
             len = sizeof(response);
             assert(SCardTransmit(card, 0, cdf, sizeof(cdf), 0, response, &len) == 0);
             len = sizeof(response);
             assert(SCardTransmit(card, 0, read, sizeof(read), 0, response, &len) == 0 && len == 258);
         }
-        if (mode == 24 || mode == 25 || mode == 26 || mode == 27 || mode == 28 || mode == 29 || mode == 30 || mode == 31) {
+        if (mode == 24 || mode == 25 || mode == 26 || mode == 27 || mode == 28 || mode == 29 || mode == 30 || mode == 31 || mode == 32) {
             const unsigned char empty[] = { 0, 0x20, 0, 1 };
             len = sizeof(response);
             assert(SCardTransmit(card, 0, mf, sizeof(mf), 0, response, &len) == 0);
@@ -177,14 +177,14 @@ int run_fixture(int mode)
             assert(SCardTransmit(card, 0, empty, sizeof(empty), 0, response, &len) == 0 &&
                     len == 2 && response[0] == 0x63 && response[1] == 0xC7);
         }
-        if (mode == 25 || mode == 26 || mode == 27 || mode == 28 || mode == 29 || mode == 30 || mode == 31) {
+        if (mode == 25 || mode == 26 || mode == 27 || mode == 28 || mode == 29 || mode == 30 || mode == 31 || mode == 32) {
             const unsigned char df0f[] = { 0, 0xA4, 2, 0, 2, 0xDF, 0x0F, 0 };
             len = sizeof(response);
             assert(SCardTransmit(card, 0, app, sizeof(app), 0, response, &len) == 0);
             len = sizeof(response);
             assert(SCardTransmit(card, 0, df0f, sizeof(df0f), 0, response, &len) == 0);
             len = sizeof(response);
-            if (mode == 26 || mode == 27 || mode == 28 || mode == 29 || mode == 30 || mode == 31) {
+            if (mode == 26 || mode == 27 || mode == 28 || mode == 29 || mode == 30 || mode == 31 || mode == 32) {
                 const unsigned char bounded[] = { 0, 0xB0, 0, 0, 150 };
                 assert(SCardTransmit(card, 0, bounded, sizeof(bounded), 0, response, &len) == 0 && len == 152 &&
                         !memcmp(response, "PRIVATE_DF0F_INFO", 17));
@@ -192,7 +192,7 @@ int run_fixture(int mode)
                 assert(SCardTransmit(card, 0, read, sizeof(read), 0, response, &len) != 0 && !len);
             }
         }
-        if (mode == 27 || mode == 28 || mode == 29 || mode == 30 || mode == 31) {
+        if (mode == 27 || mode == 28 || mode == 29 || mode == 30 || mode == 31 || mode == 32) {
             const unsigned char cert[] = { 0, 0xA4, 2, 0, 2, 0xB0, 1, 0 };
             len = sizeof(response); assert(SCardTransmit(card, 0, mf, sizeof(mf), 0, response, &len) == 0);
             len = sizeof(response); assert(SCardTransmit(card, 0, app, sizeof(app), 0, response, &len) == 0);
@@ -200,7 +200,7 @@ int run_fixture(int mode)
             len = sizeof(response); assert(SCardTransmit(card, 0, read, sizeof(read), 0, response, &len) == 0 && len == 258 &&
                     !memcmp(response, "PRIVATE_CERT_DER", 16));
         }
-        if (mode == 28 || mode == 29 || mode == 30 || mode == 31) {
+        if (mode == 28 || mode == 29 || mode == 30 || mode == 31 || mode == 32) {
             const unsigned char cert[] = { 0, 0xA4, 2, 0, 2, 0xB0, 2, 0 };
             len = sizeof(response); assert(SCardTransmit(card, 0, cert, sizeof(cert), 0, response, &len) == 0);
             len = sizeof(response); assert(SCardTransmit(card, 0, read, sizeof(read), 0, response, &len) == 0 && len == 258 &&
@@ -213,11 +213,16 @@ int run_fixture(int mode)
             len = sizeof(response);
             assert(SCardControl(other_card, CM_IOCTL_GET_FEATURE_REQUEST, NULL, 0, response, sizeof(response), &len) != 0 && !len);
         }
-        if (mode == 30 || mode == 31) {
+        if (mode == 30 || mode == 31 || mode == 32) {
             SCARDCONTEXT other_context; SCARDHANDLE other_card;
             assert(SCardEstablishContext(SCARD_SCOPE_USER, 0, 0, &other_context) == 0);
             assert(SCardConnect(other_context, "PRIVATE_READER", SCARD_SHARE_SHARED, SCARD_PROTOCOL_T1, &other_card, &protocol) == 0);
-            len = sizeof(response); assert(SCardTransmit(mode == 31 ? card : other_card, 0, mf, sizeof(mf), 0, response, &len) == 0);
+            len = sizeof(response); assert(SCardTransmit(mode == 31 || mode == 32 ? card : other_card, 0, mf, sizeof(mf), 0, response, &len) == 0);
+            if (mode == 32) {
+                const unsigned char status[] = {0, 0x82, 0, 3};
+                len = sizeof(response); assert(SCardTransmit(card, 0, status, sizeof(status), 0, response, &len) == 0 && len == 2 && response[0] == 0x63 && response[1] == 0xC6);
+                len = sizeof(response); assert(SCardTransmit(card, 0, status, sizeof(status), 0, response, &len) != 0 && !len);
+            }
             len = sizeof(response); assert(SCardTransmit(other_card, 0, name, sizeof(name), 0, response, &len) != 0 && !len);
             len = sizeof(response); assert(SCardTransmit(other_card, 0, pin, sizeof(pin), 0, response, &len) != 0 && !len);
         }
@@ -316,7 +321,7 @@ int main(int argc, char **argv)
     void *core = dlopen(argv[2], RTLD_NOW | RTLD_LOCAL);
     assert(core);
     int (*count)(void) = (int (*)(void))dlsym(core, "fixture_count");
-    assert(count && count() == (mode == 30 || mode == 31 ? 25 : mode == 29 || mode == 28 ? 24 : mode == 27 ? 22 : mode == 26 ? 18 : mode == 25 ? 17 : mode == 24 ? 15 : mode == 23 ? 13 : mode == 22 ? 11 : mode == 21 ? 9 : mode == 20 ? 7 : mode == 19 ? 5 : mode == 9 || mode == 17 ? 3 : mode == 7 || mode == 14 ? 2 : mode == 0 || mode == 10 || mode == 16 ? 1 : 0));
+    assert(count && count() == (mode == 32 ? 26 : mode == 30 || mode == 31 ? 25 : mode == 29 || mode == 28 ? 24 : mode == 27 ? 22 : mode == 26 ? 18 : mode == 25 ? 17 : mode == 24 ? 15 : mode == 23 ? 13 : mode == 22 ? 11 : mode == 21 ? 9 : mode == 20 ? 7 : mode == 19 ? 5 : mode == 9 || mode == 17 ? 3 : mode == 7 || mode == 14 ? 2 : mode == 0 || mode == 10 || mode == 16 ? 1 : 0));
     int (*controls)(void) = (int (*)(void))dlsym(core, "fixture_control_count");
     if (controls) assert(controls() == (mode == 10 || mode == 12 || mode == 13 ? 1 : 0));
     return 0;
@@ -533,6 +538,24 @@ task_headers=$(< "$task_tmp/second-mf-first.txt")
    $task_headers == *'second_mf_request_atr=known_jcop4'* && $task_headers == *'second_mf_sw=9000'* &&
    $task_headers == *'boundary_command=known_chipdoc_name_query'* && $task_headers != *'PRIVATE_'* ]]
 printf 'PASS real delegation checks actual original-handle ATR for one MF SELECT and blocks follow-up commands\n'
+env -u LD_PRELOAD -u LIBPCSCLITE_SPY_DELEGATE -u JCOP4_PUBLIC_SELECT_SPY_TRACE \
+    LIBPCSCLITE_DELEGATE="$task_tmp/delegate.so" JCOP4_PUBLIC_DISCOVERY_TRACE="$task_tmp/auth-status.txt" \
+    JCOP4_DIAGNOSTIC_READ4141=1 JCOP4_DIAGNOSTIC_READ4109=1 JCOP4_DIAGNOSTIC_AODF=1 JCOP4_DIAGNOSTIC_PRKDF=1 JCOP4_DIAGNOSTIC_PUKDF=1 JCOP4_DIAGNOSTIC_CDF=1 JCOP4_DIAGNOSTIC_PIN_STATUS=1 JCOP4_DIAGNOSTIC_SELECT_DF0F=1 JCOP4_DIAGNOSTIC_READ_DF0F=1 JCOP4_DIAGNOSTIC_CERT_B001=1 JCOP4_DIAGNOSTIC_CERT_B002=1 JCOP4_DIAGNOSTIC_SECOND_MF=1 JCOP4_DIAGNOSTIC_AUTH_STATUS=1 \
+    "$task_tmp/local-client" "$task_tmp/redirect-plugin.so" "$task_tmp/libfakepcsc.so" 32
+task_headers=$(< "$task_tmp/auth-status.txt")
+[[ $task_headers == *'auth_status_sw=63C6'* && $task_headers == *'auth_status_result=returned_still_stopped'* &&
+   $task_headers != *'PRIVATE_'* && $task_headers != *'SECRET_PIN'* ]]
+printf 'PASS real delegation permits one exact external status query and blocks repeats and credential-bearing commands\n'
+for task_auth_flag in invalid missing_parent; do
+    task_auth_env=("JCOP4_DIAGNOSTIC_AUTH_STATUS=invalid" "JCOP4_DIAGNOSTIC_SECOND_MF=1")
+    if [[ $task_auth_flag == missing_parent ]]; then task_auth_env=("JCOP4_DIAGNOSTIC_AUTH_STATUS=1"); fi
+    env -u JCOP4_DIAGNOSTIC_SECOND_MF -u LD_PRELOAD -u LIBPCSCLITE_SPY_DELEGATE \
+        LIBPCSCLITE_DELEGATE="$task_tmp/delegate.so" JCOP4_PUBLIC_DISCOVERY_TRACE="$task_tmp/auth-status-$task_auth_flag.txt" \
+        JCOP4_DIAGNOSTIC_READ4141=1 JCOP4_DIAGNOSTIC_READ4109=1 JCOP4_DIAGNOSTIC_AODF=1 JCOP4_DIAGNOSTIC_PRKDF=1 JCOP4_DIAGNOSTIC_PUKDF=1 JCOP4_DIAGNOSTIC_CDF=1 JCOP4_DIAGNOSTIC_PIN_STATUS=1 JCOP4_DIAGNOSTIC_SELECT_DF0F=1 JCOP4_DIAGNOSTIC_READ_DF0F=1 JCOP4_DIAGNOSTIC_CERT_B001=1 JCOP4_DIAGNOSTIC_CERT_B002=1 "${task_auth_env[@]}" \
+        "$task_tmp/local-client" "$task_tmp/redirect-plugin.so" "$task_tmp/libfakepcsc.so" 6
+    [[ $(< "$task_tmp/auth-status-$task_auth_flag.txt") != *'public_header='* && $(< "$task_tmp/auth-status-$task_auth_flag.txt") != *'auth_status_query='* ]]
+    printf 'PASS external status rejects %s configuration before transport\n' "$task_auth_flag"
+done
 for task_second_flag in invalid missing_parent; do
     task_second_env=("JCOP4_DIAGNOSTIC_SECOND_MF=invalid" "JCOP4_DIAGNOSTIC_CERT_B002=1")
     if [[ $task_second_flag == missing_parent ]]; then task_second_env=("JCOP4_DIAGNOSTIC_SECOND_MF=1"); fi

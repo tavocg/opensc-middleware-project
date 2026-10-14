@@ -3506,6 +3506,105 @@ vigentes142 comprobaciones observador/constructor/decoder,87 lanzador público,
 6 lanzador firma,79 helper y12 operación anteriores. Driver/submódulo intactos;
 firma JCOP4, VERIFY6982 y RSA3072 siguen pendientes.
 
+## Estado externo03: precedente en Idopte y respuesta63CF
+
+Revisión iniciada con principal `54b9cc8` y OpenSC `3dfef6704` limpios.
+Se analizó estáticamente libt_ias.so instalado, SHA256
+`2380540cd85316306233aa2baf640019a848606ce72bb5692cbebbb111542dc4`,
+BuildID `bc24f5debf1a871a6124f3c684425e7f4ebb5c55`. Identifican el programa,
+no una tarjeta/certificado. Desensamblado privado en
+local/jcop4-idopte-static-u8qg_p48/; no se incorpora código propietario a Git.
+
+### Constructor, clase y manejo de estado
+
+RTTI y relocaciones vinculan la tabla virtual5d0c68 a token_P15::CP71Token.
+Slot660 apunta a36e4f0, cuyas rutas de error usan GetAuthRemainingAttempts.
+La fábrica tiene una rama P71 Token detected que invoca el constructor368470.
+**Son relaciones estáticas del binario**: no se inspeccionó una vtable de un
+proceso con la tarjeta ni se determinó su modelo físico de CPU. Los nombres
+vecinos que objdump asigna a direcciones sin símbolo no identifican funciones.
+
+36e4f0 obtiene una referencia de un objeto de autenticación (offset2c8 del
+token), construye CLA00/INS82/P100/P2=referencia y transmite sin añadir datos
+ni Le. Constructor227600 deja vacíos esos campos,2278c0 delega transmisión y
+22c120 extrae el SW. Sus ramas tratan6983/63C0 como cero,63Cx como el nibble
+bajo y9000 conservando el resultado desconocido inicial. OtrosSW producen
+error, sin generar un criptograma en esta rutina. Slots640/648 recuperan/
+guardan **cache local**, no reinician un contador físico de tarjeta.
+
+T_GetVSlotInfo despacha slot1b8 hacia3a0710, que al llenar su estructura llama
+slot660. Es una consulta en la ruta de información de slot, no solamente de
+login con challenge/criptograma, y aporta un vínculo con el uso ISO investigado.
+**La referencia03 no está hardcodeada en esa rutina**: el objeto del perfil
+aporta P2. No determina cuál objeto de nuestra tarjeta es, qué autenticación
+exige la firma o cuándo reinicia sus intentos. No se ejecutaron rutas de
+unblock/changeSOPin ni operaciones administrativas.
+
+### Nuevo diagnóstico separado
+
+`make inspect/jcop4-idopte-auth-status READER=0` activa exclusivamente dentro
+del inventario Idopte JCOP4_DIAGNOSTIC_AUTH_STATUS=1, dependiente de SECOND_MF
+y todos sus padres. Modos anteriores bloquean82; inventario previo/otros modos/
+firma retiran el flag externo. Tras el SELECT MF comprobado con ATR/9000,
+permite una sola solicitud exacta **00 82 00 03**, cuatro bytes, por ese mismo
+handle. No modifica la APDU de Idopte; stopped=1 y selecciones normales siguen
+inactivas. No habilita READ, PIN con datos, GET CHALLENGE, MSE, GA, SM, PSO,
+escrituras, variantes, repetición ni comandos posteriores.
+
+Primera operación inesperada consume la oportunidad; cambios de contexto,
+reset, control o SetAttrib la eliminan. Getter PC/SC de atributos preexistente
+sin cambios. Backend recibe exactamente2bytes de capacidad y exige salida
+válida/marker privado antes de transmitir. Solo una respuesta exacta SW9000
+o63Cx se copia al cliente;63C0 también es un resultado de consulta, **no un
+permiso de reintento**. Fallos de log/transporte/tamaño, otrosSW y presupuesto
+global128 detienen sin fallback/GET RESPONSE. Conexiones no restauran los
+presupuestos; se registran únicamente cabecera fija/transporte/SW.
+
+Pasaron **150 observador/constructor/decoder,89 lanzador y6 lanzador firma:
+245 comprobaciones**, con transporte ficticio y redirector PC/SC real.
+Cubren opt-ins aislados, salida SW-only, fallos de SW/buffer/log/transporte,
+contexto/primera operación inesperada, otro handle/referencia/algoritmo/SM,
+exclusión de credenciales y reintentos. Biblioteca real compilada. Helper79 y
+operación12 intactos, suites previas vigentes sin repetir.
+
+### Resultado real: dos estados distintos
+
+El usuario reiteró verificar sus hipótesis sobre contadores y autorizó acciones
+que no bloqueen la tarjeta. Esta consulta se evaluó por su forma sin credencial,
+precedente ISO y rutina de estado, **sin asumir máximo7 ni reinicio tras firma
+correcta**. No se pidió ni hizo un ensayo de fallos, PIN erróneos o agotamiento.
+
+Una ejecución tras pruebas:
+
+```sh
+nix develop --offline -c make inspect/jcop4-idopte-auth-status READER=0
+```
+
+Informe privado local/jcop4-idopte-auth-status-dXi6peTi/report.txt,
+**2026-10-14T00:27:33Z**, todavía13 de octubre CR. Build/inventario correctos;
+ATR de nuevo handle y emisor original conocidos. MF solicitado por
+first_handle_value/case4_le256 ->0/9000. Consulta00820003 ->**transporte0/SW63CF**,
+returned_still_stopped, exactamente una.105 APDU transmitidas:103SW9000,
+un estado vacío PIN63C7 y un estado externo63CF. **Siguiente solicitud
+bloqueada00A40000/known_master_file_select**, antes de transmitir, sin SW.
+No se continuó con otra selección para descubrir más.
+
+63CF es consistente con **15 disponibles para ref03** según ISO/manejo Idopte;
+PIN1 reportó7 en63C7. No se presentan como el mismo contador. No se midieron
+máximos, decrementos, reinicios ni identidad exacta del objeto03. Una firma
+válida del usuario tampoco demostraría el reinicio de ese objeto sin establecer
+la relación entre operaciones. La oferta de hacer firmas fallidas se conserva
+como posibilidad, **no se necesita para este paso**.
+
+module_exit_status0, token_info_result=CKR_DEVICE_ERROR,
+diagnostic_result=token_info_unavailable/exit1 y events_recorded. El inventario
+falló con el SELECT MF posterior bloqueado; no hay rechazo APDU a esa selección
+ni nuevo VERIFY6982. No credencial/login/firma/MSE/PSO/SM/escritura; ambas
+consultas de estado son vacías. Siguiente contraste: caracterizar ese MF y
+evaluar un modo SELECT-only independiente, sin reabrir transporte global ni
+repetir auth-status/otras referencias/PIN por inercia. C_Login/VERIFY6982/canal
+siguen pendientes; driver/submódulo intactos, JCOP4/RSA3072 pendientes.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño

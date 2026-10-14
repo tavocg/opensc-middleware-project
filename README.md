@@ -291,6 +291,15 @@ comando permanece bloqueado; no se repitieron consultas a la tarjeta ni suites
 por este cambio documental. Fuentes, límites y siguiente contraste en
 [docs/jcop4.md](docs/jcop4.md#precedente-iso-para-external-authenticate-sin-datos).
 
+El contraste estático con libt_ias.so encontró una consulta de intentos externos
+vacía en CP71Token. Nuevo `make inspect/jcop4-idopte-auth-status READER=0`,
+opt-in separado: una00820003 tras MF comprobado, respuesta SW-only y transporte
+posterior detenido. La prueba real devolvió **63CF (compatible con15 disponibles
+para ref03)**; PIN1 devolvió **63C7 (7 disponibles)**. No demuestran máximos ni
+reinicio tras firma correcta. Siguiente SELECT MF bloqueado: inventario todavía
+fallido. Pasaron **245 pruebas** con transporte ficticio; no se ensayaron firmas
+fallidas ni PIN incorrectos. [Evidencia y límites](docs/jcop4.md#estado-externo03-precedente-en-idopte-y-respuesta63cf).
+
 Capturas privadas bajo local/jcop4-idopte-spy-*/; no agregarlas a Git.
 Pasaron previamente **30 comprobaciones del observador/decoder y 40 del
 lanzador** con transporte ficticio. El diagnóstico de firma pasó además

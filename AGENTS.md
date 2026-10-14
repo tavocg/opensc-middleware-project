@@ -6,7 +6,61 @@ la tarjeta. El usuario ejecuta las operaciones que requieran PIN o GUI. Esto
 sustituye las restricciones anteriores de no ejecutar Git/hardware/Idopte por
 el agente; conservar límites de cada diagnóstico y privacidad de los registros.
 
-**Última investigación: precedente ISO para EXTERNAL AUTHENTICATE vacío.**
+**Último resultado: estado externo03 devuelve63CF; PIN1 devuelve63C7.**
+Principal `54b9cc8`, OpenSC `3dfef6704` limpios al comenzar. Usuario reiteró
+verificar sus hipótesis: siete disponibles no acredita máximo7 ni reinicio tras
+PIN/firma correctos. Autorizó acciones que no bloqueen tarjeta; ofreció firmas
+fallidas controladas, **no se solicitó/ejecutó ninguna**. No ensayar credenciales
+erróneas ni bloqueo/reset de contadores por inercia.
+
+Análisis estático de libt_ias.so instalado, SHA256
+2380540cd85316306233aa2baf640019a848606ce72bb5692cbebbb111542dc4:
+RTTI CP71Token, vtable5d0c68/slot660 ->36e4f0, cadena de error
+GetAuthRemainingAttempts. Construye CLA00/INS82/P100/P2 de objeto auth2c8,
+sin datos/Le añadidos; convierte63Cx a x&0x0f. Slots640/648 son cache local,
+no decremento/reset físico. T_GetVSlotInfo usa slot1b8 ->3a0710, que llama
+slot660 al llenar su salida. Constructor227600 inicializa cabecera/campos vacíos,
+transmisión2278c0, extracciónSW22c120. Direcciones VMA de este binario, **no
+nombres fiables de símbolos vecinos de objdump**. Rama fábrica imprime P71
+Token detected y usa368470. No demuestra CPU/modelo de esta tarjeta ni selección
+runtime de clase; combinación con APDU observada/respuesta respalda intención
+de consulta de estado, no auth con criptograma. Disassembly privado
+local/jcop4-idopte-static-u8qg_p48/, no copiar a Git/chat.
+
+Nuevo modo separado inspect/jcop4-idopte-auth-status/--idopte-auth-status,
+JCOP4_DIAGNOSTIC_AUTH_STATUS=1 depende de SECOND_MF y padres, exclusivamente
+inventario Idopte/stdin vacío. Modos previos conservan bloqueo82; inventario/
+firma eliminan flag externo. Tras MF comprobado/9000, permite una sola
+APDU exacta00820003/4bytes por el mismo handle. Primera operación inesperada
+consume oportunidad; conexión/reset/control/SetAttrib la eliminan. Presupuestos
+originales/global128 sin reinicio, stopped permanece1; ningún READ/PIN con
+datos/challenge/MSE/GA/SM/PSO/escritura/reintento habilitado. Backend buffer2;
+solo respuesta exacta2/SW9000 o63Cx se devuelve, incluso63C0 no habilita otro
+intento. Marker privado previo obligatorio; fallos/otrosSW no fallback. Getter
+PC/SC de atributos preexistente no se amplió. Solo transporte/cabecera/SW en log.
+Pasaron150 observador/constructor/decoder,89 lanzador y6 firma: **245**, transporte
+ficticio/redirector real, biblioteca compilada. Helper79/operación12 intactos.
+
+Una consulta autorizada sin PIN/GUI tras tests:
+nix develop --offline -c make inspect/jcop4-idopte-auth-status READER=0.
+Informe local/jcop4-idopte-auth-status-dXi6peTi/report.txt,
+**2026-10-14T00:27:33Z (13 de octubre CR)**. Build/inventario/ATR correctos;
+MF por first_handle_value/case4_le256 ->0/9000, ATR del emisor conocido.
+**00820003 -> transporte0/SW63CF, returned_still_stopped**, exactamente una.
+105 APDU:103SW9000, un63C7 PIN y un63CF estado externo. **Siguiente bloqueado
+00A40000/known_master_file_select**, no transmitido/sinSW. Módulo0,
+token_info_result=CKR_DEVICE_ERROR/diagnóstico1/token_info_unavailable,
+events_recorded. No credencial/login/firma/MSE/PSO/SM/escritura ni VERIFY6982 nuevo.
+63CF encaja con15 disponibles para ref03; **no máximo15 ni cambio/reset medido**.
+No equipararlo al PIN1/7 intentos ni probar vínculo Card Admin Key por ese SW.
+
+**Próximo contraste:** caracterizar la siguiente selección MF/propósito dentro
+del inventario y evaluar una excepción SELECT-only independiente, sin reabrir
+transporte ni ensayar fallos PIN. No repetir auth-status ni otra referencia por
+inercia. C_Login/VERIFY6982/canal pendiente, driver/submódulo intactos; JCOP4/
+RSA3072 pendientes. Git autorizado pero .git sigue solo lectura; no eludirlo.
+
+**Investigación anterior: precedente ISO para EXTERNAL AUTHENTICATE vacío.**
 Principal `3e44bb6`, OpenSC `3dfef6704`, ambos limpios al comenzar.
 Solo revisión documental/estática, sin hardware, PIN, GUI, Idopte ejecutado ni
 cambios de protocolo/permisos. ISO/IEC7816-4:2005,7.5.4 y tabla68, contempla

@@ -72,6 +72,10 @@ LONG SCardTransmit(SCARDHANDLE card, const SCARD_IO_REQUEST *pci,
 		return SCARD_S_SUCCESS;
 	}
 	assert(card == 7 && cmd[0] == 0);
+	if (cmd[1] == 0x82) {
+		assert(getenv("JCOP4_DIAGNOSTIC_AUTH_STATUS") && size == 4 && !memcmp(cmd, "\x00\x82\x00\x03", 4) && selected_file == 0x3F00 && *len == 2);
+		calls++; response[0] = 0x63; response[1] = 0xC6; *len = 2; return SCARD_S_SUCCESS;
+	}
 	if (cmd[1] == 0x20) {
 		assert(size == 4 && !memcmp(cmd, "\x00\x20\x00\x01", 4) && selected_file == 0x3F00);
 		assert(getenv("JCOP4_DIAGNOSTIC_PIN_STATUS") && *len == 2);

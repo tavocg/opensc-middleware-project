@@ -7,7 +7,7 @@
 static int calls, control_calls, control_missing, control_response_fixture;
 static DWORD control_capacity, control_size = 16;
 static int second_atr_calls, second_atr_bad, second_atr_failure;
-static LONG control_result;
+static LONG control_result, fixture_transmit_result;
 static unsigned int fixture_sw = 0x9000;
 static unsigned int fixture_payload = 16, fixture_overrun;
 static LONG fixture_transmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
@@ -16,6 +16,7 @@ static LONG fixture_transmit(SCARDHANDLE card, const SCARD_IO_REQUEST *send_pci,
 {
 	(void)card; (void)send_pci; (void)cmd; (void)len; (void)recv_pci;
 	calls++;
+	if (fixture_transmit_result) return fixture_transmit_result;
 	assert(*response_len >= fixture_payload + 2);
 	if (control_response_fixture) {
 		const unsigned char fcp[] = { 0x62, 9, 0x82, 1, 1, 0x86, 4, 0xA1, 0xB2, 0xC3, 0xD4, 0x90, 0 };
@@ -72,12 +73,12 @@ static FILE *fixture_reset(void)
 	trace_fd = fileno(file);
 	stopped = selected_public_file = selected_mf = selected_app = handle_set = pending_response = calls = events = lifecycle_events = 0;
 	control_calls = control_missing = control_capacity = 0;
-	compare_second_mf = second_mf_connect_seen = second_mf_ready = second_mf_calls = second_atr_calls = second_atr_bad = second_atr_failure = 0;
+	compare_auth_status = auth_status_ready = auth_status_calls = compare_second_mf = second_mf_connect_seen = second_mf_ready = second_mf_calls = second_atr_calls = second_atr_bad = second_atr_failure = 0;
 	connection_reference_set = connection_reader_valid = connection_records = connection_boundary_stop = boundary_operation_recorded = 0;
 	memset(connection_reference_reader, 0, sizeof(connection_reference_reader));
 	control_response_fixture = 0; select_spy_fd = -1;
 	control_size = 16; control_result = 0;
-	fixture_sw = 0x9000;
+	fixture_sw = 0x9000; fixture_transmit_result = 0;
 	fixture_payload = 16; fixture_overrun = 0;
 	compare_b002 = select_b002_calls = read_b002_budget = read_b002_offset = read_b002_calls = compare_b001 = select_b001_calls = read_b001_budget = read_b001_offset = read_b001_calls = compare_read_df0f = read_df0f_calls = compare_select_df0f = select_df0f_calls = pin_status_result_valid = compare_pin_status = pin_status_calls = compare_cdf = read7005_budget = read7005_offset = read7005_calls = compare_pukdf = read7004_budget = read7004_offset = read7004_calls = compare_prkdf = read7002_budget = read7002_offset = read7002_calls = compare_aodf = read7001_budget = read7001_offset = read7001_calls = compare_read4109 = read4109_calls = compare_read4141 = read4141_budget = read4141_offset = read4141_calls = 0;
 	comparison_atr_ok = 1; /* Unit fixture simulates a validated connection. */
@@ -223,6 +224,73 @@ int main(void)
 			send_command(version, sizeof(version)) == 0 && calls == 5);
 	check_private(file);
 	puts("PASS public observer forwards only allowed discovery and logs no payloads or lengths");
+	{
+		const unsigned char mf[] = {0, 0xA4, 0, 0, 2, 0x3F, 0, 0};
+		const unsigned char query[] = {0, 0x82, 0, 3};
+		SCARDHANDLE next = 8; DWORD protocol = SCARD_PROTOCOL_T1;
+		for (int i = 0; i < 3; i++) {
+			file = fixture_second_mf(); compare_auth_status = 1;
+			prepare_second_mf("PRIVATE_READER", SCARD_SHARE_SHARED, &next, &protocol, 0);
+			assert(send_large(mf, sizeof(mf)) == 0 && auth_status_ready);
+			int before = calls; fixture_payload = 0;
+			fixture_sw = i == 0 ? 0x63C6 : i == 1 ? 0x9000 : 0x63C0;
+			unsigned char out[2]; DWORD count = sizeof(out);
+			assert(SCardTransmit(7, NULL, query, sizeof(query), NULL, out, &count) == 0 && count == 2 &&
+					out[0] == fixture_sw >> 8 && out[1] == (fixture_sw & 0xFF) && calls == before + 1);
+			assert(stopped && !selected_mf && !selected_app && !comparison_atr_ok && !auth_status_ready && auth_status_calls == 1);
+			assert(send_large(query, sizeof(query)) != 0 && send_large(pin, sizeof(pin)) != 0 &&
+					send_large(read, sizeof(read)) != 0 && send_large(get_response, sizeof(get_response)) != 0 && calls == before + 1);
+			check_private(file);
+		}
+		puts("PASS external status returns only two SW bytes once after checked MF without enabling login/read/retry");
+		for (int i = 0; i < 10; i++) {
+			file = fixture_second_mf(); compare_auth_status = i != 0;
+			prepare_second_mf("PRIVATE_READER", SCARD_SHARE_SHARED, &next, &protocol, 0);
+			assert(send_large(mf, sizeof(mf)) == 0);
+			int before = calls; fixture_payload = 0;
+			unsigned char bad[] = {0, 0x82, 0, 3, 0};
+			if (i == 1) bad[0] = 0x0C;
+			if (i == 2) bad[2] = 1;
+			if (i == 3) bad[3] = 4;
+			if (i == 4) { unsigned char out[2]; DWORD count = 2;
+				assert(SCardTransmit(8, NULL, query, sizeof(query), NULL, out, &count) != 0 && !count); }
+			else if (i == 5) assert(send_large(pin, sizeof(pin)) != 0);
+			else if (i == 6) drop_card_context();
+			else if (i == 7) { unsigned char out[2]; DWORD count = 2;
+				assert(SCardControl(7, CM_IOCTL_GET_FEATURE_REQUEST, NULL, 0, out, sizeof(out), &count) != 0 && !count); }
+			else if (i == 8) { unsigned char out[64]; DWORD count = sizeof(out);
+				assert(SCardSetAttrib(7, SCARD_ATTR_ATR_STRING, out, count) != 0); }
+			else assert(send_large(bad, i == 0 ? 4 : i == 1 || i == 2 || i == 3 ? 4 : 5) != 0);
+			assert(send_large(query, sizeof(query)) != 0 && !auth_status_ready && calls == before); check_private(file);
+		}
+		puts("PASS external status rejects opt-out/SM/other reference/algorithm/handle/PIN and loses opportunity on context/control/attribute");
+		file = fixture_reset(); compare_auth_status = 1; stopped = 1; int before = calls;
+		assert(send_large(query, sizeof(query)) != 0 && calls == before); check_private(file);
+		puts("PASS external status cannot be sent before the successful second MF selection");
+		for (int i = 0; i < 6; i++) {
+			file = fixture_second_mf(); compare_auth_status = 1;
+			prepare_second_mf("PRIVATE_READER", SCARD_SHARE_SHARED, &next, &protocol, 0);
+			assert(send_large(mf, sizeof(mf)) == 0); before = calls; fixture_payload = 0;
+			if (i == 0) fixture_sw = 0x6982;
+			if (i == 1) fixture_sw = 0x6101;
+			if (i == 2) fixture_overrun = 1;
+			if (i == 3) fixture_transmit_result = SCARD_E_NOT_TRANSACTED;
+			if (i == 4) events = 128;
+			int saved = trace_fd;
+			if (i == 5) { trace_fd = open("/dev/full", O_WRONLY); assert(trace_fd >= 0); }
+			assert(send_large(query, sizeof(query)) != 0 && calls == before + (i < 4));
+			assert(send_large(query, sizeof(query)) != 0 && !auth_status_ready && stopped);
+			if (i == 5) { close(trace_fd); trace_fd = saved; } check_private(file);
+		}
+		puts("PASS external status transport/69xx/61xx/oversize/event/log failures remain stopped with no follow-up or response copy");
+		file = fixture_second_mf(); compare_auth_status = 1;
+		prepare_second_mf("PRIVATE_READER", SCARD_SHARE_SHARED, &next, &protocol, 0);
+		assert(send_large(mf, sizeof(mf)) == 0); before = calls;
+		unsigned char out[1]; DWORD count = sizeof(out);
+		assert(SCardTransmit(7, NULL, query, sizeof(query), NULL, out, &count) != 0 && !count && calls == before);
+		assert(send_large(query, sizeof(query)) != 0 && calls == before); check_private(file);
+		puts("PASS external status requires SW output capacity before transport and does not retry a rejected buffer");
+	}
 	{
 		const unsigned char select[] = { 0, 0xA4, 0, 0, 2, 0x3F, 0, 0 };
 		SCARDHANDLE next = 8; DWORD protocol = SCARD_PROTOCOL_T1;

@@ -85,6 +85,11 @@ if [[ ${FIXTURE_B002_MODE:-0} == 1 ]]; then
 else
     [[ ${JCOP4_DIAGNOSTIC_CERT_B002-unset} == unset ]] || exit 96
 fi
+if [[ ${FIXTURE_AUTH_STATUS_MODE:-0} == 1 ]]; then
+    [[ ${JCOP4_DIAGNOSTIC_AUTH_STATUS-} == 1 ]] || exit 96
+else
+    [[ ${JCOP4_DIAGNOSTIC_AUTH_STATUS-unset} == unset ]] || exit 96
+fi
 if [[ ${FIXTURE_SECOND_MF_MODE:-0} == 1 ]]; then
     [[ ${JCOP4_DIAGNOSTIC_SECOND_MF-} == 1 ]] || exit 96
 else
@@ -162,7 +167,7 @@ esac
    ${OPENSC_DEEPBIND-unset} == unset &&
    ${LD_PRELOAD-unset} == unset && ${LIBPCSCLITE_DELEGATE-unset} == unset &&
    ${LIBPCSCLITE_SPY_DELEGATE-unset} == unset && ${JCOP4_PUBLIC_SELECT_SPY_TRACE-unset} == unset &&
-   ${JCOP4_DIAGNOSTIC_READ4141-unset} == unset && ${JCOP4_DIAGNOSTIC_READ4109-unset} == unset && ${JCOP4_DIAGNOSTIC_AODF-unset} == unset && ${JCOP4_DIAGNOSTIC_PRKDF-unset} == unset && ${JCOP4_DIAGNOSTIC_PUKDF-unset} == unset && ${JCOP4_DIAGNOSTIC_CDF-unset} == unset && ${JCOP4_DIAGNOSTIC_PIN_STATUS-unset} == unset && ${JCOP4_DIAGNOSTIC_SELECT_DF0F-unset} == unset && ${JCOP4_DIAGNOSTIC_READ_DF0F-unset} == unset && ${JCOP4_DIAGNOSTIC_CERT_B001-unset} == unset && ${JCOP4_DIAGNOSTIC_CERT_B002-unset} == unset && ${JCOP4_DIAGNOSTIC_SECOND_MF-unset} == unset &&
+   ${JCOP4_DIAGNOSTIC_READ4141-unset} == unset && ${JCOP4_DIAGNOSTIC_READ4109-unset} == unset && ${JCOP4_DIAGNOSTIC_AODF-unset} == unset && ${JCOP4_DIAGNOSTIC_PRKDF-unset} == unset && ${JCOP4_DIAGNOSTIC_PUKDF-unset} == unset && ${JCOP4_DIAGNOSTIC_CDF-unset} == unset && ${JCOP4_DIAGNOSTIC_PIN_STATUS-unset} == unset && ${JCOP4_DIAGNOSTIC_SELECT_DF0F-unset} == unset && ${JCOP4_DIAGNOSTIC_READ_DF0F-unset} == unset && ${JCOP4_DIAGNOSTIC_CERT_B001-unset} == unset && ${JCOP4_DIAGNOSTIC_CERT_B002-unset} == unset && ${JCOP4_DIAGNOSTIC_SECOND_MF-unset} == unset && ${JCOP4_DIAGNOSTIC_AUTH_STATUS-unset} == unset &&
    ${OPENSC_API_TRACE_FILE-unset} == unset &&
    ${OPENSC_JCOP3_SESSION_STATE-unset} == unset &&
    ${OPENSC_JCOP3_PIN_STATUS_IN_PLACE-unset} == unset &&
@@ -220,7 +225,7 @@ export JCOP4_DIAGNOSTIC_SELECT_DF0F=1
 export JCOP4_DIAGNOSTIC_READ_DF0F=1
 export JCOP4_DIAGNOSTIC_CERT_B001=1
 export JCOP4_DIAGNOSTIC_CERT_B002=1
-export JCOP4_DIAGNOSTIC_SECOND_MF=1
+export JCOP4_DIAGNOSTIC_SECOND_MF=1 JCOP4_DIAGNOSTIC_AUTH_STATUS=1
 export OPENSC_DEBUG=99 OPENSC_DEBUG_FILE=/should/not/be/used
 export OPENSC_CONF=/should/not/be/used OPENSC_API_TRACE_FILE=/should/not/be/used
 export OPENSC_DEEPBIND=1
@@ -711,6 +716,19 @@ export FIXTURE_IDOPTE_EXIT=17
 task_run 17 2 --idopte-second-mf
 [[ $(< "$task_tmp/output.txt") != *'Consulta pública de Idopte terminada'* ]]
 printf 'PASS second MF preserves provider failure without read/authentication fallback\n'
+unset FIXTURE_IDOPTE_EXIT
+export FIXTURE_AUTH_STATUS_MODE=1
+task_run 0 2 --idopte-auth-status
+task_auth_report=$(sed -n 's/^Informe: //p' "$task_tmp/output.txt")
+[[ $task_auth_report == */jcop4-idopte-auth-status-*/report.txt &&
+   $(< "$task_auth_report") == *'auth_status_scope=mf_ref03_case1_once_sw_only_no_followup_permissions'* &&
+   $(stat -c %a "$task_auth_report") == 600 ]]
+printf 'PASS external status opt-in is confined to its guarded inventory mode with empty stdin\n'
+export FIXTURE_IDOPTE_EXIT=17
+task_run 17 2 --idopte-auth-status
+[[ $(< "$task_tmp/output.txt") != *'Consulta pública de Idopte terminada'* ]]
+printf 'PASS external status mode preserves failure without authentication fallback\n'
+unset FIXTURE_AUTH_STATUS_MODE
 unset FIXTURE_IDOPTE_EXIT FIXTURE_COMPARE_MODE FIXTURE_READ4109_MODE FIXTURE_AODF_MODE FIXTURE_PRKDF_MODE FIXTURE_PUKDF_MODE FIXTURE_CDF_MODE FIXTURE_STATUS_MODE FIXTURE_DF0F_MODE FIXTURE_READ_DF0F_MODE FIXTURE_B001_MODE FIXTURE_B002_MODE FIXTURE_SECOND_MF_MODE
 export FIXTURE_TOKEN_INFO_ERROR=1
 task_run 1 2 --idopte-discovery
