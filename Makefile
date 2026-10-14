@@ -29,7 +29,7 @@
 .PHONY: inspect/jcop4-reader-features test/jcop4-reader-features
 .PHONY: inspect/jcop4-channel-transport test/jcop4-channel-transport
 .PHONY: test/iasecc-chipdoc-profile
-.PHONY: test/iasecc-chipdoc-channel test/iasecc-chipdoc-bootstrap
+.PHONY: test/iasecc-chipdoc-channel test/iasecc-chipdoc-bootstrap test/iasecc-chipdoc-transaction
 
 PDF_INPUT ?= doc.pdf
 PDF_OUTPUT ?= local/jcop3-cli.pdf
@@ -107,6 +107,7 @@ help:
 		'make test/iasecc-chipdoc-profile Prueba perfil y ciclo de sesión IAS/ChipDoc, sin tarjeta ni PIN.' \
 		'make test/iasecc-chipdoc-channel Prueba CA/MF protegido con el dispatcher real y un lector simulado.' \
 		'make test/iasecc-chipdoc-bootstrap Prueba metadata PKCS15 y preparación del canal sin tarjeta.' \
+		'make test/iasecc-chipdoc-transaction Prueba reserva/reset/cierre y estado PIN autenticado, sin tarjeta.' \
 		'make test/jcop4-reader-features Prueba el diagnóstico del lector con PC/SC simulado.' \
 		'make test/jcop4-channel-sign Prueba firma/guard/verificación con transporte y PIN ficticios.' \
 		'make test/jcop4-channel-kdf Prueba la derivación candidata AES128 con datos sintéticos, sin tarjeta ni PIN.' \
@@ -399,3 +400,6 @@ test/iasecc-chipdoc-channel:
 
 test/iasecc-chipdoc-bootstrap:
 	@bash scripts/test-iasecc-chipdoc-bootstrap.sh
+
+test/iasecc-chipdoc-transaction:
+	@bash scripts/test-iasecc-chipdoc-transaction.sh

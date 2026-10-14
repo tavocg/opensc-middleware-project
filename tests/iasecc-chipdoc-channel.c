@@ -18,10 +18,12 @@ static int mf_error, mf_bit, reset_on_command, swap_provider_on_command, restric
 static struct sc_reader_operations reader_ops;
 static struct sc_card_operations card_ops;
 
+#ifndef IASECC_CHIPDOC_REAL_LOCKS
 int sc_lock(struct sc_card *card)
 { assert(card == &test_card && card->lock_count == 1); card->lock_count++; locks++; return SC_SUCCESS; }
 int sc_unlock(struct sc_card *card)
 { assert(card == &test_card && card->lock_count == 2); card->lock_count--; unlocks++; return SC_SUCCESS; }
+#endif
 
 static void response_iv(unsigned int counter, unsigned char iv[16])
 {
@@ -82,7 +84,7 @@ static int backend(struct sc_reader *reader, struct sc_apdu *a)
 {
 	unsigned char *wire = NULL, response[258]; size_t size = 0, received = 0;
 	const unsigned long flags = SC_APDU_FLAGS_NO_SM | SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP;
-	assert(reader == &test_reader && test_card.lock_count == 2 && (a->flags & flags) == flags);
+	assert(reader == &test_reader && test_card.lock_count >= 2 && (a->flags & flags) == flags);
 	assert(!a->control && !(a->flags & (SC_APDU_FLAGS_CHAINING | SC_APDU_FLAGS_SM_CHAINING)));
 	assert(sc_apdu_get_octets(&test_ctx, a, &wire, &size, SC_PROTO_T1) == SC_SUCCESS);
 	physical++; a->sw1 = 0x90; a->sw2 = 0;

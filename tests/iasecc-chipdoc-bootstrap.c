@@ -16,7 +16,7 @@ static int bootstrap_backend(struct sc_reader *reader, struct sc_apdu *a)
 	if (plain_calls == 3) return backend(reader,a);
 	unsigned char *wire = NULL; size_t size = 0;
 	const unsigned long flags = SC_APDU_FLAGS_NO_SM | SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP;
-	assert(reader == &test_reader && test_card.lock_count == 2 && (a->flags & flags) == flags);
+	assert(reader == &test_reader && test_card.lock_count >= 2 && (a->flags & flags) == flags);
 	assert(!a->control && !(a->flags & (SC_APDU_FLAGS_CHAINING | SC_APDU_FLAGS_SM_CHAINING)));
 	assert(!sc_apdu_get_octets(&test_ctx,a,&wire,&size,SC_PROTO_T1));
 	assert(a->cla == 0); physical++; plain_calls++;
@@ -118,6 +118,7 @@ static void real_pkcs15_decode(void)
 	puts("PASS real native PKCS15 DER key/PIN decoding drives exact bootstrap then real dispatcher CA/MF, six/seven APDU, SSC2/4, no PIN or discovery");
 }
 
+#ifndef IASECC_CHIPDOC_BOOTSTRAP_FIXTURE
 int main(void)
 {
 	test_provider.libctx = OSSL_LIB_CTX_new(); assert(test_provider.libctx);
@@ -233,3 +234,5 @@ int main(void)
 	OSSL_PROVIDER_unload(alternate_provider.defprov); OSSL_LIB_CTX_free(alternate_provider.libctx);
 	return 0;
 }
+
+#endif

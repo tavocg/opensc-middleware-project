@@ -6074,3 +6074,38 @@ ningún cambio de permisos. Sin hardware/PIN real/GUI/Idopte del agente,
 firmareal JnUUiy9x/capturas/flake/lock/observador intactos. No comando nuevo
 de tarjeta: siguen reserva/cierre/query/VERIFY/MSE/PSO y activación pública
 con pruebas sintéticas. [Detalles](jcop4-opensc-integration.md#bootstrap-desde-objetos-pkcs15-y-parámetros-d004).
+
+### Reserva/cierre y consulta PIN protegida dentro de OpenSC
+
+Principal `5e59f0a`, OpenSC `0710faaf1`, limpios al comenzar. Controlador
+privado transaction_begin añade un sc_lock propio (respeta anidados), invalida
+estado antes del reset inicial y ejecuta bootstrap/MF:7APDU,SSC4/faseMF.
+Transaction_close borra crypto/MSE/cache antes del reset final, libera solo
+su lock y es idempotente. Si reset/unlock/mutex o propiedad fallan, reporta
+recuperación y bloquea otro begin hasta desconectar/recrear instancia; sin
+reintentos de canal/PIN. Callers aún deben serializar APIs: no mutex nuevo.
+
+Hook de adquisición física durante reserva activa invalida incluso sin
+reset, para que close no libere/resetee un nuevo lock ajeno. Logout/finish
+cierran reserva; binding reconocido evita SELECT raíz en logout. Finish
+propaga error propio, pero sc_disconnect_card local lo registra y retorna0:
+comprobar close/report antes de desconectar, no inferir cierre de disconnect0.
+
+Consulta privada solo EMPTY VERIFY protegido/global1/DO8E sin credencial:
+frame16/Le256/NO_RETRY_WL/NO_GET_RESP/NO_SM, MAC antes de SW/datos.63C7 avanza
+PIN_AVAILABLE/SSC6, no máximo7 ni login inferidos. Otros contadores autenticados
+se reportan y detienen;0 blocked, otros no7 security status.9000 no permite
+saltar PIN; respuesta inválida deja tries=-1/sinSW. No VERIFY con PIN ni
+wiring a PIN_CMD/PKCS11/init/match públicos todavía.
+
+Pasaron7grupos nuevos y ASan/UBSan7 detect_leaks0, sin fugas verificadas ni
+instrumentación de bibliotecas/locks/reset/ASN1 precompilados. Dispatcher/
+sc_lock/reset/unlock reales con reader/peer/mutex de software, no PCSC real:
+anidados/rollback/cierre/errores/reset/reacquisición sinreset,64bitsMAC/replay/
+status0..15/duplicados/provider y logout/finish.23grupos previos y suiteIAS/
+JCOP3 pasaron de nuevo; core47/helpers76 intactos/vigentes/no repetidos.
+OpenSC/móduloPKCS11 compilados, helpers intactos no reconstruidos; sin nm-D
+nuevo. No hardware/PIN real/GUI/Idopte/nuevas capturas del agente ni efecto
+sobre intentos probado. Firma JnUUiy9x vigente. Sigue VERIFY protegido desde
+API y luego AID/MSE/PSO, serialización/wiring público/PKCS11 antes de tarjeta.
+[Detalles](jcop4-opensc-integration.md#reserva-del-lector-cierre-y-consulta-de-pin-autenticada).

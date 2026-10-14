@@ -65,9 +65,12 @@ El canal ya usa el contexto criptográfico de OpenSC y respeta sus providers
 y restricciones, con pruebas de aislamiento frente al contexto global.
 La API interna de preparación valida la llave y PIN de PKCS#15, selecciona
 la aplicación, comprueba D004 y confirma el canal. Pasaron cinco grupos
-adicionales con objetos decodificados y transporte simulado. Faltan la
-activación optativa desde el driver público y las operaciones PIN/MSE/PSO;
-el backend nuevo requiere OpenSSL3. No hay otra prueba con tarjeta ahora.
+adicionales con objetos decodificados y transporte simulado.
+El controlador privado ya reserva el lector, hace reset y cierra la sesión,
+y consulta el estado del PIN con MAC verificado. Siete grupos adicionales,
+ASan/UBSan y las regresiones IAS/JCOP3 pasaron con lector simulado.
+Faltan la activación optativa desde el driver público y las operaciones
+VERIFY con credencial/MSE/PSO; el backend nuevo requiere OpenSSL3. No hay otra prueba con tarjeta ahora.
 Los párrafos siguientes conservan los pasos históricos de investigación.
 La selección temporal RSA/SHA-256 obtuvo `9000`; VERIFY vacío devolvió
 `63C7`, con siete intentos disponibles, PIN global 1 y formato UTF-8.

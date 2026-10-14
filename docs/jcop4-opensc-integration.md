@@ -3,8 +3,9 @@
 Estado al 14 de octubre de 2026,10:13 Costa Rica. Base local del proyecto
 `0f51c4c`, submódulo OpenSC `3dfef6704`. Este documento define el siguiente
 cambio. **Perfil/estado/limpieza y adaptador interno CA/MF están implementados;
-metadata/bootstrap privados y providers también implementados; activación
-optativa y PIN/firma todavía no están conectados al driver público.**
+metadata/bootstrap/providers/reserva/cierre/consulta PIN privados también
+implementados; activación optativa y VERIFY/firma aún no están conectados
+al driver público.**
 
 ## Evidencia disponible
 
@@ -57,7 +58,7 @@ Los datos públicos de política no acreditan un login ni permiten saltar VERIFY
 | PIN | `iasecc_pin_cmd`, `iasecc_pin_verify`, `iasecc_pin_get_info` | VERIFY/consulta protegidos, un intento, sin copia persistente ni cache de PIN; publicar estado solo autenticado y limpiar login tras reset/error. |
 | MSE | `iasecc_set_security_env` | Mapear operación/hash/llave de PKCS#15 al formato probado, manteniendo selección AID bajo SM y orden. |
 | Firma | `iasecc_compute_signature`, `iasecc_compute_signature_dst`, `iasecc_compute_signature_at` | Para este perfil usar la operación PSO probada; no INTERNAL AUTHENTICATE o hashing convencional por semejanza. |
-| Limpieza | `iasecc_logout`, `iasecc_finish`, `card_reader_lock_obtained` | Limpieza de estado/ownership/MSE/cache y hook de reset implementados. Contexto crypto real implementado; quedan reset explícito/remoción y reserva/liberación de sesión del llamador. |
+| Limpieza | `iasecc_logout`, `iasecc_finish`, `card_reader_lock_obtained` | Limpieza de estado/ownership/MSE/cache y hook de reset implementados. Contexto y reserva/reset/cierre privados implementados con lifecycle; quedan remoción real, serialización y wiring al llamador público. |
 | PKCS#15/PKCS#11 | `sc_pkcs15_compute_signature`, algoritmos anunciados | Asegurar paso de digestSHA25632; manejar DigestInfo de CKM_RSA_PKCS conforme a la conversión existente, nunca firmarlo como un digest distinto. |
 
 La ruta actual de `iasecc` sigue siendo IAS convencional: no contiene este
@@ -392,3 +393,91 @@ JnUUiy9x sigue vigente. Siguiente: reserva/reset/cierre, query/VERIFY y luego
 MSE/PSO con APIs y transporte sintético, wiring público optativo y PKCS11,
 antes de pedir otra firma física. OpenSSL3 solamente; otros backends siguen
 con stub, sin builds reales/FIPS/Windows/macOS. RSA3072 aún no acreditado.
+
+## Reserva del lector, cierre y consulta de PIN autenticada
+
+Sobre principal `5e59f0a` y OpenSC `0710faaf1`, APIs privadas
+`iasecc_chipdoc_transaction_begin`, `transaction_close` y
+`iasecc_chipdoc_channel_query_pin`. No se conectan todavía a init/match,
+PIN_CMD público o PKCS11, no añaden mecanismos ni interfaz para credenciales.
+
+Begin valida objetos/contexto/perfil/límites y callbacks de lock/unlock/reset
+y hook. Añade un único sc_lock, incluso si el llamador ya tiene otros locks.
+Invalida selección/MSE/crypto local antes del único reset inicial; bootstrap
+6APDU y MF corto1APDU. Éxito conserva una reserva propia en la misma tarjeta/
+lector/contexto, con canal SSC4/faseMF. No modifica límites o capabilities.
+OpenSC conserva sus reintentos normales de lock ante reset; el controlador
+no reintenta startup ni APDU. Los callers deben serializar las APIs de una
+tarjeta: esta reserva entre llamadas no es un mutex nuevo o prueba de hilos.
+
+El header privado `iasecc-chipdoc-transaction.h` implementa close compartido
+por APIs y lifecycle. Despega propiedad y borra claves/SSC/MSE/cache antes
+del reset final bajo el lock original, luego libera solo su sc_unlock.
+Respeta la profundidad restante del llamador, y no repite efectos al cerrar
+otra vez. Reporta resultados/flags/etapas fijos, sin buffers, claves o datos
+personales. Close inactivo sin estado pendiente es no-op del controlador,
+no certifica cierre remoto de APIs raw que usen su propio lock/reset.
+
+Un reset inicial fallido provoca unlock sin repetir reset; fallo de cierre
+o unlock deja recovery_required. Esa instancia no puede comenzar de nuevo
+hasta que se desconecte y se cree otra. Si sc_lock falla después de aumentar
+el contador (p.ej. falla liberar mutex), no supone que posee una transacción
+usable: marca pérdida/recuperación y no ejecuta reset/unlock desconocidos.
+El reporte conserva la incertidumbre y exige desconectar, sin reintento.
+
+El hook real card_reader_lock_obtained se invoca al adquirir un lock físico,
+no en llamadas anidadas. Si aparece mientras la reserva propia estaba
+activa, la reserva original se perdió: invalida canal y marca lost/owned0/
+recovery aunque was_reset sea0. Close nunca resetea ni libera ese nuevo lock
+ajeno. No implica detectar instantáneamente un unlock externo sin otra
+operación: la próxima API comprueba lock_count y descarta contexto; una
+reacquisición física posterior queda cubierta por el hook. Perfiles legacy
+y contextos raw conservan su comportamiento ordinario previo.
+
+Logout/finish cierran reserva activa. Logout con binding reconocido ya
+inactivo evita reselección raíz IAS en claro. Finish libera drv_data y
+retorna error de cierre. En esta base **sc_disconnect_card registra el error
+de finish pero termina retornando0**; por eso el consumidor debe comprobar
+transaction_close/report antes de desconectar. No inferir reset/cierre
+completo solo de disconnect0 ni presentar esto como reporte de bug upstream.
+
+Query exige reserva propia, faseMF y contexto/lector/generación vigentes.
+Solo manda EMPTY VERIFY global1 protegido: CLA0C/INS20/P100/P201, CASE4 corto,
+Lc10/DO8E MAC8 y Le exterior256; frame16. **Sin credencial, DO87 o DO97**.
+Usa sc_transmit_apdu normal y NO_RETRY_WL/NO_GET_RESP/NO_SM. Verifica MAC
+antes de datos/SW; admite exterior9000 o63Cx que coincida exactamente con
+DO99 autenticado, y exige payload vacío. Cambios de contexto/ownership
+posteriores a transporte se comprueban antes de volver a usar el crypto.
+
+La primera política medida avanza a PIN_AVAILABLE/SSC6 solo con63C7.
+Devuelve otros contadores autenticados0..15 pero descarta el canal y falla:
+0 es AUTH_METHOD_BLOCKED; otros no7 SECURITY_STATUS. No infiere máximo7 ni
+reinicio del contador y no transforma9000 en login o permiso de saltar PIN.
+Respuestas inválidas no publican SW y dejan tries_left=-1. Un fallo real
+limpia el canal, manteniendo obligación de close; argumentos/duplicados
+locales preservan el propietario y no envían otra consulta o usan cache.
+No se implementa aún VERIFY con credencial; ningún test nuevo lee PIN real.
+
+`make test/iasecc-chipdoc-transaction` pasó **siete grupos**: sc_lock/reset/
+unlock y dispatcher reales de libOpenSC, con lector/locks del backend/peer
+y fallo de mutex simulados. Incluye anidamiento, rollback en cada etapa,
+reset inicial/final/unlock/mutex fallidos, pérdida y reacquisición física
+sin reset, todos64bitsMAC, replay/forma/SW/outer/payload y contadores0..15,
+provider cambiado, duplicados y lifecycle real logout/finish. Respuestas y
+MAC del peer se construyen fuera del codec. Sin PCSC/contexto real/tarjeta.
+
+ASan/UBSan7 pasó con detect_leaks=0, sin prueba de fugas o instrumentación de
+OpenSC.so/OpenSSL/lock/reset/unlock/ASN1 precompilados. Código local del
+driver/controlador/codec/serializer del fixture sí instrumentado. Pasaron
+los23 grupos previos perfil/adaptador/bootstrap y la suite IAS/JCOP3 completa
+con el nuevo target (30grupos nativos). Core47/helpers76 no cambiaron y
+sus suites previas siguen vigentes; no repetirlas por este cambio. OpenSC/
+móduloPKCS11 compilados, sin nuevos símbolos nm-D, sin reconstruir helpers
+reales intactos. Makefile.am distribuye el header privado nuevo.
+
+Sin PCSC/lector/tarjeta/PIN real/GUI/Idopte del agente, ni captura o informe.
+Los efectos reales de reset/query sobre intentos no se acreditan mediante
+esta prueba software. Tampoco concurrencia de hilos/procesos, bloqueo temporal
+acotado de PCSC o remoción física. Firma JnUUiy9x vigente; no repetir ahora.
+Sigue VERIFY desde argumentos de API, luego AID/MSE/PSO, activación pública
+optativa con capacidades/serialización justificadas y pruebas PKCS15/PKCS11.

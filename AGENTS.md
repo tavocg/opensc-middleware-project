@@ -9,6 +9,85 @@ transporte simulado. PIN/GUI también los ejecuta el usuario. Esto sustituye
 la autorización anterior de hardware por el agente; conservar límites de
 cada diagnóstico y privacidad. Git sigue autorizado pero .git solo lectura.
 
+**Última revisión: reserva/reset/cierre privados y consulta PIN autenticada implementados.**
+Principal `5e59f0a`, OpenSC `0710faaf1`, limpios al comenzar. Firma real
+JnUUiy9x vigente. Sin PCSC/lector/tarjeta/PIN real/GUI/Idopte ejecutado;
+no nueva captura/informe/hardware. Todavía no ejecutar otra firma real.
+
+Nuevo controlador privado **iasecc_chipdoc_transaction_begin(p15,key,report)**:
+valida metadata native/perfil/contexto/límites y callbacks lector/hook antes
+del lock. Añade exactamente UN sc_lock a los locks existentes (anidados
+conservan los del llamador); OpenSC mantiene sus reintentos de lock físico
+ante reset, no hay retry propio de APDU/PIN. Invalida local antes de único
+reset inicial, bootstrap existente6APDU y MF corto1APDU. Éxito conserva
+reserva propia/SSC4/faseMF; no credencial/login/firma. Sin vtable pública,
+match/init/binding automático/algoritmos anunciados nuevos.
+
+Nuevo **iasecc-chipdoc-transaction.h** compartido con lifecycle: close descarta
+contexto/MSE/cache ANTES de reset final bajo misma reserva y libera solo un
+sc_unlock. No toca locks anidados ajenos. Idempotente, sin nuevo reset/unlock
+tras cierre; reportes numéricos de etapas/commands/lock/reset/unlock/flags,
+sin buffers/claves/identidad. Inactivo es no-op de controlador, no prueba de
+cierre remoto de las APIs raw cuyo reset sigue a cargo del llamador.
+Reset inicial fallido libera reserva sin repetir reset, marca recuperación.
+Fallo final/reset/unlock o pérdida de reserva deja **recovery_required**:
+instancia bloqueada para otro begin hasta desconectar/recrear; no retry de
+canal/PIN ni reconexión automática. Fallo sc_lock con contador incrementado
+(p.ej. mutex-unlock) NO acredita propiedad: conserva marcador de pérdida/
+recuperación, no reset/unlock desconocidos, requiere desconectar.
+
+Hook real card_reader_lock_obtained: adquisición física mientras reserva
+propia estaba activa demuestra pérdida, incluso was_reset0; invalida canal,
+marca owned_lock0/lost/recovery. Close no resetea ni desbloquea lock nuevo
+del otro llamador. Locks anidados no invocan hook; perfil/raw/JCOP3 conservan
+comportamiento ordinario. Begin marca propiedad DESPUÉS de sc_lock/hook.
+**Callers aún deben serializar operaciones en una tarjeta**: no nuevo mutex,
+no prueba de hilos/concurrencia PCSC ni timeout acotado de backend real.
+
+Logout/finish IAS cierran reserva activa. Logout con binding reconocido
+inactivo evita SELECT raíz en claro. Finish libera drv_data y devuelve fallo
+de cierre; **sc_disconnect_card local registra ese fallo pero retorna0**, no
+lo modificar/reportar upstream ahora. Consumidor debe comprobar close/report
+antes de desconectar; disconnect0 solo no demuestra reset/cierre completos.
+
+Nueva API privada **channel_query_pin(card,ref1,tries,report)** exige reserva
+propia+faseMF/SSC válido. Único EMPTY VERIFY protegido: CLA0C/INS20/global1,
+Lc10/MAC8E, exteriorLe256/CASE4 corto16, **sin PIN/DO87/DO97**. Dispatcher
+normal, NO_RETRY_WL/NO_GET_RESP/NO_SM. MAC antes de datos/SW y outer9000 o
+63Cx idéntico al DO99 autenticado; respuesta sin payload obligatoria.
+Solo observado63C7 avanza PIN_AVAILABLE/SSC6; NO login ni máximo7 inferido.
+Otros contadores autenticados0..15 se devuelven y descartan canal;0 ->
+AUTH_METHOD_BLOCKED, resto no7 -> SECURITY_STATUS.9000 no permite omitir PIN.
+MAC/forma/contexto/transporte inválidos: tries=-1, sin SW publicado. Error
+real limpia crypto pero la reserva exige close; argumentos/duplicados
+locales preservan propietario, no repetición/query cache. No VERIFY con
+credencial ni interfaz para obtener/guardar PIN. Efectos reales de resets/
+query sobre intentos no probados en esta revisión sin hardware.
+
+**7 grupos nuevos** test/iasecc-chipdoc-transaction: sc_lock/reset/unlock y
+dispatcher REALES de libOpenSC con callbacks lector/mutex/peer software.
+Anidamiento/cierre completo, cada etapa startup, inicial/final reset/unlock/
+mutex release fallidos, adquisición física nueva sinreset, todos64bitsMAC/
+replay/SW/count0..15/payload/duplicados/provider, lifecyclelogout/finish.
+ASan/UBSan7 detect_leaks0 pasó, sin prueba de fugas ni instrumentación de
+OpenSC.so/provider/lock/reset/unlock/ASN1 precompilados; driver/controlador/
+codec/serializer de fixture sí. Perfil9/adaptador9/bootstrap5 pasaron de
+nuevo:30grupos nativos en total. SuiteIAS/JCOP3 completa pasó con nuevo target
+(685líneasPASS, NO685testcases distintos). Core47/helpers76 sin cambios,
+suites anteriores vigentes/no repetidas. OpenSC/móduloPKCS11 compilados;
+helpers reales sin cambios/no reconstruidos. Sin símbolos nm-D nuevos.
+
+**Siguiente trabajo autónomo:** VERIFY protegido desde argumentos de API,
+único intento/sin cache/reintento/PIN-pad, parámetros reales6..14/UTF8 por
+validar al conectar; luego selecciónAID/MSE/PSO y PKCS15/PKCS11. Mantener
+serialización/cierre/reportes de recuperación y preparar activación optativa
+con inicialización/capacidades justificadas antes de hardware. RSA3072/JCOP4
+GUI/consecutivas/reinserción/otros backends/plataformas/FIPS pendientes.
+Git readonly/noeludir: submódulo primero,5modificados (Makefile.am,card-iasecc.c,
+iasecc.h,sm.c/h) y **nuevo header transaction.h**; principal después puntero,
+4docs/Makefile/test-iasecc.sh/3fixtures previos y **nuevo test+lanzador**.
+No build/capturas a Git. No comando nuevo de tarjeta ahora.
+
 **Última revisión: bootstrap privado desde objetos PKCS15 y D004, probado sin hardware.**
 Principal `d0ee1da`, OpenSC `8e107d776`, limpios al comenzar. Firma real
 JnUUiy9x sigue vigente. Sin PCSC/lector/tarjeta/PIN real/GUI/Idopte ejecutado;
