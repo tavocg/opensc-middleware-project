@@ -14,12 +14,16 @@
 #include "libopensc/asn1.h"
 #include "jcop4-dh-control.h"
 #include "jcop4-channel-confirmation.h"
+#ifdef JCOP4_SIGN_DIAGNOSTIC
+#include "jcop4-signature.h"
+static struct jcop4_signature probe_signature = {.directory_fd = -1};
+#endif
 
 static const unsigned char probe_atr[] = {0x3B,0xD5,0x18,0xFF,0x81,0x91,0xFE,0x1F,0xC3,0x80,0x73,0xC8,0x21,0x10,0x0A};
 static const unsigned char probe_aid[] = {0xE8,0x28,0xBD,0x08,0x0F,0xA0,0,0,3,0x63,0x64,0x79,0x6E,0x69,0x64};
 static volatile sig_atomic_t probe_interrupted;
 enum probe_phase { PROBE_STOP, PROBE_DIR, PROBE_APP, PROBE_D004, PROBE_INITIAL, PROBE_MSE, PROBE_GA, PROBE_READ, PROBE_CONTEXT_MF, PROBE_PIN_QUERY,
-	PROBE_LOGIN_VERIFY };
+	PROBE_LOGIN_VERIFY, PROBE_SIGNATURE_MSE, PROBE_SIGNATURE_PSO, PROBE_SIGNATURE_GET };
 static struct {
 	const struct sc_reader_operations *original;
 	sc_reader_t *reader;
@@ -28,7 +32,9 @@ static struct {
 	int root, directory, blocked, called, ended;
 	int context_mode, context_selected;
 	int login_mode; unsigned int context_query_sw;
-	unsigned char expected[38]; size_t expected_size;
+	int sign_mode, login_authenticated, signature_mse_verified;
+	unsigned int signature_pending_sw, signature_gets;
+	unsigned char expected[70]; size_t expected_size;
 } probe_guard;
 
 static void probe_signal(int sig) { (void)sig; probe_interrupted = 1; }
@@ -103,6 +109,25 @@ static int probe_apdu_allowed(sc_apdu_t *a)
 			!memcmp(probe_guard.expected, "\x0c\x20\0\x01\x1d", 5) && !memcmp(a->data, probe_guard.expected + 5, 29);
 	}
 #endif
+#ifdef JCOP4_SIGN_DIAGNOSTIC
+	else if (probe_guard.sign_mode && probe_guard.login_authenticated &&
+		(probe_guard.phase == PROBE_SIGNATURE_MSE || probe_guard.phase == PROBE_SIGNATURE_PSO)) {
+		int pso = probe_guard.phase == PROBE_SIGNATURE_PSO;
+		return (!pso || probe_guard.signature_mse_verified) && probe_guard.expected_size == (pso ? 70u : 35u) &&
+			!memcmp(probe_guard.expected, pso ? "\x0c\x2a\x9e\x9a\x40" : "\x0c\x22\x81\xb6\x1d", 5) &&
+			a->cla == 0x0C && a->ins == (pso ? 0x2A : 0x22) &&
+			a->p1 == (pso ? 0x9E : 0x81) && a->p2 == (pso ? 0x9A : 0xB6) && a->cse == SC_APDU_CASE_4_SHORT && a->le == 256 &&
+			a->lc == (pso ? 64u : 29u) && !memcmp(a->data, pso ? "\x87\x31\x01" : "\x87\x11\x01", 3) &&
+			(pso ? !memcmp(a->data + 51, "\x97\x01\0\x8e\x08", 5) : !memcmp(a->data + 19, "\x8e\x08", 2)) &&
+			!memcmp(probe_guard.expected + 5, a->data, a->lc);
+	} else if (probe_guard.sign_mode && probe_guard.login_authenticated && probe_guard.signature_mse_verified && probe_guard.phase == PROBE_SIGNATURE_GET) {
+		unsigned int le = probe_guard.signature_pending_sw & 255; if (!le) le = 256;
+		return (probe_guard.signature_pending_sw & 0xFF00) == 0x6100 && probe_guard.signature_gets < 3 &&
+			probe_guard.expected_size == 5 && !a->cla && a->ins == 0xC0 && !a->p1 && !a->p2 &&
+			a->cse == SC_APDU_CASE_2_SHORT && !a->lc && a->le == le &&
+			!memcmp(probe_guard.expected, "\0\xc0\0\0", 4) && probe_guard.expected[4] == (unsigned char)le;
+	}
+#endif
 	return 0;
 }
 static int probe_guard_transmit(sc_reader_t *reader, sc_apdu_t *apdu)
@@ -115,8 +140,15 @@ static int probe_guard_transmit(sc_reader_t *reader, sc_apdu_t *apdu)
 	}
 	apdu->flags |= SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP | SC_APDU_FLAGS_NO_SM;
 	probe_guard.called = 1; probe_guard.commands++;
+#ifdef JCOP4_SIGN_DIAGNOSTIC
+	if (probe_guard.phase == PROBE_SIGNATURE_GET) probe_guard.signature_gets++;
+#endif
 	rv = probe_guard.original->transmit(reader, apdu);
 	if (rv < 0) { probe_guard.blocked = 1; return rv; }
+#ifdef JCOP4_SIGN_DIAGNOSTIC
+	if (probe_guard.phase == PROBE_SIGNATURE_PSO || probe_guard.phase == PROBE_SIGNATURE_GET)
+		probe_guard.signature_pending_sw = apdu->sw1 * 256 + apdu->sw2;
+#endif
 	if (probe_guard.phase == PROBE_DIR) {
 		if (apdu->ins == 0xA4) {
 			probe_guard.directory = 0;
@@ -139,7 +171,11 @@ static int probe_exchange(void *context, const unsigned char *wire, size_t size,
 	sc_card_t *card = context; sc_apdu_t a; int rv, cse;
 	if (!received) return SC_ERROR_INVALID_ARGUMENTS;
 	*received = 0;
-	if (!wire || !response || capacity != 258 || !probe_transport_ready(card) || probe_guard.blocked || probe_interrupted)
+	int big_response = 0;
+#ifdef JCOP4_SIGN_DIAGNOSTIC
+	big_response = probe_guard.sign_mode && probe_guard.phase == PROBE_SIGNATURE_PSO && capacity == 293;
+#endif
+	if (!wire || !response || (capacity != 258 && !big_response) || !probe_transport_ready(card) || probe_guard.blocked || probe_interrupted)
 		return SC_ERROR_NOT_ALLOWED;
 	if (size == 17 && probe_guard.phase == PROBE_INITIAL) { probe_phase_set(PROBE_MSE); cse = SC_APDU_CASE_3_SHORT; }
 	else if (size == 144 && probe_guard.phase == PROBE_MSE) { probe_phase_set(PROBE_GA); cse = SC_APDU_CASE_3_SHORT; }
@@ -151,12 +187,20 @@ static int probe_exchange(void *context, const unsigned char *wire, size_t size,
 	else if (probe_guard.login_mode && probe_guard.phase == PROBE_LOGIN_VERIFY && size == 35 &&
 		probe_guard.expected_size == size && !memcmp(wire, probe_guard.expected, size)) cse = SC_APDU_CASE_4_SHORT;
 #endif
+#ifdef JCOP4_SIGN_DIAGNOSTIC
+	else if (probe_guard.sign_mode &&
+		((probe_guard.phase == PROBE_SIGNATURE_MSE && size == 35) || (probe_guard.phase == PROBE_SIGNATURE_PSO && size == 70)) &&
+		probe_guard.expected_size == size && !memcmp(wire, probe_guard.expected, size)) cse = SC_APDU_CASE_4_SHORT;
+	else if (probe_guard.sign_mode && probe_guard.phase == PROBE_SIGNATURE_GET && size == 5 &&
+		probe_guard.expected_size == size && !memcmp(wire, probe_guard.expected, size)) cse = SC_APDU_CASE_2_SHORT;
+#endif
 	else { probe_guard.blocked = 1; return SC_ERROR_NOT_ALLOWED; }
 	sc_format_apdu(card, &a, cse, wire[1], wire[2], wire[3]); a.cla = wire[0];
-	a.data = wire + 5; a.lc = a.datalen = wire[4];
+	if (cse != SC_APDU_CASE_2_SHORT) { a.data = wire + 5; a.lc = a.datalen = wire[4]; }
 	if ((cse == SC_APDU_CASE_3_SHORT && size != a.lc + 5) ||
 		(cse == SC_APDU_CASE_4_SHORT && (size != a.lc + 6 || wire[size - 1] != 0))) return SC_ERROR_NOT_ALLOWED;
-	a.le = cse == SC_APDU_CASE_4_SHORT ? 256 : 0; a.resp = response; a.resplen = capacity - 2;
+	a.le = cse == SC_APDU_CASE_2_SHORT ? (wire[4] ? wire[4] : 256) : cse == SC_APDU_CASE_4_SHORT ? 256 : 0;
+	a.resp = response; a.resplen = cse == SC_APDU_CASE_2_SHORT ? a.le : capacity - 2;
 	a.flags |= SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP | SC_APDU_FLAGS_NO_SM;
 	rv = sc_transmit_apdu(card, &a);
 	if (rv < 0 || a.resplen > capacity - 2) { probe_guard.blocked = 1; return rv < 0 ? rv : SC_ERROR_INVALID_DATA; }
@@ -235,6 +279,9 @@ out:
 #ifdef JCOP4_LOGIN_DIAGNOSTIC
 #include "jcop4-channel-login.h"
 #endif
+#ifdef JCOP4_SIGN_DIAGNOSTIC
+#include "jcop4-channel-sign.h"
+#endif
 
 int main(int argc, char **argv)
 {
@@ -248,7 +295,12 @@ int main(int argc, char **argv)
 	unsigned long index; char *end; int rv, status = 1, locked = 0, session = 0, announced = 0;
 	int context_mode = argc == 3 && !strcmp(argv[2], "--pin-context");
 #ifdef JCOP4_LOGIN_DIAGNOSTIC
+#ifdef JCOP4_SIGN_DIAGNOSTIC
+	int sign_mode = argc == 5 && !strcmp(argv[2], "--sign-once");
+	int login_mode = sign_mode;
+#else
 	int login_mode = argc == 3 && !strcmp(argv[2], "--login-once");
+#endif
 	if (!login_mode) return 2; /* Separate binary cannot silently run another mode. */
 	context_mode = 1;
 #endif
@@ -257,16 +309,23 @@ int main(int argc, char **argv)
 	for (size_t i = 0; i < sizeof(unsafe_env)/sizeof(unsafe_env[0]); i++) if (getenv(unsafe_env[i])) return 2;
 	if (getenv("OPENSC_DEBUG") && strcmp(getenv("OPENSC_DEBUG"), "0")) return 2;
 	if (!getenv("OPENSC_CONF")) return 2;
+#ifdef JCOP4_SIGN_DIAGNOSTIC
+	if (jcop4_signature_prepare(&probe_signature, argv[3], argv[4])) { printf("signature_certificate=invalid_stop\n"); return 1; }
+	printf("signature_certificate=rsa2048_signing_public_key_loaded\n");
+#endif
 	memset(&probe_guard, 0, sizeof(probe_guard)); probe_guard.next_record = 1; probe_interrupted = 0;
 	probe_guard.context_mode = context_mode;
 #ifdef JCOP4_LOGIN_DIAGNOSTIC
 	probe_guard.login_mode = login_mode;
 #endif
+#ifdef JCOP4_SIGN_DIAGNOSTIC
+	probe_guard.sign_mode = sign_mode;
+#endif
 #ifdef JCOP4_LOGIN_DIAGNOSTIC
 	/* Interrupt terminal read so TERM/INT can restore echo before closing. */
 	struct sigaction action; memset(&action, 0, sizeof(action)); action.sa_handler = probe_signal;
 	sigemptyset(&action.sa_mask);
-	if (sigaction(SIGINT, &action, NULL) || sigaction(SIGTERM, &action, NULL)) return 2;
+	if (sigaction(SIGINT, &action, NULL) || sigaction(SIGTERM, &action, NULL)) goto out;
 #else
 	signal(SIGINT, probe_signal); signal(SIGTERM, probe_signal);
 #endif
@@ -324,6 +383,9 @@ int main(int argc, char **argv)
 #ifdef JCOP4_LOGIN_DIAGNOSTIC
 	if (!status) status = probe_login_once(card, &confirmed);
 #endif
+#ifdef JCOP4_SIGN_DIAGNOSTIC
+	if (!status) status = probe_sign_once(card, &confirmed);
+#endif
 out:
 	probe_guard.phase = PROBE_STOP;
 	jcop4_sm_invalidate(&confirmed); OPENSSL_cleanse(probe_guard.expected, sizeof(probe_guard.expected));
@@ -334,6 +396,11 @@ out:
 	if (card) { rv = sc_disconnect_card(card); printf("disconnect_result=%d\n", rv); if (rv < 0) status = 1; }
 	if (reader && probe_guard.original) reader->ops = probe_guard.original;
 	if (ctx) sc_release_context(ctx);
+#ifdef JCOP4_SIGN_DIAGNOSTIC
+	if (!status && !probe_interrupted) status = jcop4_signature_save(&probe_signature);
+	printf("signature_result=%s\n", status || probe_interrupted ? "not_saved_stop" : "rsa_sha256_verified_and_saved");
+	jcop4_signature_clear(&probe_signature);
+#endif
 	printf("guard_blocked=%d\ncommand_count=%u\ninterrupted=%d\n", probe_guard.blocked, probe_guard.commands, !!probe_interrupted);
 	return probe_interrupted ? 1 : status;
 }

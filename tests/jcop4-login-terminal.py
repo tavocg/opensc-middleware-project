@@ -102,15 +102,22 @@ with tempfile.TemporaryDirectory() as directory:
     builder = fixture / "scripts/build-jcop4-channel-probe.sh"
     builder.write_text('''#!/usr/bin/env bash
 set -euo pipefail
-[[ $# == 2 && -z $1 && $2 == --login-once ]]
+[[ $# == 2 && -z $1 ]]
+task_binary=jcop4-channel-login
+if [[ ${FIXTURE_SIGN:-0} == 1 ]]; then [[ $2 == --sign-once ]]; task_binary=jcop4-channel-sign; else [[ $2 == --login-once ]]; fi
 printf 'build\n' >> "$FIXTURE_ROOT/calls"
 [[ ${FIXTURE_BUILD_FAIL:-0} == 0 ]] || exit 31
-cp "$FIXTURE_ROOT/helper" "$FIXTURE_ROOT/build/opensc/jcop4-channel-login"
+cp "$FIXTURE_ROOT/helper" "$FIXTURE_ROOT/build/opensc/$task_binary"
 ''')
     helper = fixture / "helper"
     helper.write_text('''#!/usr/bin/env bash
 set -euo pipefail
-[[ $# == 2 && $1 == 0 && $2 == --login-once && $OPENSC_DEBUG == 0 ]]
+[[ $1 == 0 && $OPENSC_DEBUG == 0 ]]
+if [[ ${FIXTURE_SIGN:-0} == 1 ]]; then
+    [[ $# == 4 && $2 == --sign-once && $3 == "$FIXTURE_ROOT/local/jcop4-signature-5Dpadr1N/certificate.der" && $4 == "${OPENSC_CONF%/*}" ]]
+else
+    [[ $# == 2 && $2 == --login-once ]]
+fi
 for var in OPENSC_API_TRACE_FILE OPENSC_DEBUG_FILE LD_PRELOAD LD_AUDIT LD_LIBRARY_PATH LIBPCSCLITE_DELEGATE LIBPCSCLITE_SPY_DELEGATE; do
     [[ ! -v $var ]]
 done
@@ -152,4 +159,19 @@ exec "$@"
     status = subprocess.run(["bash", str(launcher), "0", "--login-once"], env=env, stdin=subprocess.DEVNULL,
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE).returncode
     assert status == 2 and (fixture / "calls").read_text() == before
+    env.pop("FIXTURE_BUILD_FAIL")
+    env["FIXTURE_SIGN"] = "1"
+    for expected in (0, 1, 124):
+        env["FIXTURE_HELPER_EXIT"] = str(expected)
+        status, output = pty_run(["bash", str(launcher), "0", "--sign-once"], tty_stdout=True, environment=env)
+        assert status == expected
+        report = Path(next(line.removeprefix("Informe: ").strip() for line in output.decode().splitlines() if line.startswith("Informe: ")))
+        assert "mode=anonymous_channel_signature_once_rsa2048_sha256" in report.read_text()
+        assert report.stat().st_mode & 0o777 == 0o600 and report.parent.stat().st_mode & 0o777 == 0o700
+    assert (fixture / "calls").read_text().splitlines() == ["build", "helper"] * 3 + ["build"] + ["build", "helper"] * 3
+    before = (fixture / "calls").read_text()
+    status = subprocess.run(["bash", str(launcher), "0", "--sign-once"], env=env, stdin=subprocess.DEVNULL,
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE).returncode
+    assert status == 2 and (fixture / "calls").read_text() == before
 print("PASS login launcher requires a terminal, selects separate binary, isolates tracing, closes stdin, preserves private reports and never retries failures/timeouts/build errors")
+print("PASS signature launcher explicitly selects the separate binary/cached public certificate/private output and foreground timeout, with no retries or nonterminal PIN input")

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Bounded channel diagnostic; explicit separate login mode can collect one PIN.
-# No signature, GUI or Idopte in any mode.
+# Explicit sign mode signs only its generated technical test text. No GUI/Idopte.
 set -euo pipefail
 umask 077
 ulimit -c 0
@@ -15,7 +15,7 @@ if (( $# == 2 )) && [[ $2 == --pin-context ]]; then
     task_mode=anonymous_channel_pin_context_no_pin_once
     task_prefix=jcop4-channel-pin-context
     task_helper_args+=(--pin-context)
-elif (( $# == 2 )) && [[ $2 == --login-once ]]; then
+elif (( $# == 2 )) && [[ $2 == --login-once || $2 == --sign-once ]]; then
     # A controlling terminal is required, never accept credentials via pipe.
     if [[ ! -t 0 || ! -t 1 ]]; then
         printf 'El login requiere una terminal para introducir el PIN sin eco.\n' >&2
@@ -29,8 +29,15 @@ elif (( $# == 2 )) && [[ $2 == --login-once ]]; then
     # A timeout subprocess group is not the terminal foreground group when
     # launched from this script: keep terminal access and Ctrl+C on the helper.
     task_timeout_args=(--foreground)
+    if [[ $2 == --sign-once ]]; then
+        task_mode=anonymous_channel_signature_once_rsa2048_sha256
+        task_prefix=jcop4-channel-signature
+        task_helper=jcop4-channel-sign
+        task_helper_args=("$task_reader" --sign-once)
+        task_builder_args=("" --sign-once)
+    fi
 elif (( $# > 1 )); then
-    printf 'Uso: bash scripts/probe-jcop4-channel.sh [lector] [--pin-context|--login-once]\n' >&2
+    printf 'Uso: bash scripts/probe-jcop4-channel.sh [lector] [--pin-context|--login-once|--sign-once]\n' >&2
     exit 2
 fi
 if [[ ! $task_reader =~ ^[0-9]+$ ]]; then
@@ -46,6 +53,10 @@ mkdir -p -- "$task_root/local"
 task_dir=$(mktemp -d "$task_root/local/$task_prefix-XXXXXXXX")
 task_report="$task_dir/report.txt"
 task_config="$task_dir/opensc.conf"
+if [[ $task_mode == anonymous_channel_signature_once_rsa2048_sha256 ]]; then
+    # Validated earlier as LlaveDeFirma; cached public certificate only.
+    task_helper_args+=("$task_root/local/jcop4-signature-5Dpadr1N/certificate.der" "$task_dir")
+fi
 cat > "$task_config" <<'CONFIG'
 app default {
     debug = 0;
@@ -87,7 +98,9 @@ env -u OPENSC_API_TRACE_FILE -u OPENSC_DEBUG_FILE -u OPENSC_DEEPBIND \
     "$task_root/build/opensc/$task_helper" "${task_helper_args[@]}" \
     </dev/null >> "$task_report" 2>&1 || task_status=$?
 printf 'helper_exit_status=%d\n' "$task_status" >> "$task_report"
-if [[ $task_mode == anonymous_channel_login_once_no_signature ]]; then
+if [[ $task_mode == anonymous_channel_signature_once_rsa2048_sha256 ]]; then
+    printf 'Prueba de firma terminada (estado %d). Revisar verificación RSA y cierre en el informe; no repetir por inercia.\n' "$task_status"
+elif [[ $task_mode == anonymous_channel_login_once_no_signature ]]; then
     printf 'Login terminado (estado %d), sin firma. Revisar el informe; no repetir por inercia.\n' "$task_status"
 elif (( task_status )); then
     if [[ $task_mode == anonymous_channel_pin_context_no_pin_once ]]; then

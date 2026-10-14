@@ -9,7 +9,66 @@ transporte simulado. PIN/GUI también los ejecuta el usuario. Esto sustituye
 la autorización anterior de hardware por el agente; conservar límites de
 cada diagnóstico y privacidad. Git sigue autorizado pero .git solo lectura.
 
-**Última revisión: login JCOP4 confirmado; recolector de respuesta larga probado offline.**
+**Última revisión: firma RSA2048/SHA256 bajo SM preparada, aún sin prueba real.**
+Principal `4241b41`, OpenSC `3dfef6704`, limpios al comenzar. Última tarjeta
+siguehSQwNDBj/unVERIFY9000/MAC/cierre0. Esta revisión sinPCSC/hardware/PINreal/
+GUI/Idopte ejecutado. Certificados5Dpadr1N/0dfqWRSN/6m61lek4 tienen misma
+pubkey; sin identidad/modulus/fingerprint volcados. Checker offline declara
+5Dpadr1N elegibleRSA2048/uso firma; no usar4FGWOtpI.
+
+**Corrección:**22dbe0 no llama227760 ni conserva literalmenteCLA original.
+22dbe5 toma byte y22dbe8 aplicaAND F3, eliminando0C. Para nuestros comandos
+básicos0C ambas ramasflag49 convergen **GET RESPONSE00C00000Le**. Lectura
+anterior incompleta, corregida antes de hardware; no probar0C como alternativa.
+GuíaANS/CPS4§6.6.1/6.7.1 recuperada: algoritmo28/SHA256RSA-PKCS1v1.5,
+bit80ref=hash externo/PSOdatahash; otra personalización, no pruebaCR. MSE
+91022891 ya dio9000 sinSM; candidato ahora trasloginMF/SM. Fuenteen docs.
+
+Nuevo **make sign/jcop4-channel READER=0**, build separadojcop4-channel-sign/
+--sign-once. Antes de conectar valida DER completo<16384, RSA2048/256bytes/
+uso firma youtput0700propio/no symlink; solo pubkey del certificado cacheado.
+Genera texto técnico+nonceRAND128/SHA256, muestra texto/dev/tty antesPIN.
+Canal/MF/query63C7/unlogin como probado; retieneSSC8 solo nuevo modo. MSE
+002281B6/91022891 ->SSC9/10/body29/wire35/noDO97; MAC/inner9000/datos0 y
+marcaMSEvalidada antesPSO. PSO002A9E9A/hash32/Le256 ->SSC11/12/body64/wire70.
+No selecciónAID/ref/padding/hash alternativos. Modos anteriores siguencerrando
+sin firma; nadaenvactiva nuevo modo. ASCII6..14/PINsolo/dev/tty/foreground45s+
+5sKILL/debug0/core0 como antes. Guard exigeoptin/login/MSE/ATR/T1/budget24 y
+frameexacto; no plaintext/admin/otrohash/ref/GETno solicitado/replay6C/PSO/PIN.
+
+Le exterior256/APDUcortaT1 intactos, buffer293 soloPSO; reader-pcsc.c:334 y
+sm-iso.c contemplanresplen>Le poroverheadSM, no prueba empírica/extended.
+Collector permite primerframe **exacto293/421 conSW9000** mayor256; fragmentos
+61siguen<=256/258/max3GET. Signreal solo293/RSA2048, CLA00/LeSW2/0=>256 solo
+tras61pendiente, sin seal/SSCnuevo/GETautomático. MAC/SW completos antes de
+firma256; EVP_DigestVerifySHA256+RSA_PKCS1_PADDING conpubkey. Guarda message.txt/
+signature.bin/certificate.der **solo mathvalid+reset/unlock/disconnect0**,0600,
+O_EXCL/no symlink/rollbacksolo nuevos. No sesión devuelta ni privatekeyuser.
+Metadata primerPSO size/outer/tagcategoría no autenticados, colección/getcount,
+etapas/MAC/SWvalidado; noPIN/longitud/raw/keys/MAC/hash/certidentidad/sighex.
+Verificación matemática, no cadenaX509/OCSP/sello/PDF calificado. Formato/
+contexto/protocoloMSE/PSO de tarjeta aún candidatos hasta éxito real.
+
+Pasaron **12firma**(6nativos+6bootstrap real/lector simulado), **5collector**,
+**14login**(incluye wrapperfirmaPTY) y **22probe** por dependencias. Solo RSAkey/
+PINficticios: cipher/CMACindependiente/SSC9..12, directo293/0..3GET, errores,
+replay/MAC/RSAinválido/noartifact/cierre fallido/basuraDER/beforePIN/guards/
+rollbackO_EXCL. ASan/UBSan12firma+5collector pasaron detect_leaks0; libs
+precompiladas sin instrumentar/no prueba de fugas. Metadatafirst/assert luego,
+regresiónfirma12 pasó/helperreal compilado; no cambio crypto. Bashsyntax/
+diffcheck0/treshelpers compilados. Driver/submódulo/observador/flake/lock intactos.
+
+**Siguiente intervención:** mismaJCOP4 RSA2048, otros clientes/firmador cerrados,
+`nix develop -c make sign/jcop4-channel READER=0`, una sola vez. Revisar texto
+técnico ydarPINcorrecto soloalprompt; si falla no repetir: revisar login/MSE/
+firstPSO/collection/MAC/RSA/save/cierre antesotro comando. Timeout/reset faltante
+o fallido requiere reinserción. UnPIN fallido puede consumir intento; no se
+ejecuta ofertaPINincorrecto. Firmareal/RSA3072/driver pendientes. Gitreadonly:
+commit modificados docs3/Makefile/scripts2/tests4/tools3 y **nuevos5**:
+tools/jcop4-signature.h, tools/jcop4-channel-sign.h/.c, tests/jcop4-channel-sign.c,
+scripts/test-jcop4-channel-sign.sh. No capturas/build ni eludirGit sololectura.
+
+**Revisión anterior: login JCOP4 confirmado; recolector de respuesta larga probado offline.**
 Principal `b8800b2`, OpenSC `3dfef6704`, limpios al comenzar. Informe usuario
 `local/jcop4-channel-login-hSQwNDBj/report.txt`,2026-10-14T07:01:57Z
 (14Oct01:01CR): canal/MF/query63C7 autenticados, login transporte0/decoder
@@ -26,7 +85,8 @@ datos/Le256 en una rama, no prueba despacho runtime/MSE/entrada RSA actual.
 SM24483c..2448a0 sigue exterior256 o Le+35 según flag. Transport22d950
 ensambla61xx por GET RESPONSE antes del decoder SM240f21/2436a0:22dab4..
 22db69 armaC0/00/00/LeSW2 (0=>256), acumula datos y reemplaza SW intermedio.
-CLA segúncard+49:1->00,0->original(22dbe0 llama227760). Constructor22de3a..
+CLA segúncard+49:1->00,0->original; **corregido arriba: AND F3 elimina0C, no
+llamada227760**. Constructor22de3a..
 22de45 inicializa49/4A a0; no asumir valor/cadena activos por constructor.
 Rama6C reenvía en22dbf0..22dc56 y rama sinLe transforma61 a9000 en22dbb9:
 **no copiar esos comportamientos ni probar CLA alternativas sobre hardware**.

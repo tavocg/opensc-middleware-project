@@ -44,7 +44,11 @@ static int jcop4_response_collect(const unsigned char *first, size_t first_size,
 	wire[0] = policy == JCOP4_RESPONSE_CLA_ZERO ? 0 : 0x0C;
 	for (;;) {
 		local.result = JCOP4_RESPONSE_SIZE;
-		if (part_size < 2 || part_size > 258 || part_size - 2 > requested) goto out;
+		/* T=1 may return the whole protected frame in one physical response,
+		 * as supported by OpenSC SM receive buffers. Only the exact declared
+		 * full frame with terminal9000 is allowed to exceed a short fragment. */
+		int full_first = !local.get_count && part_size == frame_limit && first[part_size-2] == 0x90 && first[part_size-1] == 0;
+		if (part_size < 2 || (!full_first && (part_size > 258 || part_size - 2 > requested))) goto out;
 		size_t data_size = part_size - 2;
 		local.physical_sw = (unsigned int)part[part_size - 2] * 256 + part[part_size - 1];
 		local.result = JCOP4_RESPONSE_CAPACITY;

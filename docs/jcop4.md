@@ -5293,8 +5293,9 @@ PSO002A9E9A con datos/Le256 en una rama, sin acreditar despacho runtime ni
 formatoMSE/entrada RSA. SM24483c..2448a0 mantiene exterior256 oLe+35 segúnflag
 ya documentado. El transporte22d950 está antes del decoderSM:22dab4..22db69
 ensambla61xx con GET RESPONSE C0/00/00/LeSW2,0=>256, acumulando datos y
-reemplazandoSW intermedio. card+49 decide CLA00 u original;22dbe0 consulta
-227760 si vale0. Constructor22de3a..22de45 lo inicia0, lo cual no identifica
+reemplazandoSW intermedio. card+49 decide CLA00 u original; **lectura inicial
+corregida abajo:22dbe8 elimina0C medianteAND F3**. Constructor22de3a..22de45
+lo inicia0, lo cual no identifica
 cadena/valor activos. No elegir/barrer CLA por conjetura. Rama6C reenvía y otra
 rama sinLe transforma61a9000: no se copian esos comportamientos. No ejecutar
 Idopte/captura autenticada ni nuevas APDU para investigar esta lectura estática.
@@ -5328,6 +5329,76 @@ verifique RSA/SHA256 con certificado público vinculado antes de guardar una
 firma. Existen certificados en informes previos (5Dpadr1N y otros), todavía
 sin comparar en esta revisión; no usar4FGWOtpI por el error humano documentado.
 No GET/PIN real solicitado por este cambio, no prueba3072, no driver listo.
+
+### Diagnóstico de firma RSA2048/SHA256 bajo SM
+
+Principal `4241b41`, OpenSC `3dfef6704`, limpios al comenzar. Última evidencia
+real siguehSQwNDBj/login9000/MAC/cierre0; no firma real de esta revisión.
+Certificados5Dpadr1N/0dfqWRSN/6m61lek4 contienen la misma pubkey, comprobado
+offline sin volcar identidad/modulus/fingerprint.5Dpadr1N cumple el parser
+RSA2048/uso firma, no se usa la prueba4FGWOtpI marcada por error humano.
+
+La lectura anterior de22dbe0 era incompleta:22dbe5 tomaCLA original y22dbe8
+aplicaAND F3. Para nuestros comandos de canal básico0C, tanto flag49=1(00)
+como0(0C&F3) generan **00 C0 00 00 Le**. No se conserva0C ni se necesita
+adivinar el flag runtime; no se prueba una CLA alternativa. Esta corrección
+se hizo antes de hardware. La [guía primaria ANS/CPS4](https://industriels.esante.gouv.fr/sites/default/files/media/document/ANS_CPSV4_0011_Guide_De_R%C3%A9f%C3%A9rence_v1_03.pdf)
+§6.6.1/6.7.1 documenta algoritmo28 paraRSA/SHA256/PKCS1v1.5 ybit80 de
+referencia para hash externo como entradaPSO. Es otra personalización, no
+pruebaCR; el MSE91022891 ya aceptado sinSM sigue candidato bajoMF/SM.
+
+Nuevo `make sign/jcop4-channel READER=0`, binario separado/flag--sign-once.
+Antes de conectar carga únicamente pubkey de5Dpadr1N: DER completo<16384,
+RSA2048/256bytes/uso firma, destino0700propio/no symlink. Genera texto técnico
+con nonceRAND128/SHA256 y lo muestra por/dev/tty antes del únicoPIN. Mantiene
+canal/MF/query63C7/login conocidos, misma conexión/lock; solo este modo retiene
+SSC8. ModosnoPIN/loginprevios continúan cerrando, noenvhabilita firma.
+
+1. MSE002281B6/datos91022891 protegidoSSC9/10, body29/wire35/sinDO97. Exige
+   MAC/inner9000/datos0 ymarcaMSEverificado antesPSO.
+2. PSO002A9E9A/hash32/Le256,SSC11/12,body64/wire70/DO97=00,outerLe256.
+   Buffer físico293 soloPSO: reader-pcsc.c:334 ysm-iso.c admiten resplen>Le
+   paraoverheadSM. No modificar caps/maxrecv ni declarar soporteextended.
+3. Primerframe completo exacto293/SW9000 admitido aunque supere256; collector
+   conserva límites258 porfragmento61 y3GET. GETCLA00/LeSW2,0=>256 solo
+   tras61pendiente, sin seal/SSCextra, replay6C o PSO.421 sigue solo software.
+4. Verifica MAC/inner9000 del conjunto antes de publicar datos, firma256 y
+   EVP_DigestVerifySHA256 con RSA_PKCS1_PADDING/pubkey cargada. Longitud/MAC
+   sin RSA válido no éxito; no algoritmo/selección/hash/padding fallback.
+5. Borra canal/temporales, reset/unlock/disconnect. Solo tras éxito/cierre0
+   guarda message.txt/signature.bin/certificate.der,0600/O_EXCL/no symlink.
+   Error de filesystem revierte solo archivos creados, conserva los previos.
+
+Guard exige flag/login/MSE/ATR/T1/budget24/frameMSE/PSO exactos yGETacotado.
+Sin otra referencia/archivo/admin/credencial/reenvío. PINASCII6..14/devtty/
+sin eco ni log, foreground45sTERM+5sKILL/debug0/core0. Primer envelopePSO
+solo tamaño/SWexterior/tagcategoría no autenticados; restoetapas/transport/
+collection/getcount/MAC/innerSWvalidado, sin PIN/longitud/raw/hash/cipher/
+claves/MAC/certidentidad/sighex. Verificación matemática del test, no cadena
+X509/OCSP/sello/PDFcalificado. RSA3072/driver aún no implementados aquí.
+
+Pasaron12firma(6nativos+6bootstrap OpenSC real con lector simulado),5collector,
+14login(incluye wrapperfirmaPTY) y22probe por dependencias tocadas. Solo PIN/
+RSAprivatekey sintéticos: cipher/CMAC independientes/SSC9..12, retorno directo
+293 o0..3GET, errores/MAC/replay/RSAinválido sinartifact, cierre fallido,
+basuraDER/directorioinseguro antesPIN, guards yrollbackO_EXCL. ASan/UBSan
+12firma+5collector pasaron detect_leaks0; libs precompiladas sin instrumentar/
+no prueba de fugas. Metadatafirst/assert añadidos luego, regresiónfirma12
+pasó/helper real compilado, crypto intacta. Bashsyntax/diffcheck0. Driver/
+submódulo/observador/flake/lock intactos. Sin PCSC/tarjeta/PINreal/GUI/Idopte.
+
+**Siguiente intervención:** mismaJCOP4 RSA2048, otros clientes/firmador cerrados,
+una sola ejecución:
+
+```sh
+nix develop -c make sign/jcop4-channel READER=0
+```
+
+Revisar texto técnico y darPINcorrecto alprompt. Si falla, detenerse; revisar
+login/MSE/firstPSO/collection/MAC/RSA/save y cierre antes de otro intento.
+Timeout/reset faltante/fallido requiere reinsertar antesotro uso. UnPINfallido
+puede consumir intento; no se ejecuta oferta dePINincorrecto ni se reintenta.
+Firmareal JCOP4, RSA3072 y compatibilidad del firmador permanecen pendientes.
 
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 

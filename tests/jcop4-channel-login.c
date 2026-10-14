@@ -63,7 +63,11 @@ static int invoke_login(void)
 	assert(!test_lock_depth && test_state.resets == 2 && test_state.unlocks == 1 && test_state.disconnects == 1);
 	return rv;
 }
+#ifdef JCOP4_SIGN_FIXTURE
+int login_fixture_main(void)
+#else
 int main(void)
+#endif
 {
 	init(&test_flow); memcpy(test_initial, test_flow.initial, 137);
 	setenv("OPENSC_CONF", "/tmp/synthetic-config", 1); setenv("OPENSC_DEBUG", "0", 1);

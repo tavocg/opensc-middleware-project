@@ -21,7 +21,12 @@ static int jcop4_login_read_pin(unsigned char pin[14], size_t *size)
 	hidden = original; hidden.c_lflag &= ~(ECHO | ECHONL);
 	if (tcsetattr(fd, TCSAFLUSH, &hidden)) goto out;
 	changed = 1;
+#ifdef JCOP4_SIGN_DIAGNOSTIC
+	if (write(fd, probe_signature.message, probe_signature.message_size) != (ssize_t)probe_signature.message_size) goto out;
+	const char prompt[] = "PIN de la JCOP4 (sin eco; un intento, firma del texto anterior): ";
+#else
 	const char prompt[] = "PIN de la JCOP4 (sin eco; un único intento, sin firma): ";
+#endif
 	if (write(fd, prompt, sizeof(prompt) - 1) != (ssize_t)(sizeof(prompt) - 1)) goto out;
 	while (!probe_interrupted) {
 		ssize_t got = read(fd, &byte, 1);
@@ -87,10 +92,12 @@ static int probe_login_once(sc_card_t *card, struct jcop4_sm_channel *channel)
 	if (rv) goto out;
 	printf("login_response=authenticated\nlogin_sw=%04X\n", sw);
 	if (sw != 0x9000 || plain_size) goto out;
+	probe_guard.login_authenticated = 1;
 	result = 0;
 out:
 	printf("login_attempted=%d\nlogin_result=%s\n", attempted, result ? "not_confirmed_stop" : "pin_verified_no_signature");
-	jcop4_sm_invalidate(channel); OPENSSL_cleanse(pin, sizeof(pin)); OPENSSL_cleanse(header, sizeof(header));
+	if (result || !probe_guard.sign_mode) jcop4_sm_invalidate(channel);
+	OPENSSL_cleanse(pin, sizeof(pin)); OPENSSL_cleanse(header, sizeof(header));
 	OPENSSL_cleanse(body, sizeof(body)); OPENSSL_cleanse(wire, sizeof(wire)); OPENSSL_cleanse(response, sizeof(response));
 	OPENSSL_cleanse(plain, sizeof(plain)); OPENSSL_cleanse(probe_guard.expected, sizeof(probe_guard.expected)); probe_guard.expected_size = 0;
 	return result;

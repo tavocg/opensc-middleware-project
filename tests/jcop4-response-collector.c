@@ -79,6 +79,9 @@ int main(void)
 		for (int i = 0; i < 16; i++) { keys.encryption[i] = (unsigned char)i; keys.mac[i] = (unsigned char)(i + 16); }
 		assert(strlen(vector) == 586);
 		for (size_t i = 0; i < sizeof(response); i++) { unsigned int byte; assert(sscanf(vector + 2*i, "%2x", &byte) == 1); response[i] = byte; }
+		init(&f, 291, 0);
+		assert(jcop4_response_collect(response, sizeof(response), JCOP4_RESPONSE_CLA_ZERO, 293, exchange, &f,
+			out, sizeof(out), &written, &report) == 0 && !f.calls && written == 293 && !memcmp(out, response, 293));
 		for (size_t changed = 0; changed <= 291; changed++) {
 			init(&f, 291, 0x0C); memcpy(f.data, response, 291);
 			if (changed < 291) f.data[changed] ^= 1;

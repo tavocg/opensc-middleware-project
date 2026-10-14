@@ -356,10 +356,14 @@ Pasaron12 grupos login con PIN/transporte ficticios y22 de regresión del probe.
 [Protocolo y límites](docs/jcop4.md#login-experimental-de-un-único-intento-bajo-sm).
 Después de corregir el grupo de terminal (`timeout --foreground`), la prueba
 hSQwNDBj confirmó **PIN verificado con MAC válido/9000**, un único VERIFY y
-cierre completo. No repetir login por inercia. La firma aún necesita respuesta
-RSA/SHA-256 verificada: se preparó un recolector de respuesta larga aislado,
-con cinco grupos de pruebas simuladas, sin habilitar GET RESPONSE en tarjeta.
-[Estado y siguiente trabajo](docs/jcop4.md#login-confirmado-y-respuesta-rsa-protegida).
+cierre completo. No repetir login por inercia.
+Nuevo `make sign/jcop4-channel READER=0`: firma un texto técnico con nonce,
+un único PIN bajo SM, MSE/PSO y verificaciónRSA2048/SHA256 con el certificado
+público guardado de la tarjeta. Solo guarda firma/texto/certificado tras
+verificación y cierre completos. Pasaron12 grupos de firma con tarjeta/PIN
+ficticios y las regresiones del transporte/lanzador. Falta prueba real: ante
+error, detenerse y revisar informe antes de repetir.
+[Protocolo y límites](docs/jcop4.md#diagnóstico-de-firma-rsa2048sha256-bajo-sm).
 El driver aún no firma con JCOP4.
 [Evidencia y límites](docs/jcop4.md#canal-confirmado-en-jcop4-sin-pin).
 
