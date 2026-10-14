@@ -16,13 +16,17 @@ done
     -Dsc_transmit_apdu=fixture_unused_transmit -Dsc_format_apdu=fixture_unused_format \
     -I"$task_build" -I"$task_root/vendor/opensc/src" -c "$task_root/vendor/opensc/src/libopensc/apdu.c" \
     -o "$task_build/jcop4-pkcs11-sign-wire-fixture.o"
+for task_variant in sha256-rsa rsa-pkcs; do
+    task_mode_flags=()
+    [[ $task_variant != rsa-pkcs ]] || task_mode_flags=(-DJCOP4_PKCS11_RSA_PKCS)
 "${CC:-cc}" -std=c99 -D_GNU_SOURCE -DHAVE_CONFIG_H -Wall -Wextra -Werror \
     -Wno-unused-function -Wno-unused-parameter -Wno-deprecated-declarations -ffunction-sections -fdata-sections \
     -I"$task_build" -I"$task_root/vendor/opensc/src" "${task_flags[@]}" \
-    "-DJCOP4_LOCAL_MODULE_PATH=\"$task_build/src/pkcs11/.libs/opensc-pkcs11.so\"" \
+    "${task_mode_flags[@]}" "-DJCOP4_LOCAL_MODULE_PATH=\"$task_build/src/pkcs11/.libs/opensc-pkcs11.so\"" \
     "$task_root/tests/jcop4-pkcs11-sign.c" "$task_build/jcop4-pkcs11-sign-wire-fixture.o" \
     -Wl,--gc-sections "${task_exports[@]}" -L"$task_build/src/libopensc/.libs" -Wl,-rpath,"$task_build/src/libopensc/.libs" \
-    "$task_build/src/pkcs11/.libs/opensc-pkcs11.so" -lopensc -ldl "${task_libs[@]}" -o "$task_build/jcop4-pkcs11-sign-regression"
+    "$task_build/src/pkcs11/.libs/opensc-pkcs11.so" -lopensc -ldl "${task_libs[@]}" -o "$task_build/jcop4-pkcs11-$task_variant-regression"
 env -u LD_PRELOAD -u LD_AUDIT -u OPENSC_API_TRACE_FILE \
     LD_LIBRARY_PATH="$task_build/src/pkcs11/.libs:$task_build/src/libopensc/.libs" \
-    "$task_build/jcop4-pkcs11-sign-regression" "$task_build/src/pkcs11/.libs/opensc-pkcs11.so" </dev/null
+    "$task_build/jcop4-pkcs11-$task_variant-regression" "$task_build/src/pkcs11/.libs/opensc-pkcs11.so" </dev/null
+done

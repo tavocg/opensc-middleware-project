@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 umask 077
+task_binary=jcop4-pkcs11-sign
+task_mode_flags=()
+if (( $# == 1 )) && [[ $1 == --rsa-pkcs ]]; then
+    task_binary=jcop4-pkcs11-rsa-pkcs
+    task_mode_flags=(-DJCOP4_PKCS11_RSA_PKCS)
+elif (( $# )); then exit 2; fi
 task_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 task_build="$task_root/build/opensc"
 [[ -f "$task_build/config.h" && -f "$task_build/src/pkcs11/.libs/opensc-pkcs11.so" ]] || { printf 'Falta OpenSC compilado; ejecutar make build/opensc.\n' >&2; exit 1; }
@@ -11,8 +17,8 @@ for task_symbol in sc_context_create sc_release_context sc_ctx_detect_readers sc
     task_exports+=("-Wl,--export-dynamic-symbol=$task_symbol")
 done
 "${CC:-cc}" -std=c99 -D_GNU_SOURCE -DHAVE_CONFIG_H -Wall -Wextra -Werror \
-    "-DJCOP4_LOCAL_MODULE_PATH=\"$task_build/src/pkcs11/.libs/opensc-pkcs11.so\"" \
+    "-DJCOP4_LOCAL_MODULE_PATH=\"$task_build/src/pkcs11/.libs/opensc-pkcs11.so\"" "${task_mode_flags[@]}" \
     -I"$task_build" -I"$task_root/vendor/opensc/src" "${task_flags[@]}" \
     "$task_root/tools/jcop4-pkcs11-sign.c" "${task_exports[@]}" \
     -L"$task_build/src/libopensc/.libs" -Wl,-rpath,"$task_build/src/libopensc/.libs" \
-    -lopensc -ldl "${task_libs[@]}" -o "$task_build/jcop4-pkcs11-sign"
+    -lopensc -ldl "${task_libs[@]}" -o "$task_build/$task_binary"

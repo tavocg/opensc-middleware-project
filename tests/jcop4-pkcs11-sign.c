@@ -32,6 +32,11 @@ static void signature_case(int variant)
 	if (!variant && rv) fprintf(stderr,"signature fixture report:\n%s",output);
 	assert(!connected && !pub_guard.ctx && !reader_reserved && !test_card.lock_count);
 	assert(!strstr(output,"PRIVATE_") && !strstr(output,"Synthetic"));
+#ifdef JCOP4_PKCS11_RSA_PKCS
+	assert(strstr(output,"signature_mechanism=CKM_RSA_PKCS\n") && strstr(output,"canonical_sha256_digestinfo"));
+#else
+	assert(strstr(output,"signature_mechanism=CKM_SHA256_RSA_PKCS\n") && strstr(output,"fixed_message_hashed_by_module"));
+#endif
 	if (!variant || variant == 13) {
 		assert(!rv && physical == 12 && credential_attempts == 1 && signing_calls == 3 && resets == 2);
 		assert(sign_guard.step == 12 && sign_guard.verified && sign_guard.negative_verified);

@@ -6391,3 +6391,29 @@ sintarjeta ni repetir PIN anteprimererror. Revisar eventos/CMS antesotra
 operación; no inferir detección del token solo por haber esperado. RSA3072/
 otrasplataformas/upstream pendientes.
 [Detalles](jcop4-opensc-integration.md#dos-firmas-consecutivas-confirmadas-en-la-gui).
+
+### Reinserción y PDF posteriores confirmados; RSA_PKCS preparado
+
+4h1t4TnA/2026-10-14T23:41:27Z: dos Login0/SignFinal0, llave0x91/RSA2048,
+225APIeventos/exit0. Tras primera firma aparecen2presence3(PRESENT|CHANGED)
+y2tokenRemoved(b1/b0), luego nuevoLogin/firma. No presencia0/ausencia sostenida
+observada: se confirma recuperación del cambio de tarjeta informado, no
+todas las variantes de hotplug. No confundir2limpiezas con2retiradas.
+
+antes-firmado80474 y despues-firmado80454 válidos: CAdES SHA256/RSA2048/cert
+exactoJCOP4/revisión38399,original6967cubierto,bitnegativo rechazado, los2
+sellosRFC3161 y SHA512imprints correctos paraSignatureValue/rangosfinales.
+Copias/reportes privados c0eb3vim y sjg4kb2v (local/jcop4-pdf-verification-*/
+report.json),0700/0600. Sin confianza/revocación/render/identidad; cryptooffline
+Mutool/OpenSSL/envlimpio/noNSS/noPCSC/noGUI/noPIN/nored poragente.
+
+Próximo `make sign/jcop4-pkcs11-rsa-pkcs READER=0`: ejecutable separado,
+SHA256/DigestInfoASN1canónico51 antesPIN, C_SignInit_RSA_PKCS+unaSign hacia
+mismoPSOdigest32/guard12/resetcierre/negativo. Sin algoritmos/APDU/caches
+nuevos. 10grupos nativos5porcada modo+2lanzador y ASan/UBSan10 detect_leaks0
+pasaron (libprecompiladas no instrumentadas/nofugasprobadas). Módulo/driver/
+GUI/flake/lock/helpersprevios intactos; no hardware nuevo de esta variante
+ni PINreal poragente. Un comando usuario con clientes cerrados/PINcorrecto,
+no repetir ante error hasta revisar informe. RSA_PKCSreal/RSA3072/otros
+lectores/plataformas/upstream pendientes.
+[Detalles](jcop4-opensc-integration.md#reinserción-confirmada-siguiente-mecanismo-rsa_pkcs).

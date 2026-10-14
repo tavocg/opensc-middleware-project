@@ -139,12 +139,32 @@ static int sign_verify(EVP_PKEY *key,const unsigned char signature[256],int alte
 		rv = EVP_DigestVerify(ctx,signature,256,message,sizeof(message)-1);
 	EVP_MD_CTX_free(ctx); sc_mem_clear(message,sizeof(message)); return rv;
 }
+#ifdef JCOP4_PKCS11_RSA_PKCS
+/* Build canonical SHA256 DigestInfo using OpenSSL ASN.1, before any login.
+ * The card still receives the same fixed digest via the production frontend. */
+static int sign_digest_info(unsigned char output[51])
+{
+	unsigned char hash[32], *cursor = output; unsigned int size = 0;
+	X509_SIG *info = X509_SIG_new(); X509_ALGOR *alg = NULL; ASN1_OCTET_STRING *digest = NULL;
+	int result = 1;
+	if (!info || !EVP_Digest(sign_message,sizeof(sign_message)-1,hash,&size,EVP_sha256(),NULL) || size != 32) goto done;
+	X509_SIG_getm(info,&alg,&digest);
+	X509_ALGOR_set0(alg,OBJ_nid2obj(NID_sha256),V_ASN1_NULL,NULL);
+	if (!ASN1_OCTET_STRING_set(digest,hash,32) || i2d_X509_SIG(info,NULL) != 51) goto done;
+	if (i2d_X509_SIG(info,&cursor) == 51 && cursor == output+51) result = 0;
+done:
+	X509_SIG_free(info); sc_mem_clear(hash,sizeof(hash)); if (result) sc_mem_clear(output,51); return result;
+}
+#endif
 static int sign_inspect(CK_FUNCTION_LIST_PTR api,CK_SLOT_ID slot)
 {
 	CK_SESSION_HANDLE session; CK_RV rv = api->C_OpenSession(slot,CKF_SERIAL_SESSION,NULL,NULL,&session);
 	printf("signature_session_open_result=%lu\n",rv); if (rv) return 1;
 	EVP_PKEY *keys[8] = {0}; unsigned char ids[8][64] = {{0}}, pin[16] = {0}, signature[256] = {0};
 	CK_ULONG sizes[8] = {0}, count = 0; CK_OBJECT_HANDLE certs[8], privs[8]; int failed = 1, logged = 0;
+#ifdef JCOP4_PKCS11_RSA_PKCS
+	unsigned char digest_info[51] = {0};
+#endif
 	pub_guard.stage = "signature_public_certificate";
 	if (pub_find(api,session,CKO_CERTIFICATE,certs,&count) || !count || pub_guard.blocked) goto done;
 	for (CK_ULONG i = 0; i < count; i++) {
@@ -156,6 +176,13 @@ static int sign_inspect(CK_FUNCTION_LIST_PTR api,CK_SLOT_ID slot)
 		int valid = keys[i] && cursor == der+size && EVP_PKEY_is_a(keys[i],"RSA") && EVP_PKEY_get_bits(keys[i]) == 2048;
 		X509_free(cert); sc_mem_clear(der,sizeof(der)); if (!valid) goto done;
 	}
+	pub_guard.stage = "signature_input";
+#ifdef JCOP4_PKCS11_RSA_PKCS
+	printf("signature_mechanism=CKM_RSA_PKCS\nsignature_input_policy=canonical_sha256_digestinfo\n");
+	if (sign_digest_info(digest_info)) goto done;
+#else
+	printf("signature_mechanism=CKM_SHA256_RSA_PKCS\nsignature_input_policy=fixed_message_hashed_by_module\n");
+#endif
 	pub_guard.stage = "signature_pin_input";
 	size_t pin_size; if (pub_guard.blocked || pub_interrupted || sign_pin_read(pin,&pin_size)) goto done;
 	sign_guard.pin_input_ok = sign_guard.active = 1; sign_guard.login_calls++;
@@ -168,11 +195,20 @@ static int sign_inspect(CK_FUNCTION_LIST_PTR api,CK_SLOT_ID slot)
 	EVP_PKEY *key = NULL; unsigned int matches = 0;
 	for (CK_ULONG i = 0; i < count; i++) if (size == sizes[i] && !memcmp(id,ids[i],size)) { key = keys[i]; matches++; }
 	sc_mem_clear(id,sizeof(id)); if (matches != 1) goto done;
-	CK_MECHANISM mechanism = {CKM_SHA256_RSA_PKCS,NULL,0}; pub_guard.stage = "signature_init";
+#ifdef JCOP4_PKCS11_RSA_PKCS
+	CK_MECHANISM mechanism = {CKM_RSA_PKCS,NULL,0};
+#else
+	CK_MECHANISM mechanism = {CKM_SHA256_RSA_PKCS,NULL,0};
+#endif
+	pub_guard.stage = "signature_init";
 	rv = api->C_SignInit(session,&mechanism,privs[0]); printf("signature_init_result=%lu\n",rv);
 	if (rv || pub_guard.blocked || pub_interrupted) goto done;
 	size = sizeof(signature); pub_guard.stage = "signature_sign";
+#ifdef JCOP4_PKCS11_RSA_PKCS
+	rv = api->C_Sign(session,digest_info,sizeof(digest_info),signature,&size);
+#else
 	rv = api->C_Sign(session,(CK_BYTE_PTR)sign_message,sizeof(sign_message)-1,signature,&size);
+#endif
 	printf("signature_sign_result=%lu\n",rv); if (rv || size != 256 || pub_guard.blocked || pub_interrupted) goto done;
 	pub_guard.stage = "signature_verify";
 	sign_guard.verified = sign_verify(key,signature,0) == 1;
@@ -183,6 +219,9 @@ static int sign_inspect(CK_FUNCTION_LIST_PTR api,CK_SLOT_ID slot)
 	failed = 0;
 done:
 	sc_mem_clear(pin,sizeof(pin)); sc_mem_clear(signature,sizeof(signature)); sc_mem_clear(ids,sizeof(ids));
+#ifdef JCOP4_PKCS11_RSA_PKCS
+	sc_mem_clear(digest_info,sizeof(digest_info));
+#endif
 	for (size_t i = 0; i < 8; i++) EVP_PKEY_free(keys[i]);
 	/* Explicit cleanup only. No credential is retained or login retried. */
 	if (logged) { rv = api->C_Logout(session); printf("signature_logout_result=%lu\n",rv); if (rv && rv != CKR_USER_NOT_LOGGED_IN) failed = 1; }

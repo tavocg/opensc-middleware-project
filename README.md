@@ -114,28 +114,34 @@ y no evalúa confianza ni revocación. Informe privado:
 
 Las dos firmas consecutivas también pasaron en la misma GUI: KKBZwTnU,
 14 de octubre, 17:22 CR, dos logins y dos firmas multipart correctos. Ambos
-PDF y sus sellos de tiempo se verificaron offline. La siguiente prueba es
-retirar y reinsertar la misma tarjeta entre dos firmas, manteniendo la GUI
-abierta y el lector conectado:
+PDF y sus sellos de tiempo se verificaron offline. La reinserción también
+pasó: ejecución 4h1t4TnA, 17:41 CR, `CARD_CHANGED` y token retirado antes del
+nuevo login y firma; ambos PDF y sus sellos verifican. No se observó el estado
+ausente sostenido en la GUI: se detectó el cambio al volver a consultar.
+
+La siguiente prueba cubre `CKM_RSA_PKCS`, el otro mecanismo anunciado por el
+perfil. El helper construye un DigestInfo SHA256 del texto técnico fijo antes
+del login; no cambia la secuencia APDU ni los algoritmos del driver:
 
 ```bash
-nix develop -c make firmador/jcop4
+nix develop -c make sign/jcop4-pkcs11-rsa-pkcs READER=0
 ```
 
-Hay dos copias idénticas de `doc.pdf` en `local/jcop4-reinsert-vnw9_xsr/`.
-Abre `antes.pdf`, elige `LlaveDeFirma`, firma y conserva `antes-firmado.pdf`.
-Una vez guardado, mantén la GUI abierta, retira solo la tarjeta, espera unos
-segundos y vuelve a insertar la misma. Abre `despues.pdf`, firma y conserva
-`despues-firmado.pdf`; después cierra la GUI. No intentes firmar con la tarjeta
-retirada. Se firman dos originales, sin añadir otra firma al primer resultado. Introduce
-el PIN en la GUI cuando lo solicite. Si falla, detenerse y revisar el informe
-antes de repetir el PIN. El lanzador
+Misma JCOP4 y clientes/firmador cerrados; ejecutar una sola vez e introducir
+PIN correcto sin eco cuando lo solicite. Un login/VERIFY/PSO, verificación RSA
+y rechazo del mensaje alterado; informe privado sin PIN/DigestInfo/certificados.
+Ante error revisar el informe antes de repetir el PIN. Diez grupos nativos
+(cinco por mecanismo) y dos del lanzador pasaron en software, también
+ASan/UBSan nativos con detect_leaks0; bibliotecas precompiladas sin instrumentar,
+sin prueba de fugas. Esta variante todavía no se ha ejecutado sobre la tarjeta.
+
+El lanzador GUI `make firmador/jcop4`
 selecciona el módulo y libOpenSC locales, activa el perfil optativo, desactiva
 cachés/PIN-pad/PACE y los modos genéricos atomic/lock_login. Conserva el entorno
 del escritorio y elimina diagnósticos heredados. Registra únicamente eventos
 y números PKCS11 en archivos privados, sin PIN, APDU ni certificados.
 La GUI no tiene el filtro/cuota/timeout del helper de texto técnico; salir con
-estado0 no acredita firma ni cierre. El PDF se verificará offline después.
+estado0 no acredita firma ni cierre; los PDF se verifican offline después.
 Pasaron cuatro grupos nuevos del lanzador/configuración y once de regresión
 JCOP3, sin ejecutar Java, PCSC, GUI o PIN reales.
 Los párrafos siguientes conservan los pasos históricos de investigación.

@@ -37,6 +37,7 @@
 .PHONY: inspect/jcop4-pkcs11 test/jcop4-pkcs11-public
 .PHONY: sign/jcop4-pkcs11 test/jcop4-pkcs11-sign
 .PHONY: firmador/jcop4 test/jcop4-firmador-launcher
+.PHONY: sign/jcop4-pkcs11-rsa-pkcs
 
 PDF_INPUT ?= doc.pdf
 PDF_OUTPUT ?= local/jcop3-cli.pdf
@@ -124,6 +125,7 @@ help:
 		'make inspect/jcop4-pkcs11 READER=0 Consulta pública acotada del módulo JCOP4, sin PIN ni login.' \
 		'make test/jcop4-pkcs11-public Prueba el diagnóstico público y su lanzador con lector simulado.' \
 		'make sign/jcop4-pkcs11 READER=0 Una firma PKCS#11 de texto técnico; PIN interactivo, sin reintentos.' \
+		'make sign/jcop4-pkcs11-rsa-pkcs READER=0 Una firma RSA_PKCS con DigestInfo SHA256, PIN interactivo.' \
 		'make test/jcop4-pkcs11-sign Prueba firma, fallos y terminal con tarjeta/PIN simulados.' \
 		'make firmador/jcop4       Abre la GUI con el perfil JCOP4 RSA2048 y metadatos API privados.' \
 		'make test/jcop4-firmador-launcher Prueba configuración/entorno GUI sin Java, lector ni PIN.' \
@@ -450,6 +452,9 @@ test/jcop4-pkcs11-public:
 
 sign/jcop4-pkcs11:
 	@bash scripts/sign-jcop4-pkcs11.sh "$(READER)"
+
+sign/jcop4-pkcs11-rsa-pkcs:
+	@bash scripts/sign-jcop4-pkcs11.sh --rsa-pkcs "$(READER)"
 
 test/jcop4-pkcs11-sign:
 	@bash scripts/test-jcop4-pkcs11-sign.sh

@@ -1,7 +1,7 @@
 # Integrar el perfil JCOP4 observado en OpenSC
 
 Estado al 14 de octubre de 2026. Base de esta etapa: proyecto
-`90ea080`, submódulo OpenSC `52057cc6a`. Este documento describe la integración.
+`d9af553`, submódulo OpenSC `52057cc6a`. Este documento describe la integración.
 **Perfil/estado/limpieza, canal/bootstrap/providers y operaciones
 PIN/firma privados están implementados. Frontend PKCS15 y routing privado
 instalado por tarjeta pasaron con callbacks de producción y lector simulado.
@@ -11,7 +11,8 @@ transporte simulado. El módulo PKCS11 del build ya pasó nueve grupos de
 mecanismos, objetos, sesiones y firmas con contexto/lector/PIN sintéticos.
 El diagnóstico público y una firma SHA256_RSA_PKCS ya pasaron en la JCOP4
 real. El firmador produjo un PDF CAdES y dos sellos RFC3161 verificados offline;
-dos firmas consecutivas también pasaron. Falta reinserción en la misma GUI.**
+dos firmas consecutivas y reinserción en la misma GUI también pasaron.
+Falta prueba real de CKM_RSA_PKCS, aunque está probado en software.**
 
 ## Evidencia disponible
 
@@ -1268,3 +1269,75 @@ o firma, detenerse sin reiniciar/repetir PIN; se revisarán eventos y resultados
 antes de otra operación. La espera no demuestra detección en Java: la traza
 posterior deberá mostrar cómo se recuperó el token. No inventario/estado/
 D004 separado ni otras pruebas de concurrencia durante esa secuencia.
+
+## Reinserción confirmada; siguiente mecanismo RSA_PKCS
+
+Principal d9af553/OpenSC52057cc6a, limpios al comenzar. Informe usuario
+`local/jcop4-firmador-api-4h1t4TnA/report.txt`,2026-10-14T23:41:27Z (17:41CR):
+exitGUI0/225eventos, dos Login0 y dos SignInit0x40/Update0/SignFinal0 con
+llave0x91/RSA2048/SELECT-MSE0/compute256. Después de la primera firma aparecen
+dos CARD_PRESENCE3 y dos SLOT_TOKEN_REMOVED (b1 token presente, b0 ya vacío),
+antes del nuevo login y segunda firma. opensc.h define3=PRESENT1|CHANGED2;
+slot.c descarta conexión/recursos anteriores y continúa con nuevo binding.
+No confundir esas dos notificaciones de limpieza con dos retiradas físicas.
+No hubo CARD_PRESENCE0: no se verificó detección de ausencia sostenida en Java,
+sino recuperación tras cambio observado en la reinserción informada. No
+GetSessionInfo despuésfirmas ni Finalize/resetChipDoc registrados: límites
+anteriores del logger siguen vigentes, no inferir conteos físicos de APDU.
+
+Ambos resultados de local/jcop4-reinsert-vnw9_xsr se verificaron offline con
+Mutool/OpenSSL/envlimpio/noNSS/noverify/sinred: CAdES CMS SHA256/RSA2048 con
+certificado DER exactoJCOP4, originales6967bytes idénticos preservados y
+cubiertos, rangos/Contents/DER/relleno0 y bitnegativo rechazado; tokens de
+firma RFC3161 e imprintSHA512 sobre SignatureValue correctos, DocTS CMS e
+imprintSHA512 sobre ByteRange final correctos. Copias/reportes privados:
+
+| Archivo | Final | CAdES/revisión | DocTS | Informe |
+| --- | --- | --- | --- | --- |
+| antes-firmado.pdf |80474|[0,7343,33969,4430]/38399|[0,60488,79434,1040]|local/jcop4-pdf-verification-c0eb3vim/report.json|
+| despues-firmado.pdf |80454|[0,7343,33969,4430]/38399|[0,60468,79414,1040]|local/jcop4-pdf-verification-sjg4kb2v/report.json|
+
+Sin confianza/revocación/identidad/render evaluados. Confirmados firmaPDF,
+consecutivas y recuperación tras este cambio de tarjeta con la misma GUI/
+lector observado. No otras tarjetas/lectores/plataformas/RSA3072 ni todas las
+formas de hotplug/concurrencia. No repetir estas operaciones por inercia.
+
+**Nueva prueba preparada:** make sign/jcop4-pkcs11-rsa-pkcs READER=0. El módulo
+anuncia también CKM_RSA_PKCS; hasta ahora sus pruebas hardware solo usaron
+CKM_SHA256_RSA_PKCS. Este comando construye SHA256 del mismo texto técnico y
+DigestInfo DER canónico51bytes mediante X509_SIG/OpenSSL ASN.1 (algoritmo con
+parámetrosNULL), antes de solicitar PIN. C_SignInit/CKM_RSA_PKCS y una C_Sign
+reciben ese DigestInfo, no mensaje ni firma RSA cruda. El frontend real
+PKCS15 valida ese formato y entrega el digest32 al mismo driver/PSO, que
+conserva SHA256/PKCS1v1.5/RSA2048 y la secuencia APDU ya probada. Sin PSS/
+otroshashes/nuevosalgoritmos/variante APDU/cambio de transporte.
+
+La opción --rsa-pkcs del builder compila un ejecutable separado
+jcop4-pkcs11-rsa-pkcs mediante define cerrado; el modo default mantiene
+jcop4-pkcs11-sign/CKM_SHA256_RSA_PKCS. El lanzador usa la misma configuración/
+entradaTTY sin eco/guard12/únicoVERIFY-PSO/envlimpio/timeoutforeground120s/
+TERM+5KILL/cierre comprobado y report/config0600/dir0700; variante/modo/ruta
+separados y metadatos signature_mechanism/signature_input_policy explícitos.
+No imprime/guarda DigestInfo/hash/PIN/llave/cert/firma, limpia temporales.
+VerificaciónRSA y negativo conbit alterado siguen sobre el texto técnico
+original. Binario público, GUI, driver/submódulo/helpersanteriores/flake/lock
+intactos; no nueva operación con tarjeta/PIN/GUI del agente.
+
+make test/jcop4-pkcs11-sign pasó **10 grupos nativos (5 por cada mecanismo)
+y2 del lanzador**: helper y módulo reales con contexto/lector/cert/RSA/PIN
+sintéticos, PTY real. Cada modo verifica firma/negativo/PIN6-14/cierre, errores
+authenticated/PINsimulado/MAC/reset/query61 sinreintento, inputmalformado/
+INT-TERM/eco/flush, resetexternobloqueado y guardphase/ownership/cabeceras/
+credencialextra. Fixture exige los metadatos del mecanismo elegido y verifica
+el digest/resultadoRSA mediante peer independiente. Lanzador prueba ambos
+modos con herramientas falsas/PTY, entorno/permisos/flagsbuilder/modo/status
+y restauración terminal/timeout simulado. ASan/UBSan10 detect_leaks0 pasaron,
+bibliotecas/módulo precompilados no instrumentados y sin prueba de fugas.
+HelperRSA_PKCS real compilado; suites sin cambios no repetidas.
+
+Siguiente usuario: mismaJCOP4 y todos los clientes/firmador cerrados,
+`nix develop -c make sign/jcop4-pkcs11-rsa-pkcs READER=0`, una sola vez, PIN
+correcto cuando lo solicite. Revisar mecanismo/inputpolicy/login/sign/
+verificación/negativo/conteos/reset/cierre antes otra operación. Propósito
+es comprobar el mecanismo anunciado mediante otra API PKCS11, no repetir
+variantes de APDU ni probar PIN incorrecto. RSA_PKCS hardware todavía pendiente.

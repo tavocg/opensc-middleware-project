@@ -9,6 +9,59 @@ transporte simulado. PIN/GUI también los ejecuta el usuario. Esto sustituye
 la autorización anterior de hardware por el agente; conservar límites de
 cada diagnóstico y privacidad. Git sigue autorizado pero .git solo lectura.
 
+**Último resultado: reinserción JCOP4 confirmada; RSA_PKCS preparado.**
+Principal `d9af553`, OpenSC `52057cc6a`, limpios al comenzar. Usuario
+local/jcop4-firmador-api-4h1t4TnA/report.txt/2026-10-14T23:41:27Z (17:41CR):
+exit0/225APIeventos,2Login0/SignInit0x40/Update0/SignFinal0, llave0x91/RSA2048
+/MSE0/compute256. Tras primera firma:2presence3=PRESENT|CHANGED y2tokenRemoved
+(b1 antes presente/b0 ya vacío), después nuevo Login/firma. slot.c limpia conexión/
+recursos y rebind al observarCHANGED. No presencia0: no ausencia sostenida
+observada enJava, recuperación del cambio informado sí. No interpretar
+2limpiezas como2retiradas. No conteos realesVERIFY/PSO/reset desde logger.
+
+Antes80474/despues80454 verificados offline (c0eb3vim/sjg4kb2v enlocal/jcop4-
+pdf-verification-*/report.json,dir0700/files0600): CAdES SHA256/RSA2048/certDER
+exactoJCOP4, revisión38399/[0,7343,33969,4430], original6967preservado/cubierto,
+bitnegativo rechazado, tokenRFC3161SignatureValue yDocTS válidos/imprintSHA512
+correcto. DocTS antes[0,60488,79434,1040]/80474, después[0,60468,79414,1040]/80454.
+Sin confianza/revocación/identidad/render. Mutool/OpenSSL/envlimpio/noNSS/
+PKCS11/red/PCSC/PINreal/GUI/Idopte poragente, solo archivos/cryptooffline.
+FirmaPDF/consecutivas/cambio-reinserción GUI confirmados parainstanciaobservada.
+No repetirlos ni enum/estado/D004/helperporinercia. RSA3072/otroslectores/
+plataformas/hotplug/concurrencia/upstream pendientes.
+
+**Nuevo make sign/jcop4-pkcs11-rsa-pkcs READER=0**: otro mecanismo anunciado,
+no repetición de variantesAPDU. Builder --rsa-pkcs compila binario separado
+con definecerrado JCOP4_PKCS11_RSA_PKCS; default permaneceSHA256_RSA_PKCS.
+Construye DigestInfoSHA256DER51 de texto fijo con X509_SIG/ASN1NULL/OpenSSL
+antesPIN; C_SignInitCKM_RSA_PKCS/unaC_Sign.DigestInfo ->frontendvalida/digest32
+->mismoPSO.SHA256/RSA2048/PKCS1v1.5/guard12/resetcierre/envlimpio/TTYsinECHO/
+1login-VERIFY-PSO/timeoutforeground120sTERM+5KILL/privacidad0600-0700 intactos.
+Reportafijos signature_mechanism/signature_input_policy; nuncaDigestInfo/hash/
+PIN/firmacert/captura. Borra temporales. VerificaRSA/bitnegativo sobretexto
+original, no sobreDigestInfo. No nuevoalgoritmo/PSS/hash/APDU/fallback/cache.
+
+Pasaron **10grupos nativos (5porcada mecanismo)+2lanzador** con helper/módulo
+reales y contexto/lector/RSA/cert/PIN sintéticos/PTYreal: firma/negativo/PIN6-14
+/cierre; errores/MAC/reset/query61/PINsimulado sinreintento; malinput/INT-TERM
+/restauraecho/flush; resetexterno; guardphase/ownership/credencialextra.
+Fixture exige mecanismo/inputPolicy y digest/rSA software correcto. Wrapper
+ambosmodos/builderflags/entorno/permisos/únicaejecución/status/timeoutsimulado/
+terminalrestaurada. **ASan/UBSan10 detect_leaks0** pasaron, bibliotecas/módulo
+precompilados sininstrumentar/nofugasprobadas. HelperRSA_PKCSrealcompilado;
+suitesintactas no repetidas; no modificación driver/submódulo/GUI/binario
+público/flake/lock/helpersanteriores/observador. NingúnAPDU/PINreal poragente.
+
+**Siguiente usuario:** mismaJCOP4 y clientes-firmadorcerrados,
+`nix develop -c make sign/jcop4-pkcs11-rsa-pkcs READER=0`, una sola vez,
+PINcorrecto sinECHO al solicitarlo. Informe local/jcop4-pkcs11-rsa-pkcs-*/
+report.txt. Revisar mechanism/inputpolicy/login/sign/verify/negative/1VERIFY/
+1PSO/reset/cierre antes otraoperación; ningúnPIN incorrecto/reintento porinercia.
+RSA_PKCS hardware todavía pendiente. Git autorizado: git add falló creando
+index.lock por .gitRO, no eludir; commit
+Makefile/build-sign/launch-sign/test-sign/2tests/sign.h y AGENTS/README/docs;
+todosya rastreados, ningún PDF/local/captura/build/submódulo aGit.
+
 **Último resultado: dos firmas consecutivas JCOP4 verificadas.**
 Principal `90ea080`, OpenSC `52057cc6a`, limpios al comenzar. Informe usuario
 `local/jcop4-firmador-api-KKBZwTnU/report.txt`, 2026-10-14T23:22:27Z (17:22 CR):

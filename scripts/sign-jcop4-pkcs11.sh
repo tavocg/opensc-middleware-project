@@ -3,9 +3,18 @@
 set -euo pipefail
 umask 077
 ulimit -c 0
+task_binary=jcop4-pkcs11-sign
+task_mode=single_pkcs11_sha256_rsa2048_one_login_one_pso
+task_build_args=()
+if [[ ${1-} == --rsa-pkcs ]]; then
+    shift
+    task_binary=jcop4-pkcs11-rsa-pkcs
+    task_mode=single_pkcs11_rsa_pkcs_digestinfo_sha256_rsa2048_one_login_one_pso
+    task_build_args=(--rsa-pkcs)
+fi
 task_reader=${1:-${READER:-0}}
 if (( $# > 1 )) || [[ ! $task_reader =~ ^[0-9]{1,4}$ ]] || (( 10#$task_reader > 1024 )); then
-    printf 'Uso: bash scripts/sign-jcop4-pkcs11.sh [lector 0..1024]\n' >&2; exit 2
+    printf 'Uso: bash scripts/sign-jcop4-pkcs11.sh [--rsa-pkcs] [lector 0..1024]\n' >&2; exit 2
 fi
 task_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 task_build="$task_root/build/opensc"
@@ -18,7 +27,7 @@ task_tty_state=$(stty -g </dev/tty) || exit 2
 # Restore the caller's terminal even if timeout has to kill the helper.
 trap 'stty "$task_tty_state" </dev/tty 2>/dev/null || true' EXIT
 mkdir -p -- "$task_root/local"
-task_dir=$(mktemp -d "$task_root/local/jcop4-pkcs11-sign-XXXXXXXX")
+task_dir=$(mktemp -d "$task_root/local/$task_binary-XXXXXXXX")
 task_report="$task_dir/report.txt"
 task_config="$task_dir/opensc.conf"
 cat > "$task_config" <<'CONFIG'
@@ -38,13 +47,13 @@ app default {
 }
 CONFIG
 {
-    printf 'date_utc=%s\nreader_index=%s\nmode=single_pkcs11_sha256_rsa2048_one_login_one_pso\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$task_reader"
+    printf 'date_utc=%s\nreader_index=%s\nmode=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$task_reader" "$task_mode"
     printf 'project_commit=%s\nopensc_commit=%s\n' \
         "$(git -C "$task_root" rev-parse HEAD 2>/dev/null || true)" \
         "$(git -C "$task_root/vendor/opensc" rev-parse HEAD 2>/dev/null || true)"
 } > "$task_report"
 printf 'Informe: %s\n' "$task_report"
-if bash "$task_root/scripts/build-jcop4-pkcs11-sign.sh" >> "$task_report" 2>&1; then
+if bash "$task_root/scripts/build-jcop4-pkcs11-sign.sh" "${task_build_args[@]}" >> "$task_report" 2>&1; then
     printf 'helper_build_status=0\n' >> "$task_report"
 else
     task_status=$?; printf 'helper_build_status=%s\n' "$task_status" >> "$task_report"
@@ -56,7 +65,7 @@ task_status=0
 env -i PATH="$PATH" LC_ALL=C OPENSC_CONF="$task_config" OPENSC_DEBUG=0 \
     LD_LIBRARY_PATH="$task_build/src/pkcs11/.libs:$task_build/src/libopensc/.libs" \
     timeout --foreground --signal=TERM --kill-after=5s 120s \
-    "$task_build/jcop4-pkcs11-sign" "$task_reader" "$task_build/src/pkcs11/.libs/opensc-pkcs11.so" \
+    "$task_build/$task_binary" "$task_reader" "$task_build/src/pkcs11/.libs/opensc-pkcs11.so" \
     </dev/null >> "$task_report" 2>/dev/null || task_status=$?
 printf 'helper_exit_status=%s\n' "$task_status" >> "$task_report"
 if (( task_status )); then
