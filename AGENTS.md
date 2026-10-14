@@ -6,7 +6,63 @@ la tarjeta. El usuario ejecuta las operaciones que requieran PIN o GUI. Esto
 sustituye las restricciones anteriores de no ejecutar Git/hardware/Idopte por
 el agente; conservar límites de cada diagnóstico y privacidad de los registros.
 
-**Último resultado: estado externo03 devuelve63CF; PIN1 devuelve63C7.**
+**Último resultado: inventario público Idopte completo, sin PIN.**
+Principal `e095ffa`, OpenSC `3dfef6704` limpios al comenzar. Nuevo modo separado
+inspect/jcop4-idopte-post-auth-mf/--idopte-post-auth-mf,
+JCOP4_DIAGNOSTIC_POST_AUTH_MF=1 depende de AUTH_STATUS y todos sus padres.
+Después del estado externo válido9000/63Cx no cero, permite **máximo4 SELECT
+MF** exactos00A40000023F00, caso3 o caso4/Le00, por el mismo handle de ese
+estado; ATR fresco del emisor en cada selección. Mantiene stopped1 y contextos
+normales0; no READ, otros SELECT, challenge, autenticación con datos, MSE/GA/
+PSO/SM/escrituras/reintentos. Presupuestos/global128 sin reinicio; contexto/
+reset/control/SetAttrib o primera operación inesperada cancelan oportunidad.
+Buffer mínimo capacidad cliente/258, SW9000/tamaño válido únicamente, marker
+privado previo; fallos/otrosSW detienen sin copiar/GET RESPONSE/fallback.
+63C0 no activa excepción. Modos previos intactos; inventario/firma limpian flag.
+
+Consultas que fundamentaron el límite: P8Shlru3 (00:52:48Z) permitió1 MF9000,
+luego otro MF bloqueado. iuXYHcIZ (00:55:56Z) permitió2 MF9000, luego tercero
+bloqueado. X0xq6QeQ (00:59:35Z), mismos permisos2, recuperó **origen de llamadas
+antes omitido**, no reintento por error/PIN. Solo normaliza direcciones de retorno
+ELF VMA de nombres exactos libt_ias.so/libidop11.so, máximo24frames, fases primera
+selección permitida y primer MF bloqueado. No stack/argumentos/datos, direcciones
+absolutas/ASLR, rutas, nombres de otros módulos o símbolos. Coincide por basename,
+no certifica identidad de módulo. Siempre privado. La traza distingue rutas
+T_GetTokenInfo (283e5c/3bb367) y T_GetVSlotInfo (281d3e/3a07d2), ambas pasando
+por37560b ->39cd4d ->3a8432/selección raíz al preparar consulta de atributos PIN.
+No demuestra loop de reintentos ni ejecución C_Login. Interpretar con binario
+instalado/hash documentado, no símbolos vecinos ficticios de objdump.
+
+Máximo4 deja margen acotado para esas consultas repetidas de metadatos, no cambia
+la clase de APDU ni permisos restantes. Tests finales **162 observador/constructor/
+decoder,91 lanzador público,6 firma:259**. Transporte ficticio/redirector real,
+normalización en módulo sintético llamado libt_ias.so contra rangos ELF ejecutables,
+exclusión de módulos/argumentos/rutas, máximo4 sin reponer, ATR/buffers/SW/log/
+transporte fallidos y aislamiento flags. Biblioteca compilada. Helper79/operación12
+intactos, suites previas vigentes; fixture privacidad creció4K->8K por registro
+mayor, no cambio en política de log. Firma6 previa de este cambio sigue vigente.
+
+**Última consulta:** local/jcop4-idopte-post-auth-mf-cn4D9B89/report.txt,
+**2026-10-14T01:03:08Z (13 de octubre CR)**:
+nix develop --offline -c make inspect/jcop4-idopte-post-auth-mf READER=0.
+Build/inventario/ATR correctos; primera MF9000, estado externo63CF y **3 SELECT
+MF posteriores0/9000**, same_as_status_sender/case4_le256/known_jcop4.
+**token_info_result=returned, module_exit_status=0, observer_result=events_recorded;
+diagnóstico0.** No operación posterior bloqueada ni permiso4 agotado.
+108APDU:106SW9000, un63C7 PIN1 y un63CF ref03. La marca inicial
+blocked=read4141_connection_boundary permanece porque la barrera global sigue
+activa: **no indica fallo del inventario final**. No PIN/credencial/C_Login/firma,
+MSE/GA/challenge/SM/escrituras ni VERIFY6982 nuevos. Estados7/15 no máximos ni
+reinicio/decremento medido; no se pidió la oferta de firmas fallidas del usuario.
+
+**Próximo paso:** analizar estáticamente C_Login/T_Login y la construcción de
+VERIFY/ref/contexto/formato PIN en el perfil observado, comparando con diagnóstico
+libre6982. Inicialización pública exitosa no prueba PIN/signado libre ni ausencia
+de requisito de canal para firma. No repetir inventario/auth-status ni ensayar
+PIN fallidos por inercia. Driver/submódulo intactos; JCOP4/RSA3072 pendientes.
+Git autorizado, .git solo lectura si persiste; no eludirlo, dar comando de commit.
+
+**Resultado anterior: estado externo03 devuelve63CF; PIN1 devuelve63C7.**
 Principal `54b9cc8`, OpenSC `3dfef6704` limpios al comenzar. Usuario reiteró
 verificar sus hipótesis: siete disponibles no acredita máximo7 ni reinicio tras
 PIN/firma correctos. Autorizó acciones que no bloqueen tarjeta; ofreció firmas

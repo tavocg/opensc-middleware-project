@@ -73,7 +73,7 @@ static FILE *fixture_reset(void)
 	trace_fd = fileno(file);
 	stopped = selected_public_file = selected_mf = selected_app = handle_set = pending_response = calls = events = lifecycle_events = 0;
 	control_calls = control_missing = control_capacity = 0;
-	compare_auth_status = auth_status_ready = auth_status_calls = compare_second_mf = second_mf_connect_seen = second_mf_ready = second_mf_calls = second_atr_calls = second_atr_bad = second_atr_failure = 0;
+	post_auth_mf_origin_recorded = compare_post_auth_mf = post_auth_mf_ready = post_auth_mf_calls = compare_auth_status = auth_status_ready = auth_status_calls = compare_second_mf = second_mf_connect_seen = second_mf_ready = second_mf_calls = second_atr_calls = second_atr_bad = second_atr_failure = 0;
 	connection_reference_set = connection_reader_valid = connection_records = connection_boundary_stop = boundary_operation_recorded = 0;
 	memset(connection_reference_reader, 0, sizeof(connection_reference_reader));
 	control_response_fixture = 0; select_spy_fd = -1;
@@ -100,7 +100,7 @@ static LONG send_large(const unsigned char *cmd, size_t size)
 }
 static void check_private(FILE *file)
 {
-	char log[4096] = {0};
+	char log[8192] = {0};
 	fflush(file); rewind(file);
 	assert(fread(log, 1, sizeof(log) - 1, file) < sizeof(log) - 1);
 	assert(!strstr(log, "PRIVATE_RESPONSE") && !strstr(log, "SECRET_PIN") &&
@@ -190,6 +190,19 @@ static FILE *fixture_second_mf(void)
 	drop_card_context(); assert(stopped && connection_boundary_stop && !selected_mf && !comparison_atr_ok);
 	return file;
 }
+static FILE *fixture_post_auth_mf(unsigned int sw)
+{
+	const unsigned char mf[] = {0, 0xA4, 0, 0, 2, 0x3F, 0, 0};
+	const unsigned char query[] = {0, 0x82, 0, 3};
+	SCARDHANDLE next = 8; DWORD protocol = SCARD_PROTOCOL_T1;
+	FILE *file = fixture_second_mf(); compare_auth_status = compare_post_auth_mf = 1;
+	prepare_second_mf("PRIVATE_READER", SCARD_SHARE_SHARED, &next, &protocol, 0);
+	assert(send_large(mf, sizeof(mf)) == 0);
+	fixture_payload = 0; fixture_sw = sw;
+	assert(send_large(query, sizeof(query)) == 0);
+	fixture_payload = 16; fixture_sw = 0x9000;
+	return file;
+}
 static LONG send_second(const unsigned char *cmd, size_t size)
 {
 	unsigned char response[402]; DWORD len = sizeof(response);
@@ -224,6 +237,92 @@ int main(void)
 			send_command(version, sizeof(version)) == 0 && calls == 5);
 	check_private(file);
 	puts("PASS public observer forwards only allowed discovery and logs no payloads or lengths");
+	{
+		const unsigned char post_mf[] = {0, 0xA4, 0, 0, 2, 0x3F, 0, 0};
+		for (int i = 0; i < 2; i++) {
+			file = fixture_post_auth_mf(i ? 0x9000 : 0x63CF); int before = calls;
+			assert(post_auth_mf_ready && send_large(post_mf, sizeof(post_mf) - i) == 0 && calls == before + 1);
+			assert(post_auth_mf_ready && send_large(post_mf, sizeof(post_mf) - i) == 0 && calls == before + 2);
+			assert(post_auth_mf_ready && send_large(post_mf, sizeof(post_mf) - i) == 0 && calls == before + 3);
+			assert(post_auth_mf_ready && send_large(post_mf, sizeof(post_mf) - i) == 0 && calls == before + 4);
+			assert(post_auth_mf_calls == 4 && second_atr_calls == 6 && stopped && !post_auth_mf_ready &&
+					!selected_mf && !selected_app && !comparison_atr_ok && read_b002_budget == 256);
+			assert(send_large(post_mf, sizeof(post_mf)) != 0 && send_large(read, sizeof(read)) != 0 &&
+					send_large(pin, sizeof(pin)) != 0 && send_large(get_response, sizeof(get_response)) != 0 && calls == before + 4);
+			check_private(file);
+		}
+		puts("PASS post-auth MF permits four bounded root selections by checked status sender without read/login/retry or budget reset");
+		file = fixture_post_auth_mf(0x63CF);
+		assert(send_large(post_mf, sizeof(post_mf)) == 0);
+		assert(send_large(post_mf, sizeof(post_mf)) == 0);
+		assert(send_large(post_mf, sizeof(post_mf)) == 0);
+		assert(send_large(post_mf, sizeof(post_mf)) == 0);
+		assert(send_large(post_mf, sizeof(post_mf)) != 0);
+		char origin_log[8192] = {0}; fflush(file); rewind(file); assert(fread(origin_log, 1, sizeof(origin_log)-1, file) > 0);
+		assert(strstr(origin_log, "post_auth_mf_origin_phase=first_permitted_mf") &&
+				strstr(origin_log, "post_auth_mf_origin_phase=first_blocked_mf") &&
+				strstr(origin_log, "post_auth_mf_origin_result=no_vendor_frames") &&
+				!strstr(origin_log, "post_auth_mf_origin=") && !strstr(origin_log, "/"));
+		check_private(file);
+		puts("PASS MF origin summary omits all unknown modules, stack values and paths while preserving transmission budgets");
+		file = fixture_post_auth_mf(0x63CF); assert(send_large(post_mf, sizeof(post_mf)) == 0); int interrupted_before = calls;
+		assert(send_large(pin, sizeof(pin)) != 0 && !post_auth_mf_ready && calls == interrupted_before);
+		assert(send_large(post_mf, sizeof(post_mf)) != 0 && calls == interrupted_before);
+		char interrupted_log[8192] = {0}; fflush(file); rewind(file); assert(fread(interrupted_log, 1, sizeof(interrupted_log)-1, file) > 0);
+		assert(strstr(interrupted_log, "boundary_blocked_header=00200001") && !strstr(interrupted_log, "SECRET_PIN"));
+		check_private(file);
+		puts("PASS unexpected command mid-MF sequence is recorded once without leaking credentials or spending additional transport");
+
+		file = fixture_post_auth_mf(0x63C0); int before = calls;
+		assert(!post_auth_mf_ready && send_large(post_mf, sizeof(post_mf)) != 0 && calls == before); check_private(file);
+		puts("PASS exhausted external status does not enable the post-auth MF exception");
+		for (int i = 0; i < 10; i++) {
+			file = fixture_post_auth_mf(0x63CF); before = calls;
+			unsigned char bad[sizeof(post_mf)]; memcpy(bad, post_mf, sizeof(bad));
+			if (i == 0) compare_post_auth_mf = 0;
+			if (i == 1) bad[0] = 1;
+			if (i == 2) bad[3] = 0x0C;
+			if (i == 3) bad[6] = 1;
+			if (i == 4) bad[7] = 0xFF;
+			if (i == 5) auth_status_calls = 0;
+			if (i == 6) { unsigned char out[32]; DWORD size = sizeof(out);
+				assert(SCardTransmit(8, NULL, post_mf, sizeof(post_mf), NULL, out, &size) != 0 && !size); }
+			else if (i == 7) assert(send_large(pin, sizeof(pin)) != 0);
+			else if (i == 8) drop_card_context();
+			else if (i == 9) { unsigned char out[32]; DWORD size = 0;
+				assert(SCardControl(7, CM_IOCTL_GET_FEATURE_REQUEST, NULL, 0, out, sizeof(out), &size) != 0 && !size); }
+			else assert(send_large(bad, sizeof(bad)) != 0);
+			assert(send_large(post_mf, sizeof(post_mf)) != 0 && !post_auth_mf_ready && calls == before); check_private(file);
+		}
+		puts("PASS post-auth MF rejects missing opt-in/status, other CLA/FID/Le/handle, credentials and context/control interruptions");
+		for (int i = 0; i < 3; i++) {
+			file = fixture_post_auth_mf(0x63CF); before = calls;
+			if (i == 0) second_atr_bad = 1;
+			if (i == 1) second_atr_bad = 2;
+			if (i == 2) second_atr_failure = 1;
+			assert(send_large(post_mf, sizeof(post_mf)) != 0 && calls == before && second_atr_calls == 3);
+			assert(send_large(post_mf, sizeof(post_mf)) != 0 && calls == before); check_private(file);
+		}
+		puts("PASS post-auth MF rechecks actual sender ATR and rejects mismatch/oversize/failure without any APDU");
+		for (int i = 0; i < 6; i++) {
+			file = fixture_post_auth_mf(0x63CF); before = calls;
+			if (i == 0) fixture_sw = 0x6101;
+			if (i == 1) fixture_sw = 0x6982;
+			if (i == 2) fixture_overrun = 1;
+			if (i == 3) fixture_transmit_result = SCARD_E_NOT_TRANSACTED;
+			if (i == 4) events = 128;
+			int saved = trace_fd;
+			if (i == 5) { trace_fd = open("/dev/full", O_WRONLY); assert(trace_fd >= 0); }
+			assert(send_large(post_mf, sizeof(post_mf)) != 0 && calls == before + (i < 4));
+			assert(send_large(get_response, sizeof(get_response)) != 0 && send_large(post_mf, sizeof(post_mf)) != 0);
+			if (i == 5) { close(trace_fd); trace_fd = saved; } check_private(file);
+		}
+		puts("PASS post-auth MF transport/status/oversize/event/log failures stop without copy/fallback/GET RESPONSE");
+		file = fixture_post_auth_mf(0x63CF); before = calls; unsigned char out[1]; DWORD size = sizeof(out);
+		assert(SCardTransmit(7, NULL, post_mf, sizeof(post_mf), NULL, out, &size) != 0 && !size && calls == before);
+		assert(send_large(post_mf, sizeof(post_mf)) != 0 && calls == before); check_private(file);
+		puts("PASS insufficient output buffer consumes post-auth MF opportunity before transport");
+	}
 	{
 		const unsigned char mf[] = {0, 0xA4, 0, 0, 2, 0x3F, 0, 0};
 		const unsigned char query[] = {0, 0x82, 0, 3};

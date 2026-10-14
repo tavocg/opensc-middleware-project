@@ -300,6 +300,15 @@ reinicio tras firma correcta. Siguiente SELECT MF bloqueado: inventario todavía
 fallido. Pasaron **245 pruebas** con transporte ficticio; no se ensayaron firmas
 fallidas ni PIN incorrectos. [Evidencia y límites](docs/jcop4.md#estado-externo03-precedente-en-idopte-y-respuesta63cf).
 
+`make inspect/jcop4-idopte-post-auth-mf READER=0` completa ahora el inventario
+público Idopte: **C_GetTokenInfo devuelto, módulo y diagnóstico0**, tras tres
+selecciones de raíz9000. Máximo4 selecciones idénticas por el mismo handle con
+ATR comprobado, sin habilitar otros comandos. El origen de las llamadas las
+vincula a consultas de información del token/slot. Pasaron **259 comprobaciones**;
+no PIN/login/firma nuevos. Próximo paso: analizar la ruta C_Login/VERIFY de
+Idopte; firma libre JCOP4 aún pendiente.
+[Evidencia y límites](docs/jcop4.md#inventario-idopte-completo-tras-las-selecciones-de-raíz).
+
 Capturas privadas bajo local/jcop4-idopte-spy-*/; no agregarlas a Git.
 Pasaron previamente **30 comprobaciones del observador/decoder y 40 del
 lanzador** con transporte ficticio. El diagnóstico de firma pasó además

@@ -3605,6 +3605,119 @@ evaluar un modo SELECT-only independiente, sin reabrir transporte global ni
 repetir auth-status/otras referencias/PIN por inercia. C_Login/VERIFY6982/canal
 siguen pendientes; driver/submódulo intactos, JCOP4/RSA3072 pendientes.
 
+## Inventario Idopte completo tras las selecciones de raíz
+
+Revisión iniciada con principal `e095ffa`, OpenSC `3dfef6704` limpios. El
+SELECT MF que seguía al estado externo era el primer comando omitido por el
+guard. Se preparó el modo separado **inspect/jcop4-idopte-post-auth-mf**,
+JCOP4_DIAGNOSTIC_POST_AUTH_MF=1 dependiente de AUTH_STATUS y todos sus padres,
+exclusivamente dentro del inventario Idopte/stdin vacío. Modos anteriores no
+conceden este permiso; inventario previo/otros modos/firma eliminan el flag.
+Driver y submódulo permanecen intactos.
+
+### Identificar la repetición con evidencia
+
+La primera versión permitía un SELECT MF posterior al estado externo, con ATR
+fresco, mismo handle y sin permisos posteriores. Informe privado
+local/jcop4-idopte-post-auth-mf-P8Shlru3/report.txt, **00:52:48Z**: MF0/9000,
+seguido de otro MF bloqueado. La versión de máximo2, informe
+local/jcop4-idopte-post-auth-mf-iuXYHcIZ/report.txt, **00:55:56Z**, aceptó2MF
+con9000 y bloqueó un tercero. No eran rechazos de tarjeta a los bloqueados,
+ni intentos de PIN. Una simple repetición no explicaba su propósito.
+
+Se añadió un registro limitado del origen de llamadas **sin ampliar permisos**.
+Informe local/jcop4-idopte-post-auth-mf-X0xq6QeQ/report.txt, **00:59:35Z**,
+recuperó posiciones de código antes omitidas. No fue un reintento idéntico por
+error ni una prueba de contador. El registro usa máximo24 direcciones de retorno
+por fase, solo primera selección permitida y primer MF bloqueado. Normaliza a
+VMA ELF las que pertenecen a nombres exactos libt_ias.so/libidop11.so y omite
+stack/argumentos/datos de tarjeta, direcciones absolutas, rutas, símbolos y otros
+módulos. Si no hay frames conocidos lo indica sin habilitar otro transporte.
+Coincidir por basename no certifica la identidad del módulo; para interpretar
+posiciones se usa el binario instalado con SHA/BuildID documentados antes.
+Registros privados0700/0600; no se copian completos a Git/chat.
+
+El primer SELECT permitido procede de la ruta **T_GetTokenInfo**, con retornos
+283e5c y3bb367 en libt_ias.so. El primero bloqueado procede de **T_GetVSlotInfo**,
+281d3e/3a07d2. Ambas pasan por37560b (preparación de consulta de atributos del
+PIN),39cd4d (restablecimiento de contexto de selección) y3a8432 (rutina común
+de selección de raíz). El análisis estático confirma construcción del FID3F00
+con Le256 en esa ruta; el guard comprueba el comando efectivo CLA00/P100/P200
+que llega a PC/SC. No se sustituyen bytes por los del constructor intermedio.
+
+Esto vincula la repetición a **dos rutas de información**, sin demostrar un
+loop de reintentos ni una ejecución de C_Login/autenticación. No se deduce de
+estas posiciones la política de reset del PIN o una condición de firma. Los
+nombres vecinos mostrados por objdump para código sin símbolo siguen sin ser
+nombres fiables de funciones internas.
+
+### Límite final y pruebas
+
+El modo final permite **hasta4 SELECT MF consecutivos** después de estado
+externo9000/63Cx no cero. Es un presupuesto pequeño para las consultas repetidas
+de información del token/slot ya identificadas, no una nueva clase de APDU ni
+una rehabilitación del transporte. Cada solicitud debe ser exactamente
+00 A4 00 00 02 3F 00, caso3 o caso4 con Le00, por el mismo handle del estado;
+se vuelve a comprobar su ATR conocido en cada una. No variantes con otro Le,
+canal, archivo, P1/P2 o handle.63C0 no concede la excepción.
+
+stopped permanece1 y contextos normales0. No se habilitan READ, otros SELECT,
+PIN con datos, GET CHALLENGE, MSE/GA/PSO/SM, escrituras o reintentos. Cambio de
+contexto/reset/control/SetAttrib o primera operación inesperada cancela la
+secuencia restante. Presupuestos originales y global128 sin reinicio. Buffer
+mínimo de capacidad del cliente/258; marker privado antes de transmitir,
+SW9000/tamaño válido para copiar al cliente. Respuestas de control no se guardan.
+Fallos de ATR/log/transporte/buffer/tamaño/otrosSW detienen sin GET RESPONSE,
+fallback o reposición del presupuesto.
+
+Pasaron **162 observador/constructor/decoder,91 lanzador público y6 lanzador
+firma:259 comprobaciones** con transporte ficticio y redirector PC/SC real.
+Incluyen máximo4 con contextos normales siempre inactivos, agotamiento sin
+rearme, interrupciones, variantes/credenciales excluidas, errores, entornos
+limpios y normalización de origen en un módulo sintético llamado libt_ias.so
+comprobada contra sus rangos ELF ejecutables. Se omiten otros módulos/rutas/
+argumentos. El buffer de lectura del fixture de privacidad pasó de4K a8K para
+comprobar el registro completo más largo; no cambia la política de captura.
+Biblioteca real compilada. Firma6 de este cambio sigue vigente tras ajustes
+que no la modificaron; helper79/operación12 intactos, suites anteriores vigentes.
+
+### Resultado final: inventario satisfactorio
+
+Una ejecución del modo final después de las pruebas:
+
+```sh
+nix develop --offline -c make inspect/jcop4-idopte-post-auth-mf READER=0
+```
+
+Informe privado **local/jcop4-idopte-post-auth-mf-cn4D9B89/report.txt**,
+**2026-10-14T01:03:08Z**, todavía13 de octubre CR. Compilación/inventario/ATR
+correctos, primera MF9000 y estado externo63CF. **Tres SELECT MF posteriores
+transporte0/SW9000**, mismo handle del estado, caso4/Le256 y ATR comprobado.
+
+```text
+token_info_result=returned
+module_exit_status=0
+observer_result=events_recorded
+```
+
+Diagnóstico0.108 APDU transmitidas:106SW9000, un estado vacío PIN1/63C7 y un
+estado externo03/63CF. No solicitud posterior bloqueada, ni agotamiento del
+límite4. La marca inicial read4141_connection_boundary continúa en el registro
+porque **la barrera global sigue activa**; las excepciones acotadas completaron
+el inventario sin reabrirla. No interpretar esa marca aislada como fallo final.
+No se registró inventario con identificadores, certificados ni respuestas brutas
+fuera del área privada. No PIN/credencial/login/firma, MSE/GA/challenge/SM/
+escritura ni nuevo VERIFY6982. No se ensayó la oferta de firmas fallidas.
+
+La inicialización pública observada con Idopte ahora termina correctamente
+con las APDU permitidas, sin necesitar un canal seguro en esa secuencia. **No
+prueba que la autenticación/firma de este perfil prescinda de canal seguro ni
+que OpenSC ya firme con JCOP4**. Los estados7/15 no establecen máximos,
+decrementos o reinicios. Siguiente paso: análisis estático C_Login/T_Login y
+constructor VERIFY/referencia/contexto/formato PIN, comparado con el diagnóstico
+libre6982. No repetir inventario/estado ni provocar PIN fallidos por inercia.
+Driver/submódulo intactos; JCOP4/RSA3072 pendientes.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño
