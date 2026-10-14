@@ -27,6 +27,7 @@
 .PHONY: test/jcop4-response-collector
 .PHONY: sign/jcop4-channel sign/jcop4-channel-application test/jcop4-channel-sign
 .PHONY: inspect/jcop4-reader-features test/jcop4-reader-features
+.PHONY: inspect/jcop4-channel-transport test/jcop4-channel-transport
 
 PDF_INPUT ?= doc.pdf
 PDF_OUTPUT ?= local/jcop3-cli.pdf
@@ -98,6 +99,8 @@ help:
 		'make sign/jcop4-channel READER=0 Firma y verifica un texto técnico RSA2048/SHA256 bajo SM, un PIN.' \
 		'make sign/jcop4-channel-application READER=0 Prueba el AID conocido bajo SM después del login, antes de firmar.' \
 		'make inspect/jcop4-reader-features READER=0 Consulta capacidades del lector, sin PIN ni APDU de tarjeta.' \
+		'make inspect/jcop4-channel-transport READER=0 Prueba MF protegido con DO97/2 y APDU extendida, sin PIN.' \
+		'make test/jcop4-channel-transport Prueba la variante de transporte con lector simulado.' \
 		'make test/jcop4-reader-features Prueba el diagnóstico del lector con PC/SC simulado.' \
 		'make test/jcop4-channel-sign Prueba firma/guard/verificación con transporte y PIN ficticios.' \
 		'make test/jcop4-channel-kdf Prueba la derivación candidata AES128 con datos sintéticos, sin tarjeta ni PIN.' \
@@ -372,3 +375,9 @@ inspect/jcop4-reader-features:
 
 test/jcop4-reader-features:
 	@bash scripts/test-jcop4-reader-features.sh
+
+inspect/jcop4-channel-transport:
+	@bash scripts/probe-jcop4-channel.sh "$(READER)" --transport-extended
+
+test/jcop4-channel-transport:
+	@bash scripts/test-jcop4-channel-transport.sh

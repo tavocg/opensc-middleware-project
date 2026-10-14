@@ -84,9 +84,11 @@ static int jcop4_sm_take_tlv(const unsigned char *input, size_t size, size_t *of
 /* Emits a protected header and body, not a complete wire APDU. The caller
  * retains responsibility for transport limits, operation authorization and
  * ending the channel on a transport failure. No credential/data logging. */
-static int jcop4_sm_seal(struct jcop4_sm_channel *channel, const unsigned char header[4],
+enum jcop4_sm_le_encoding { JCOP4_SM_LE_SHORT, JCOP4_SM_LE_TWO_BYTE_256 };
+static int jcop4_sm_seal_policy(struct jcop4_sm_channel *channel, const unsigned char header[4],
 		const unsigned char *data, size_t data_size, int has_le, unsigned int le,
-		unsigned char protected_header[4], unsigned char *body, size_t capacity, size_t *written)
+		unsigned char protected_header[4], unsigned char *body, size_t capacity, size_t *written,
+		enum jcop4_sm_le_encoding encoding)
 {
 	unsigned char next[16] = {0}, iv[16] = {0}, mac[16] = {0}, local_header[4];
 	unsigned char padded[JCOP4_SM_CRYPTO_LIMIT] = {0}, encrypted[JCOP4_SM_CRYPTO_LIMIT] = {0};
@@ -97,7 +99,9 @@ static int jcop4_sm_seal(struct jcop4_sm_channel *channel, const unsigned char h
 	*written = 0;
 	if (!channel || channel->phase != JCOP4_SM_IDLE || !header || header[0] != 0 ||
 			(!data && data_size) || data_size > JCOP4_SM_DATA_LIMIT || !protected_header || !body ||
-			(has_le != 0 && has_le != 1) || (has_le && (!le || le > 256))) goto out;
+			(has_le != 0 && has_le != 1) || (has_le && (!le || le > 256)) ||
+			(encoding != JCOP4_SM_LE_SHORT && encoding != JCOP4_SM_LE_TWO_BYTE_256) ||
+			(encoding == JCOP4_SM_LE_TWO_BYTE_256 && (!has_le || le != 256))) goto out;
 	if (jcop4_sm_next_ssc(channel->keys.ssc, next)) {
 		jcop4_sm_invalidate(channel);
 		goto out;
@@ -114,8 +118,10 @@ static int jcop4_sm_seal(struct jcop4_sm_channel *channel, const unsigned char h
 		if (jcop4_sm_append_tlv(candidate, sizeof(candidate), &body_size, 0x87, encrypted, padded_size + 1)) goto out;
 	}
 	if (has_le) {
-		unsigned char encoded = le == 256 ? 0 : (unsigned char)le;
-		if (jcop4_sm_append_tlv(candidate, sizeof(candidate), &body_size, 0x97, &encoded, 1)) goto out;
+		unsigned char encoded[2] = {le == 256 ? 0 : (unsigned char)le, 0};
+		size_t encoded_size = 1;
+		if (encoding == JCOP4_SM_LE_TWO_BYTE_256) { encoded[0] = 1; encoded_size = 2; }
+		if (jcop4_sm_append_tlv(candidate, sizeof(candidate), &body_size, 0x97, encoded, encoded_size)) goto out;
 	}
 	if (body_size) {
 		memcpy(authenticated + 32, candidate, body_size);
@@ -135,6 +141,15 @@ out:
 	OPENSSL_cleanse(padded, sizeof(padded)); OPENSSL_cleanse(encrypted, sizeof(encrypted));
 	OPENSSL_cleanse(candidate, sizeof(candidate)); OPENSSL_cleanse(authenticated, sizeof(authenticated));
 	return result;
+}
+
+/* Existing callers retain the exact original short DO97 encoding. */
+static int jcop4_sm_seal(struct jcop4_sm_channel *channel, const unsigned char header[4],
+		const unsigned char *data, size_t data_size, int has_le, unsigned int le,
+		unsigned char protected_header[4], unsigned char *body, size_t capacity, size_t *written)
+{
+	return jcop4_sm_seal_policy(channel, header, data, data_size, has_le, le,
+		protected_header, body, capacity, written, JCOP4_SM_LE_SHORT);
 }
 
 /* Fixed diagnostic enums only: no response bytes, status, lengths or keys.

@@ -8,8 +8,10 @@ if (( $# == 2 )) && [[ $2 == --login-once ]]; then
     task_source=jcop4-channel-login
 elif (( $# == 2 )) && [[ $2 == --sign-once ]]; then
     task_source=jcop4-channel-sign
+elif (( $# == 2 )) && [[ $2 == --transport-extended ]]; then
+    task_source=jcop4-channel-transport
 elif (( $# > 1 )); then
-    printf 'Uso: build-jcop4-channel-probe.sh [build] [--login-once|--sign-once]\n' >&2
+    printf 'Uso: build-jcop4-channel-probe.sh [build] [--login-once|--sign-once|--transport-extended]\n' >&2
     exit 2
 fi
 if [[ ! -f $task_build/config.h || ! -f $task_build/src/libopensc/.libs/libopensc.so ]]; then

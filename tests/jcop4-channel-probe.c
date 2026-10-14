@@ -92,6 +92,9 @@ static int backend_transmit(sc_reader_t *r, sc_apdu_t *a)
 	const unsigned long flags = SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP | SC_APDU_FLAGS_NO_SM;
 	assert(r == &test_reader && (a->flags & flags) == flags && test_state.locks == 1 && !test_state.unlocks);
 	test_state.physical++; a->sw1 = 0x90; a->sw2 = 0;
+#ifdef JCOP4_TRANSPORT_FIXTURE
+	if (probe_guard.phase == PROBE_TRANSPORT_MF) return test_transport_reply(a);
+#endif
 #ifdef JCOP4_SIGN_FIXTURE
 	if (probe_guard.phase == PROBE_SIGNATURE_APP || probe_guard.phase == PROBE_SIGNATURE_MSE || probe_guard.phase == PROBE_SIGNATURE_PSO || probe_guard.phase == PROBE_SIGNATURE_GET)
 		return test_signature_reply(a);
@@ -250,7 +253,7 @@ static int invoke_mode(int context_mode)
 	assert(dup2(saved, STDOUT_FILENO) >= 0); close(saved); fclose(capture); return result;
 }
 static int invoke(void) { return invoke_mode(0); }
-#ifdef JCOP4_LOGIN_FIXTURE
+#if defined(JCOP4_LOGIN_FIXTURE) || defined(JCOP4_TRANSPORT_FIXTURE)
 int no_pin_fixture_main(void)
 #else
 int main(void)

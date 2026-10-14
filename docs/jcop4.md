@@ -5716,3 +5716,97 @@ Una sola vez, sin PIN ni firma. No necesita tarjeta para esta consulta del
 lector, puede mantenerse insertada. Revisar features/properties/max_apdu_data,
 extended_apdu y cierre/helper antes de elegir transporte. No repetir firmas
 baseline/aplicación ni solicitar otro PIN por este hallazgo.
+
+### Transporte extendido candidato sin PIN
+
+Principal `93e161c`, OpenSC `3dfef6704`, limpios al comenzar. La ejecución
+del usuario `local/jcop4-reader-features-kwMEvhg4/report.txt`,
+2026-10-14T15:28:34Z (14Oct09:28CR), terminó con controles/decoders/cierre/
+helper0 y APDU0. El lector **no anuncia VERIFY_PIN_DIRECT**, anuncia
+GET_TLV_PROPERTIES y max_apdu_data65536. Extended_apdu sigue siendo
+advertised_not_tested: esa capacidad del lector no acredita la de la tarjeta
+ni RSA3072. No repetir esta consulta para confirmar el resultado.
+
+La continuación estática de Idopte confirma que3682c7 guarda el booleano
+inverso anterior,3682f2 lo carga en r8d y3682f9 llama240960, que lo almacena
+en descriptor+0C. En la rama flag1, READ137 usa DO97 de un byte137 y Le
+exterior172; Le256 usa DO97 de dos bytes0100 y exterior291. La ausencia
+observada de feature06 **no permite determinar ReaderNames.bit1** ni afirmar
+que esa sea la política runtime del módulo. Se propone una política fija
+para una prueba delimitada, sin barrer combinaciones ni solicitar otro PIN.
+
+Nuevo `make inspect/jcop4-channel-transport READER=0`, helper separado
+`--transport-extended`, sin código de introducción de credencial. Usa el
+driver genérico/default y los mismos ATR/AID/D004 conocidos, T=1, lock,
+reset inicial y validación de control/lectura137. Antes de lock/bootstrap
+exige max_recv_size del lector OpenSC>=291; el dato de capacidades Part10
+no sustituye esa comprobación en la conexión actual.
+
+Establece el canal candidato con los MSE/GA conocidos. El READ protegido
+de confirmación conserva DO97137 y usa Le exterior172. Solo después de
+MAC válido, estado interno9000 y contenido137 idéntico en memoria conserva
+la sesión local en SSC2 y permite **un único SELECT MF protegido**:
+
+- Interior00A40000, datos3F00, Le lógico256.
+- DO97 `97 02 01 00`; el MAC incluye el byte adicional.
+- Body33, frame42 en formato extendido: Lc000021 y Le exterior0123=291.
+- SSC3 para comando y SSC4 para respuesta, misma conexión/lock.
+
+No hace consulta PIN vacía, VERIFY, login, firma, selección de otras llaves,
+GET RESPONSE, ajuste6C, continuación, fallback o reintento. Una respuesta
+solo9000 no confirma éxito: exige MAC antes de publicar plaintext/SW, estado
+interno9000 y control FCP62 o FCI6F canónico, con83=3F00 y descriptor82 de DF,
+ambos únicos. Control no reconocido detiene, aunque el MAC sea válido. No
+registra contenido del control, claves, SSC real, punto, MAC ni APDU raw.
+
+**Se trata de un frame experimental, no de una capacidad detectada.**
+El driver genérico no declara SC_CARD_CAP_APDU_EXT; sc_check_apdu de la
+biblioteca local rechaza EXT sin ese flag. El helper no lo añade ni modifica
+límites de tarjeta/lector, caché o driver. Para este único frame llama
+reader.ops->transmit a través del guard propio: exige modo/fase específicos,
+canal confirmado, ATR/T1/límite291, CASE4_EXT, cabecera/Lc/Le/cuerpo exactos,
+buffer y máximo24 APDU en la sesión. El backend PCSC OpenSC real serializa
+el frame; no se llama sc_transmit_apdu para esta etapa. Esta ruta evita la
+validación genérica de capability únicamente dentro del experimento acotado,
+sin habilitar operaciones extendidas en otros clientes ni inferir soporte
+general de tarjeta. Se prueba el serializer real apdu.c en el fixture local.
+
+El codec conserva por defecto el DO97 de un byte y sus vectores anteriores.
+Solo la nueva función con política explícita acepta DO97/2, exclusivamente
+para Le256; otros tamaños, ausencia de Le o políticas desconocidas fallan
+localmente. No añade Le384, otras curvas ni soporte RSA3072.
+
+Tras la operación borra claves/contexto/buffers, hace reset final bajo lock,
+unlock y disconnect. Confirmación exige transport_mf_result=
+extended_frame_authenticated_mf_no_pin **y helper0/cierre completo**.
+Un resultado favorable previo al cierre no basta si el reset final falla.
+Lanzador una llamada, stdin vacío, debug0, trazas/delegados/precargas retirados,
+core dumps desactivados, timeout45sTERM+5sKILL; directorio0700 y reporte0600
+en `local/jcop4-channel-transport-*/report.txt`. Timeout no prueba limpieza
+de tarjeta: ante timeout/reset final ausente o fallido, cerrar clientes y
+reinsertar antes de otra operación, sin repetir por inercia.
+
+`make test/jcop4-channel-transport` pasó10 grupos nativos/bootstrap con
+transporte y peer sintéticos, serializer real local, frame exacto42bytes,
+MAC/SSC/control MF62/6F, errores de transporte/longitud/estado/MAC, guard
+negativo, una llamada/noPIN/noGET, límite290 antes de bootstrap y cierre
+fallido. Para enlazar el serializer privado se compila apdu.c local con
+funciones sobrantes renombradas/secciones descartadas; vendor no cambia.
+Pasaron también14 grupos de codec,24 probe/lanzador,15login,18firma,
+7confirmation,6session y5collector. Son pruebas offline, no firmas reales.
+ASan/UBSan pasó10transporte+14codec, detect_leaks0; no prueba de fugas ni
+instrumentación de OpenSC.so/provider precompilados. Cuatro helpers reales
+compilados, ninguno ejecutado. Driver/submódulo/observador/flake/lock intactos;
+agente sinPCSC/lector/tarjeta/PINreal/GUI/Idopte ejecutado.
+
+Siguiente intervención: misma JCOP4 RSA2048 y lector0, otros clientes cerrados:
+
+```sh
+nix develop -c make inspect/jcop4-channel-transport READER=0
+```
+
+Una sola vez, **sin PIN**. Revisar canal, primer fallo, transport_mf, MAC,
+control y cierre/helper antes de decidir otra operación. No repetir reader
+features ni sign baseline/aplicación. Una confirmación solo demostraría
+esta operación extendida en esta sesión; firma JCOP4/RSA3072 y política
+efectiva de Idopte seguirían pendientes.

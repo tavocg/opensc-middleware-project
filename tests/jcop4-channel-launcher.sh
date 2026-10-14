@@ -11,14 +11,21 @@ cat > "$task_tmp/scripts/build-jcop4-channel-probe.sh" <<'BUILD'
 #!/usr/bin/env bash
 set -euo pipefail
 if [[ ${FIXTURE_BUILD_FAIL:-0} != 0 ]]; then exit 31; fi
-cp "$FIXTURE_ROOT/helper" "$FIXTURE_ROOT/build/opensc/jcop4-channel-probe"
-chmod +x "$FIXTURE_ROOT/build/opensc/jcop4-channel-probe"
+task_binary=jcop4-channel-probe
+if (( $# )); then
+    [[ $# == 2 && -z $1 && $2 == --transport-extended ]] || exit 95
+    task_binary=jcop4-channel-transport
+fi
+cp "$FIXTURE_ROOT/helper" "$FIXTURE_ROOT/build/opensc/$task_binary"
+chmod +x "$FIXTURE_ROOT/build/opensc/$task_binary"
 BUILD
 cat > "$task_tmp/helper" <<'HELPER'
 #!/usr/bin/env bash
 set -euo pipefail
 [[ $1 == 0 && $OPENSC_DEBUG == 0 && $(stat -c %a "$OPENSC_CONF") == 600 ]] || exit 91
-if [[ ${FIXTURE_EXPECT_CONTEXT:-0} == 1 ]]; then
+if [[ ${FIXTURE_EXPECT_TRANSPORT:-0} == 1 ]]; then
+    [[ $# == 2 && $2 == --transport-extended ]] || exit 91
+elif [[ ${FIXTURE_EXPECT_CONTEXT:-0} == 1 ]]; then
     [[ $# == 2 && $2 == --pin-context ]] || exit 91
 else
     [[ $# == 1 ]] || exit 91
@@ -96,3 +103,20 @@ run_fixture 0
 [[ $(wc -l < "$task_tmp/invocations") == 6 ]]
 rg -q '^mode=anonymous_channel_no_pin_once$' "$task_report"
 printf 'PASS failed context run is never retried and an environment flag alone cannot enable the opt-in mode\n'
+export FIXTURE_EXPECT_TRANSPORT=1
+for task_exit in 0 1 124; do
+    export FIXTURE_HELPER_EXIT="$task_exit"
+    run_fixture "$task_exit" --transport-extended
+    [[ $task_report == *'/jcop4-channel-transport-'* ]]
+    rg -q '^mode=anonymous_channel_extended_mf_no_pin_once$' "$task_report"
+    rg -q '^policy=candidate_t1_read172_mf_extended291$' "$task_report"
+done
+[[ $(wc -l < "$task_tmp/invocations") == 9 ]]
+printf 'PASS extended transport requires an explicit argument/separate binary/private prefix and preserves0/1/124 with one no-PIN invocation\n'
+unset FIXTURE_EXPECT_TRANSPORT
+export FIXTURE_HELPER_EXIT=0 JCOP4_CHANNEL_TRANSPORT=1
+run_fixture 0
+[[ $(wc -l < "$task_tmp/invocations") == 10 ]]
+rg -q '^mode=anonymous_channel_no_pin_once$' "$task_report"
+rg -q '^policy=opensc_t1_short_max256$' "$task_report"
+printf 'PASS an environment transport flag cannot enable the experimental profile or change legacy policy\n'

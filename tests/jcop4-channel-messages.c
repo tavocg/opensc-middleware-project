@@ -95,6 +95,25 @@ int main(void)
 		puts("PASS synthetic independent command fixtures cover encrypted87, Le97 and header-only MAC without extra padding");
 	}
 	{
+		/* Independently assembled OpenSSL CLI fixture: same logical Le256,
+		 * explicit two-byte DO97. This does not authorize EXT card transport. */
+		const unsigned char mf_header[4] = {0,0xA4,0,0}, mf[2] = {0x3F,0};
+		size_t expected_size = hex(expected, "8711013bbf9cd5615d6032c4352411f1470a7a970201008e08fe2f3e76dd15b3ae");
+		assert(jcop4_sm_init(&channel, &fixture_keys) == 0);
+		assert(jcop4_sm_seal_policy(&channel, mf_header, mf, 2, 1, 256, header, body, sizeof(body), &written,
+			JCOP4_SM_LE_TWO_BYTE_256) == 0 && written == expected_size && written == 33 && !memcmp(body, expected, written));
+		assert(channel.phase == JCOP4_SM_WAITING && channel.keys.ssc[15] == 1);
+		for (int error = 0; error < 6; error++) {
+			assert(jcop4_sm_init(&channel, &fixture_keys) == 0); struct jcop4_sm_channel saved = channel;
+			memset(body, 0xAA, sizeof(body)); memset(header, 0xAA, sizeof(header));
+			unsigned int le = error == 0 ? 137 : error == 1 ? 255 : error == 2 ? 384 : 256;
+			assert(jcop4_sm_seal_policy(&channel, mf_header, mf, 2, error == 3 ? 0 : 1, le, header, body,
+				error == 4 ? 32 : sizeof(body), &written, error == 5 ? (enum jcop4_sm_le_encoding)2 : JCOP4_SM_LE_TWO_BYTE_256) == 1);
+			assert(!written && !memcmp(&channel, &saved, sizeof(channel)) && body[0] == 0xAA && header[0] == 0xAA);
+		}
+		puts("PASS explicit two-byte DO97 for256 matches an independent CMAC/ciphertext fixture; other lengths/missing Le/unknown policy/small buffers preserve unsent state, default short encoding unchanged");
+	}
+	{
 		const unsigned char data_header[4] = {0, 0xDA, 0, 0};
 		const size_t sizes[] = {128, 384, 3584}, body_sizes[] = {161, 418, 3618};
 		const char *digests[] = {"c3f1d0f7bf16e5cc5cab0258118b3cde34f9701715fa434e8896d17ab1a05e68",

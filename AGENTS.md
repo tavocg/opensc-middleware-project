@@ -9,7 +9,64 @@ transporte simulado. PIN/GUI también los ejecuta el usuario. Esto sustituye
 la autorización anterior de hardware por el agente; conservar límites de
 cada diagnóstico y privacidad. Git sigue autorizado pero .git solo lectura.
 
-**Última revisión: SELECT/MSE9000 autenticados; PSO6500 desnudo, consulta del lector preparada.**
+**Última revisión: lector anuncia extensión; diagnóstico de transporte sin PIN preparado.**
+Principal `93e161c`, OpenSC `3dfef6704`, limpios al comenzar. Informe usuario
+`local/jcop4-reader-features-kwMEvhg4/report.txt`, 2026-10-14T15:28:34Z
+(14Oct09:28CR): consultas/control/decoders/cierre/helper0, APDU0;
+VERIFY_PIN_DIRECT no anunciado, GET_TLV_PROPERTIES anunciado,
+max_apdu_data65536/extended_apdu=advertised_not_tested. **No prueba extensión
+de tarjeta, política runtime Idopte ni RSA3072.** ReaderNames.bit1 pendiente;
+no repetir consulta de lector ni firmas baseline/aplicación. PSO6500 de
+olZZ5giU sigue sin MAC/firma, no daño/PIN perdido acreditados.
+
+Revisión estática del mismo Idopte/hash:3682c7 guarda booleano inverso,
+3682f2 lo pasa en r8d a240960/descriptor+0C. Flag1 implica READ137 exterior172,
+DO97137; Le256 implica DO97/2=0100 y exterior291. Feature06 ausente no basta
+para inferir flag1: compatibilidad ReaderNames.bit1 sigue desconocida.
+
+Nuevo **make inspect/jcop4-channel-transport READER=0**, helper separado
+--transport-extended, **sin PIN/query/VERIFY/login/firma**. Mismo ATR/ADF/D004,
+T1/guard/lock/reset inicial; exige límite OpenSC del lector>=291 antes de
+bootstrap. Canal candidato MSE/GA y READ protegido137 con exterior172;
+MAC/inner9000/contenido idéntico/SSC2 obligatorios antes de un solo SELECT MF
+protegido: interior00A40000/3F00/Le256, DO97020100, body33, wire42 extendida,
+exteriorLe291, SSC3/4. Exige MAC/inner9000/control canónico MF3F00/DF únicos.
+Política explícita candidata, no afirma rama Idopte activa. No fallback/GET/
+6C/reintento/alternancia/PIN/certificados; cierre limpia canal y reset/unlock/
+disconnect, helper0/cierre completo obligatorios para confirmar.
+
+Generic OpenSC no declara SC_CARD_CAP_APDU_EXT y sc_transmit_apdu lo rechaza:
+**no se modifica capability ni límites de tarjeta/lector/cache/driver**.
+Solo este frame experimental exacto pasa por reader.ops->transmit guardado;
+guard exige fase/modo/canal confirmado/ATR/T1/límite/encodings/body42 y máximo
+24APDU, backend OpenSC real serializa. No habilita EXT global ni firma/RSA3072.
+Nuevo codec wide opt-in solo Le256; wrapper antiguo conserva DO97/1/bytes.
+Lanzador una invocación/stdin vacío/debug0/core0/entorno sin trazas/delegados,
+timeout45sTERM+5KILL/report0600/dir0700; no publica buffers/MAC/claves/puntos.
+
+Pasaron **10grupos transporte**, **14codec**, **24probe/lanzador**, **15login**,
+**18firma**, **7confirmation**, **6session**, **5collector**, transporte/PIN
+sintéticos. Transporte usa serializer real local apdu.c en fixture, no copia
+ni modifica vendor; símbolos sobrantes renombrados y descartados al enlazar.
+Cubre MF62/6F, control inválido, MAC/SSC/SW/errores, límite290 antes de canal,
+guard/negaciones/noPIN/noGET/una llamada/cierre fallido. Cuatro helpers reales
+compilados sin ejecutarlos. ASan/UBSan10transporte+14codec pasaron detect_leaks0;
+no prueba de fugas, OpenSC.so/provider precompilados sin instrumentación.
+Agente sinPCSC/hardware/PINreal/GUI/Idopte ejecutado. Driver/submódulo/
+observador/flake/lock intactos.
+
+**Siguiente intervención:** misma JCOP4 RSA2048 y lector0, otros clientes
+cerrados, `nix develop -c make inspect/jcop4-channel-transport READER=0`,
+una sola vez **sin PIN**. Revisar primer fallo/canal/transport_mf/MAC/control/
+cierre/helper antes de otro comando. Timeout o reset final ausente/fallido:
+reinsertar antes de otra operación, no repetir por inercia. JCOP4 firma y
+RSA3072 siguen pendientes. Git autorizado pero .git solo lectura, no eludir.
+Commit incluye documentos3/Makefile, builders/wrapper existentes, tests
+launcher/messages/probe y tools/messages/probe, más **cuatro nuevos**:
+tools/jcop4-channel-transport.c/.h, tests/jcop4-channel-transport.c y
+scripts/test-jcop4-channel-transport.sh. No capturas/build/submódulo.
+
+**Revisión anterior: SELECT/MSE9000 autenticados; PSO6500 desnudo, consulta del lector preparada.**
 Principal `642c1e6`, OpenSC `3dfef6704`, limpios al comenzar. Informe usuario
 `local/jcop4-channel-signature-application-olZZ5giU/report.txt`,
 2026-10-14T08:32:09Z (14Oct02:32CR): canal/MF/query/login9000 confirmados;

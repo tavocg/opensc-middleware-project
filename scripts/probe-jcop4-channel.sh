@@ -15,6 +15,12 @@ if (( $# == 2 )) && [[ $2 == --pin-context ]]; then
     task_mode=anonymous_channel_pin_context_no_pin_once
     task_prefix=jcop4-channel-pin-context
     task_helper_args+=(--pin-context)
+elif (( $# == 2 )) && [[ $2 == --transport-extended ]]; then
+    task_mode=anonymous_channel_extended_mf_no_pin_once
+    task_prefix=jcop4-channel-transport
+    task_helper=jcop4-channel-transport
+    task_helper_args+=(--transport-extended)
+    task_builder_args=("" --transport-extended)
 elif (( $# == 2 )) && [[ $2 == --login-once || $2 == --sign-once || $2 == --sign-application-once ]]; then
     # A controlling terminal is required, never accept credentials via pipe.
     if [[ ! -t 0 || ! -t 1 ]]; then
@@ -41,7 +47,7 @@ elif (( $# == 2 )) && [[ $2 == --login-once || $2 == --sign-once || $2 == --sign
         fi
     fi
 elif (( $# > 1 )); then
-    printf 'Uso: bash scripts/probe-jcop4-channel.sh [lector] [--pin-context|--login-once|--sign-once|--sign-application-once]\n' >&2
+    printf 'Uso: bash scripts/probe-jcop4-channel.sh [lector] [--pin-context|--transport-extended|--login-once|--sign-once|--sign-application-once]\n' >&2
     exit 2
 fi
 if [[ ! $task_reader =~ ^[0-9]+$ ]]; then
@@ -77,7 +83,11 @@ app default {
 CONFIG
 {
     printf 'date_utc=%s\nreader_index=%s\nmode=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$task_reader" "$task_mode"
-    printf 'policy=opensc_t1_short_max256\n'
+    if [[ $task_mode == anonymous_channel_extended_mf_no_pin_once ]]; then
+        printf 'policy=candidate_t1_read172_mf_extended291\n'
+    else
+        printf 'policy=opensc_t1_short_max256\n'
+    fi
     git -C "$task_root" rev-parse HEAD || true
     git -C "$task_root" status --short || true
     git -C "$task_root/vendor/opensc" rev-parse HEAD || true

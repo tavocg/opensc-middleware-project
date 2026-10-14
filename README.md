@@ -377,11 +377,20 @@ no una corrección validada en tarjeta. Pasaron18 grupos de firma simulada.
 La ejecuciónolZZ5giU confirmó SELECT del AID y MSE con MAC/9000; PSO cambió a
 una respuesta desnuda6500, sin firma y con cierre completo. No repetir firmas
 para confirmar esto. La revisión estática encontró DO97 de dos bytes para
-Le256 en una rama de Idopte que también cambia el transporte; aún falta
-conocer las capacidades del lector. Nuevo diagnóstico sin PIN ni APDU:
+Le256 en una rama de Idopte que también cambia el transporte. Diagnóstico
+sin PIN ni APDU:
 `make inspect/jcop4-reader-features READER=0`, mediante controles de metadatos
 del lector. No activa otro formato de firma ni prueba compatibilidad extendida
-de la tarjeta. [Detalle](docs/jcop4.md#pso6500-sin-mac-y-capacidades-del-lector).
+de la tarjeta. La ejecución kwMEvhg4 obtuvo límite anunciado65536 y ausencia
+de VERIFY_PIN_DIRECT, con cierre completo; la política efectiva de Idopte
+sigue pendiente. Nuevo `make inspect/jcop4-channel-transport READER=0`:
+diagnóstico separado sin PIN, que confirma el canal con READ exterior172 y
+prueba un único SELECT MF protegido extendido con DO97/2 y exteriorLe291.
+Exige MAC/9000/control MF válidos y cierre completo; no modifica capacidades
+del driver ni habilita firma extendida. Pasaron10 grupos de transporte
+simulado y las regresiones de codec/probe/login/firma. Ejecutarlo una sola
+vez y revisar el informe antes de continuar.
+[Detalle](docs/jcop4.md#transporte-extendido-candidato-sin-pin).
 [Protocolo y límites](docs/jcop4.md#diagnóstico-de-firma-rsa2048sha256-bajo-sm).
 El driver aún no firma con JCOP4.
 [Evidencia y límites](docs/jcop4.md#canal-confirmado-en-jcop4-sin-pin).
