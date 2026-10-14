@@ -6,6 +6,62 @@ la tarjeta. El usuario ejecuta las operaciones que requieran PIN o GUI. Esto
 sustituye las restricciones anteriores de no ejecutar Git/hardware/Idopte por
 el agente; conservar límites de cada diagnóstico y privacidad de los registros.
 
+**Última revisión: secuencia de confirmación probada con transporte sintético.**
+Principal `e9951da`, OpenSC `3dfef6704`, limpios al comenzar. Sin hardware,
+Idopte ejecutado, PIN, GUI ni nuevas capturas. D004 real LbbFD51N sigue vigente;
+no repetir inventario/estado/D004 por inercia. No dato o secreto real en tests.
+
+368190 llama acuerdo slot460 antes de instalar SM slot448/384820. Si token+340
+ya tiene SM retorna sin reinstalar;384c60 lo retira/borra el estado local.
+No identificar esos campos con contadores persistentes de tarjeta.
+240e30 clona comando, prepara porslot38, transmite y verifica respuesta por40.
+**Nuevo hallazgo: Le exterior del READ protegido no es siempre256.**
+24483c..2448a0: descriptor+0C=0 ->256;=1 ->Le original+(27+MACsize), salvo65536.
+Para READ137/MAC8 es172. DO97 sigue137 en ambos; respuesta sintética cifrada164.
+240960 guarda r8 endescriptor+0C.36828f..3682bc calcula ese booleano a partir
+de FEATURE_VERIFY_PIN_DIRECT tag06 (consulta2266e0) y bit1 de compatibilidad
+(226260).2266e0 consulta capacidades vacías42000D48, respetando
+SecuritySuite/DisablePinPad; /etc/idoss.conf declara DisablePinPad0, pero esto
+**no prueba presencia/capacidad de PIN-pad**.226260/226070 usan una tabla de
+configuración **ReaderNames**, no inferir sus flags desdeATR/nombre de lector.
+No se ejecutó control lector ni PIN-pad. Disponibilidad tag06/flags actuales
+y política efectiva de Le pendientes; no alternar172/256 sobre hardware.
+
+Nuevo **tools/jcop4-channel-confirmation.h**: secuencia candidata por callback,
+sin PC/SC/Idopte/PIN. Requiere mismo contexto exclusivo ADF/D004, control y
+lectura137 ya validados por futuro llamador; no descubre ni lee inicial por sí.
+Genera acuerdo efímero, MSE una vez, GA una vez y READ protegido una vez.
+Política exterior172/256 explícita, sin default/fallback; READ caso4 corto19.
+MSE exigeSW9000 sinpayload; GA admite sinpayload o plantilla vacía7C00, **no
+observación real de GA**. Nonce/token/otro payload detiene, nunca se ignora.
+No retries/GET RESPONSE/6C/PIN-status/VERIFY/firma/seguimiento. Solo devuelve
+éxito con MAC/padding válido, SW interno9000 y contenido137 idéntico en memoria.
+MAC válido con SW6982 o contenido distinto sigue fallo. Reporte solo enums,
+transporte/SW/booleano; sin buffers/claves/datos. Limpia keys/SSC/temporales
+en toda salida, no devuelve sesión reutilizable. Futuro llamador debe cerrar/
+resetear también sesión de tarjeta: limpieza local no lo hace.
+
+Nuevo **make test/jcop4-channel-confirmation** pasó **6 grupos**: peer RFC5903
+de software/efímero local, armado independiente CBC/MAC/TLV de respuesta,
+orden exacto3 comandos y Le explícito/GA vacío; errores transporte/buffer en
+cada etapa; setup69xx/61xx/6Cxx y payload;9000 solo/no MAC,64bitsMACalterados,
+padding malo conMAC válido; SW interno error/datos distintos/cortos/ausentes;
+entrada/curva/longitud/política/nulos con0 intercambios y reporte limpio.
+ASan/UBSan pasaron (detect_leaks0 por ptrace, no prueba de fugas); lanzador
+desactiva core dumps. Fallo inicial del fixture se corrigió: plantilla GA de
+éxito sobreescribía el SW fallido simulado. No error de tarjeta ni de PIN.
+KDF5/primitivas7/codec9/acuerdo8/helper92/lanzador95/observador162/firma6/
+operación12 intactos/no repetidos. Driver/submódulo/helper/observador/flake/lock
+sin cambios; se mantienen los bloqueos de observación previos.
+
+**Siguiente trabajo:** justificar Le mediante capacidades/compatibilidad del
+lector actual, preparar adaptador real acotado con control de ATR/AID/D004,
+debug0, lock y cierre/reset de sesión. Aún no hay make inspect de canal ni
+se envió MSE/GA/SM real: no dar por confirmado canal/identidad/PIN/firmaJCOP4.
+No repetir estados/lecturas sin propósito nuevo; RSA3072/VERIFY6982 pendientes.
+Git autorizado pero .git solo lectura impide index.lock, no eludirlo. Commit
+incluye tres archivos nuevos de confirmation.h, tests y lanzador.
+
 **Última revisión: acuerdo efímero P-521 y MSE/GA candidatos probados offline.**
 Principal `458007f`, OpenSC `3dfef6704`, limpios al comenzar. Última tarjeta:
 LbbFD51N/02:22:26Z, punto D004 válido; no repetir diagnósticos D004/estado/

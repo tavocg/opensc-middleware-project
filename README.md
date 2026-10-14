@@ -313,13 +313,16 @@ Idopte; firma libre JCOP4 aún pendiente.
 La ruta estática Idopte aporta CA/ECDH/AES128, KDF y una variante CBC con IV cero.
 Hay componentes libres aislados para KDF, primitivas, mensajes protegidos y
 acuerdo efímero P-521. Pasaron cinco grupos de KDF, siete de primitivas,
-nueve del codec y ocho de acuerdo, con datos sintéticos y vectores públicos.
+nueve del codec, ocho de acuerdo y seis de confirmación, con datos sintéticos
+y vectores públicos.
 `make test/jcop4-channel-agreement` verifica la derivación y los constructores
 candidatos MSE/GA. La ruta estática de transporte conserva CLA10 y Le ausente
-en GA; todavía falta confirmar la cadena activa en esta tarjeta y validar
-el primer intercambio protegido antes de integrar el canal al driver.
+en GA. `make test/jcop4-channel-confirmation` prueba MSE/GA y el primer READ
+autenticado con una tarjeta simulada. El Le exterior de ese READ depende de
+compatibilidad del lector; falta justificarlo y preparar el adaptador real
+antes de probar el canal en esta tarjeta.
 Sin nuevas pruebas de tarjeta o PIN; el driver aún no firma con JCOP4.
-[Evidencia y límites](docs/jcop4.md#acuerdo-efímero-p-521-y-transporte-candidato-de-ga).
+[Evidencia y límites](docs/jcop4.md#confirmación-del-primer-intercambio-con-transporte-sintético).
 
 Capturas privadas bajo local/jcop4-idopte-spy-*/; no agregarlas a Git.
 Pasaron previamente **30 comprobaciones del observador/decoder y 40 del

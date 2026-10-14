@@ -4409,6 +4409,110 @@ pedir PIN; no probar variantes por inercia. La causa de VERIFY6982 y el soporte
 libre JCOP4/RSA3072 siguen pendientes. Git montado solo lectura impide el
 commit, que debe incluir los tres archivos nuevos de acuerdo/pruebas/lanzador.
 
+## Confirmación del primer intercambio con transporte sintético
+
+Principal `e9951da`, OpenSC `3dfef6704`, limpios al comenzar. Sin hardware,
+ejecución de Idopte, PIN, GUI o nuevas capturas. D004 de LbbFD51N conserva su
+validez como última prueba real; no se repitieron lectura, estado ni inventario.
+
+### Orden de instalación y Le del comando protegido
+
+`368190` llama al acuerdo por slot460 antes de instalar la capa SM por
+slot448/`384820`. Si el campo token+340 ya contiene esa capa, retorna sin
+reinstalarla. `384c60` la retira y borra estado local. Estos campos no son
+evidencia de contadores persistentes ni de efectos sobre intentos de PIN.
+La ruta `240e30` clona el comando, invoca preparación por slot38, lo transmite
+y procesa su respuesta por slot40; no realiza el establecimiento después
+de preparar el primer comando protegido.
+
+Se resolvió otra diferencia que el codec, al no serializar transporte, dejaba
+abierta: **el Le exterior no es necesariamente256**. En `24483c..2448a0`,
+descriptor+0C falso lleva a `244b10` y Le256. Si es verdadero, el Le original
+se incrementa en27 más la longitud de MAC, excepto el valor65536. Para la
+lectura candidata de137 bytes con MAC8, esto produce172. El DO97 mantiene
+137 en ambas ramas; el Le exterior cambia el límite de transporte, no ese
+objeto autenticado. La respuesta cifrada del fixture ocupa164 bytes totales.
+
+`240960` almacena r8 en descriptor+0C. En `36828f..3682bc` se calcula a partir
+de la disponibilidad de tag06 y bit1 de compatibilidad. `2266e0` busca tag06
+mediante CM_IOCTL_GET_FEATURE_REQUEST vacío42000D48 y respeta la opción
+SecuritySuite/DisablePinPad. El header PC/SC local `reader.h` identifica06
+como FEATURE_VERIFY_PIN_DIRECT: **consultar su presencia no ejecuta VERIFY**.
+No se invocó ese control ni PIN-pad en esta revisión. `/etc/idoss.conf` tiene
+DisablePinPad0, que habilita la consulta del módulo, pero no acredita ninguna
+capacidad del lector. `226260`/`226070` obtienen flags usando la configuración
+ReaderNames; no interpretar ese bit como capacidad deducida del ATR.
+
+Los informes previos omitieron los TLV de capacidades. Ni esos informes ni
+el nombre Bit4id/OMNIKEY determinan aquí la política efectiva. **No probar
+172 y256 en tarjeta como fallback**: el futuro adaptador debe justificar su
+elección y registrar solamente la política resultante, sin ejecutar PIN-pad.
+
+### Secuencia candidata y límites
+
+Nuevo `tools/jcop4-channel-confirmation.h`, sin PC/SC, descubrimiento, Idopte
+o credenciales. Recibe la lectura inicial137 de D004 y un callback de transporte.
+Su futuro llamador debe haber comprobado ATR/AID, control de archivo y lectura
+en la misma conexión con acceso exclusivo, manteniendo el ADF/D004 seleccionado.
+Esa procedencia no puede demostrarse con un buffer suministrado a esta función.
+
+Genera el acuerdo efímero y ejecuta, mediante el callback, exactamente MSE,
+GA y una lectura protegida de137 bytes. Requiere una política explícita de
+Le exterior172 o256, sin default ni alternancia. El READ candidato tiene19
+bytes/caso4 corto: cabecera0CB00000, Lc13, DO97 de137 y8E/MAC8, luego Le exterior.
+No hay PIN status, VERIFY, firma, reintentos, corrección6C, GET RESPONSE ni
+comando de seguimiento tras la confirmación o tras un fallo.
+
+MSE requiere respuesta sin payload/SW9000; GA admite sin payload o plantilla
+vacía7C00/SW9000. Son límites conservadores del candidato, **no formas de GA
+observadas en esta tarjeta**. Un nonce/token u otro payload detiene la prueba,
+sin ignorar datos de autenticación ni atribuirlos a otro protocolo por su tamaño.
+
+La función solo confirma la lectura si el codec verifica MAC, descifrado y
+padding, el SW interno es9000 y el contenido completo137 coincide en memoria
+con la lectura inicial. `9000` de MSE/GA o un SW físico sin MAC no bastan.
+MAC válido con error interno6982, contenido diferente, corto o ausente sigue
+siendo una confirmación fallida. Ningún dato/clave/secreto se incluye en el
+reporte: solo etapa/resultado/transporte/SW y booleano de respuesta autenticada.
+
+Limpia claves, SSC y temporales en toda salida; no devuelve una sesión para
+login. **El llamador debe cerrar/resetear también el estado de tarjeta** al
+final: limpiar memoria local no termina el canal remoto. Esta pieza aún no
+tiene adaptador real ni está conectada al helper, observador o driver.
+Confirmar un intercambio no demostraría identidad de tarjeta, permiso PIN,
+causa del rechazo anterior o capacidad de firmar.
+
+### Pruebas
+
+`make test/jcop4-channel-confirmation` pasó **6 grupos**. El peer de software
+usa la clave pública de prueba RFC5903 ya utilizada en el acuerdo y deriva
+las claves desde cada punto efímero del terminal. Arma el MAC del comando
+esperado y la respuesta CBC/MAC/TLV separadamente del codec. Sus datos D004
+son sintéticos; no se utiliza ningún parámetro o secreto de tarjeta.
+
+Se comprobó orden exacto de tres comandos, Le172/256 elegido antes del envío,
+formas vacías de GA y coincidencia íntegra. Fallos de transporte, tamaño de
+respuesta, SW69xx/61xx/6Cxx y payload inesperado detienen la secuencia en su
+etapa; no hay APDU adicionales. Los64 bits de MAC alterados, SW físico9000
+solo y padding inválido con MAC válido no confirman el canal. SW interno de
+error, datos distintos/cortos/ausentes y argumentos inválidos tampoco lo
+confirman; estos últimos producen cero intercambios y limpian el reporte.
+
+Un error inicial del fixture sobreescribía su SW de fallo con la plantilla GA
+de éxito; se corrigió y se repitió la suite. No fue error de tarjeta/PIN.
+ASan/UBSan pasaron con detect_leaks0 por el límite ptrace de LeakSanitizer;
+no prueba de ausencia de fugas. El lanzador desactiva core dumps. Suites
+anteriores KDF5/primitivas7/codec9/acuerdo8/helper92/lanzador95/observador162/
+firma6/operación12 intactas, sin repetirlas por documentación.
+
+**Siguiente trabajo:** justificar la política de Le para el lector actual
+y preparar adaptador real con ATR/AID/D004 comprobados, debug0, lock y cierre
+de sesión. No hay todavía un make inspect para canal ni MSE/GA/SM enviados
+a hardware. Observador y bloqueos anteriores, driver/submódulo/helper/flake/
+lock intactos. JCOP4/RSA3072 y causa de VERIFY6982 pendientes. Git montado
+solo lectura impide commit; incluir los tres archivos nuevos de confirmación,
+tests y lanzador.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño

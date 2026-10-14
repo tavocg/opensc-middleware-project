@@ -19,6 +19,7 @@
 .PHONY: inspect/jcop4-idopte
 .PHONY: inspect/jcop4-idopte-discovery inspect/jcop4-idopte-spy test/pcsc-public-observer test/jcop4-channel-kdf test/jcop4-channel-primitives test/jcop4-channel-messages
 .PHONY: test/jcop4-channel-agreement
+.PHONY: test/jcop4-channel-confirmation
 
 PDF_INPUT ?= doc.pdf
 PDF_OUTPUT ?= local/jcop3-cli.pdf
@@ -79,6 +80,7 @@ help:
 		'make test/jcop4-channel-primitives Prueba AES/CMAC/padding/SSC sin tarjeta ni PIN.' \
 		'make test/jcop4-channel-messages Prueba el codec candidato de mensajes protegidos, sin tarjeta ni PIN.' \
 		'make test/jcop4-channel-agreement Prueba ECDH P-521 y construcción candidata MSE/GA sin tarjeta ni PIN.' \
+		'make test/jcop4-channel-confirmation Prueba el primer MAC con transporte simulado.' \
 		'make test/jcop4-channel-kdf Prueba la derivación candidata AES128 con datos sintéticos, sin tarjeta ni PIN.' \
 		'make test/pcsc-public-observer Comprueba el observador sin lector ni tarjeta.' \
 		'make sign/jcop4-apdu      Firma experimental RSA SHA-256 por APDU y verifica, un intento de PIN.' \
@@ -312,3 +314,6 @@ test/jcop4-channel-messages:
 
 test/jcop4-channel-agreement:
 	@bash scripts/test-jcop4-channel-agreement.sh
+
+test/jcop4-channel-confirmation:
+	@bash scripts/test-jcop4-channel-confirmation.sh
