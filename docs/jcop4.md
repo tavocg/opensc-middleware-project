@@ -4768,6 +4768,84 @@ El usuario ejecuta todos los comandos de lector/tarjeta. Revisar confirmación,
 regiones/tamaño si falla y cierre antes de otra operación; no ignorar campos
 para convertir el resultado en éxito. JCOP4/RSA3072 y VERIFY6982 pendientes.
 
+## Intento anterior sin tarjeta: sin ejecución del protocolo
+
+Principal `d462900`, limpio al comenzar. Informe del usuario
+`local/jcop4-channel-CkRwMyGb/report.txt`, **2026-10-14T05:37:16Z** (13Oct CR):
+compilación/contexto/driver0, `reader_result=not_found`, guard sin bloqueo,
+**command_count=0**, sin interrupción, helper1. No connect, reset ni APDU.
+No se ejecutó MSE/GA/READ protegido ni se intentó un PIN; no prueba rechazo de
+tarjeta ni incompatibilidad del IV corregido. Context0 indica creación del
+contexto OpenSC, no disponibilidad acreditada del servicio PC/SC o lector.
+El usuario aclaró que ejecutó el diagnóstico accidentalmente sin tarjeta y
+lo volvió a ejecutar. La propuesta de enumeración `pcsc_scan -r` ya no hace
+falta ante el resultado satisfactorio siguiente. Conservar este informe como
+no ejecución del protocolo; no usarlo para diagnosticar servicio inactivo,
+incompatibilidad del IV, tarjeta o PIN. No repetir ni variar el protocolo por él.
+
+## Canal confirmado en JCOP4 sin PIN
+
+Principal `d462900`, OpenSC `3dfef6704`; al comenzar seguían pendientes solo
+los tres documentos del intento anterior, cuya revisión se interrumpió con
+la aclaración del usuario. No cambios de código del usuario o submódulo.
+Informe `local/jcop4-channel-27daTsCp/report.txt`, **2026-10-14T05:40:01Z**
+(13Oct CR), reader_index0, ATR conocido y política T=1/Le exterior256 comprobada.
+Compilación/contexto/driver/conexión/lock/reset inicial0, directory0 y AID
+anunciado1, selección de aplicación0, SELECT/control/READ D0040/9000.
+
+La confirmación llegó a **stage4/outcome8/READ_CONFIRMED**: transporte0,
+MAC verificado, SW interno9000, **137 bytes coincidentes íntegramente**, con
+size_equal/first_block_equal/tail_equal1. Resultado
+`protected_d004_read_confirmed_no_login`. Ocho APDU, guard sin bloqueo,
+reset final/unlock/desconexión0, sin interrupción y helper0.
+
+Es evidencia de acuerdo/capa de mensajes compatible con este primer READ,
+incluido el descifrado con IV=AES(Kenc,SSC) y coincidencia completa. No hay
+que ignorar campos para obtener éxito. El comando READ no contiene datos;
+el envío de datos cifrados en DO87 aún tiene evidencia de software, mientras
+la respuesta cifrada sí se comprobó en tarjeta. No prueba identidad certificada,
+autenticación/PIN, firma RSA2048, soporte3072 ni un perfil CA/PACE universal.
+La sesión de diagnóstico terminó y sus claves/SSC se borraron: no se puede
+continuar con VERIFY desde otro proceso aprovechando esta sesión.
+
+No repetir canal, D004, inventario o estados para corroborar el mismo resultado.
+La causa del antiguo VERIFY6982 sigue pendiente: un READ compatible con SM
+no identifica la política del PIN ni toda la ruta de login.
+
+### Selección de raíz: una rama retira el canal local
+
+Se revisó estáticamente el mismo módulo instalado/hash2380540... de la sección
+anterior, sin ejecutar Idopte, hardware o PIN. Para referencia global ordinaria,
+368b90 llega a39cd30;39cd47 despacha CP71 slot4d8. La relocación ELF de
+vtable5d0c68 en5d1140 resuelve ese slot a **37d690**.
+
+37d690 compara el tipo interno devuelto por3a02f0: tipos0/7/9 llegan
+directamente a3a8370; para los otros,37d6c9..37d6cf invoca primero slot450.
+Relocación5d10b8 resuelve ese slot a **384c60**, la retirada de SM examinada
+antes: quita el pipe por228b60, destruye token+340 y pone ese puntero a cero.
+Esto retira **la capa local del cliente**; no demuestra un reset remoto,
+efecto sobre intentos de PIN ni el resultado de una selección protegida.
+
+En3a8370 la rama de SELECT MF también usa slot538 para elegir P2:62->04,
+64->08,6F/otros->00 en el bloque revisado; construye datos3F00 y Le256.
+No se conoce aquí el selector runtime, y esos valores no son generaciones
+JCOP/ATR. No se elige una variante ni se ensayan todas. La referencia anterior
+a3a8432 señalaba procesamiento de respuesta dentro de esa función; la entrada
+se identifica ahora como3a8370.
+
+Por tanto, antes de integrar canal+VERIFY se necesita resolver referencia
+global/local, tipo efectivo y selección/cache/contexto de la rama que utiliza
+la tarjeta. **No copiar un SELECT raíz genérico después del acuerdo** ni
+afirmar que Idopte conserve SM en esa ruta a partir del éxito de D004. Tampoco
+se demuestra que esa rama concreta se haya ejecutado con esta tarjeta.
+
+**Próximo trabajo local:** retención de un canal ya confirmado en la misma
+conexión/lock, selección y SSC bajo pruebas sintéticas; terminar de identificar
+la ruta de contexto/login/formato antes de pedir PIN. No nuevo comando de
+tarjeta ni repetición del diagnóstico por ahora. Las29 pruebas y ASan25
+anteriores siguen vigentes, sin repetir suites sin cambios. Driver/submódulo,
+observador, helpers y flake/lock intactos; esta revisión solo cambia documentos.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño

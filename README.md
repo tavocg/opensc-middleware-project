@@ -324,18 +324,21 @@ sin PIN: comprueba ATR/AID/D004, intenta MSE/GA y verifica un READ protegido.
 El adaptador exige T=1 y límites declarados suficientes para APDU cortas;
 elige Le exterior256, sin alternarlo ni copiar la tabla de lectores de Idopte.
 Mantiene el bloqueo de la conexión y resetea la sesión al finalizar.
-La última ejecución llegó al primer READ protegido: **MAC válido y SW interno
-9000**, pero tamaño/contenido no coincidió con D004. Cerró correctamente.
-La revisión estática posterior corrigió el IV: el cero pertenece al cifrado
-previo del SSC; los datos usan **AES(Kenc,SSC)** como IV. El codec se corrigió
-y mantiene comparación completa, sin ignorar diferencias. Pasaron diez grupos
+La última ejecución **confirmó el canal**: READ protegido con MAC válido,
+SW interno9000 y los **137 bytes idénticos** al D004 inicial, incluido el primer
+bloque; reset final/unlock/desconexión y proceso0. La corrección del IV
+**AES(Kenc,SSC)** quedó comprobada para ese intercambio. Pasaron diez grupos
 del codec, siete de confirmación y doce del adaptador/lanzador, incluidos dos
 con las funciones reales de OpenSC y lector simulado. Nuevos informes añaden
-solo tamaño y booleanos de comparación, sin datos o hashes. Falta comprobar
-esta corrección con la misma JCOP4 y otros clientes cerrados. El agente prepara
-y revisa; el usuario ejecuta todos los comandos de lector/tarjeta.
+solo tamaño y booleanos de comparación, sin datos o hashes. Un intento anterior
+sin tarjeta dio cero APDU; el usuario aclaró el accidente y la nueva ejecución
+fue satisfactoria. No hace falta repetir el diagnóstico ni enumerar lectores.
+El siguiente paso es resolver contexto de login y retención del canal: una
+rama de selección de raíz Idopte retira SM local, por lo que no basta añadir
+SELECT raíz y VERIFY de forma genérica. El agente prepara y revisa; el usuario
+ejecuta todos los comandos de lector/tarjeta. La prueba no usó PIN ni firma.
 El driver aún no firma con JCOP4.
-[Evidencia y límites](docs/jcop4.md#primer-mac-real-y-corrección-del-iv-de-datos).
+[Evidencia y límites](docs/jcop4.md#canal-confirmado-en-jcop4-sin-pin).
 
 Capturas privadas bajo local/jcop4-idopte-spy-*/; no agregarlas a Git.
 Pasaron previamente **30 comprobaciones del observador/decoder y 40 del

@@ -9,6 +9,64 @@ transporte simulado. PIN/GUI también los ejecuta el usuario. Esto sustituye
 la autorización anterior de hardware por el agente; conservar límites de
 cada diagnóstico y privacidad. Git sigue autorizado pero .git solo lectura.
 
+**Último resultado: canal JCOP4 confirmado mediante READ protegido íntegro.**
+Principal `d462900`, OpenSC `3dfef6704`. Tres documentos pendientes de la
+revisión interrumpida del intento sin tarjeta; sin cambios de código del usuario.
+Informe nuevo `local/jcop4-channel-27daTsCp/report.txt`, 2026-10-14T05:40:01Z
+(13Oct CR): build/context/driver/connect/lock/reset inicial0, ATR/política
+correctos, directory0/AID anunciado1/select aplicación0, SELECT/READ D0040/9000.
+stage4/outcome8(READ_CONFIRMED), transporte0/SW interno9000/MAC verificado1,
+**content_size137/size_equal1/first_block_equal1/tail_equal1**,
+channel_result=protected_d004_read_confirmed_no_login. Ocho APDU, guard0,
+reset final/unlock/disconnect0, interrupted0/helper0. Confirmación completa
+del primer intercambio en esa sesión; no identidad certificada/PIN/login/firma.
+El comando READ no tiene datos cifrados: DO87 en comandos aún solo probado en
+software, respuesta cifrada sí comprobada con igualdad completa en tarjeta.
+No repetir canal/D004/estado por inercia; la sesión ya fue reseteada y sus
+claves/SSC borrados, no reutilizarla desde otro comando/proceso.
+
+Usuario aclaró que CkRwMyGb se ejecutó accidentalmente sin tarjeta y volvió a
+ejecutar el diagnóstico. Conservar ese informe como no ejecución del protocolo;
+no hace falta pcsc_scan ni investigar servicio por ese intento ahora superado.
+
+**Hallazgo estático para el próximo paso:** misma libt_ias.so/hash2380540...
+368b90->39cd30 para rama global ordinaria;39cd47 llama CP71 slot4d8.
+Relocación5d1140=37d690; esta rutina va a3a8370 sin quitar SM para tipos0/7/9,
+pero para los otros llama slot450 primero. Relocación5d10b8=384c60: retira
+pipe228b60, destruye objeto token+340 y lo pone0. Es **retirada de SM local**,
+no prueba de reset/cierre remoto ni de intento PIN. No copiar SELECT raíz
+genérico antes de VERIFY: puede descartar la capa en esa rama.3a8370 también
+elige P2 de SELECT MF según slot538 (62->04,64->08,6F/otros->00 en rama
+examinada), aún sin selector runtime. No atribuir esos números a generación
+JCOP/ATR ni elegir/barrer P2. No declarar ejecutada esta ruta en esta tarjeta.
+Tipo efectivo, referencia global/local, selección/cache/contexto y formato PIN
+siguen pendientes para login. El éxito de D004 no resuelve por sí solo VERIFY6982.
+
+**Siguiente trabajo local:** resolver la rama de contexto/login y diseñar
+retención de un canal confirmado en la misma conexión/lock, con pruebas
+sintéticas de SSC y selección. No pedir otro PIN, repetir hardware ni añadir
+SM/SELECT/VERIFY al diagnóstico actual por inercia. Driver/submódulo/observador
+intactos; suites codec10/confirmation7/probe12 y ASan25 vigentes/no repetidas.
+Solo documentación/revisión estática esta vez; JCOP4/RSA3072/firma pendientes.
+Git solo lectura: commit documental AGENTS.md/README.md/docs/jcop4.md, sin
+capturas/binarios/build/submódulo. Todos los comandos de tarjeta los hace usuario.
+
+**Intento anterior sin tarjeta: lector no enumerado, sin ejecución del protocolo.**
+Principal `d462900`, limpio al comenzar. Informe del usuario
+`local/jcop4-channel-CkRwMyGb/report.txt`, 2026-10-14T05:37:16Z (13Oct CR):
+build/context/driver0, **reader_result=not_found**, guard_blocked0,
+command_count0, interrupted0, helper1. No connect, reset ni APDU/MSE/GA/SM/
+PIN/VERIFY. No rechazo de tarjeta ni evidencia a favor/en contra del IV nuevo.
+Context0 es contexto OpenSC creado, no prueba de servicio PCSC/lector disponible.
+No determinar desconexión física/pcscd inactivo/socket/índice desde este resumen.
+Última evidencia de MAC real sigue siendo NY1kGaJQ, con mismatch anterior;
+corrección AES(Kenc,SSC) probada en software pero todavía no en tarjeta.
+
+Se propuso enumerar lectores, pero el usuario aclaró el accidente sin tarjeta
+y el informe posterior27daTsCp confirmó el canal. **Esa intervención ya no es
+necesaria**. No repetir canal por este informe ni modificar protocolo/Le/CLA.
+No enumeración/activación PCSC por el agente.
+
 **Última revisión: primer MAC real verificado; corregido IV derivado del SSC.**
 Principal `6ab901f`, OpenSC `3dfef6704`, limpios al comenzar. Informe del usuario
 `local/jcop4-channel-NY1kGaJQ/report.txt`, 2026-10-14T05:23:31Z (13Oct CR):
