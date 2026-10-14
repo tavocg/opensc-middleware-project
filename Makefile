@@ -35,6 +35,7 @@
 .PHONY: test/iasecc-chipdoc-init
 .PHONY: test/iasecc-chipdoc-pkcs11
 .PHONY: inspect/jcop4-pkcs11 test/jcop4-pkcs11-public
+.PHONY: sign/jcop4-pkcs11 test/jcop4-pkcs11-sign
 
 PDF_INPUT ?= doc.pdf
 PDF_OUTPUT ?= local/jcop3-cli.pdf
@@ -121,6 +122,8 @@ help:
 		'make test/iasecc-chipdoc-pkcs11 Prueba el módulo PKCS#11 compilado con tarjeta y PIN simulados.' \
 		'make inspect/jcop4-pkcs11 READER=0 Consulta pública acotada del módulo JCOP4, sin PIN ni login.' \
 		'make test/jcop4-pkcs11-public Prueba el diagnóstico público y su lanzador con lector simulado.' \
+		'make sign/jcop4-pkcs11 READER=0 Una firma PKCS#11 de texto técnico; PIN interactivo, sin reintentos.' \
+		'make test/jcop4-pkcs11-sign Prueba firma, fallos y terminal con tarjeta/PIN simulados.' \
 		'make test/jcop4-reader-features Prueba el diagnóstico del lector con PC/SC simulado.' \
 		'make test/jcop4-channel-sign Prueba firma/guard/verificación con transporte y PIN ficticios.' \
 		'make test/jcop4-channel-kdf Prueba la derivación candidata AES128 con datos sintéticos, sin tarjeta ni PIN.' \
@@ -441,3 +444,10 @@ inspect/jcop4-pkcs11:
 test/jcop4-pkcs11-public:
 	@bash scripts/test-jcop4-pkcs11-public.sh
 	@bash tests/jcop4-pkcs11-launcher.sh
+
+sign/jcop4-pkcs11:
+	@bash scripts/sign-jcop4-pkcs11.sh "$(READER)"
+
+test/jcop4-pkcs11-sign:
+	@bash scripts/test-jcop4-pkcs11-sign.sh
+	@python3 tests/jcop4-pkcs11-sign-launcher.py

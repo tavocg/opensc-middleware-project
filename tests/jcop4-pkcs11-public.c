@@ -77,6 +77,7 @@ static int public_run(const char *index,char output[8192])
 	assert(dup2(out,1) >= 0 && dup2(err,2) >= 0); close(out); close(err);
 	fseek(capture,0,SEEK_SET); size_t n = fread(output,1,8191,capture); output[n] = 0; fclose(capture); return rv;
 }
+#ifndef JCOP4_PKCS11_PUBLIC_TEST_FIXTURE
 int main(void)
 {
 	(void)thread_ops; (void)slot; (void)session; (void)second;
@@ -137,3 +138,4 @@ int main(void)
 	OSSL_PROVIDER_unload(test_provider.defprov); OSSL_LIB_CTX_free(test_provider.libctx);
 	OSSL_PROVIDER_unload(alternate_provider.defprov); OSSL_LIB_CTX_free(alternate_provider.libctx); return 0;
 }
+#endif

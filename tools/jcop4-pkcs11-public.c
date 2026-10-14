@@ -57,6 +57,11 @@ static int pub_stop(unsigned int ins, int result)
 	if (!pub_guard.blocked) { pub_guard.failure_ins = ins; pub_guard.failure_transport = result; pub_guard.failure_stage = pub_guard.stage; }
 	pub_guard.blocked = 1; return result;
 }
+#ifdef JCOP4_PKCS11_SIGN_DIAGNOSTIC
+static int sign_reset(sc_reader_t *,int);
+static int sign_transmit(sc_reader_t *,sc_apdu_t *);
+static int sign_active(void);
+#endif
 static int pub_reader_connect(sc_reader_t *r)
 {
 	if (r != pub_guard.reader || pub_interrupted || pub_guard.reader_connects++ || !pub_atr(&r->atr) ||
@@ -80,9 +85,19 @@ static int pub_lock(sc_reader_t *r)
 { if (r != pub_guard.reader || pub_guard.blocked || pub_interrupted) return SC_ERROR_NOT_ALLOWED; int rv = pub_guard.original->lock(r); if (!rv) pub_guard.locks++; return rv; }
 static int pub_unlock(sc_reader_t *r)
 { if (r != pub_guard.reader) return SC_ERROR_NOT_ALLOWED; int rv = pub_guard.original->unlock(r); if (!rv) pub_guard.unlocks++; return rv; }
-static int pub_reset(sc_reader_t *r,int cold) { (void)r; (void)cold; return pub_stop(0,SC_ERROR_NOT_ALLOWED); }
+static int pub_reset(sc_reader_t *r,int cold)
+{
+#ifdef JCOP4_PKCS11_SIGN_DIAGNOSTIC
+	return sign_reset(r,cold);
+#else
+	(void)r; (void)cold; return pub_stop(0,SC_ERROR_NOT_ALLOWED);
+#endif
+}
 static int pub_transmit(sc_reader_t *r,sc_apdu_t *a)
 {
+#ifdef JCOP4_PKCS11_SIGN_DIAGNOSTIC
+	if (sign_active()) return sign_transmit(r,a);
+#endif
 	unsigned int fid = 0, file = 9, offset = 0; int selected_app = pub_guard.app;
 	if (!a || r != pub_guard.reader || !pub_guard.connected || !pub_atr(&r->atr) || r->active_protocol != SC_PROTO_T1 ||
 		pub_interrupted || pub_guard.blocked || pub_guard.commands >= 128 || a->cla || a->control ||
@@ -209,6 +224,9 @@ static CK_RV pub_find(CK_FUNCTION_LIST_PTR api,CK_SESSION_HANDLE session,CK_OBJE
 }
 static CK_RV pub_attribute(CK_FUNCTION_LIST_PTR api,CK_SESSION_HANDLE s,CK_OBJECT_HANDLE o,CK_ATTRIBUTE_TYPE type,void *buf,CK_ULONG *size)
 { CK_ATTRIBUTE a = {type,buf,*size}; CK_RV rv = api->C_GetAttributeValue(s,o,&a,1); *size = a.ulValueLen; return rv; }
+#ifdef JCOP4_PKCS11_SIGN_DIAGNOSTIC
+#include "jcop4-pkcs11-sign.h"
+#endif
 static int pub_inspect(CK_FUNCTION_LIST_PTR api,CK_SLOT_ID slot)
 {
 	CK_TOKEN_INFO token; CK_RV rv = api->C_GetTokenInfo(slot,&token); printf("token_result=%lu\n",rv);
@@ -285,6 +303,14 @@ int main(int argc,char **argv)
 	memset(&pub_guard,0,sizeof(pub_guard)); pub_guard.reader_index = (unsigned int)index; pub_guard.stage = "module";
 	for (size_t i = 0; i < 9; i++) pub_guard.read_budget[i] = pub_files[i].size*2;
 	pub_interrupted = 0; signal(SIGINT,pub_signal); signal(SIGTERM,pub_signal);
+#ifdef JCOP4_PKCS11_SIGN_DIAGNOSTIC
+	sign_initialize();
+	struct sigaction interrupted = {0}; interrupted.sa_handler = pub_signal; sigemptyset(&interrupted.sa_mask);
+	if (sigaction(SIGINT,&interrupted,NULL) || sigaction(SIGTERM,&interrupted,NULL) ||
+		sigaction(SIGHUP,&interrupted,NULL) || sigaction(SIGQUIT,&interrupted,NULL)) {
+		fclose(pub_report); pub_report = NULL; return 1;
+	}
+#endif
 #ifndef JCOP4_PKCS11_PUBLIC_FIXTURE
 	if (pub_resolve()) { fclose(pub_report); pub_report = NULL; return 1; }
 #endif
@@ -299,6 +325,10 @@ int main(int argc,char **argv)
 	if (rv || count != 1 || pub_guard.blocked || !pub_guard.context_ready || !pub_guard.card_connected) goto done;
 	pub_guard.stage = "token_and_mechanisms";
 	failed = pub_inspect(api,slots[0]);
+#ifdef JCOP4_PKCS11_SIGN_DIAGNOSTIC
+	printf("public_phase_result=%s\n",failed ? "incomplete_stop" : "validated_public_only");
+	if (!failed) failed = sign_inspect(api,slots[0]);
+#endif
 done:
 	if (initialized) { CK_RV finalized = api->C_Finalize(NULL); printf("finalize_result=%lu\n",finalized); if (finalized) failed = 1; }
 	printf("stage=%s\nguard_blocked=%d\nbackend_call_count=%u\nselect_count=%u\nread_count=%u\nfirst_failure_ins=%u\nfirst_failure_sw=%u\nfirst_failure_transport=%d\nreader_disconnect_result=%d\ncontext_release_result=%d\n",pub_guard.stage,pub_guard.blocked,pub_guard.commands,pub_guard.selects,pub_guard.reads,pub_guard.failure_ins,pub_guard.failure_sw,pub_guard.failure_transport,pub_guard.disconnect_result,pub_guard.release_result);
@@ -307,6 +337,11 @@ done:
 	printf("context_create_attempts=%u\ncontext_release_attempts=%u\ncard_connect_attempts=%u\ncard_disconnect_attempts=%u\nreader_connect_attempts=%u\nreader_disconnect_attempts=%u\n",pub_guard.creates,pub_guard.releases,pub_guard.connects,pub_guard.card_disconnects,pub_guard.reader_connects,pub_guard.reader_disconnects);
 	if (pub_guard.blocked || pub_interrupted || pub_guard.card_connected || pub_guard.connected || pub_guard.ctx || pub_guard.locks != pub_guard.unlocks ||
 		pub_guard.release_result || pub_guard.disconnect_result || pub_guard.card_disconnect_result) failed = 1;
+#ifdef JCOP4_PKCS11_SIGN_DIAGNOSTIC
+	if (sign_report()) failed = 1;
+	printf("signature_test_result=%s\n",failed ? "incomplete_stop_no_retry" : "validated_rsa2048_sha256_pkcs11_closed");
+#else
 	printf("public_inspection_result=%s\n",failed ? "incomplete_stop_no_pin" : "validated_public_only_no_login_or_signature");
+#endif
 	dlclose(module); fclose(pub_report); pub_report = NULL; return failed;
 }

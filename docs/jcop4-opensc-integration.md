@@ -1,7 +1,7 @@
 # Integrar el perfil JCOP4 observado en OpenSC
 
 Estado al 14 de octubre de 2026. Base de esta etapa: proyecto
-`528db12`, submódulo OpenSC `52057cc6a`. Este documento describe la integración.
+`6a22c7a`, submódulo OpenSC `52057cc6a`. Este documento describe la integración.
 **Perfil/estado/limpieza, canal/bootstrap/providers y operaciones
 PIN/firma privados están implementados. Frontend PKCS15 y routing privado
 instalado por tarjeta pasaron con callbacks de producción y lector simulado.
@@ -9,8 +9,8 @@ Configuración/init y activación automática desde el binding nativo PKCS15
 están implementados para una opción explícita, con firma verificada en
 transporte simulado. El módulo PKCS11 del build ya pasó nueve grupos de
 mecanismos, objetos, sesiones y firmas con contexto/lector/PIN sintéticos.
-El diagnóstico público sin PIN ya está preparado y probado en software;
-falta su ejecución por el usuario y la prueba real de esta integración.**
+El diagnóstico público sin PIN ya pasó en la JCOP4 real. La siguiente prueba
+de firma PKCS11 está preparada y probada en software; falta su ejecución real.**
 
 ## Evidencia disponible
 
@@ -1002,5 +1002,89 @@ módulo/libOpenSC precompilados no instrumentados, sin prueba de fugas. La
 primera expectativa de liberación del fixture usaba0: sc_free_apps realmente
 marca app_count=-1; se corrigió el test, no el backend ni los permisos.
 No PCSC/hardware/PIN real/GUI/Idopte por el agente. Suites no modificadas no
-repetidas. El diagnóstico real y firma PKCS11/GUI/consecutivas/reinserción y
-RSA3072 siguen pendientes.
+repetidas. La posterior ejecución pública real se documenta a continuación;
+firma PKCS11/GUI/consecutivas/reinserción y RSA3072 siguen pendientes.
+
+## Enumeración PKCS11 real y siguiente firma de prueba
+
+Informe privado `local/jcop4-pkcs11-public-Z5agqf5n/report.txt`,
+2026-10-14T22:40:33Z (16:40 CR), proyecto6a22c7a/OpenSC52057cc6a:
+build/initialize/slots/token/mechanismos/sesión0, dos certificados y dos
+llaves públicas RSA2048 con IDs coincidentes en memoria, privadas ocultas sin
+login. Lector conocido/T1/límites139/291 validados;79 llamadas backend
+(16 SELECT+63 READ), guard0, sin primer fallo. Nueve locks/unlocks balanceados,
+una conexión/desconexión módulo-tarjeta/lector y creación/liberación contexto;
+los tres resultados de cierre0, CloseSession/Finalize/helper0. Acredita la
+enumeración pública con ese módulo/configuración/tarjeta, sin VERIFY/PIN/
+MSE/GA/SM/firma; no identifica la llave privada ni valida confianza del
+certificado. No repetir este diagnóstico por inercia.
+
+`make sign/jcop4-pkcs11 READER=0` compila otro ejecutable que reutiliza el
+filtro/contexto/metadata público y añade código de login solo en esta variante.
+El binario público conserva sus permisos anteriores y no compila ese código.
+Nueva instancia necesita binding y certificados públicos antes de la firma:
+esas lecturas son preparación de la operación, no un inventario adicional.
+Firma exclusivamente el texto ASCII fijo mostrado en la terminal:
+
+```text
+libjcop3p11: prueba tecnica PKCS11 JCOP4 RSA SHA-256.
+```
+
+Recoge una línea en /dev/tty, modo canónico y eco desactivado; admite ASCII
+imprimible6..14 sin truncar/normalizar la credencial. Rechaza entradas largas
+y vacía el input pendiente, no pasa PIN por argv/env/archivo/pipe ni lo imprime.
+INT/TERM/HUP/QUIT interrumpen la espera; poll evita perder una cancelación justo
+antes de read. Restaura atributos de terminal antes de C_Login y borra el
+buffer en toda salida. No conserva PIN para otro login. El lanzador exige
+terminal, guarda/restaura también sus atributos, incluido timeout/KILL.
+
+C_Login una vez CKU_USER; el módulo valida el canal, MF y estado autenticado
+antes del único VERIFY con credencial. El perfil exige el estado observado
+63C7: no asumir un máximo persistente7 ni reinicio del contador; cualquier
+estado diferente detiene sin credencial. Encuentra una sola llave privada
+expuesta y un certificado cuyo ID coincida en memoria. C_SignInit y una única
+C_Sign con CKM_SHA256_RSA_PKCS firman el texto fijo. No PDF/firma multipart/
+queries de tamaño ni firma con otra llave. Verifica RSA2048/PKCS1v1.5/SHA256
+y exige rechazo del mensaje con un bit cambiado, sin otra operación de tarjeta.
+No guarda mensaje/firma/certificado ni datos personales en esta prueba: solo
+metadatos fijos; la validación criptográfica ocurre en memoria.
+
+El filtro autenticado limita encabezados/casos/longitudes/TLV y orden a doce
+APDU: AID, control D004, READ137, MSE CA, GA sinLe, READ protegido, MF protegido,
+consulta PIN, VERIFY cifrado, AID protegido, MSE firma y PSO extendido. Comprueba
+reserva propia y fase del driver en cada envío; esas fases posteriores dependen
+de respuestas autenticadas por el driver. Es un límite de transporte, no una
+segunda verificación criptográfica independiente del canal. No copia claves,
+SSC o plaintext PIN. Cuenta el VERIFY y PSO antes de llamar al backend; bloqueo
+definitivo, sin GET RESPONSE/6C/chaining/variantes/relogin. Solo permite reset
+inicial de la reserva y un reset final después de borrar canal/detachar reserva,
+incluso si falló un intercambio o hubo cancelación. Sin reset automático fuera
+de esta operación. Cierra explícitamente login/sesión y comprueba resultados
+y conteos de reset, locks, tarjeta, lector y contexto; Finalize0 no basta.
+
+Lanzador envvacío/liblocal/debug0/core0/stdinvacío/informe+config0600/dir0700,
+una invocación, timeout --foreground120s TERM+5s KILL para permitir /dev/tty
+interactivo. Un timeout PCSC puede impedir el cierre aunque se restaure el
+eco: ante cierre incompleto/timeout, cerrar clientes y reinsertar antes de
+otra operación; revisar informe sin repetir PIN. No cambiar la tarjeta ni
+abrir otro cliente durante la prueba.
+
+Pasaron cinco grupos nativos del nuevo make test/jcop4-pkcs11-sign con el
+helper y módulo reales, transporte/certificados/RSA/PIN sintéticos y PTY real:
+firma/verificación/negativo con PIN6/14; estados autenticados no disponibles,
+PIN incorrecto simulado,9000 sinMAC, PSO MACmalo, reset inicial/final malo y
+query61 sin segundo intento; entradas cortas/largas/noASCII/INT/TERM sin
+VERIFY y eco/atributos restaurados/input pendiente vacío; reset fuera de
+operación bloqueado; encabezados/fases/ownership/credencial repetida y comando
+extra bloqueados antes del backend. Dos grupos del lanzador con herramientas
+falsas/PTY real verifican terminal obligatoria, entorno, permisos, ejecución
+única/timeout foreground, propagación de errores y restauración tras KILL
+simulado. Cinco grupos ASan/UBSan detect_leaks0 pasaron; módulo/libOpenSC
+precompilados no instrumentados, sin prueba de fugas. También pasaron de nuevo
+los siete grupos del diagnóstico público al compartir el helper y fixture.
+Fallos iniciales fueron fixtures (PIN sintético del padre sin inicializar y
+expectativa de finish exitoso tras reset fallido) y compilación de macroEXT/
+write; se corrigieron antes de intervenir la tarjeta. Submódulo, driver y
+helpers autenticados previos intactos. No hardware/PIN real/GUI/Idopte por
+el agente; firma PKCS11 real/firmador/PDF/consecutivas/reinserción/RSA3072
+siguen pendientes.

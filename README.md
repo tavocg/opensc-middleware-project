@@ -99,21 +99,27 @@ descifrado, y el token no anuncia escritura ni PIN-pad. Después de cada firma
 se cierra la reserva y el próximo firmado requiere un login explícito.
 El perfil rechaza las opciones PKCS#11 `atomic` y `lock_login`; usa su propia
 reserva y no conserva credenciales para repetir logins. La consulta pública
-acotada del módulo ya está preparada y probada con lector simulado. El próximo
-paso, desde la terminal del usuario, con la misma JCOP4 y otros clientes cerrados:
+del módulo ya pasó en la JCOP4 real: dos certificados y dos llaves públicas,
+79 llamadas al backend, sin PIN ni bloqueos y cierre correcto. El informe
+Z5agqf5n corresponde al 14 de octubre de 2026, 16:40 CR. No repetir esa consulta
+como primer paso. La siguiente prueba, desde la terminal del usuario, con la
+misma JCOP4 y otros clientes cerrados:
 
 ```bash
-nix develop -c make inspect/jcop4-pkcs11 READER=0
+nix develop -c make sign/jcop4-pkcs11 READER=0
 ```
 
-Ejecutarla una sola vez, sin PIN. Comprueba token, mecanismos, certificados y
-objetos públicos con el módulo local; no llama login ni firma. Un filtro limita
-los SELECT/READ a archivos públicos conocidos y detiene el primer fallo. El
-informe privado contiene resultados y conteos, sin identidad ni certificados.
-Si falla o vence el timeout, revisar etapa y cierre antes de otra operación;
-no repetir ni introducir PIN por inercia. La exploración inicial de PCSC puede
-consultar capacidades de otros lectores; el filtro limita las conexiones del
-módulo a uno. Todavía no se ha ejecutado este diagnóstico sobre la tarjeta real.
+Ejecutarla una sola vez. Firmará un texto técnico fijo mostrado en la terminal,
+con un único login y PIN introducido sin eco; no firma un PDF ni usa Idopte.
+Verifica la firma RSA y rechaza el mismo mensaje con un bit alterado, en memoria.
+El binario público sigue sin login; esta variante separada limita además la
+secuencia autenticada a doce APDU, un VERIFY con credencial y un PSO extendido,
+sin reintentos. Los certificados y el PIN no se guardan en el informe, que
+contiene resultados, conteos y cierre. Si falla o vence el timeout, revisar el
+informe antes de otra operación; no repetir el PIN por inercia. El lanzador
+restaura la terminal incluso si necesita matar el helper. Pasaron siete grupos
+de software y la regresión del diagnóstico público; todavía falta esta firma
+PKCS11 real antes de probar el firmador y PDFs.
 Los párrafos siguientes conservan los pasos históricos de investigación.
 La selección temporal RSA/SHA-256 obtuvo `9000`; VERIFY vacío devolvió
 `63C7`, con siete intentos disponibles, PIN global 1 y formato UTF-8.

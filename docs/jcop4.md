@@ -6300,5 +6300,23 @@ intercambio. Informe privado de resultados y conteos, sin objetos/identidades.
 Cinco grupos nativos y dos del lanzador pasaron en software, también ASan/UBSan
 nativo detect_leaks0; las bibliotecas precompiladas no se instrumentaron ni
 se probaron fugas. Se repitieron y pasaron nueve grupos del módulo al compartir
-fixture. Falta la ejecución real por el usuario antes de pedir otro PIN.
+fixture. La ejecución pública real posterior se documenta a continuación.
 [Alcance y límites](jcop4-opensc-integration.md#diagnóstico-público-acotado-del-módulo-local).
+
+### Enumeración PKCS11 real confirmada; firma integrada pendiente
+
+Z5agqf5n/2026-10-14T22:40:33Z: módulo local reconocido, dos certificados y
+dos llaves públicas RSA2048, privadas ocultas, políticas de token/mecanismos
+correctas.79 llamadas backend, guard0,9locks/9unlocks, tarjeta/lector/contexto
+cerrados con0, helper0, sin PIN. No repetir la consulta pública por inercia.
+
+La siguiente prueba es `make sign/jcop4-pkcs11 READER=0`, desde la terminal
+del usuario, mismaJCOP4 y clientes cerrados: texto técnico fijo, un login/PIN
+sin eco y una C_Sign, RSA verificada y mensaje alterado rechazado enmemoria.
+Guard de doceAPDU autenticadas/único VERIFY/único PSO; una invocación/timeout
+foreground120s/cierre verificado/terminal restaurada y reporte sin datos.
+Pasaron5grupos nativos+2lanzador, ASan/UBSan5 detect_leaks0 (bibliotecas
+precompiladas sin instrumentar/nofugasprobadas) y7grupos públicos repetidos.
+Sin hardware/PIN real/GUI/Idopte del agente. No es PDF/firmador ni prueba
+RSA3072/consecutivas/reinserción; ante error revisar informe antes de repetir.
+[Detalles](jcop4-opensc-integration.md#enumeración-pkcs11-real-y-siguiente-firma-de-prueba).

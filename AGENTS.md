@@ -9,6 +9,66 @@ transporte simulado. PIN/GUI también los ejecuta el usuario. Esto sustituye
 la autorización anterior de hardware por el agente; conservar límites de
 cada diagnóstico y privacidad. Git sigue autorizado pero .git solo lectura.
 
+**Último resultado: enumeración PKCS11 real correcta; firma integrada preparada.**
+Principal `6a22c7a`, OpenSC `52057cc6a`, limpios al comenzar. Informe usuario
+local/jcop4-pkcs11-public-Z5agqf5n/report.txt/2026-10-14T22:40:33Z (16:40CR):
+build/initialize/slots/token/mecanismos/sesión0,2certificados/2llaves públicas
+RSA2048/IDs coincidentes enmemoria/privadas ocultas sinlogin. T1/ATR/límites
+139/291 validados;79backend(16SELECT+63READ),guard0;9locks/9unlocks;1conexión/
+desconexión tarjeta/lector+1context/release, trescierres0/CloseSession/Finalize/
+helper0. SinVERIFY/PIN/MSE/GA/SM/firma. Enum pública confirmada con esa
+instancia, no confianza/identidad del certificado. No repetirla ni estados/
+D004/helperfirmareal por inercia. Firma JnUUiy9x previa sigue vigente.
+
+Nuevo make sign/jcop4-pkcs11 READER=0: ejecutable separado con define explícito,
+reutiliza helper público/contexto/filtro y módulos reales. Binario público
+sigue sin código/login/permisos autenticados. Nuevo contexto necesita bind/
+certificados para firma; no inventario independiente. TextoASCII fijo mostrado
+en /dev/tty, entrada canónica sinECHO/ECHONL,ASCIIimprimible6..14/una línea/
+sintruncar/PIN nunca argv/env/archivo/pipe/reporte. Rechaza largos+flushinput
+pendiente, borra buffer, restaura terminal antes de C_Login; poll evita perder
+cancelación antesderead. INT/TERM/HUP/QUIT, wrapper tambiénrestaura terminal
+tras timeout/KILL. No se conservaPIN ni reintenta login.
+
+Una C_Login CKU_USER; driver confirma canal/MF/estado63C7 antesúnicoVERIFY
+cifrado. No inferir máximo7/reinicio del contador; otroestado detiene sinPIN.
+Una privada validada y un certificado conID coincidente enmemoria;
+C_SignInit/SHA256_RSA_PKCS+una C_Sign de texto técnico. RSA verificada+bitnegativo
+enmemoria; noPDF/multipart/queries/tarjetaextra/artifactos de firma guardados.
+Filtro autenticado verifica reserva/fase y orden/casos/TLV/longitudes de12APDU
+(AID/D004control/READ137/MSECA/GA/READprotegido/MF/query/VERIFY/AID/MSE/PSO).
+Fases dependen de MACverificado por driver; guard no verifica cryptoindependiente
+ni copia claves/SSC/PIN. Únicoreset inicial propio y final tras limpiar/
+detacharreserva, también antefallo/cancelación; cuenta VERIFY/PSO antesbackend.
+Sinunknown/cambios/escrituras/fallback/chaining/GETRESP/6C/relogin. Informe
+solo fixedmetadata/APIresultados/conteos/reset/cierre, stdout/stderrlibsdescartados.
+Envvacío/debug0/core0/stdinvacío/config+report0600/dir0700/timeoutforeground120s
+TERM+5KILL/una invocación. Finalize0 solo no acredita cierre; ante timeout/
+cierreincompleto cerrarclientes/reinsertar antesotraoperación, revisar primero.
+
+Pasaron **5grupos nativos+2lanzador**, helper/módulo producción y transporte/
+RSA/cert/PIN de software/PTYreal: PIN6/14+firma/negativo/cierre; querynoavailable/
+PINincorrectosimulado/VERIFY9000sinMAC/PSOMACmalo/resetinicio-finalmalo/query61
+sinreintento; cortos/largos/noASCII/INT/TERM sinlogin y echo/atributos/input
+restaurados; resetexternobloqueado; cabeceras/fases/ownership/VERIFYrepetido/
+comandoextra bloqueados. **ASan/UBSan5 detect_leaks0** pasó, bibliotecas/módulo
+precompilados noinstrumentados/nofugasprobadas. **7grupos públicos** repetidos
+por helper/fixturecompartidos, pasaron. Errores iniciales solo fixtures:
+PINsintéticopadresininicializar y finish trasresetfallido esperadoexitoso;
+macroEXT/write de compilación corregidos. Helpers reales compilados; driver/
+submódulo/flake/lock/helpersanteriores/observador/capturas intactos; suites
+sin cambios no repetidas. NoPCSC/hardware/PINreal/GUI/Idopte poragente.
+
+**Siguiente intervención:** mismaJCOP4/otrosclientes-firmadorcerrados,
+`nix develop -c make sign/jcop4-pkcs11 READER=0`, una sola vez porusuario;
+introducir PIN correcto sin eco cuando lo solicite. Revisar publicphase/login/
+sign/verification/negative/VERIFYcount/PSOcount/resets/cierre antesotrocomando.
+Firma PKCS11 real/firmador/PDF/consecutivas/reinserción/RSA3072 pendientes.
+Git autorizado; git add falló creando index.lock por .git sololectura:
+no eludir; commit raíz con7archivosnuevos
+(tools/sign.c+sign.h,3scripts,2tests), tools/public.c+tests/public.c/Makefile y
+AGENTS/README/docs; ningún submódulo/build/captura/archivo privado.
+
 **Última revisión: diagnóstico público del módulo preparado, sin hardware.**
 Principal `528db12`, OpenSC `52057cc6a`, limpios al comenzar. Firma real
 JnUUiy9x vigente; no PCSC/hardware/PIN real/GUI/Idopte/captura/informe nuevo.
