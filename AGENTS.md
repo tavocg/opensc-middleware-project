@@ -6,6 +6,42 @@ la tarjeta. El usuario ejecuta las operaciones que requieran PIN o GUI. Esto
 sustituye las restricciones anteriores de no ejecutar Git/hardware/Idopte por
 el agente; conservar límites de cada diagnóstico y privacidad de los registros.
 
+**Último resultado: SELECT/READ D0049000; rechazo local de formato.**
+Principal `6465cb0`, OpenSC `3dfef6704`, limpios al comenzar. Informe del usuario
+`local/jcop4-dh-parameters-gd7lajTW/report.txt`, **2026-10-14T02:12:31Z (13 CR)**.
+Inventario/build/conexión/ADF correctos; SELECT D0040/9000, identidad/estructura/
+tamaño confirmados. READ00B0000089 ->0/9000, **exactamente137 bytes** (el parser
+solo se llama tras esa comprobación). Resultado unrecognized_layout_stop,
+unlock0/proceso1. No PIN/VERIFY/MSE/GA/SM/firma en el helper. No rechazo de
+la tarjeta: byte2!=18 o byte4!=04 o ambos; informe anterior no distingue cuál.
+No concluir otra curva/punto inválido: **no se ejecutó validación del punto**.
+Buffer borrado, no cabecera/coordenadas/raw/hashes guardados; no se pueden
+recuperar las comparaciones del informe. Lectura aceptada solo en ese contexto,
+no prueba política universal ni SM/identidad/causa6982.
+
+Mejora exclusiva del parser en tools/jcop4-dh-info.h: nuevas etiquetas fijas
+**dh_layout_size**, **dh_curve_selector**, **dh_point_prefix** y point=
+not_checked_due_to_layout. Size expected_137/unexpected_or_missing_stop;
+selector matches_p521_candidate/different_uninterpreted; prefijo
+matches_uncompressed_candidate/different_uninterpreted. Nulo/tamaño distinto
+no clasifican bytes. Sin valores/otros selectores/coords/hash ni cambios de
+aceptación: solo137, byte2=18, byte4=04 y punto P-521 válido no infinito.
+Sin nueva curva/formato/APDU, permisos, repetición/continuación/fallback ni
+cambios del lanzador, constructor, observador, firma, driver o submódulo.
+
+Pasaron **90 comprobaciones del helper**, fallos individuales/combinados,
+privacidad y nulos/truncados; real compilado contra ambos builds. Lanzador95,
+observador162/firma6/operación12 intactos, suites previas vigentes. No hardware,
+PIN o GUI por el agente, no repetir prueba desde sesión que no detectaba lector.
+**Siguiente intervención:** misma JCOP4, otros clientes cerrados,
+`nix develop -c make inspect/jcop4-dh-parameters READER=0`, sin PIN. Se requiere
+otra única READ137 porque el resumen anterior omitió qué condición falló;
+no repetir por error de tarjeta ni nueva variante. Revisar nuevos campos antes
+de cambiar formato/curva o intentar canal/PIN. Datos D004/perfil efectivo/
+VERIFY6982/JCOP4/RSA3072 aún pendientes. Git autorizado: git add -u falló
+por .git montado solo lectura; no eludirlo. Dar comandos de commit, todos
+estos archivos ya seguidos.
+
 **Último resultado: D004 existe; lectura aislada de parámetros preparada.**
 Principal `fa9c8f2`, OpenSC `3dfef6704`, limpios al comenzar. Informe del usuario
 `local/jcop4-filed004-qSMBuWC3/report.txt`, **2026-10-14T01:38:49Z (13 CR)**:

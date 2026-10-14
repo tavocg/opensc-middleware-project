@@ -3918,6 +3918,61 @@ JCOP4/RSA3072 y la causa de VERIFY6982 siguen pendientes. Se intentó añadir
 los archivos a Git; .git sigue montado solo lectura y no permitió index.lock.
 El commit del principal debe incluir el nuevo tools/jcop4-dh-info.h.
 
+## READ D004 aceptado; formato aún no reconocido
+
+Principal `6465cb0`, OpenSC `3dfef6704`, limpios al comenzar. Informe del
+usuario `local/jcop4-dh-parameters-gd7lajTW/report.txt`,
+**2026-10-14T02:12:31Z** (13 de octubre CR). Inventario, compilación, contexto,
+conexión, transacción y selección ADF correctos. SELECT D004 transporte0/
+SW9000; identidad/estructura/tamaño confirmados por control. **READ D004
+00B0000089 -> transporte0/SW9000**. El parser emitió
+`dh_parameters_result=unrecognized_layout_stop`; unlock0 y proceso1.
+
+El parser solo se invoca tras respuesta exactamente137: ese tamaño sí está
+confirmado por el flujo del helper. El rechazo significa que **byte2 no coincide
+con el discriminador18 o byte4 no coincide con prefijo04, o ambos**. El informe
+anterior no distingue cuál. No hay coordenadas/cabecera/contenido en los
+registros: el buffer fue borrado al finalizar. No inferir un nuevo rechazo de
+tarjeta, PIN incorrecto, curva alternativa, punto inválido o necesidad/ausencia
+de SM. **La validación criptográfica no se ejecutó**, por fallo previo de formato.
+El helper no envió PIN, VERIFY, MSE, GA, SM ni firma. Lectura aceptada en este
+contexto no demuestra una regla universal de acceso ni autentica los parámetros.
+
+Se mejoró únicamente la observación de ese parser, manteniendo exactamente
+sus condiciones de aceptación y las mismas APDU/presupuestos. Nuevos campos
+con valores fijos:
+
+- `dh_layout_size=expected_137` o `unexpected_or_missing_stop`.
+- `dh_curve_selector=matches_p521_candidate` o `different_uninterpreted`.
+- `dh_point_prefix=matches_uncompressed_candidate` o `different_uninterpreted`.
+- `dh_parameters_point=not_checked_due_to_layout` cuando no coinciden.
+
+No se registran valores, otros selectores, claves, hashes o datos de cabecera.
+No se aceptan otras curvas/formatos ni se elimina una comprobación para forzar
+una coincidencia. Nulo o tamaño distinto detienen antes de acceder a los bytes.
+Sin cambios del lanzador, constructor, observador, driver o submódulo.
+
+Pasaron **90 comprobaciones del helper**, incluidos fallos individuales/
+combinados, rechazo sin validación de punto, privacidad de valores y buffers
+nulos/truncados. Helper real compilado contra build/opensc-offline y build/opensc.
+Las95 del lanzador,162 del observador,6 de firma y12 de operación siguen
+vigentes; no repetir suites intactas. No hardware/PIN/GUI por el agente en
+esta revisión; su sesión anterior no detectaba lectores y no se reintentó.
+
+Siguiente intervención, misma JCOP4 y otros clientes cerrados, sin introducir PIN:
+
+```sh
+nix develop -c make inspect/jcop4-dh-parameters READER=0
+```
+
+Esta repetición responde a **información omitida por el diagnóstico**, no a
+un nuevo comando, ubicación, curva o intento de autenticación. Es otra única
+lectura de137 bytes con control previo. Revisar los tres campos nuevos y el
+resultado antes de decidir cambios; no abrir canal, capturar login o pedir PIN
+por inercia. El significado completo de D004, tipo efectivo del perfil,
+VERIFY6982 y firma libre JCOP4/RSA3072 siguen pendientes. Git add -u volvió
+a fallar por .git montado solo lectura; cambios sin commit por el agente.
+
 ## Diseño requerido para 2048, 3072 y futuras generaciones
 
 Separar tres dimensiones: plataforma JCOP, protocolo/aplicación y tamaño

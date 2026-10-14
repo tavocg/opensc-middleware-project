@@ -941,9 +941,40 @@ int main(void)
 			assert(summarize_d004_parameters(fixture_dh, sizeof(fixture_dh)) == 0);
 			fflush(stdout); rewind(capture); assert(fread(output, 1, sizeof(output) - 1, capture) > 0);
 			assert(dup2(saved, STDOUT_FILENO) >= 0); close(saved); fclose(capture);
-			assert(!strcmp(output, "dh_parameters_curve=secp521r1\ndh_parameters_point=valid_non_infinity\ndh_parameters_result=recognized_point_only_no_channel\n"));
+			assert(!strcmp(output, "dh_layout_size=expected_137\ndh_curve_selector=matches_p521_candidate\ndh_point_prefix=matches_uncompressed_candidate\ndh_parameters_curve=secp521r1\ndh_parameters_point=valid_non_infinity\ndh_parameters_result=recognized_point_only_no_channel\n"));
 			assert(!strstr(output, point_hex));
 			puts("PASS D004 summary emits exclusively fixed curve/validation labels and no point, header, hash or identifying bytes");
+		}
+		for (int failure = 0; failure < 3; failure++) {
+			unsigned char invalid[sizeof(fixture_dh)];
+			char output[512] = {0}; FILE *capture = tmpfile(); int saved = dup(STDOUT_FILENO);
+			assert(capture && saved >= 0);
+			memcpy(invalid, fixture_dh, sizeof(invalid));
+			if (failure != 1) invalid[2] = 0xAA;
+			if (failure != 0) invalid[4] = 0xBB;
+			fflush(stdout); assert(dup2(fileno(capture), STDOUT_FILENO) >= 0);
+			assert(summarize_d004_parameters(invalid, sizeof(invalid)) == 1);
+			fflush(stdout); rewind(capture); assert(fread(output, 1, sizeof(output) - 1, capture) > 0);
+			assert(dup2(saved, STDOUT_FILENO) >= 0); close(saved); fclose(capture);
+			assert(strstr(output, "dh_layout_size=expected_137\n"));
+			assert(strstr(output, failure == 1 ? "dh_curve_selector=matches_p521_candidate\n" : "dh_curve_selector=different_uninterpreted\n"));
+			assert(strstr(output, failure == 0 ? "dh_point_prefix=matches_uncompressed_candidate\n" : "dh_point_prefix=different_uninterpreted\n"));
+			assert(strstr(output, "dh_parameters_point=not_checked_due_to_layout\n"));
+			assert(strstr(output, "dh_parameters_result=unrecognized_layout_stop\n"));
+			assert(!strstr(output, "secp521r1") && !strstr(output, "valid_non_infinity") && !strstr(output, "AA") && !strstr(output, "BB"));
+		}
+		puts("PASS D004 layout failure distinguishes either or both mismatches without exposing values or accepting another format");
+		{
+			char output[256] = {0}; FILE *capture = tmpfile(); int saved = dup(STDOUT_FILENO);
+			assert(capture && saved >= 0);
+			fflush(stdout); assert(dup2(fileno(capture), STDOUT_FILENO) >= 0);
+			assert(summarize_d004_parameters(NULL, 137) == 1);
+			assert(summarize_d004_parameters(fixture_dh, 2) == 1);
+			fflush(stdout); rewind(capture); assert(fread(output, 1, sizeof(output) - 1, capture) > 0);
+			assert(dup2(saved, STDOUT_FILENO) >= 0); close(saved); fclose(capture);
+			assert(!strstr(output, "dh_curve_selector=") && !strstr(output, "dh_point_prefix="));
+			assert(strstr(output, "dh_layout_size=unexpected_or_missing_stop\n"));
+			puts("PASS D004 layout diagnostic avoids reading or classifying absent and truncated input");
 		}
 	}
 	{

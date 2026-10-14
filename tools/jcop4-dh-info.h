@@ -51,7 +51,20 @@ static int summarize_d004_parameters(const unsigned char *buf, size_t size)
 	/* Installed Idopte parser: discriminator at2; coordinates at5.
 	 * Its discriminator18 selects OpenSSL NID716 (secp521r1).
 	 * Remaining header fields have no asserted semantics here. */
-	if (!buf || size != 137 || buf[2] != 18 || buf[4] != 4) {
+	if (!buf || size != 137) {
+		printf("dh_layout_size=unexpected_or_missing_stop\n");
+		printf("dh_parameters_result=unrecognized_layout_stop\n");
+		return 1;
+	}
+	/* Report each prerequisite separately, with fixed labels only. These
+	 * comparisons do not interpret another selector or dump header bytes. */
+	printf("dh_layout_size=expected_137\n");
+	printf("dh_curve_selector=%s\n", buf[2] == 18 ?
+			"matches_p521_candidate" : "different_uninterpreted");
+	printf("dh_point_prefix=%s\n", buf[4] == 4 ?
+			"matches_uncompressed_candidate" : "different_uninterpreted");
+	if (buf[2] != 18 || buf[4] != 4) {
+		printf("dh_parameters_point=not_checked_due_to_layout\n");
 		printf("dh_parameters_result=unrecognized_layout_stop\n");
 		return 1;
 	}
