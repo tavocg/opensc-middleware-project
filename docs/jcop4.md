@@ -5895,3 +5895,41 @@ nix develop -c make sign/jcop4-channel-extended READER=0
 Una sola vez, PIN correcto únicamente en el prompt tras leer el texto.
 Revisar login/SELECT/MSE/PSO/MAC/verificación/cierre/helper antes de otro
 comando. La firma JCOP4 y RSA3072 siguen pendientes de evidencia real.
+
+### Primera firma JCOP4 RSA2048 verificada
+
+Principal `0f51c4c`, OpenSC `3dfef6704`, limpios al comenzar. Ejecución del
+usuario `local/jcop4-channel-signature-extended-JnUUiy9x/report.txt`,
+2026-10-14T16:13:02Z (14Oct10:13CR), mismo lector/perfil JCOP4 RSA2048.
+Canal/SELECT MF/query63C7/login/SELECTAID/MSE pasaron con MAC válido.
+Un único VERIFY con credencial. PSO extendido obtuvo transporte0,
+**293bytes/objeto87/exterior9000**, decoderaccepted/**MACverified/inner9000**,
+GET0. **signature_verification=rsa_sha256_pkcs1_verified**;
+reset final/unlock/disconnect0,14APDU/guard0/interrupted0/helper0,
+signature_result=rsa_sha256_verified_and_saved. Texto/firma/certificado
+presentes,0600 en directorio0700.
+
+Verificación offline adicional con OpenSSL CLI sobre esos archivos:
+firma válida, mismo mensaje con un bit alterado rechazado. Certificado
+guardado idéntico al cache público5Dpadr1N. Sin hardware/PIN/GUI/Idopte
+ejecutado por el agente; no se imprimieron mensaje/nonce/certidentidad/firma
+o hashes, temporales eliminados tras la comprobación.
+
+Se ha producido y verificado **una firma real RSA2048/SHA256/PKCS1v1.5 con
+la JCOP4** mediante el helper libre. No acredita aún una firma desde el módulo
+PKCS#11/firmador, PDF, otras tarjetas/lectores, operaciones consecutivas o
+RSA3072. El éxito después de cambiar solo el formato del PSO respalda esa
+solución para la secuencia observada; no separa el efecto individual de
+DO97/2, Le291 y formaEXT ni identifica la política runtime de Idopte.
+
+**No repetir firma/PIN, lector o canal para confirmar este resultado.**
+El siguiente cambio es integrar el perfil en `iasecc`, conservar JCOP3 y
+probar toda la ruta driver/PKCS15/PKCS11 con transporte simulado antes de
+otra intervención de tarjeta. La auditoría local identificó detección,
+canal, PIN/MSE/PSO, capacidades/límites y reset/cierre como piezas pendientes:
+[plan concreto de integración](jcop4-opensc-integration.md).
+
+Esta revisión modifica solo documentación; suites previas vigentes, no
+repetidas. Sin cambio de código/driver/submódulo/build/flake/lock/observador
+ni nueva prueba de hardware. Todos los comandos PCSC/tarjeta/PIN/GUI siguen
+siendo del usuario; no hay otro comando de tarjeta preparado ahora.

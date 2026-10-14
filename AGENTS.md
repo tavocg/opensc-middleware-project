@@ -9,7 +9,56 @@ transporte simulado. PIN/GUI también los ejecuta el usuario. Esto sustituye
 la autorización anterior de hardware por el agente; conservar límites de
 cada diagnóstico y privacidad. Git sigue autorizado pero .git solo lectura.
 
-**Última revisión: SELECT MF extendido confirmado; prueba de firma extendida preparada.**
+**Última revisión: primera firma JCOP4 RSA2048 verificada; integración OpenSC pendiente.**
+Principal `0f51c4c`, OpenSC `3dfef6704`, limpios al comenzar. Informe usuario
+`local/jcop4-channel-signature-extended-JnUUiy9x/report.txt`,
+2026-10-14T16:13:02Z (14Oct10:13CR): canal/MF/query63C7/login/SELECTAID/MSE
+autenticados; un VERIFY/PIN. PSO transporte0/**293bytes/exterior9000/87**,
+decoderaccepted/**MACverified/inner9000**, GET0,
+**rsa_sha256_pkcs1_verified/rsa_sha256_verified_and_saved**. Resetfinal/
+unlock/disconnect0,14APDU/guard0/interrupted0/helper0. Archivos message.txt,
+signature.bin y certificate.der presentes con0600/directorio0700.
+**Firma real del texto técnico con JCOP4 RSA2048 comprobada**, no aún PKCS11/
+firmador/PDF ni RSA3072/otras tarjetas/lectores/algoritmos/firmas consecutivas.
+
+Verificación independiente offline con OpenSSL CLI: firma guardada válida;
+mismo mensaje con1bit alterado rechazado. Certificado guardado idéntico al
+cache público5Dpadr1N. No se expusieron mensaje/nonce/certidentidad/firmahex/
+hash/PIN; temporales de verificación borrados. No nueva operación hardware.
+Último experimento cambió solo el PSO respectoolZZ5giU/6500; evidencia apoya
+que el formato corregido basta para esta secuencia, no identifica si DO97,
+Le o formaEXT aislados explican cada error. No atribuir perfilIdopte runtime
+ni PACE/CAN/identidad a firma/MAC; ReaderNames.bit1 sigue pendiente.
+
+Auditoría local de integración: iasecc_match_card tablaATR no contiene ATR
+JCOP4 exacto; iasecc_is_chipdoc_signing_key reconoce AID/ref3 JCOP3, no este
+AID/ref91. iasecc_pin_cmd/set_security_env/compute_signature aún usan ruta
+IAS convencional, sin este canal. iasecc_private_data no tiene estadoCA/SSC.
+iasecc_finish/logout y card_reader_lock_obtained deben limpiar canal/cache/
+login; hookreset no asignado en iasecc actual. FrameworkSM get_sm_apdu/
+free_sm_apdu valida APDU externo por sc_check_apdu, por lo que integrar EXT
+correctamente exige perfil/capacidad/límites propios, no copiar bypass del
+helper globalmente. SC_CARD_CAP_APDU_EXT ya está en defaultsIAS genéricos:
+no heredar todas esas capacidades/algoritmos para el perfil nuevo.
+Plan concreto en **docs/jcop4-opensc-integration.md** con funciones, módulos,
+datos de perfil y pruebas software/API; aún no implementación ni vendor edit.
+
+**Siguiente trabajo autónomo:** implementar adaptador/perfil mínimo optativo
+para iasecc y probar PIN/CA/SM/MSE/PSO/reset/detección/firma porPKCS15/PKCS11
+con transporte sintético antes de otra intervención del usuario. Mantener
+JCOP3/otrosIAS y eOI separados por perfilAID/metadatos, nunca nombreJCOPsolo.
+PrimeroRSA2048/SHA256/PKCS1v1.5 comprobado; medidas y referencias desdePKCS15,
+no soporte3072 por fixtures o límitelector. No pedir repetir la firma helper/
+lector/MF/canal ahora. Hardware/PCSC/PIN/GUI siguen solo usuario cuando haya
+implementación nueva compilada y revisada. Después pruebaPKCS11 de una firma;
+firmadorCLI/GUI/consecutivas/reinserción siguen pendientes.
+
+Esta revisión solo documentos4, sin cambio de código/tests/submódulo/build/
+flake/lock/observador. Suites previas vigentes, no repetidas; sin pruebas
+hardware adicionales. Git autorizado/.gitreadonly/noeludir; incluir archivo
+nuevo docs/jcop4-opensc-integration.md explícitamente, gitadd-u lo omite.
+
+**Revisión anterior: SELECT MF extendido confirmado; prueba de firma extendida preparada.**
 Principal `6607b15`, OpenSC `3dfef6704`, limpios al comenzar. Informe usuario
 `local/jcop4-channel-transport-Od74BxHu/report.txt`, 2026-10-14T16:01:11Z
 (14Oct10:01CR): build/context/driver/connect/lock/reset inicial/directory0;

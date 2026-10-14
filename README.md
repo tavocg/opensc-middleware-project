@@ -48,6 +48,13 @@ La JCOP4 disponible tiene dos certificados **RSA 2048**, corroborados con
 OpenSSL. Se leyeron PKCS#15 y certificados sin PIN: LlaveDeFirma referencia
 `0x91`, autenticación `0x90`, PIN global 1. Su AID ChipDoc
 `E828BD080FA00000036364796E6964` y referencias difieren de JCOP3.
+**Ya se obtuvo una firma JCOP4 RSA2048/SHA256/PKCS1v1.5 válida** con el helper
+de diagnóstico: informe JnUUiy9x, 14 de octubre de 2026,10:13 CR. MAC/9000,
+verificación RSA y cierre completo; OpenSSL verificó también los archivos
+guardados y rechazó el mensaje al alterar un bit. Falta integrar esta
+secuencia en el driver OpenSC y probar PKCS#11/firmador. RSA3072 permanece
+sin verificar. [Plan de integración](docs/jcop4-opensc-integration.md).
+Los párrafos siguientes conservan los pasos históricos de investigación.
 La selección temporal RSA/SHA-256 obtuvo `9000`; VERIFY vacío devolvió
 `63C7`, con siete intentos disponibles, PIN global 1 y formato UTF-8.
 El primer intento autenticado devolvió **6982 en VERIFY**, sin llegar a
@@ -396,12 +403,14 @@ conserva el login y la selección de aplicación anteriores; solo cambia PSO
 a DO97/2 y transporte extendido Le291. Hace un único intento de PIN y PSO,
 sin GET/reintento, y solo guarda una firma tras verificar RSA/SHA256 y cerrar
 la sesión. Pasaron26 grupos de firma y16 de login/terminal con datos
-sintéticos. Firma real JCOP4 aún pendiente; ejecutar una sola vez y revisar
-el informe si falla.
+sintéticos. La ejecución JnUUiy9x confirmó PSO293bytes/MAC/9000 y firma
+RSA2048/SHA256 verificada, con cierre completo y artefactos privados. OpenSSL
+verificó la firma guardada y rechazó un mensaje alterado. **No repetir este
+diagnóstico para confirmar el éxito**; sigue la integración en OpenSC.
 [Prueba de firma extendida](docs/jcop4.md#firma-con-pso-extendido-un-único-intento).
 [Detalle](docs/jcop4.md#transporte-extendido-candidato-sin-pin).
 [Protocolo y límites](docs/jcop4.md#diagnóstico-de-firma-rsa2048sha256-bajo-sm).
-El driver aún no firma con JCOP4.
+El helper ya firma con JCOP4; el driver PKCS#11 aún requiere integración.
 [Evidencia y límites](docs/jcop4.md#canal-confirmado-en-jcop4-sin-pin).
 
 Capturas privadas bajo local/jcop4-idopte-spy-*/; no agregarlas a Git.
