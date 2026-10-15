@@ -9,6 +9,41 @@ transporte simulado. PIN/GUI también los ejecuta el usuario. Esto sustituye
 la autorización anterior de hardware por el agente; conservar límites de
 cada diagnóstico y privacidad. Git sigue autorizado pero .git solo lectura.
 
+**Última revisión: documentación simplificada y compilación nativa descrita.**
+Principal `8547313`, OpenSC `b14152bb0`, limpios al comenzar. Usuario pidió
+README sencillo, URLs tavocg/middleware-project, descarga curl/extracción bajo
+~/.local/lib, compilación sin depender de Nix y firmador por LIBASEP11 con
+una misma biblioteca JCOP3/JCOP4. README resume alcance/enlaces y conserva
+íntegro el bloque Mermaid generado; se retira el historial redundante del
+README, conservado en Git/AGENTS/docs de investigación. INSTALL describe
+dependencias nativas (ejemplo Debian/Ubuntu), clon base pública y gitapply
+para evitar commits de submódulo no publicados, makebuild sinNix/copiaopcional,
+misma biblioteca con configsJCOP3/4 y carga desdebuild o ~/.local/lib.
+No cambia driver, submódulo, workflow, scripts, configs, flake ni artefactos.
+
+Releases actuales siguen enlazadas aNix; se declara límite sin presentarlas
+como portables. curl consulta releases?per_page=1 incluyendo prereleases,
+resuelve tag antes de descargar3assets y verifica SHA ignoremissing/extracción
+stripcomponents1/runtimeimport. URLlatest/download solo estable alternativa:
+GitHub excluye prereleases de latest según documentación primaria enlazada.
+No se descargó/importó release real ni se publicó; receta probada con curl,
+runtime y firmador simulados/archivos sintéticos/directorio temporal. Pasaron
+ambas cargas documentadas de mismo módulo conconfig correspondiente;12bloques
+Bash parseados y enlaceslocales válidos. Exporter--check y5tests export/launcher
+pasaron; Mermaid idéntico byteporbyte. No compilación nativa Debian real,
+pruebas físicas ni validación de portabilidad de binarios en esta revisión.
+
+Consulta adicional usuario opensc-tool -c '?': fuente crea contexto y detecta
+lectores antes de listar. Se ejecutó binario real parcheado contra proveedor
+sintético (tests/pcsc-delegate-fixture.c con EstablishContext=NO_SERVICE),
+config aislada/env-i y libopensc local explícita. Exit0/lista37drivers,
+iasecc IAS-ECC compartido, sin entradas independientes jcop3/jcop4; eOI no
+compilado en esta configuración sinOpenPACE. Proveedor no enlaza PCSC ni usa
+daemon/lector/tarjeta; archivos ignorados enbuild/diagnostics/driver-list.
+Sin PCSC real/PIN/GUI/Idopte por agente. Git RO no eludir; commit raíz pendiente
+solo README.md INSTALL.md AGENTS.md. Artefactos build/release anteriores no
+regenerados para esta edición documental.
+
 **Última revisión: diagrama, parche exportable y release Nix preparados.**
 Principal `06d125f`, submódulo `b14152bb0`, limpios al comenzar. Submódulo
 intacto en esta revisión, sin PCSC/lector/tarjeta/PIN real/GUI/Idopte.
