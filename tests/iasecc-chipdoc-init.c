@@ -107,6 +107,7 @@ int main(void)
 	init_defaults(); assert(iasecc_chipdoc_opted_in(&test_card) && !initialize());
 	assert(iasecc_chipdoc_configured(&test_card) && !metadata_commands && !resets && !physical);
 	assert(test_card.max_send_size == 139 && test_card.max_recv_size == 291 && test_card.algorithm_count == 1 && test_card.algorithms[0].flags == rsa_algorithm.flags);
+	assert(test_card.algorithms[0].algorithm == SC_ALGORITHM_RSA && test_card.algorithms[0].key_length == 2048 && !test_card.algorithms[0].u._rsa.exponent);
 	assert(test_card.caps == (SC_CARD_CAP_APDU_EXT|SC_CARD_CAP_ISO7816_PIN_INFO) && !card_ops.compute_signature && !card_ops.get_challenge && !card_ops.update_binary);
 	struct sc_pin_cmd_data pin = {0}; pin.cmd = SC_PIN_CMD_VERIFY; pin.pin_type = SC_AC_CHV; pin.pin_reference = 1; pin.pin1.data = fictitious_pin; pin.pin1.len = 6;
 	assert(sc_pin_cmd(&test_card,&pin) < 0 && !metadata_commands && !credential_attempts); finish_initialized();

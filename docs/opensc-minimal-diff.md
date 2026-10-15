@@ -86,3 +86,55 @@ observados. No hay PR público preparado o publicado.
 El contenido de master se incorporó al árbol de trabajo, sin crear merge ni
 modificar la historia de Git. Los commits requieren escritura en `.git`,
 que sigue restringida en esta sesión.
+
+## Reutilización de IAS/ECC y revisión del PR 3751
+
+La referencia del usuario es el [PR 3751 de OpenSC](https://github.com/OpenSC/OpenSC/pull/3751),
+`card-chipdocit.c`, en particular `chipdocit_read_enc_can`. El código también
+está en nuestra base `fc27ee876`: selecciona `CHIPDOCIT_IAS_AID` mediante
+`iso7816_select_aid`, luego MF/E000 para leer el CAN cifrado. Esto activa una
+aplicación de la tarjeta; no ejecuta `iasecc_init`, no hereda sus callbacks y
+no usa el parser de SDO de `iasecc-sdo.c`. El driver italiano hereda operaciones
+ISO7816 y tiene código propio para PACE/CAN, PIN y firma.
+
+| Recorrido | Reutilización actual | Diferencia que impide sustituirlo directamente |
+| --- | --- | --- |
+| JCOP3 CR | `iasecc_init`, `iasecc_sdo_get_tagged_data`, `iasecc_sdo_parse`, ACL, PIN y firma IAS/ECC existentes | El parche adapta metadatos y comportamiento del perfil; no crea un segundo parser SDO. |
+| JCOP4 CR | Selección/lectura/FCI ISO7816, decodificadores nativos PKCS#15, dispatcher APDU, locks y contexto OpenSSL de OpenSC | Establece el canal observado con D004/P-521/ECDH/AES y firma un digest SHA-256 mediante PSO `2A 9E 9A`. |
+| ChipDoc italiano del PR | ISO7816 y OpenPACE | Usa CAN/PACE y PSO `2A 80 86` sobre un bloque RSA ya rellenado; su AID IAS y sus aplicaciones de firma difieren del perfil CR. |
+
+El `set_security_env` IAS/ECC genérico consulta SDO/DOCP con GET DATA `CB 3F FF`
+y construye la operación según esos permisos. Sustituir con él la ruta JCOP4
+cambiaría la secuencia probada y añadiría consultas no acreditadas para ese
+perfil. El texto "SDO path" en la validación de PKCS#15 no implica que se
+haya implementado otro protocolo SDO: comprueba que la llave nativa no tenga
+una ruta de archivo que obligue al framework a reseleccionar.
+
+Tampoco basta conectar la función `perform_chip_authentication_ex` existente:
+en nuestra base consume nonce/token de GENERAL AUTHENTICATE para derivar las
+claves. La secuencia CR confirmada obtiene los parámetros de D004 y usa la
+respuesta GA vacía. Esto no descarta una futura adaptación de las capas SM
+compartidas, pero exige demostrar equivalencia; no autoriza cambiar el canal
+probado por analogía con PACE.
+
+La revisión sí elimina el registro manual de `sc_algorithm_info` del
+inicializador JCOP4 y usa `_sc_card_add_rsa_alg`, ya presente en OpenSC. El
+tamaño procede del perfil (`signing_bits`); se conservan RSA2048, flags
+PKCS#1 tipo 1/SHA256, exponente no declarado (0) y las demás capacidades.
+La memoria privada se libera si falla el helper, sin publicar callbacks ni
+estado de tarjeta. Cambio en OpenSC: un header, +6/-9, tres líneas netas menos;
+frente a la base completa quedan 39 archivos, +4482/-81.
+
+El fixture existente comprueba también tipo RSA, tamaño y exponente del
+registro resultante. Esta revisión no modifica AID, APDU, SDO, canal, PIN,
+algoritmos anunciados, política de intentos ni cierre. Las exportaciones
+fijadas en `patches/` y el diagrama se regeneran después del commit del
+submódulo; todavía representan el commit anterior mientras este cambio
+permanezca sin commit. No se altera la historia ni se elude `.git` solo lectura.
+
+Verificación de esta reducción: compilación incremental, 733 líneas PASS de
+la suite IAS/ECC y 34 de las pruebas públicas/firma PKCS#11 (ambos mecanismos)
+y lanzadores. Se comprobaron formato clang-format 21.1.8 y `git diff --check`.
+Todo el transporte y las credenciales usados por esas pruebas son sintéticos;
+no se ejecutó PC/SC real, tarjeta, PIN real, Idopte ni GUI. No se repitieron
+las pruebas físicas anteriores ni se regeneraron los binarios de release.

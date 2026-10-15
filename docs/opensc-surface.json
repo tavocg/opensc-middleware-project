@@ -1,6 +1,6 @@
 {
   "base": "fc27ee8768cb882fceb99535dce8b6a966534dcb",
-  "target": "b14152bb016dde201fe3d1807d71655a6ccd91e6",
+  "target": "79e2e994afae953bd9f3e902af084e8a7557219f",
   "files": [
     {
       "path": "etc/opensc.conf.example.in",
@@ -465,7 +465,7 @@
     },
     {
       "path": "src/libopensc/iasecc-chipdoc-init.h",
-      "added": 121,
+      "added": 118,
       "deleted": 0,
       "added_file": true,
       "scopes": [

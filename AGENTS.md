@@ -9,6 +9,38 @@ transporte simulado. PIN/GUI también los ejecuta el usuario. Esto sustituye
 la autorización anterior de hardware por el agente; conservar límites de
 cada diagnóstico y privacidad. Git sigue autorizado pero .git solo lectura.
 
+**Última revisión: reutilización IAS/ECC contrastada con PR3751.**
+Principal e76e1f9/OpenSCb14152bb0 limpios al comenzar. Usuario pidió evaluar
+si SELECT IAS del driver italiano permite reutilizarSDO/reducir parche y
+aclaró fork=OpenSC+patch. Revisión fuente local y PR3751 público (webfiles/raw
+no disponibles, conversación sí): card-chipdocit.c:175..176 seleccionaIAS_AID
+con iso7816_select_aid, NO llama iasecc_init; sc_get_chipdocit_driver copia
+opsISO7816. Tiene PACE/CAN yPSO_DECIPHER2A8086/RSAblock256, no parserSDO.
+JCOP3 ya usa init/SDO/parser/ACL/PIN/firmaIAS existentes; JCOP4 decodificaPKCS15
+nativo/ISO/dispatcher/locks, canalD004P521/ECDHAES/GA vacío yPSO2A9E9A/digest32.
+SDOgenérico añadeCB3FFF/DOCP/políticas no probadas paraJCOP4; performCA_ex
+actual consume nonce/token, no sustituto directo de suGA vacío. No afirmar
+que no puede generalizarse en futuro; no usaranalogía comoequivalencia.
+
+Cambio real únicamente iasecc-chipdoc-init.h: reemplaza calloc/manualregistro
+sc_algorithm_info por _sc_card_add_rsa_alg(card,p->signing_bits,flags,0).
+No RAW, helper conserva flags/exponente0; falla sinmutaralgoritmos y libera
+prvantespublicarstate/ops. +6/-9,3líneasnetasmenos; totalbase39files/+4482/-81.
+Testinit existente añadeasserttipo/tamaño/exponente. No nuevoSDO/APDU/PIN/
+algoritmo/perfil/política/SM/backendfallback/cierre ni formateoadyacente.
+Detalle+fuentePR en docs/opensc-minimal-diff.md. Compilaciónincremental0 y
+suiteIAS733PASS +público/firmaambosmecanismos/lanzadores34PASS. clang-format
+21.1.8 estable/gitdiffcheck0. Transporte/PIN/RSA sintéticos; noPCSCreal/GUI/
+Idopte/PINreal poragente. NoASANnuevo/portabilidad/pruebafísicarelease.
+Logs ignorados local/opensc-sdo-review-build.log, -tests.log y-module-tests.log.
+
+GitRO noeludir; cambio submódulo sincommit. Exportador exigeHEADlimpio: diff/
+metadata/diagrama aún fijadosb14152bb0, no describen nuevoheader hasta commit.
+Usuario debe commitvendor primero (header), ejecutar exporter, luegocommit
+raíz de pointer/tests/iasecc-chipdoc-init.c/docs/opensc-minimal-diff.md/AGENTS
+máspatches/docs-surface/README regenerados. Todosarchivosya rastreados,
+gitadd-u trasexport sirve; no build/localcapturas aGit. No publicación.
+
 **Última revisión: documentación simplificada y compilación nativa descrita.**
 Principal `8547313`, OpenSC `b14152bb0`, limpios al comenzar. Usuario pidió
 README sencillo, URLs tavocg/middleware-project, descarga curl/extracción bajo

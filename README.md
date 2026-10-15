@@ -49,7 +49,7 @@ una ejecución manual solo genera artefactos descargables.
 <!-- BEGIN OPENSC SURFACE -->
 ## Superficie modificada de OpenSC
 
-Base `fc27ee876`; submódulo `b14152bb0`. Verde: función nueva; naranja:
+Base `fc27ee876`; submódulo `79e2e994a`. Verde: función nueva; naranja:
 función existente modificada. Los archivos indican **+añadidas / -eliminadas**
 frente a la base. Archivos compartidos se repiten visualmente en ambas rutas,
 pero las cifras no se suman dos veces. Las flechas entre funciones terminan
@@ -291,7 +291,7 @@ flowchart TB
       c4_fn7_0["iasecc_chipdoc_pkcs15_activate()<br/>NUEVA"]:::added
     end
     subgraph c4_file8_group["src/libopensc"]
-      c4_file8["iasecc-chipdoc-init.h<br/>AGREGADO<br/>+121 / -0"]:::file
+      c4_file8["iasecc-chipdoc-init.h<br/>AGREGADO<br/>+118 / -0"]:::file
       JCOP4 --> c4_file8
       c4_fn8_0["iasecc_chipdoc_opted_in()<br/>NUEVA"]:::added
       c4_fn8_1["chipdoc_unbound_pin()<br/>NUEVA"]:::added

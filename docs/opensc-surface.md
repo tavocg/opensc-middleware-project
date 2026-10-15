@@ -1,6 +1,6 @@
 # Superficie modificada de OpenSC
 
-Base master: `fc27ee8768cb882fceb99535dce8b6a966534dcb`. Submódulo: `b14152bb016dde201fe3d1807d71655a6ccd91e6`.
+Base master: `fc27ee8768cb882fceb99535dce8b6a966534dcb`. Submódulo: `79e2e994afae953bd9f3e902af084e8a7557219f`.
 
 Verde = función **nueva respecto a master**; naranja = función existente
 modificada. Las flechas de llamadas solo terminan en funciones nuevas: no se
@@ -34,7 +34,7 @@ El [diagrama completo está en README.md](../README.md#superficie-modificada-de-
 | `src/libopensc/card.c` | Existente | 5 | 0 | JCOP3 | `sc_reset` (M)<br/>`sc_lock` (M) |
 | `src/libopensc/cards.h` | Existente | 1 | 0 | JCOP4 | Datos / declaraciones / configuración / build |
 | `src/libopensc/iasecc-chipdoc-bind.c` | Agregado | 42 | 0 | JCOP4 | `iasecc_chipdoc_pkcs15_activate` (N) |
-| `src/libopensc/iasecc-chipdoc-init.h` | Agregado | 121 | 0 | JCOP4 | `iasecc_chipdoc_opted_in` (N)<br/>`chipdoc_unbound_pin` (N)<br/>`chipdoc_unbound_logout` (N)<br/>`chipdoc_metadata_read` (N)<br/>`chipdoc_metadata_record` (N)<br/>`chipdoc_metadata_data` (N)<br/>`iasecc_chipdoc_initialize` (N) |
+| `src/libopensc/iasecc-chipdoc-init.h` | Agregado | 118 | 0 | JCOP4 | `iasecc_chipdoc_opted_in` (N)<br/>`chipdoc_unbound_pin` (N)<br/>`chipdoc_unbound_logout` (N)<br/>`chipdoc_metadata_read` (N)<br/>`chipdoc_metadata_record` (N)<br/>`chipdoc_metadata_data` (N)<br/>`iasecc_chipdoc_initialize` (N) |
 | `src/libopensc/iasecc-chipdoc-pkcs15.h` | Agregado | 149 | 0 | JCOP4 | `iasecc_chipdoc_pkcs15_key` (N)<br/>`iasecc_chipdoc_pkcs15_operation` (N)<br/>`iasecc_chipdoc_pkcs15_disable_pin_cache` (N) |
 | `src/libopensc/iasecc-chipdoc-routing.h` | Agregado | 407 | 0 | JCOP4 | `chipdoc_route` (N)<br/>`chipdoc_route_close` (N)<br/>`chipdoc_route_valid` (N)<br/>`chipdoc_route_require` (N)<br/>`chipdoc_route_idle` (N)<br/>`chipdoc_route_pin` (N)<br/>`chipdoc_route_select` (N)<br/>`chipdoc_route_mse` (N)<br/>`chipdoc_route_sign` (N)<br/>`chipdoc_route_read` (N)<br/>`chipdoc_route_record` (N)<br/>`chipdoc_route_data` (N)<br/>`chipdoc_route_logout` (N)<br/>`iasecc_chipdoc_routing_remove` (N)<br/>`chipdoc_route_clear` (N)<br/>`chipdoc_route_finish` (N)<br/>`iasecc_chipdoc_routing_install` (N)<br/>`iasecc_chipdoc_routing_last_report` (N) |
 | `src/libopensc/iasecc-chipdoc-sm.c` | Agregado | 1219 | 0 | JCOP4 | `chipdoc_provider_matches` (N)<br/>`chipdoc_crypto_clear` (N)<br/>`chipdoc_platform_supported` (N)<br/>`chipdoc_platform_ready` (N)<br/>`chipdoc_ready` (N)<br/>`iasecc_chipdoc_channel_supported` (N)<br/>`iasecc_chipdoc_channel_pin_status` (N)<br/>`chipdoc_setup_exchange` (N)<br/>`iasecc_chipdoc_channel_open` (N)<br/>`iasecc_chipdoc_channel_select_mf` (N)<br/>`chipdoc_bootstrap_exchange` (N)<br/>`iasecc_chipdoc_channel_bootstrap` (N)<br/>`iasecc_chipdoc_transaction_begin` (N)<br/>`iasecc_chipdoc_channel_query_pin` (N)<br/>`iasecc_chipdoc_channel_verify_pin` (N)<br/>`chipdoc_signing_ready` (N)<br/>`chipdoc_signature_exchange` (N)<br/>`iasecc_chipdoc_channel_select_application` (N)<br/>`iasecc_chipdoc_channel_set_security_env` (N)<br/>`iasecc_chipdoc_channel_compute_signature` (N) |
