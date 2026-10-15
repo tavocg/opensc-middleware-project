@@ -28,9 +28,10 @@ root = pathlib.Path(__file__).resolve().parents[1]
 assert len(sys.argv) == 1
 assert os.environ["OPENSC_CONF"] == "/dev/null"
 assert os.environ["OPENSC_DEBUG"] == "0"
+assert os.environ["OPENSC_JCOP3_PIN_STATUS_IN_PLACE"] == "yes"
 assert os.environ["LIBASEP11"] == str(root/"build/opensc/src/pkcs11/.libs/opensc-pkcs11.so")
 assert os.environ["LD_LIBRARY_PATH"] == str(root/"build/opensc/src/pkcs11/.libs")+":"+str(root/"build/opensc/src/libopensc/.libs")
-allowed = {"PATH", "HOME", "USER", "LOGNAME", "LANG", "LC_ALL", "LC_CTYPE", "DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY", "DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_DATA_DIRS", "XDG_CONFIG_DIRS", "SSL_CERT_FILE", "SSL_CERT_DIR", "NIX_SSL_CERT_FILE", "TZ", "LD_LIBRARY_PATH", "LIBASEP11", "OPENSC_CONF", "OPENSC_DEBUG", "OPENSC_API_TRACE_FILE"}
+allowed = {"PATH", "HOME", "USER", "LOGNAME", "LANG", "LC_ALL", "LC_CTYPE", "DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY", "DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_DATA_DIRS", "XDG_CONFIG_DIRS", "SSL_CERT_FILE", "SSL_CERT_DIR", "NIX_SSL_CERT_FILE", "TZ", "LD_LIBRARY_PATH", "LIBASEP11", "OPENSC_CONF", "OPENSC_DEBUG", "OPENSC_API_TRACE_FILE", "OPENSC_JCOP3_PIN_STATUS_IN_PLACE"}
 assert set(os.environ) <= allowed, set(os.environ)-allowed
 assert os.environ["DISPLAY"] == "fixture-display"
 assert os.environ["WAYLAND_DISPLAY"] == "fixture-wayland"
@@ -59,6 +60,10 @@ sys.exit(int((root/"exit-status").read_text()))
                "JAVA_TOOL_OPTIONS": "private-old-options", "_JAVA_OPTIONS": "private-old-options",
                "JDK_JAVA_OPTIONS": "private-old-options", "OPENSSL_CONF": "private-old-crypto"}
         for expected in (0, 17):
+            # Neither an absent flag nor a conflicting inherited flag may lose the correction.
+            env.pop("OPENSC_JCOP3_PIN_STATUS_IN_PLACE", None)
+            if expected == 17:
+                env["OPENSC_JCOP3_PIN_STATUS_IN_PLACE"] = "no"
             (project/"exit-status").write_text(str(expected))
             completed = subprocess.run(["bash", str(launcher)], env=env, capture_output=True, text=True, check=False)
             assert completed.returncode == expected, completed.stderr
@@ -73,12 +78,15 @@ sys.exit(int((root/"exit-status").read_text()))
             assert values["mode"] == "autodetection_gui"
             assert values["configuration"] == "none_dev_null"
             assert values["detection"] == "normal_driver_dispatch"
+            assert values["jcop3_pin_status"] == "in_place_physical_query"
+            assert values["jcop3_verify"] == "fresh_verify"
             assert "signature_verification" not in values
             statuses.add(values["firmador_exit_status"])
             assert "private-old" not in report.read_text()
             assert (report.parent/"api.log").read_text().count("C_GetSlotList") == 1
         assert statuses == {"0", "17"}
         print("PASS local module/core and normal autodetection without a .conf")
+        print("PASS launcher explicitly enables JCOP3 physical status/fresh VERIFY with absent or conflicting inherited flag")
         print("PASS desktop/trust store preserved and inherited diagnostics/Java options removed")
         print("PASS one GUI call without arguments, visible output and exit0/17 propagated")
         print("PASS private reports/API metadata, no signature claim, core dumps disabled")

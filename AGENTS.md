@@ -9,6 +9,32 @@ transporte simulado. PIN/GUI también los ejecuta el usuario. Esto sustituye
 la autorización anterior de hardware por el agente; conservar límites de
 cada diagnóstico y privacidad. Git sigue autorizado pero .git solo lectura.
 
+**Última revisión: firmador/auto JCOP3 corregido en el lanzador.**
+Principal cef0756/OpenSC cf0fd80e5 limpios al comenzar. Usuario reportó JCOP4
+funciona y JCOP3 falla, incluso pasando OPENSC_JCOP3_PIN_STATUS_IN_PLACE=yes
+por make. Se revisaron solo informes privados auto-firmador-api-MuwoZYdm
+(JCOP4 KEYref91/compute256/SignFinal0), vzO3S59A y3D5F10Di (JCOP3 login0,
+consultas token/sesión con SELECT/política despuéslogin, KEYref3/MSE0,
+SIGN_AT6982/SignFinal101). No PIN/cert/PDF/APDU guardados/leídos ni prueba
+cryptoPDF esta revisión. Patrón coherente con pérdida de permiso RSA por
+reselección y falta de preVERIFY SELECT de la corrección existente.
+Causa de intento sin efecto: env-i/allowlist del lanzador descartaba variable.
+scripts/firmador-auto.sh ahora fija explícitamente esa opción yes, sin heredar
+valor del caller, y reporta jcop3_pin_status/in_place_physical_query y
+jcop3_verify/fresh_verify. No .conf ni selección de driver/perfil; gates ya
+existentes Amos/GenericPKI/CHV1 excluyen JCOP4. Incluye status físico sin
+reselección/política conocida, VERIFY real sin hashprevio y SELECT aplicación
+antesVERIFY. No cambios al vendor/helpersotros ni flags globales heredados.
+7 PASS launcher con firmador simulado incluyen variable ausente/no heredado;
+81 PASS de pkcs15-pin-status-in-place/iasecc-pin-application/
+iasecc-post-login-status con transporte/PIN de software, errores/sinreintento/
+perfiles excluidos. Shellcheck/Bash/diffcheck pasaron; log privado ignorado
+local/auto-firmador-jcop3-tests.log. docs/auto-sign.md explica requisito y
+marcas/eventos; noafirmar prueba física nueva. Usuario puede probar una vez
+`nix develop -c make firmador/auto`, sin variableextra, con clientes cerrados;
+revisar nuevo api/report/PDF antesotraoperación. No PCSCreal/lector/tarjeta/
+PINreal/GUI/Java poragente. Sin commit/staging/publicación, GitRO sigue.
+
 **Última revisión: lanzador GUI con autodetección.**
 Usuario pidió añadir `make firmador/auto` antes de agregar los cambios de la
 prueba genérica. scripts/firmador-auto.sh deriva del lanzador JCOP4, sin
