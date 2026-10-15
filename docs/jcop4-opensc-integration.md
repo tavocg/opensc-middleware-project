@@ -1,7 +1,7 @@
 # Integrar el perfil JCOP4 observado en OpenSC
 
 Estado al 14 de octubre de 2026. Base de esta etapa: proyecto
-`d9af553`, submódulo OpenSC `52057cc6a`. Este documento describe la integración.
+`28d3ff0`, submódulo OpenSC `52057cc6a`. Este documento describe la integración.
 **Perfil/estado/limpieza, canal/bootstrap/providers y operaciones
 PIN/firma privados están implementados. Frontend PKCS15 y routing privado
 instalado por tarjeta pasaron con callbacks de producción y lector simulado.
@@ -12,7 +12,10 @@ mecanismos, objetos, sesiones y firmas con contexto/lector/PIN sintéticos.
 El diagnóstico público y una firma SHA256_RSA_PKCS ya pasaron en la JCOP4
 real. El firmador produjo un PDF CAdES y dos sellos RFC3161 verificados offline;
 dos firmas consecutivas y reinserción en la misma GUI también pasaron.
-Falta prueba real de CKM_RSA_PKCS, aunque está probado en software.**
+CKM_RSA_PKCS también pasó en hardware. El trabajo siguiente es revisar la
+integración sobre master actual, sin repetir estos controles.**
+
+[Estado actual y límites](jcop4-support.md).
 
 ## Evidencia disponible
 
@@ -1341,3 +1344,31 @@ correcto cuando lo solicite. Revisar mecanismo/inputpolicy/login/sign/
 verificación/negativo/conteos/reset/cierre antes otra operación. Propósito
 es comprobar el mecanismo anunciado mediante otra API PKCS11, no repetir
 variantes de APDU ni probar PIN incorrecto. RSA_PKCS hardware todavía pendiente.
+
+## RSA_PKCS real confirmado y alcance consolidado
+
+Informe local/jcop4-pkcs11-rsa-pkcs-XzQvJtgn/report.txt,2026-10-15T00:03:53Z
+(14Oct18:03CR), principal28d3ff0/OpenSC52057cc6a: módulo local/fase pública
+correctos, mecanismoCKM_RSA_PKCS/inputcanonical_sha256_digestinfo,
+Login/SignInit/Sign/session-state0, RSAválida y contenidoalterado rechazado.
+1Login/12APDUauth/1VERIFY/1PSO,91backend(79públicos+12auth)/guard0;
+resetinicio/final1/0,11locks/11unlocks,1disconnect tarjeta/lector/contextrelease
+con0, sesiones/finalize/helper0. Logout257 esperado trasPUBLIC.
+No datos/PIN/DigestInfo/firmacert guardados por helper. No hardware/PIN/GUI
+poragente esta revisión, solo lectura privada de metadatos.
+
+Los dos mecanismos anunciados y firmador/PDF/multipart/consecutivas/reinserción
+en el recorrido observado están confirmados. No significa driver completo
+para toda JCOP4/RSA3072/plataforma/estado PIN. El estado protegido63C7 sigue
+siendo condición conservadora, no prueba de máximo7 ni soporte de otros
+contadores. Se consolidó matriz, límites e inventario en jcop4-support.md.
+Delta integración3dfef6704..52057cc6a:26archivos/2803insertadas/10eliminadas;
+historial propio desdebasecomúnc7a377af:40archivos/3539insertadas/87eliminadas,
+incluyeJCOP3/logger/experimentos previos. origin/masterlocalfc27ee876 no se
+actualizó ni acredita mastervigente. No se preparó reporte público o PR.
+
+Próximo trabajo: checkout separado de masteractual, build sin hardware,
+separar dependencias/diagnósticos/funcionalidad y adaptar tests al checkout e
+infraestructura upstream. No modificar ni reemplazar el build validado por
+inercia; no nuevas firmas para repetir evidencia. Revisión interna documental
+y lectura de diffs únicamente; código/suites/driver/submódulo intactos.

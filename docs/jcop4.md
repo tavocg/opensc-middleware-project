@@ -6417,3 +6417,18 @@ ni PINreal poragente. Un comando usuario con clientes cerrados/PINcorrecto,
 no repetir ante error hasta revisar informe. RSA_PKCSreal/RSA3072/otros
 lectores/plataformas/upstream pendientes.
 [Detalles](jcop4-opensc-integration.md#reinserción-confirmada-siguiente-mecanismo-rsa_pkcs).
+
+### Los dos mecanismos RSA anunciados ya tienen evidencia real
+
+XzQvJtgn/2026-10-15T00:03:53Z (14Oct18:03CR), principal28d3ff0/OpenSC52057cc6a:
+CKM_RSA_PKCS/canonicalSHA256DigestInfo, Login/SignInit/Sign0, firma válida y
+negativo rechazado.1Login/1VERIFY/1PSO/12auth/91backend,guard0,resetinicio-final0,
+11locks/unlocks y tarjeta/lector/contexto cerrados0,helper0. Logout101esperado
+trasPUBLIC. Sin nuevoPIN/lector/GUI poragente ni repetir suites intactas.
+
+Se consolidó el [estado actual](jcop4-support.md): muestra evidencia, límites
+(63C7 conservador, soloRSA2048/SHA256/llave91, Linux/OpenSSL3/lectorobservado),
+delta integración26archivos/2803+10- y rama completa40archivos/3539+87- con
+JCOP3/diagnósticos anteriores. No PR listo: falta masteractual/build separado,
+separar dependencias/experimentos y portar tests. origin/masterlocal no es
+prueba de actualidad. No repetir comandos de tarjeta ya verificados.

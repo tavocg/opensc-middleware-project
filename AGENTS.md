@@ -9,6 +9,50 @@ transporte simulado. PIN/GUI también los ejecuta el usuario. Esto sustituye
 la autorización anterior de hardware por el agente; conservar límites de
 cada diagnóstico y privacidad. Git sigue autorizado pero .git solo lectura.
 
+**Último resultado: RSA_PKCS real confirmado; siguiente trabajo local.**
+Principal `28d3ff0`, OpenSC `52057cc6a`, limpios al comenzar. Informe usuario
+local/jcop4-pkcs11-rsa-pkcs-XzQvJtgn/report.txt/2026-10-15T00:03:53Z
+(14Oct18:03CR): módulo local/público válidos, CKM_RSA_PKCS/inputcanonicalSHA256
+DigestInfo, Login/SignInit/Sign/session-state0, RSA válida y bitnegativo
+rechazado.1Login/12auth/1VERIFY/1PSO,91backend/guard0; resetinicio-final1/0,
+11locks/11unlocks,1disconnect tarjeta/lector/contextrelease y resultados0,
+sesiones/finalize/helper0. Logout257 esperado trasPUBLIC. No PIN/DigestInfo/
+firmacert guardados. Sin hardware/PIN/GUI/Idopte por agente, solo metadatos.
+
+Ya hay evidencia real de dos mecanismos anunciados, firma PDF/multipart,
+consecutivas y cambio/reinserción GUI observado. No ausencia sostenida enJava,
+concurrencia real/otras tarjetas-lectores/plataformas/RSA3072 ni confianza/
+revocación/render. No repetir esos controles ni enum/estado/D004 por inercia.
+Consolidación actual: docs/jcop4-support.md (leer antes del historial largo).
+Incluye limitación63C7: estado conservador obligatorio, otros positivos
+rechazados, no inferir máximo7/reinicio del contador ni soporte de recuperación.
+
+Inventario local leído: integración11commits3dfef6704..52057cc6a,26files/
+2803insertadas/10eliminadas (15nuevos/11modificados), excluye raíz y cambios
+previos. Historial propio desdebasecomúnc7a377af971df03f879c1697e91ebac1f7e28c56:
+40files/3539insertadas/87eliminadas, incluyeJCOP3/logger/experimentos. No
+presentar delta26comoindependiente: headers/framework tienen loggerapi-trace.h
+previo y testsraíz usan fuentes/build fijos; hay que separar/portar.
+origin/masterLOCALfc27ee8768cb882fceb99535dce8b6a966534dcb no actualizado,
+no master vigente. No PR/reporte bug público preparado/enviado, no análisis
+que autorice omitir instrucciones vendor/opensc/AGENTS.md.
+
+**Siguiente trabajo:** obtener masteractual en checkout separado y compilar,
+conservar vendor/build validados. Después separar funcionalidad y diagnósticos,
+comprobar dependencias/tests y revisar diseño para integración. No saltar a
+más PIN, otras variantes o autopublicar. Build/test solo después de leer las
+instrucciones del checkout y confirmar que cada test no accede a PCSC real.
+Los runners actuales no prueban automáticamente otro checkout; no mezclar
+headers/sourceviejos con biblioteca nueva. Git autorizado/.gitRO noeludir;
+sourcepropuesto build/opensc-upstream-review todavía no existe. Lectura de
+Git/diffs y docs solamente esta revisión; código/suites/submódulo/flake/lock/
+helpers/observador intactos, no regresiones sin cambios repetidas. Commit
+solo AGENTS/README/docs y nuevo docs/jcop4-support.md; ningún informe/local/
+PDF/captura/build aGit.
+Intento de `git add` de esos cinco archivos falló: index.lock/.git montado
+solo lectura. No se creó commit ni se eludió la restricción; comandos para
+commit, fetch y worktree quedan al usuario. `git diff --check` pasó.
+
 **Último resultado: reinserción JCOP4 confirmada; RSA_PKCS preparado.**
 Principal `d9af553`, OpenSC `52057cc6a`, limpios al comenzar. Usuario
 local/jcop4-firmador-api-4h1t4TnA/report.txt/2026-10-14T23:41:27Z (17:41CR):

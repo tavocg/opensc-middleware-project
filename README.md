@@ -119,21 +119,15 @@ pasó: ejecución 4h1t4TnA, 17:41 CR, `CARD_CHANGED` y token retirado antes del
 nuevo login y firma; ambos PDF y sus sellos verifican. No se observó el estado
 ausente sostenido en la GUI: se detectó el cambio al volver a consultar.
 
-La siguiente prueba cubre `CKM_RSA_PKCS`, el otro mecanismo anunciado por el
-perfil. El helper construye un DigestInfo SHA256 del texto técnico fijo antes
-del login; no cambia la secuencia APDU ni los algoritmos del driver:
+`CKM_RSA_PKCS` también pasó en la tarjeta: XzQvJtgn, 14 de octubre 18:03 CR,
+DigestInfo SHA256 canónico, firma válida/negativo y cierre completo, con un
+login/VERIFY/PSO. Ya están comprobados los dos mecanismos anunciados y el
+recorrido del firmador. No repetir estas pruebas como siguiente paso.
 
-```bash
-nix develop -c make sign/jcop4-pkcs11-rsa-pkcs READER=0
-```
-
-Misma JCOP4 y clientes/firmador cerrados; ejecutar una sola vez e introducir
-PIN correcto sin eco cuando lo solicite. Un login/VERIFY/PSO, verificación RSA
-y rechazo del mensaje alterado; informe privado sin PIN/DigestInfo/certificados.
-Ante error revisar el informe antes de repetir el PIN. Diez grupos nativos
-(cinco por mecanismo) y dos del lanzador pasaron en software, también
-ASan/UBSan nativos con detect_leaks0; bibliotecas precompiladas sin instrumentar,
-sin prueba de fugas. Esta variante todavía no se ha ejecutado sobre la tarjeta.
+El [estado actual y alcance](docs/jcop4-support.md) reúne la evidencia, los
+límites y el inventario del parche. El siguiente trabajo es local: comprobar
+master actual en una copia separada y organizar la integración para revisión.
+El perfil sigue siendo experimental y no hay un PR preparado o publicado.
 
 El lanzador GUI `make firmador/jcop4`
 selecciona el módulo y libOpenSC locales, activa el perfil optativo, desactiva
