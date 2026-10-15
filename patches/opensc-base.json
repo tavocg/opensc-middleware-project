@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "upstream": "https://github.com/OpenSC/OpenSC.git",
+  "base_commit": "fc27ee8768cb882fceb99535dce8b6a966534dcb",
+  "patched_commit": "b14152bb016dde201fe3d1807d71655a6ccd91e6",
+  "patched_tree": "59043ee1b0ef4b310de56e4e1b61d96766a1bac5",
+  "patch_file": "opensc-jcop3-jcop4.diff",
+  "patch_sha256": "3937797ca35dcb85c5e2bc0ed29ccf5fc2056280d581739bae99d77ca74f5932",
+  "files": 39,
+  "added_lines": 4485,
+  "deleted_lines": 81
+}

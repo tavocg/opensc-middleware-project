@@ -31,6 +31,8 @@
               pcsc-tools
               python3 # pcsc-spy decoder from pcsclite.dev
               util-linux # script: terminal fixture for authenticated launcher tests
+              patchelf # relative paths in release libraries
+              xz # export the Nix runtime closure
             ];
             nativeBuildInputs = with pkgs; [
               autoconf

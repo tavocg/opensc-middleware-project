@@ -1,0 +1,93 @@
+name: Build and release libjcop3p11
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout project without private submodule commits
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Read pinned upstream base
+        id: base
+        run: |
+          python3 - <<'PY'
+          import json, os
+          with open('patches/opensc-base.json') as f:
+              base = json.load(f)['base_commit']
+          assert len(base) == 40 and all(c in '0123456789abcdef' for c in base)
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f'commit={base}\n')
+          PY
+      - name: Checkout public OpenSC base
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: OpenSC/OpenSC
+          ref: ${{ steps.base.outputs.commit }}
+          path: vendor/opensc
+          persist-credentials: false
+      - name: Apply and verify exported patch
+        run: python3 scripts/apply-opensc-patch.py vendor/opensc
+      - name: Install upstream Nix
+        uses: DeterminateSystems/nix-installer-action@c5a866b6ab867e88becbed4467b93592bce69f8a # v21
+        with:
+          determinate: false
+      - name: Verify patch, diagram inventory and release launchers
+        run: python3 tests/opensc-release.py
+      - name: Compile and run software regressions
+        run: |
+          nix develop --no-write-lock-file -c make test/iasecc JOBS="$(nproc)"
+          nix develop --no-write-lock-file -c make test/jcop4-pkcs11-public test/jcop4-pkcs11-sign test/jcop4-firmador-launcher
+      - name: Package libraries, sources and Nix runtime
+        run: nix develop --no-write-lock-file -c bash scripts/package-release.sh
+      - name: Verify packaged release without hardware
+        run: nix develop --no-write-lock-file -c python3 tests/check-release-artifacts.py build/release
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: libjcop3p11-linux-x86_64
+          path: build/release/*
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download verified build
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: libjcop3p11-linux-x86_64
+          path: release
+      - name: Publish experimental release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd release
+          sha256sum --check SHA256SUMS
+          # Refuse an existing release instead of replacing published binaries.
+          gh release create "$RELEASE_TAG" ./* \
+            --verify-tag --prerelease \
+            --title "libjcop3p11 $RELEASE_TAG" --notes-file RELEASE-NOTES.md

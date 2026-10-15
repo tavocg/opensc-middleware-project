@@ -9,6 +9,71 @@ transporte simulado. PIN/GUI también los ejecuta el usuario. Esto sustituye
 la autorización anterior de hardware por el agente; conservar límites de
 cada diagnóstico y privacidad. Git sigue autorizado pero .git solo lectura.
 
+**Última revisión: diagrama, parche exportable y release Nix preparados.**
+Principal `06d125f`, submódulo `b14152bb0`, limpios al comenzar. Submódulo
+intacto en esta revisión, sin PCSC/lector/tarjeta/PIN real/GUI/Idopte.
+Usuario pidió diagrama en README, INSTALL.md, .diff aplicable y workflow Nix
+que publique biblioteca. Pregunta posterior de nombre fue solo opinión:
+no cambiar nombres/ramas. Recomendación comunicada iasecc/costa-rica-rsa y
+`iasecc: add support for Costa Rican RSA signing cards`; no NXP general.
+
+scripts/export-opensc-patch.py genera/checkea de HEAD limpio contra base
+fijada fc27ee876: patches/opensc-jcop3-jcop4.diff y opensc-base.json,
+docs/opensc-surface.json/.md/.mmd y bloque marcado del README. Parche39files
+/4485/-81, SHA2563937797ca35dcb85c5e2bc0ed29ccf5fc2056280d581739bae99d77ca74f5932,
+targettree59043ee1b0ef4b310de56e4e1b61d96766a1bac5. No diffs de raíz,
+capturas o datos de tarjeta en el patch. Base inmutable, no promesa contra
+otro master. 169funciones afectadas/114nuevas, 2raíces JCOP3/JCOP4, archivos
+compartidos repetidos visualmente con cifras únicas; verdeNueva/naranjaMod.
+Solo nuevas funciones como destinos de llamadas, callbacks/referencias
+punteados; análisis léxico, no resolución dinámica. 467aristas<límite500.
+No render local: mermaid npm ausente en cache. Actionlint no disponible:
+intento Nix offline falló por dependencias ausentes; no afirmar esos checks.
+
+Workflow .github/workflows/release.yml: checkout raíz sin submódulos,
+checkout OpenSC base pública, apply-opensc-patch.py --index+write-tree para
+comparar árbol exacto (solo CI; no ejecutado aquí/GitRO), instala upstreamNix
+con action SHA/determinatefalse, compila+regresiones software y pruebas de
+patch/lanzadores, empaqueta y valida assets. Buildcontentsread; jobrelease
+contentswrite solo pushv*, ghcreate--verify-tag/--prerelease. Dispatch solo
+artifacts, no release ni reemplazos. Ningún push/tag/workflow/release enviado
+desde esta sesión. Los hashes Actions se verificaron con fuentes primarias.
+
+package-release.sh prepara build/release nuevo (rechaza preexistente):
+libjcop3p11.so+libopensc.so.13 con ORIGIN y solo RPATH Nix, paquete/config/
+launcher GUI, fuente exacta vía gitarchive árbol (no exige commit privado),
+patch/meta/INSTALL/manifest/SHA256SUMS y runtime Nix exportado con cierre de
+referencias. No so universal: Linuxx86_64/Nix y ABIglibc de proceso compatible;
+importar runtime no cambia libc de Java externo. INSTALL declara esto y los
+límites RSA2048/SHA256/63C7, da descarga/import y bin/firmador-jcop jcop3|jcop4.
+Lanzador env-i conserva escritorio, selecciona LIBASE/config y libs locales;
+JCOP3statusinplace+locklogin; JCOP4perfil cr-rsa2048 y reserva propia.
+Sin PIN/CLI/log/debug/APDU por launcher. Configs probadas con parser real.
+Flake solo añadepatchelf/xz, lock intacto, PS1/nombre intactos.
+
+Pasaron 5tests tests/opensc-release.py: gitapply--check/apply sobre archivo
+base fuera de repositorio y comparación íntegra contra targetárbol de Git
+(bytes/modos/symlinks), segundoapplyrechazado, inventario/callees/raíces,
+lexer y lanzadores con firmador simulado/argumentos/fallos/entorno.
+check-release-artifacts.py pasó sobre assets reales: SHA/manifest, fuente
+exacta, configs/roles/permisos, ORIGIN sinbuildpaths, dladdr confirma core
+hermano, cargaCGetFunctionListsinCInitialize y cierre referenciasNix/xz.
+Verificación de loader sin inicializar Cryptoki ni PCSC; constructor notify
+está desactivado por configure. PyYAML/triggers/permisos/pins/Bash de steps,
+shellcheck y gitdiffcheck pasaron. Exporter --check pasó. No regresiones
+de driver intacto repetidas; workflow las ejecutará antes de publicar.
+
+Se corrigió durante pruebas la colisión de nombre manifest.files por
+asset_sha256 y el filtro del directorio raíz del tar en el checker; no fallo
+de tarjeta. Artifacts locales finales en build/release, copias intermedias
+en build/release-*-check ignoradas. Logs local/opensc-release-package.log.
+Nada binario/captura/local/build aGit. Commit pendiente solo raíz:
+AGENTS/README/INSTALL/flake/.github/config/patches/docs-surface/4scripts/2tests.
+No usar git add -u solo: casi todos los archivos son nuevos. No eludir GitRO.
+Intento real de git add explícito falló por index.lock/.git solo lectura;
+ningún staging/commit ni publicación realizados. Verificación final artifacts
+pasó (nix develop -c python3 tests/check-release-artifacts.py build/release).
+
 **Última revisión: reducción del parche y formato OpenSC, software verificado.**
 Principal `d195c2b`, OpenSC HEAD `52057cc6a`, limpios al comenzar. Referencia
 master local `fc27ee8768cb882fceb99535dce8b6a966534dcb`, checkout existente
