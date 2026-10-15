@@ -25,6 +25,11 @@ Consulta [INSTALL.md](INSTALL.md) para:
 No hace falta instalar OpenSC en el sistema ni modificar el firmador.
 El PIN se introduce en el diálogo del firmador.
 
+Para comprobar una firma desde terminal con autodetección, sin configuración
+de JCOP3/JCOP4: `nix develop -c make sign/auto SLOT_INDEX=0`.
+Para abrir la GUI con autodetección: `nix develop -c make firmador/auto`.
+Consulta [la prueba genérica](docs/auto-sign.md) para sus pasos y límites.
+
 ## Desarrollo
 
 Repositorio: [tavocg/middleware-project](https://github.com/tavocg/middleware-project).

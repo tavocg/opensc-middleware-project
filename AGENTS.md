@@ -9,6 +9,54 @@ transporte simulado. PIN/GUI también los ejecuta el usuario. Esto sustituye
 la autorización anterior de hardware por el agente; conservar límites de
 cada diagnóstico y privacidad. Git sigue autorizado pero .git solo lectura.
 
+**Última revisión: lanzador GUI con autodetección.**
+Usuario pidió añadir `make firmador/auto` antes de agregar los cambios de la
+prueba genérica. scripts/firmador-auto.sh deriva del lanzador JCOP4, sin
+crear configuración ni forzar driver/perfil/políticas: OPENSC_CONF=/dev/null,
+LIBASEP11 módulo local y LD_LIBRARY_PATH módulo/libOpenSC locales. Conserva
+allowlist escritorio/truststores con env-i/debug0/core0, PIN solo GUI,
+sin argumentos ni redirección stdout/stderr de Java. Informe y traza API
+numérica existentes en local/auto-firmador-api-*/0700 y archivos0600;
+propaga exitstatus sin afirmar firma/cierre. GUI sin guard APDU/cuota/timeout.
+Nuevo tests/auto-firmador-launcher.py/make test/auto-firmador-launcher:
+6 PASS con firmador simulado y proyecto temporal; entorno y rutas locales,
+no .conf, privacidad/permisos, una llamada/exit0-17, CLI/PIN porargv rechazados,
+módulo/core/firmador ausentes paran antesGUI/reporte. Shellcheck/Bash/diffcheck
+pasaron. README/docs/auto-sign.md actualizados. No GUI/Java/PCSC/hardware/PIN
+real por agente, ni cambios al vendor/launchersanteriores. No suites intactas
+repetidas. Los cambios anteriores sign/auto siguen pendientes junto con estos,
+sin staging/commit ni publicación; GitRO vigente. Nuevo comando usuario:
+`nix develop -c make firmador/auto`; verificar el PDF y metadatos tras cerrar.
+
+**Última revisión: prueba genérica de firma con autodetección.**
+Principal `4e4a355`, OpenSC `cf0fd80e5`, limpios al comenzar. Usuario pidió un
+test genérico de firma autodetectada. Nuevo `make sign/auto SLOT_INDEX=0`
+(etiqueta opcional KEY_LABEL, default LlaveDeFirma) carga módulo local con
+OPENSC_CONF=/dev/null/env-i/debug0, sin archivo .conf ni opciones de tarjeta,
+driver/perfil/cache/lock. SLOT_INDEX es slot PKCS11 presente, no lector PCSC.
+Helper tools/pkcs11-auto-sign.c comprueba mecanismo RSA_PKCS/sesión PUBLIC/
+certificado único RSA2048 antes PIN; entrada /dev/tty ASCII6..14 sin eco,
+una C_Login y llave privada única CKA_SIGN con ID del cert, una SignInit/Sign
+DigestInfoSHA256 canónico; RSA válida y bit cambiado rechazado en memoria.
+No PIN/cert/ID/hash/firma en archivos o reporte. Sin fallback/reintentos/queries
+de tamaño de firma, cierre logout (0/257 válido)/sesión/finalize; resultados
+API no prueban resets/cierre remoto. Sin guard APDU ni namespace lector:
+usa recorrido PKCS11 normal; descubrimiento puede consultar otros lectores.
+Lanzador timeoutforeground120sTERM+5KILL, restaura TTY, core0, reporte0600/
+dir0700 en local/auto-sign-*. Se conserva diagnóstico JCOP4 anterior intacto.
+Nuevo make test/auto-sign compila módulo independiente (no OpenSC/PCSC) y
+helper real con OpenSSL/PTY: 16 escenarios+argumentos/config+launcher=18 PASS,
+RSA software, login/firma/cierre fallidos, firmas corruptas, enumeración de
+un objeto por llamada/duplicados, PIN inválido/INT/TERM y terminal restaurada;
+launcher env vacío/no config/una invocación/exit0-17/permisos. Compilación real
+del helper con -Wall/-Wextra/-Werror pasó, Bash/shellcheck/ASTPython/diffcheck
+pasaron. No prueba física, APDU/PCSC/lector/tarjeta/PINreal/GUI por agente.
+README enlaza docs/auto-sign.md. Submódulo/parche/configs/builddeOpenSC intactos;
+no suites ajenas repetidas ni publicación/commit/staging, GitRO vigente.
+Log ignorado local/auto-sign-tests.log. Usuario ejecuta sign/auto una sola
+vez con tarjeta/otrosclientes cerrados y revisa local/auto-sign-*/report.txt
+antes de cualquier otro intento. No afirmar hardware autodetectado aún.
+
 **Última revisión: autodetección trasladada desde `../opensc/`.**
 Principal `41425a7`, submódulo `79e2e994a`, limpios al comenzar. Usuario pidió
 trasladar la autodetección y comandos/nombre de commit. Se aplicaron los once

@@ -127,6 +127,10 @@ help:
 		'make sign/jcop4-pkcs11 READER=0 Una firma PKCS#11 de texto técnico; PIN interactivo, sin reintentos.' \
 		'make sign/jcop4-pkcs11-rsa-pkcs READER=0 Una firma RSA_PKCS con DigestInfo SHA256, PIN interactivo.' \
 		'make test/jcop4-pkcs11-sign Prueba firma, fallos y terminal con tarjeta/PIN simulados.' \
+		'make sign/auto SLOT_INDEX=0 Firma con autodetección y sin configuración de tarjeta; PIN por terminal.' \
+		'make test/auto-sign       Prueba el helper genérico con módulo PKCS11 y PIN de software.' \
+		'make firmador/auto        Abre el firmador con autodetección y sin configuración de tarjeta.' \
+		'make test/auto-firmador-launcher Prueba el lanzador automático sin GUI ni tarjeta.' \
 		'make firmador/jcop4       Abre la GUI con el perfil JCOP4 RSA2048 y metadatos API privados.' \
 		'make test/jcop4-firmador-launcher Prueba configuración/entorno GUI sin Java, lector ni PIN.' \
 		'make test/jcop4-reader-features Prueba el diagnóstico del lector con PC/SC simulado.' \
@@ -465,3 +469,17 @@ firmador/jcop4:
 
 test/jcop4-firmador-launcher:
 	@bash scripts/test-jcop4-firmador-launcher.sh
+
+.PHONY: sign/auto test/auto-sign
+sign/auto:
+	@bash scripts/sign-auto.sh "$(SLOT_INDEX)" "$(KEY_LABEL)"
+
+test/auto-sign:
+	@python3 tests/auto-sign.py
+
+.PHONY: firmador/auto test/auto-firmador-launcher
+firmador/auto:
+	@bash scripts/firmador-auto.sh
+
+test/auto-firmador-launcher:
+	@python3 tests/auto-firmador-launcher.py
