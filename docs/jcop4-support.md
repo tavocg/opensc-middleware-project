@@ -4,6 +4,10 @@ Estado al 14 de octubre de 2026, Costa Rica. Proyecto `28d3ff0`,
 OpenSC `52057cc6a`. Esta es la referencia del estado actual; la investigación
 y las etapas anteriores están en [jcop4-opensc-integration.md](jcop4-opensc-integration.md).
 
+La [revisión posterior del parche frente a master](opensc-minimal-diff.md)
+documenta la limpieza del árbol de trabajo, su formato y las pruebas de
+regresión; las pruebas físicas de esta página corresponden al HEAD citado.
+
 El módulo local funciona con la JCOP4 disponible y el firmador instalado en
 GNU/Linux. Es un perfil experimental optativo de `iasecc`, con OpenSSL 3,
 PKCS#15 nativo y firma RSA 2048/PKCS#1 v1.5/SHA-256. No caracteriza todas las

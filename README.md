@@ -129,6 +129,10 @@ límites y el inventario del parche. El siguiente trabajo es local: comprobar
 master actual en una copia separada y organizar la integración para revisión.
 El perfil sigue siendo experimental y no hay un PR preparado o publicado.
 
+La [revisión del parche frente a master](docs/opensc-minimal-diff.md) describe
+la limpieza posterior y las regresiones de software. Conserva JCOP3/JCOP4 y
+los diagnósticos; las firmas físicas anteriores no se han repetido tras ella.
+
 El lanzador GUI `make firmador/jcop4`
 selecciona el módulo y libOpenSC locales, activa el perfil optativo, desactiva
 cachés/PIN-pad/PACE y los modos genéricos atomic/lock_login. Conserva el entorno

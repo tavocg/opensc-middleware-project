@@ -123,6 +123,9 @@ int main(void)
 	const unsigned char alternatives[] = {0x01, 0x11, 0x01, 0x12};
 	const unsigned char truncated[] = {0x03, 0x00};
 	const unsigned char denied[] = {0x01, 0xFF};
+	const unsigned char ignored[] = {0x20, 0x11, 0x20, 0x12, 0x01, 0};
+	const unsigned char ignored_truncated[] = {0x01, 0, 0x20};
+	const unsigned char split_denied[] = {0x40, 0, 0x01, 0xFF};
 
 	iso_ops = sc_get_iso7816_driver()->ops;
 	check_acl("single READ", single, sizeof(single), SC_SUCCESS, SC_AC_OP_READ, SC_AC_NONE, 0);
@@ -135,6 +138,9 @@ int main(void)
 	check_acl("unsupported alternatives", alternatives, sizeof(alternatives), SC_ERROR_NOT_SUPPORTED, SC_AC_OP_READ, 0, 0);
 	check_acl("truncated group", truncated, sizeof(truncated), SC_ERROR_INVALID_DATA, SC_AC_OP_READ, 0, 0);
 	check_acl("denied READ", denied, sizeof(denied), SC_SUCCESS, SC_AC_OP_READ, SC_AC_NEVER, 0);
+	check_acl("ignored operation alternatives preserve READ", ignored, sizeof(ignored), SC_SUCCESS, SC_AC_OP_READ, SC_AC_NONE, 0);
+	check_acl("truncated ignored operation is rejected", ignored_truncated, sizeof(ignored_truncated), SC_ERROR_INVALID_DATA, SC_AC_OP_READ, 0, 0);
+	check_acl("later denied READ is preserved", split_denied, sizeof(split_denied), SC_SUCCESS, SC_AC_OP_READ, SC_AC_NEVER, 0);
 	check_observed_dir();
 	return failures ? 1 : 0;
 }

@@ -3,7 +3,11 @@
  */
 #include <stdio.h>
 #include <string.h>
+#include "pkcs11/sc-pkcs11.h"
+static void fixture_api_trace(enum sc_api_trace_event, CK_SESSION_HANDLE, CK_RV, CK_ULONG, CK_ULONG);
+#define sc_api_metadata_trace fixture_api_trace
 #include "pkcs11/framework-pkcs15.c"
+#undef sc_api_metadata_trace
 
 struct sc_context *context;
 static int failures, status_queries, session_state_events, query_error, token_events, token_cached_events;
@@ -33,7 +37,7 @@ int sc_pkcs15_get_pin_info(struct sc_pkcs15_card *p15card, struct sc_pkcs15_obje
 	return SC_SUCCESS;
 }
 
-void sc_pkcs11_api_trace(enum sc_api_trace_event event, CK_SESSION_HANDLE session,
+static void fixture_api_trace(enum sc_api_trace_event event, CK_SESSION_HANDLE session,
 		CK_RV rv, CK_ULONG a, CK_ULONG b)
 {
 	(void)session;

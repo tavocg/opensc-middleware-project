@@ -16,6 +16,7 @@ list_t virtual_slots, sessions;
 static struct sc_pkcs11_slot fixture_slot;
 static sc_reader_t fixture_reader, other_reader;
 static int scenario, presence_calls, connects, disconnects, binds, failures, changed = 1;
+static int event_state_marker;
 
 CK_RV sc_pkcs11_lock(void) { return CKR_OK; }
 void sc_pkcs11_unlock(void) {}
@@ -23,14 +24,13 @@ const char *lookup_enum(CK_ULONG type, CK_ULONG value) { return NULL; }
 void sc_pkcs11_release_operation(sc_pkcs11_operation_t **op) { *op = NULL; }
 int slot_get_logged_in_state(struct sc_pkcs11_slot *slot) { return SC_PIN_STATE_UNKNOWN; }
 int slot_get_card_state(struct sc_pkcs11_slot *slot) { return sc_detect_card_presence(slot->reader); }
-void sc_pkcs11_api_trace(enum sc_api_trace_event event, CK_SESSION_HANDLE session,
-		CK_RV rv, CK_ULONG a, CK_ULONG b) {}
 
 int sc_wait_for_event(sc_context_t *ctx, unsigned int mask, sc_reader_t **reader,
 		unsigned int *events, int timeout, void **states)
 {
 	*reader = scenario == 1 ? &other_reader : &fixture_reader;
 	*events = SC_EVENT_CARD_INSERTED;
+	*states = &event_state_marker;
 	return scenario == 2 ? SC_SUCCESS : (scenario == 1 ? SC_SUCCESS : SC_ERROR_EVENT_TIMEOUT);
 }
 
@@ -119,6 +119,7 @@ static int run_scenario(int variant)
 	struct sc_card *card = calloc(1, sizeof(*card));
 	CK_SESSION_HANDLE old_session = 0, new_session = 0;
 	CK_SESSION_INFO info;
+	void *reader_states = &scenario;
 	CK_RV rv;
 	int expect_reconnect = variant <= 2 || variant == 8;
 
@@ -147,7 +148,8 @@ static int run_scenario(int variant)
 		return 1;
 
 	/* Non-null state enables the event wait that incorrectly hid CARD_CHANGED. */
-	rv = card_detect(&fixture_reader, &scenario);
+	rv = card_detect(&fixture_reader, &reader_states);
+	check("event wait preserves updated reader state", reader_states == &event_state_marker);
 	if (expect_reconnect) {
 		check(names[variant], rv == CKR_OK && disconnects == 1 && connects == 1 && binds == 1 &&
 				presence_calls == 2 && fixture_slot.p11card &&
@@ -160,7 +162,7 @@ static int run_scenario(int variant)
 			int valid = 1;
 			for (int replacement = 0; replacement < 4; replacement++) {
 				changed = 1;
-				rv = card_detect(&fixture_reader, &scenario);
+				rv = card_detect(&fixture_reader, &reader_states);
 				valid &= rv == CKR_OK && fixture_slot.p11card != NULL &&
 					(fixture_slot.slot_info.flags & CKF_TOKEN_PRESENT) && fixture_slot.login_user == -1;
 			}

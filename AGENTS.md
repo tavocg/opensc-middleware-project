@@ -9,6 +9,53 @@ transporte simulado. PIN/GUI también los ejecuta el usuario. Esto sustituye
 la autorización anterior de hardware por el agente; conservar límites de
 cada diagnóstico y privacidad. Git sigue autorizado pero .git solo lectura.
 
+**Última revisión: reducción del parche y formato OpenSC, software verificado.**
+Principal `d195c2b`, OpenSC HEAD `52057cc6a`, limpios al comenzar. Referencia
+master local `fc27ee8768cb882fceb99535dce8b6a966534dcb`, checkout existente
+build/opensc-upstream-review; FETCH_HEAD14Oct18:18CR. ls-remote falló DNS,
+no afirmar comprobación online. Master compilado en build/opensc-master-build;
+submódulo compilado en build/opensc. Sin instalar/PCSC/lector/tarjeta/PINreal/
+GUI/Java/Idopte por agente; solo compilación, fixtures y archivos locales.
+
+Árbol de trabajo incorpora cambio master void**reader_states, llamadas por
+referencia y expiración tras detección, sin merge/historia Git. Mantiene
+CARD_CHANGED y retry por llamada. ACL FCI/SDO ahora comparten helper interno
+inline iasecc-sdo.h, sin símbolo exportado nuevo; conserva truncamientos/
+alternativas/operaciones ignoradas. Primer fixture falló enlace de helper no
+exportado y se resolvió con inline antes de verificaciones finales. Trazas
+PKCS11 llaman directamente al mismo sc_api_metadata_trace, sin wrapper;
+debug.c idéntico a master. Tests de metadatos/fixtures ajustados, no pierden
+eventos ni privacidad. Makefile.am conserva lista original y añade headers
+aparte; Makefile.mak añade binding faltante, sin prueba Windows.
+
+16 nuevos archivos C/header según master con clang-format21.1.8/.clang-format,
+salida estable/tokens C idénticos salvo includes ordenados; SM initializer
+necesitó segunda pasada. No formateo de archivos existentes completos; solo
+bloques propios puntuales legibles. Conserva perfiles/diagnósticos/flags/
+canal/PIN/operaciones/cierre/capacidades, no retirar para reducir líneas.
+Diff master antes40files/+3546/-94, después39/+4485/-81: existentes24/+884/-94
+->23/+868/-81; nuevos16/+2662->16/+3617 por formato, no nueva funcionalidad.
+Detalle docs/opensc-minimal-diff.md; nuevas cifras excluyen raíz/tests.
+
+Pasaron suite iasecc733líneasPASS (no733casos), público/firma dos mecanismos/
+lanzador GUI34PASS con lector/PIN sintéticos y PTY real, no GUI/Java real.
+196608 comparaciones ACL viejo HEAD vsnuevo para SDO/EF/DF, máscaras/grupos/
+alternativas/ignorados, resultado y salidas válidas equivalentes; fixture en
+/tmp/opensc-minimize, no Git. ASan/UBSan FCI/SDO/card-change71PASS,
+detect_leaks0, lib precompilada sin instrumentar/no fugas probadas.
+Logs privados ignorados local/opensc-minimize-*.log y opensc-master-build.log.
+No suites intactas ajenas repetidas; flake/lock/launchers/helper hardware/
+observador intactos. Las firmas físicas previas validan código anterior,
+no estas modificaciones; mismos límites63C7/RSA2048/SHA256/lector/Linux.
+
+Git sigue RO/no eludir. Commit submódulo primero (solo archivos ya rastreados,
+git add -u); luego principal con pointer,4tests/AGENTS/README/support y nuevo
+docs/opensc-minimal-diff.md explícito. No local/PDF/captura/build aGit.
+Intento real `git -C vendor/opensc add -u` falló creando index.lock por
+filesystem solo lectura. No hay commit/staging ni merge; no se eludió.
+**Siguiente trabajo:** revisión de integración/tests upstream desde este
+parche reducido, sin repetir PIN/hardware por inercia ni publicar PR.
+
 **Último resultado: RSA_PKCS real confirmado; siguiente trabajo local.**
 Principal `28d3ff0`, OpenSC `52057cc6a`, limpios al comenzar. Informe usuario
 local/jcop4-pkcs11-rsa-pkcs-XzQvJtgn/report.txt/2026-10-15T00:03:53Z
