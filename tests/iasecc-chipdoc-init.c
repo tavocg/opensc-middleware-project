@@ -93,8 +93,8 @@ int main(void)
 	memset(untouched,0xA5,256); unsigned char output[256];
 	for (int variant = 0; variant < 7; variant++) {
 		init_defaults(); struct sc_card_operations before = card_ops;
-		if (variant == 0) config("none");
-		if (variant == 1) config("unknown");
+		if (variant == 0) test_card.type = SC_CARD_TYPE_IASECC_AMOS;
+		if (variant == 1) test_card.type = 0;
 		if (variant == 2) test_card.atr.value[1] ^= 1;
 		if (variant == 3) test_ctx.debug = 1;
 		if (variant == 4) test_reader.max_recv_size = 256;
@@ -103,8 +103,8 @@ int main(void)
 		assert(initialize() < 0 && !test_card.drv_data && !test_card.algorithms && !metadata_commands && !resets);
 		assert(!memcmp(&card_ops,&before,sizeof(before))); test_ctx.debug = 0;
 	}
-	puts("PASS real configuration opt-in requires exact ATR/profile, quiet supported provider/T1/reader and declared limits; failed initializer sends no IO and leaves operations/private state/algorithms unchanged");
-	init_defaults(); assert(iasecc_chipdoc_opted_in(&test_card) && !initialize());
+	puts("PASS matched card initialization requires exact ATR/type, quiet supported provider/T1/reader and declared limits; failed initializer sends no IO and leaves operations/private state/algorithms unchanged");
+	init_defaults(); assert(iasecc_chipdoc_match(&test_card, test_card.driver) && !initialize());
 	assert(iasecc_chipdoc_configured(&test_card) && !metadata_commands && !resets && !physical);
 	assert(test_card.max_send_size == 139 && test_card.max_recv_size == 291 && test_card.algorithm_count == 1 && test_card.algorithms[0].flags == rsa_algorithm.flags);
 	assert(test_card.algorithms[0].algorithm == SC_ALGORITHM_RSA && test_card.algorithms[0].key_length == 2048 && !test_card.algorithms[0].u._rsa.exponent);

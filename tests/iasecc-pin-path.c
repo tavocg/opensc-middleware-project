@@ -31,6 +31,8 @@ static void check_path(const char *name, enum variant variant, int expect_fixup)
 	ctx.app_name = "iasecc-pin-path-regression";
 	card.ctx = &ctx;
 	card.type = SC_CARD_TYPE_IASECC_AMOS;
+	struct sc_card_driver driver = {.short_name = "iasecc"};
+	card.driver = &driver;
 	p15card.card = &card;
 	p15card.app = &app;
 	p15card.obj_list = &obj;

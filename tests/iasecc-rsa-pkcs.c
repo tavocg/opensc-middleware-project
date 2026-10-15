@@ -189,6 +189,8 @@ int main(void)
 	int result;
 	ctx.app_name = "iasecc-rsa-pkcs-regression";
 	card.ctx = &ctx;
+	struct sc_card_driver driver = {.short_name = "iasecc"};
+	card.driver = &driver;
 	card.type = SC_CARD_TYPE_IASECC_AMOS;
 	card.drv_data = &private_data;
 	card.ops = &operations;

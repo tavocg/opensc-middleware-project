@@ -2,6 +2,7 @@
 #include "libopensc/card-iasecc.c"
 #include "libopensc/iasecc-sdo.c"
 #include "libopensc/iasecc-chipdoc-sm.c"
+#include "libopensc/iasecc-chipdoc-bind.c"
 #define main software_peer_main
 #include "jcop4-channel-confirmation.c"
 #undef main

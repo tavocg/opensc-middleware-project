@@ -9,6 +9,32 @@ transporte simulado. PIN/GUI también los ejecuta el usuario. Esto sustituye
 la autorización anterior de hardware por el agente; conservar límites de
 cada diagnóstico y privacidad. Git sigue autorizado pero .git solo lectura.
 
+**Última revisión: autodetección trasladada desde `../opensc/`.**
+Principal `41425a7`, submódulo `79e2e994a`, limpios al comenzar. Usuario pidió
+trasladar la autodetección y comandos/nombre de commit. Se aplicaron los once
+archivos modificados de código/configuración/Makefile y el nuevo unit test
+`src/tests/unittests/iasecc-detection.c`, idénticos byte por byte al origen.
+No copiar .gitignore, shell.nix ni configs locales del repositorio hermano.
+JCOP4 usa descubrimiento público ATR/AID/D004/P521/metadatos nativos de
+llave/PIN; perfil ausente/auto activa descubrimiento, none lo desactiva y
+cr-rsa2048 conserva selección explícita. JCOP3 Generic PKI recibe defaults
+PKCS15/cache/reserva por binding, respetando opciones explícitas.
+Fixtures raíz adaptados al tipo ya detectado, identidad del driver IAS/ECC
+y dependencias nuevas de detección/validación. No cambios funcionales propios
+al código trasladado. Compilación completa pasó y 33 casos de autodetección
+pasaron con proveedor sintético NO_SERVICE (build/diagnostics/driver-list),
+sin PCSC real. Los fixtures IAS/ECC previos pasaron hasta completar el bucle
+de scripts/test-iasecc.sh; el runner se detuvo al enlazar el antiguo fixture
+de perfil. Tras adaptarlo, los diez targets ChipDoc pasaron (66 líneas PASS).
+No se repitió el tramo final de scripts/lanzadores ajenos a este cambio.
+Helpers público/firma de ambos mecanismos/lanzadores: 34 PASS.
+No hardware/lector/tarjeta/PIN real/GUI por agente. Git permanece solo lectura;
+no staging/commit ni publicación. Exporter requiere commit limpio del vendor:
+el usuario debe commit vendor (incluyendo nuevo unit test), ejecutar
+scripts/export-opensc-patch.py, luego commit raíz de pointer/tests/AGENTS y
+patches/docs-surface/README regenerados. Logs privados ignorados en
+local/autodetect-*.log. Los lanzadores/configs existentes se conservaron.
+
 **Última revisión: reutilización IAS/ECC contrastada con PR3751.**
 Principal e76e1f9/OpenSCb14152bb0 limpios al comenzar. Usuario pidió evaluar
 si SELECT IAS del driver italiano permite reutilizarSDO/reducir parche y

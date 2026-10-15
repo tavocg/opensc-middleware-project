@@ -76,6 +76,8 @@ int main(void)
 
 	ctx.app_name = "iasecc-key-path-regression";
 	card.ctx = &ctx;
+	struct sc_card_driver driver = {.short_name = "iasecc"};
+	card.driver = &driver;
 	p15card.card = &card;
 	p15card.app = &app;
 	p15card.obj_list = &obj;

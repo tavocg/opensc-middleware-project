@@ -6,6 +6,8 @@
 
 #include "libopensc/card-iasecc.c"
 #include "libopensc/iasecc-sdo.c"
+#include "libopensc/iasecc-chipdoc-sm.c"
+#include "libopensc/iasecc-chipdoc-bind.c"
 
 static int failures, metadata_queries, mse_queries, forbidden_commands;
 static int reject_mse;

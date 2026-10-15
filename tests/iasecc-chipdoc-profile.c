@@ -3,6 +3,8 @@
 #include <assert.h>
 #include <stdio.h>
 #include "libopensc/card-iasecc.c"
+#include "libopensc/iasecc-chipdoc-sm.c"
+#include "libopensc/iasecc-chipdoc-bind.c"
 #include "libopensc/iasecc-sdo.c"
 
 static int released, physical;

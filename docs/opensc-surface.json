@@ -1,10 +1,10 @@
 {
   "base": "fc27ee8768cb882fceb99535dce8b6a966534dcb",
-  "target": "79e2e994afae953bd9f3e902af084e8a7557219f",
+  "target": "cf0fd80e580a7bfc0490851165436dca98236fbb",
   "files": [
     {
       "path": "etc/opensc.conf.example.in",
-      "added": 10,
+      "added": 11,
       "deleted": 0,
       "added_file": false,
       "scopes": [
@@ -74,7 +74,7 @@
           "edges": [
             {
               "file": "src/libopensc/iasecc-chipdoc-init.h",
-              "function": "iasecc_chipdoc_opted_in",
+              "function": "iasecc_chipdoc_match",
               "kind": "call"
             }
           ]
@@ -435,7 +435,7 @@
     },
     {
       "path": "src/libopensc/iasecc-chipdoc-bind.c",
-      "added": 42,
+      "added": 63,
       "deleted": 0,
       "added_file": true,
       "scopes": [
@@ -443,15 +443,15 @@
       ],
       "functions": [
         {
-          "name": "iasecc_chipdoc_pkcs15_activate",
+          "name": "iasecc_chipdoc_pkcs15_validate",
           "new": true,
           "scopes": [
             4
           ],
           "edges": [
             {
-              "file": "src/libopensc/iasecc-chipdoc-routing.h",
-              "function": "iasecc_chipdoc_routing_install",
+              "file": "src/libopensc/iasecc-chipdoc-pkcs15.h",
+              "function": "iasecc_chipdoc_pkcs15_operation",
               "kind": "call"
             },
             {
@@ -460,12 +460,31 @@
               "kind": "call"
             }
           ]
+        },
+        {
+          "name": "iasecc_chipdoc_pkcs15_activate",
+          "new": true,
+          "scopes": [
+            4
+          ],
+          "edges": [
+            {
+              "file": "src/libopensc/iasecc-chipdoc-bind.c",
+              "function": "iasecc_chipdoc_pkcs15_validate",
+              "kind": "call"
+            },
+            {
+              "file": "src/libopensc/iasecc-chipdoc-routing.h",
+              "function": "iasecc_chipdoc_routing_install",
+              "kind": "call"
+            }
+          ]
         }
       ]
     },
     {
       "path": "src/libopensc/iasecc-chipdoc-init.h",
-      "added": 118,
+      "added": 136,
       "deleted": 0,
       "added_file": true,
       "scopes": [
@@ -473,12 +492,30 @@
       ],
       "functions": [
         {
-          "name": "iasecc_chipdoc_opted_in",
+          "name": "iasecc_chipdoc_profile_option",
+          "new": true,
+          "scopes": [
+            4
+          ],
+          "edges": []
+        },
+        {
+          "name": "iasecc_chipdoc_match",
           "new": true,
           "scopes": [
             4
           ],
           "edges": [
+            {
+              "file": "src/libopensc/iasecc-chipdoc-init.h",
+              "function": "iasecc_chipdoc_profile_option",
+              "kind": "call"
+            },
+            {
+              "file": "src/libopensc/iasecc-chipdoc-sm.c",
+              "function": "iasecc_chipdoc_detect",
+              "kind": "call"
+            },
             {
               "file": "src/libopensc/iasecc-chipdoc.h",
               "function": "iasecc_chipdoc_profile",
@@ -533,11 +570,6 @@
             4
           ],
           "edges": [
-            {
-              "file": "src/libopensc/iasecc-chipdoc-init.h",
-              "function": "iasecc_chipdoc_opted_in",
-              "kind": "call"
-            },
             {
               "file": "src/libopensc/iasecc-chipdoc-init.h",
               "function": "chipdoc_unbound_pin",
@@ -1114,7 +1146,7 @@
     },
     {
       "path": "src/libopensc/iasecc-chipdoc-sm.c",
-      "added": 1219,
+      "added": 1346,
       "deleted": 0,
       "added_file": true,
       "scopes": [
@@ -1194,6 +1226,53 @@
             {
               "file": "src/libopensc/iasecc-chipdoc-sm.c",
               "function": "chipdoc_platform_supported",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "name": "chipdoc_discovery_read",
+          "new": true,
+          "scopes": [
+            4
+          ],
+          "edges": []
+        },
+        {
+          "name": "iasecc_chipdoc_detect",
+          "new": true,
+          "scopes": [
+            4
+          ],
+          "edges": [
+            {
+              "file": "src/libopensc/iasecc-chipdoc-bind.c",
+              "function": "iasecc_chipdoc_pkcs15_validate",
+              "kind": "call"
+            },
+            {
+              "file": "src/libopensc/iasecc-chipdoc-sm.c",
+              "function": "iasecc_chipdoc_channel_supported",
+              "kind": "call"
+            },
+            {
+              "file": "src/libopensc/iasecc-chipdoc-sm.c",
+              "function": "chipdoc_discovery_read",
+              "kind": "reference"
+            },
+            {
+              "file": "src/libopensc/iasecc-chipdoc.h",
+              "function": "iasecc_chipdoc_profile",
+              "kind": "call"
+            },
+            {
+              "file": "src/libopensc/jcop4-channel-agreement.h",
+              "function": "jcop4_p521_public_valid",
+              "kind": "call"
+            },
+            {
+              "file": "src/libopensc/jcop4-dh-control.h",
+              "function": "d004_control_matches_observation",
               "kind": "call"
             }
           ]
@@ -1763,7 +1842,7 @@
     },
     {
       "path": "src/libopensc/iasecc-chipdoc-sm.h",
-      "added": 103,
+      "added": 107,
       "deleted": 0,
       "added_file": true,
       "scopes": [
@@ -2027,7 +2106,7 @@
     },
     {
       "path": "src/libopensc/iasecc.h",
-      "added": 35,
+      "added": 52,
       "deleted": 0,
       "added_file": false,
       "scopes": [
@@ -2037,6 +2116,15 @@
       "functions": [
         {
           "name": "iasecc_chipdoc_configured",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": []
+        },
+        {
+          "name": "iasecc_chipdoc_jcop3",
           "new": true,
           "scopes": [
             3,
@@ -2733,7 +2821,7 @@
     },
     {
       "path": "src/libopensc/pkcs15-iasecc.c",
-      "added": 132,
+      "added": 125,
       "deleted": 1,
       "added_file": false,
       "scopes": [
@@ -2746,7 +2834,13 @@
           "scopes": [
             3
           ],
-          "edges": []
+          "edges": [
+            {
+              "file": "src/libopensc/iasecc.h",
+              "function": "iasecc_chipdoc_jcop3",
+              "kind": "call"
+            }
+          ]
         },
         {
           "name": "_iasecc_fixup_global_pin_paths",
@@ -2907,8 +3001,8 @@
     },
     {
       "path": "src/libopensc/pkcs15.c",
-      "added": 14,
-      "deleted": 0,
+      "added": 32,
+      "deleted": 2,
       "added_file": false,
       "scopes": [
         4
@@ -2930,6 +3024,11 @@
               "file": "src/libopensc/iasecc.h",
               "function": "iasecc_chipdoc_configured",
               "kind": "call"
+            },
+            {
+              "file": "src/libopensc/iasecc.h",
+              "function": "iasecc_chipdoc_jcop3",
+              "kind": "call"
             }
           ]
         }
@@ -2937,8 +3036,8 @@
     },
     {
       "path": "src/pkcs11/framework-pkcs15.c",
-      "added": 97,
-      "deleted": 4,
+      "added": 110,
+      "deleted": 8,
       "added_file": false,
       "scopes": [
         3,
@@ -2955,6 +3054,11 @@
             {
               "file": "src/libopensc/iasecc.h",
               "function": "iasecc_chipdoc_configured",
+              "kind": "call"
+            },
+            {
+              "file": "src/libopensc/iasecc.h",
+              "function": "iasecc_chipdoc_jcop3",
               "kind": "call"
             }
           ]
@@ -3428,6 +3532,985 @@
               "file": "src/libopensc/api-trace.h",
               "function": "sc_api_metadata_trace",
               "kind": "call"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": "src/tests/unittests/Makefile.am",
+      "added": 3,
+      "deleted": 2,
+      "added_file": false,
+      "scopes": [
+        3,
+        4
+      ],
+      "functions": []
+    },
+    {
+      "path": "src/tests/unittests/iasecc-detection.c",
+      "added": 773,
+      "deleted": 0,
+      "added_file": true,
+      "scopes": [
+        3,
+        4
+      ],
+      "functions": [
+        {
+          "name": "transmit_metadata",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": [
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "select_public_file",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "name": "reader_success",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": []
+        },
+        {
+          "name": "reader_lock",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": []
+        },
+        {
+          "name": "reader_unlock",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": []
+        },
+        {
+          "name": "reader_reset",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": []
+        },
+        {
+          "name": "reader_transmit",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": [
+            {
+              "file": "src/libopensc/iasecc-chipdoc.h",
+              "function": "iasecc_chipdoc_profile",
+              "kind": "call"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "transmit_metadata",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "name": "fallback_match",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": []
+        },
+        {
+          "name": "card_success",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": []
+        },
+        {
+          "name": "select_public_file",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": []
+        },
+        {
+          "name": "encode_objects",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": []
+        },
+        {
+          "name": "directory_aid",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": []
+        },
+        {
+          "name": "read_public_file",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": []
+        },
+        {
+          "name": "configure",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": []
+        },
+        {
+          "name": "setup",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": [
+            {
+              "file": "src/libopensc/iasecc-chipdoc.h",
+              "function": "iasecc_chipdoc_profile",
+              "kind": "call"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "reader_success",
+              "kind": "reference"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "reader_lock",
+              "kind": "reference"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "reader_unlock",
+              "kind": "reference"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "reader_reset",
+              "kind": "reference"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "reader_transmit",
+              "kind": "reference"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "fallback_match",
+              "kind": "reference"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "card_success",
+              "kind": "reference"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "select_public_file",
+              "kind": "reference"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "encode_objects",
+              "kind": "call"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "directory_aid",
+              "kind": "call"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "read_public_file",
+              "kind": "reference"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "configure",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "name": "teardown",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": []
+        },
+        {
+          "name": "connect_as",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": []
+        },
+        {
+          "name": "detect_jcop4",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": [
+            {
+              "file": "src/libopensc/iasecc.h",
+              "function": "iasecc_chipdoc_configured",
+              "kind": "call"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "connect_as",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "name": "bind_jcop4",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": [
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "connect_as",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "name": "reject_missing_key",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": [
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "connect_as",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "name": "reject_other_key",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": [
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "encode_objects",
+              "kind": "call"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "connect_as",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "name": "reject_other_key_size",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": [
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "encode_objects",
+              "kind": "call"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "connect_as",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "name": "reject_other_pin",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": [
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "encode_objects",
+              "kind": "call"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "connect_as",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "name": "reject_other_application",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": [
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "connect_as",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "name": "reject_duplicate_application",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": [
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "connect_as",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "name": "reject_duplicate_key",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": [
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "connect_as",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "name": "reject_duplicate_pin",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": [
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "connect_as",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "name": "reject_shared_atr",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": [
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "connect_as",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "name": "reject_control",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": [
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "connect_as",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "name": "reject_control_size",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": [
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "connect_as",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "name": "reject_curve",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": [
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "connect_as",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "name": "reject_short_read",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": [
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "connect_as",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "name": "reject_point",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": [
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "connect_as",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "name": "preserve_crypto_errors",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": [
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "connect_as",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "name": "reject_reader_lock",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": []
+        },
+        {
+          "name": "reject_reader_unlock",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": [
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "connect_as",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "name": "reject_transport",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": [
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "connect_as",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "name": "reject_retry_status",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": [
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "connect_as",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "name": "reject_get_response",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": [
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "connect_as",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "name": "explicit_profile",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": [
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "configure",
+              "kind": "call"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "connect_as",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "name": "explicit_auto",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": [
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "configure",
+              "kind": "call"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "connect_as",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "name": "unrelated_atr",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": [
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "connect_as",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "name": "disabled_profile",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": [
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "configure",
+              "kind": "call"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "connect_as",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "name": "unsupported_transport",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": [
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "connect_as",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "name": "unsupported_protocol",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": [
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "connect_as",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "name": "prepare_bind",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": [
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "directory_aid",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "name": "bind_jcop3",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": [
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "prepare_bind",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "name": "bind_other_application",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": [
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "prepare_bind",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "name": "bind_other_iasecc",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": [
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "prepare_bind",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "name": "bind_other_driver",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": [
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "prepare_bind",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "name": "bind_explicit_options",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": [
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "configure",
+              "kind": "call"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "prepare_bind",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "name": "main",
+          "new": true,
+          "scopes": [
+            3,
+            4
+          ],
+          "edges": [
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "setup",
+              "kind": "reference"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "teardown",
+              "kind": "reference"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "detect_jcop4",
+              "kind": "reference"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "bind_jcop4",
+              "kind": "reference"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "reject_missing_key",
+              "kind": "reference"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "reject_other_key",
+              "kind": "reference"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "reject_other_key_size",
+              "kind": "reference"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "reject_other_pin",
+              "kind": "reference"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "reject_other_application",
+              "kind": "reference"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "reject_duplicate_application",
+              "kind": "reference"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "reject_duplicate_key",
+              "kind": "reference"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "reject_duplicate_pin",
+              "kind": "reference"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "reject_shared_atr",
+              "kind": "reference"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "reject_control",
+              "kind": "reference"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "reject_control_size",
+              "kind": "reference"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "reject_curve",
+              "kind": "reference"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "reject_short_read",
+              "kind": "reference"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "reject_point",
+              "kind": "reference"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "preserve_crypto_errors",
+              "kind": "reference"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "reject_reader_lock",
+              "kind": "reference"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "reject_reader_unlock",
+              "kind": "reference"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "reject_transport",
+              "kind": "reference"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "reject_retry_status",
+              "kind": "reference"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "reject_get_response",
+              "kind": "reference"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "explicit_profile",
+              "kind": "reference"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "explicit_auto",
+              "kind": "reference"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "unrelated_atr",
+              "kind": "reference"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "disabled_profile",
+              "kind": "reference"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "unsupported_transport",
+              "kind": "reference"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "unsupported_protocol",
+              "kind": "reference"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "bind_jcop3",
+              "kind": "reference"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "bind_other_application",
+              "kind": "reference"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "bind_other_iasecc",
+              "kind": "reference"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "bind_other_driver",
+              "kind": "reference"
+            },
+            {
+              "file": "src/tests/unittests/iasecc-detection.c",
+              "function": "bind_explicit_options",
+              "kind": "reference"
             }
           ]
         }

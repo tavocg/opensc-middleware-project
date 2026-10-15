@@ -1,19 +1,20 @@
 diff --git a/etc/opensc.conf.example.in b/etc/opensc.conf.example.in
-index 3781f48a3de62eb20e302600562d89687a9a1b74..8930695025151c0d785bec7092d822d3268edc47 100644
+index 3781f48a3de62eb20e302600562d89687a9a1b74..e94a75eb7137d6367717f9dfaa8d18f6280d46af 100644
 --- a/etc/opensc.conf.example.in
 +++ b/etc/opensc.conf.example.in
-@@ -211,6 +211,16 @@ app default {
+@@ -211,6 +211,17 @@ app default {
  		#can = 123456;
  	}
  
-+	# Experimental Costa Rican ChipDoc RSA2048 profile, disabled by default.
++	# Costa Rican ChipDoc RSA2048 profile, detected automatically by its ATR,
++	# application, public D004 structure/curve and native key/PIN metadata.
 +	# Requires debug=0, OpenSSL 3, T=1 and declared reader limits >=139/291.
 +	# Native PKCS#15 binding disables file/PIN caches for this profile.
 +	# Shared ATR/AID are a candidate, not an identity check. RSA3072 untested.
-+	# Keep iasecc as the selected card driver when explicitly enabling this.
-+	# card_drivers = iasecc;
 +	card_driver iasecc {
-+		# chipdoc_profile = cr-rsa2048;
++		# auto: public discovery (default); none: disable discovery.
++		# cr-rsa2048: retain the explicit profile selection without discovery.
++		# chipdoc_profile = auto;
 +	}
 +
  	card_driver eoi {
@@ -166,7 +167,7 @@ index 0000000000000000000000000000000000000000..7b839a136654fa1b90c897038272baf7
 +
 +#endif
 diff --git a/src/libopensc/card-iasecc.c b/src/libopensc/card-iasecc.c
-index 23f80aee5d6524372bb0718fbdc50ede699024cd..fe5c0b1bd8a9358a99b5b36895e82d915ee245e9 100644
+index 23f80aee5d6524372bb0718fbdc50ede699024cd..eb781edd8030b36ed0f5f0a39c2ce3de92e1142c 100644
 --- a/src/libopensc/card-iasecc.c
 +++ b/src/libopensc/card-iasecc.c
 @@ -39,6 +39,7 @@
@@ -208,9 +209,9 @@ index 23f80aee5d6524372bb0718fbdc50ede699024cd..fe5c0b1bd8a9358a99b5b36895e82d91
  {
  	struct sc_context *ctx = card->ctx;
  	int i;
-+	if (iasecc_chipdoc_opted_in(card)) {
++	if (iasecc_chipdoc_match(card, &iasecc_drv)) {
 +		card->type = SC_CARD_TYPE_IASECC_CHIPDOC;
-+		return 1; /* ATR/config candidate only; native metadata checked after bind. */
++		return 1; /* Native key/PIN metadata is still checked after bind. */
 +	}
  
  	i = _sc_match_atr(card, iasecc_known_atrs, &card->type);
@@ -924,10 +925,10 @@ index 43df71a70f68b4d1a63c20f13952b375b33a73a5..c8354cf34def946582b5fb3fa6108c49
  	SC_CARD_TYPE_SC_HSM = 26000,
 diff --git a/src/libopensc/iasecc-chipdoc-bind.c b/src/libopensc/iasecc-chipdoc-bind.c
 new file mode 100644
-index 0000000000000000000000000000000000000000..8287786201f21dfe83ddd59bc286f763c9fb46f7
+index 0000000000000000000000000000000000000000..583d533603480ee3afeed64a9ad36a6969ddea79
 --- /dev/null
 +++ b/src/libopensc/iasecc-chipdoc-bind.c
-@@ -0,0 +1,42 @@
+@@ -0,0 +1,63 @@
 +/* SPDX-License-Identifier: LGPL-2.1-or-later
 + * Native post-bind activation of the explicit measured profile. */
 +#ifdef HAVE_CONFIG_H
@@ -938,12 +939,17 @@ index 0000000000000000000000000000000000000000..8287786201f21dfe83ddd59bc286f763
 +#include "internal.h"
 +#include "pkcs15.h"
 +
-+/* Called only for the explicitly initialized candidate after native bind.
-+ * Enumerate public key/PIN metadata before installing restricted routing. */
++/* Public metadata validation shared by discovery and post-bind activation.
++ * Discovery never installs routing or retains the temporary objects. */
 +int
-+iasecc_chipdoc_pkcs15_activate(struct sc_pkcs15_card *p15)
++iasecc_chipdoc_pkcs15_validate(struct sc_pkcs15_card *p15, struct sc_pkcs15_object **key_out)
 +{
 +	struct sc_pkcs15_object *objects[32], *key = NULL;
++	struct iasecc_chipdoc_pkcs15_operation operation;
++	int rv;
++	if (!key_out)
++		return SC_ERROR_INVALID_ARGUMENTS;
++	*key_out = NULL;
 +	if (!p15 || !iasecc_chipdoc_configured(p15->card))
 +		return SC_ERROR_NOT_SUPPORTED;
 +	if (p15->flags & SC_PKCS15_CARD_FLAG_EMULATED)
@@ -968,16 +974,32 @@ index 0000000000000000000000000000000000000000..8287786201f21dfe83ddd59bc286f763
 +		return count;
 +	if (!count || count >= 32)
 +		return SC_ERROR_NOT_SUPPORTED;
-+	return iasecc_chipdoc_routing_install(p15, key);
++	rv = iasecc_chipdoc_pkcs15_operation(p15, key, &operation);
++	if (!rv)
++		*key_out = key;
++	return rv;
++}
++
++int
++iasecc_chipdoc_pkcs15_activate(struct sc_pkcs15_card *p15)
++{
++#ifdef ENABLE_OPENSSL
++	struct sc_pkcs15_object *key;
++	int rv = iasecc_chipdoc_pkcs15_validate(p15, &key);
++	return rv ? rv : iasecc_chipdoc_routing_install(p15, key);
++#else
++	(void)p15;
++	return SC_ERROR_NOT_SUPPORTED;
++#endif
 +}
 diff --git a/src/libopensc/iasecc-chipdoc-init.h b/src/libopensc/iasecc-chipdoc-init.h
 new file mode 100644
-index 0000000000000000000000000000000000000000..692aa3f797ebc9b52b08b878eab954cd98b610af
+index 0000000000000000000000000000000000000000..58d3cf3518411da4f0678d3aa06b15d5c18ee20f
 --- /dev/null
 +++ b/src/libopensc/iasecc-chipdoc-init.h
-@@ -0,0 +1,118 @@
+@@ -0,0 +1,136 @@
 +/* SPDX-License-Identifier: LGPL-2.1-or-later
-+ * Experimental opt-in initialization. Limits are ceilings for the measured
++ * Initialization of the measured profile. Limits are ceilings for the measured
 + * operation, not advertised physical maxima or discovery/authentication. */
 +#ifndef OPENSC_IASECC_CHIPDOC_INIT_H
 +#define OPENSC_IASECC_CHIPDOC_INIT_H
@@ -986,13 +1008,12 @@ index 0000000000000000000000000000000000000000..692aa3f797ebc9b52b08b878eab954cd
 +#include "scconf/scconf.h"
 +#include <stdlib.h>
 +
-+static inline int
-+iasecc_chipdoc_opted_in(const struct sc_card *card)
++static inline const char *
++iasecc_chipdoc_profile_option(const struct sc_card *card)
 +{
 +	const char *value = NULL;
-+	const struct iasecc_chipdoc_profile *p = iasecc_chipdoc_profile(IASECC_CHIPDOC_CR_RSA2048);
-+	if (!card || !card->ctx || !card->ctx->conf || card->atr.len != p->atr_len || memcmp(card->atr.value, p->atr, p->atr_len))
-+		return 0;
++	if (!card || !card->ctx || !card->ctx->conf)
++		return NULL;
 +	for (int i = 0; card->ctx->conf_blocks[i]; i++) {
 +		scconf_block **blocks = scconf_find_blocks(card->ctx->conf, card->ctx->conf_blocks[i], "card_driver", "iasecc");
 +		if (!blocks)
@@ -1001,7 +1022,24 @@ index 0000000000000000000000000000000000000000..692aa3f797ebc9b52b08b878eab954cd
 +			value = scconf_get_str(blocks[j], "chipdoc_profile", value);
 +		free(blocks);
 +	}
-+	return value && !strcmp(value, "cr-rsa2048");
++	return value;
++}
++
++static inline int
++iasecc_chipdoc_match(struct sc_card *card, struct sc_card_driver *driver)
++{
++	const struct iasecc_chipdoc_profile *p = iasecc_chipdoc_profile(IASECC_CHIPDOC_CR_RSA2048);
++	const char *value;
++	if (!card || card->atr.len != p->atr_len || memcmp(card->atr.value, p->atr, p->atr_len))
++		return 0;
++	value = iasecc_chipdoc_profile_option(card);
++	/* Preserve the existing explicit profile. Other explicit values disable
++	 * automatic probing, so a configuration can retain the old dispatch. */
++	if (value && !strcmp(value, "cr-rsa2048"))
++		return 1;
++	if (value && strcmp(value, "auto"))
++		return 0;
++	return iasecc_chipdoc_detect(card, driver);
 +}
 +static inline int
 +chipdoc_unbound_pin(struct sc_card *card, struct sc_pin_cmd_data *data)
@@ -1045,7 +1083,9 @@ index 0000000000000000000000000000000000000000..692aa3f797ebc9b52b08b878eab954cd
 +	const struct iasecc_chipdoc_profile *p = iasecc_chipdoc_profile(IASECC_CHIPDOC_CR_RSA2048);
 +	struct iasecc_private_data candidate_data = {0};
 +	struct sc_card candidate;
-+	if (!iasecc_chipdoc_opted_in(card) || !card->ops || !card->driver || card->ops == card->driver->ops ||
++	if (!card || card->type != SC_CARD_TYPE_IASECC_CHIPDOC ||
++			card->atr.len != p->atr_len || memcmp(card->atr.value, p->atr, p->atr_len) ||
++			!card->ops || !card->driver || card->ops == card->driver->ops ||
 +			card->drv_data || card->algorithm_count || card->algorithms || !metadata || !metadata->select_file ||
 +			!metadata->read_binary || !finish || !lock_hook)
 +		return SC_ERROR_NOT_SUPPORTED;
@@ -1664,14 +1704,14 @@ index 0000000000000000000000000000000000000000..bfc9f4f2baece17c65b400112f8c4408
 +#endif
 diff --git a/src/libopensc/iasecc-chipdoc-sm.c b/src/libopensc/iasecc-chipdoc-sm.c
 new file mode 100644
-index 0000000000000000000000000000000000000000..2cec92eb2053f7f6e77bab3f15821a7c3f4bade8
+index 0000000000000000000000000000000000000000..eda81843bc2182f20db5672766e7bc4fc018a83b
 --- /dev/null
 +++ b/src/libopensc/iasecc-chipdoc-sm.c
-@@ -0,0 +1,1219 @@
+@@ -0,0 +1,1346 @@
 +/* SPDX-License-Identifier: LGPL-2.1-or-later
 + * Bounded anonymous channel transport for the measured ChipDoc profile.
-+ * Private typed PIN/signature operations; no automatic public driver binding
-+ * or generic SM wrapper.
++ * Public profile discovery and private typed PIN/signature operations;
++ * no generic SM wrapper.
 + */
 +#ifdef HAVE_CONFIG_H
 +#include "config.h"
@@ -1691,6 +1731,7 @@ index 0000000000000000000000000000000000000000..2cec92eb2053f7f6e77bab3f15821a7c
 +#include "jcop4-channel-controls.h"
 +#include "jcop4-dh-control.h"
 +#include "sc-ossl-compat.h"
++#include <openssl/err.h>
 +
 +/* Borrowed context identity: sc_context owns providers/libctx and must outlive
 + * its card/channel. Never load providers or override its default properties. */
@@ -1776,6 +1817,124 @@ index 0000000000000000000000000000000000000000..2cec92eb2053f7f6e77bab3f15821a7c
 +		return SC_ERROR_NOT_SUPPORTED;
 +	return chipdoc_platform_supported(card);
 +}
++
++static int
++chipdoc_discovery_read(struct sc_card *card, unsigned int offset, unsigned char *out,
++		size_t size, unsigned long *flags)
++{
++	return sc_get_iso7816_driver()->ops->read_binary(card, offset, out, size > 256 ? 256 : size, flags);
++}
++
++int
++iasecc_chipdoc_detect(struct sc_card *card, struct sc_card_driver *driver)
++{
++	const struct iasecc_chipdoc_profile *p = iasecc_chipdoc_profile(IASECC_CHIPDOC_CR_RSA2048);
++	struct iasecc_private_data data = {0};
++	struct sc_card candidate;
++	struct sc_card_operations metadata_ops;
++	struct sc_pkcs15_card *p15 = NULL;
++	struct sc_pkcs15_object *key;
++	struct sc_apdu apdu;
++	unsigned char control[256], initial[137], peer[133];
++	int matched = 0, rv, marked;
++
++	if (!card || !card->ctx || !card->reader || !card->reader->ops ||
++			!card->reader->ops->lock || !card->reader->ops->unlock || !card->reader->ops->reset ||
++			card->atr.len != p->atr_len || memcmp(card->atr.value, p->atr, p->atr_len) ||
++			(card->max_send_size && card->max_send_size < p->min_send) ||
++			(card->max_recv_size && card->max_recv_size < p->min_receive))
++		return 0;
++	/* Check availability without changing the real card's algorithms, limits,
++	 * capabilities, driver or private data on a failed match. */
++	candidate = *card;
++	candidate.driver = driver;
++	candidate.drv_data = &data;
++	candidate.caps = SC_CARD_CAP_APDU_EXT | SC_CARD_CAP_ISO7816_PIN_INFO;
++	candidate.max_send_size = p->min_send;
++	candidate.max_recv_size = p->min_receive;
++	if (iasecc_chipdoc_channel_supported(&candidate) != SC_SUCCESS || sc_lock(card) != SC_SUCCESS)
++		return 0;
++
++	/* ATR and AID are shared with other personalizations. Require the observed
++	 * D004 control structure, size, curve selector and valid public point too.
++	 * No reset, authentication, PIN query or secure-channel setup is sent. */
++	sc_format_apdu(card, &apdu, SC_APDU_CASE_3_SHORT, 0xA4, 4, 0x0C);
++	apdu.cla = 0;
++	apdu.data = p->aid;
++	apdu.datalen = apdu.lc = p->aid_len;
++	apdu.resp = control;
++	apdu.resplen = sizeof(control);
++	apdu.flags = SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP | SC_APDU_FLAGS_NO_SM;
++	rv = sc_transmit_apdu(card, &apdu);
++	if (rv != SC_SUCCESS || apdu.sw1 != 0x90 || apdu.sw2 != 0 || apdu.resplen != 0)
++		goto out;
++
++	sc_format_apdu(card, &apdu, SC_APDU_CASE_4_SHORT, 0xA4, 2, 0);
++	apdu.cla = 0;
++	apdu.data = (const unsigned char *)"\xD0\x04";
++	apdu.datalen = apdu.lc = 2;
++	apdu.resp = control;
++	apdu.le = apdu.resplen = sizeof(control);
++	apdu.flags = SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP | SC_APDU_FLAGS_NO_SM;
++	rv = sc_transmit_apdu(card, &apdu);
++	if (rv != SC_SUCCESS || apdu.sw1 != 0x90 || apdu.sw2 != 0 ||
++			apdu.resplen > sizeof(control) || !d004_control_matches_observation(control, apdu.resplen))
++		goto out;
++
++	sc_format_apdu(card, &apdu, SC_APDU_CASE_2_SHORT, 0xB0, 0, 0);
++	apdu.cla = 0;
++	apdu.resp = initial;
++	apdu.le = apdu.resplen = sizeof(initial);
++	apdu.flags = SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP | SC_APDU_FLAGS_NO_SM;
++	rv = sc_transmit_apdu(card, &apdu);
++	if (rv != SC_SUCCESS || apdu.sw1 != 0x90 || apdu.sw2 != 0 ||
++			apdu.resplen != sizeof(initial) || initial[2] != p->curve_selector)
++		goto out;
++	peer[0] = 4;
++	memcpy(peer + 1, initial + 5, sizeof(peer) - 1);
++	/* A failed public-point probe must not leave OpenSSL errors for the next
++	 * driver, or discard errors which were already present on entry. */
++	marked = ERR_set_mark();
++	rv = jcop4_p521_public_valid(peer, sizeof(peer));
++	if (marked)
++		ERR_pop_to_mark();
++	else
++		ERR_clear_error();
++	if (!rv)
++		goto out;
++
++	/* Even D004 is not sufficient to claim a shared-ATR card. Bind public
++	 * native directories on an isolated view and validate the exact key/PIN
++	 * association before selecting this driver. The temporary objects,
++	 * caches and routing never become part of the real sc_card. */
++	metadata_ops = *sc_get_iso7816_driver()->ops;
++	metadata_ops.read_binary = chipdoc_discovery_read;
++	candidate.ops = &metadata_ops;
++	candidate.type = SC_CARD_TYPE_IASECC_CHIPDOC;
++	candidate.cla = 0;
++	candidate.lock_count = card->lock_count; /* Borrow the outer reservation. */
++	candidate.app_count = -1;
++	memset(candidate.app, 0, sizeof(candidate.app));
++	data.chipdoc_enabled = 1;
++	p15 = sc_pkcs15_card_new();
++	if (!p15)
++		goto out;
++	p15->card = &candidate;
++	if (sc_pkcs15_bind_internal(p15, NULL) == SC_SUCCESS)
++		matched = iasecc_chipdoc_pkcs15_validate(p15, &key) == SC_SUCCESS;
++	sc_pkcs15_unbind(p15);
++	sc_free_apps(&candidate);
++out:
++	sc_mem_clear(control, sizeof(control));
++	sc_mem_clear(initial, sizeof(initial));
++	sc_mem_clear(peer, sizeof(peer));
++	/* The next driver/bind selects its own application. Never reset another
++	 * application's authentication state just to undo a discovery SELECT. */
++	if (sc_unlock(card) != SC_SUCCESS)
++		matched = 0;
++	return matched;
++}
++
 +int
 +iasecc_chipdoc_channel_pin_status(struct sc_card *card, int *logged_in)
 +{
@@ -2771,6 +2930,14 @@ index 0000000000000000000000000000000000000000..2cec92eb2053f7f6e77bab3f15821a7c
 +}
 +
 +#else
++
++int
++iasecc_chipdoc_detect(struct sc_card *card, struct sc_card_driver *driver)
++{
++	(void)card;
++	(void)driver;
++	return 0;
++}
 +/* Unsupported crypto builds preserve all legacy drivers. No secret context,
 + * APDU, session transition or algorithm advertisement in this branch. */
 +int
@@ -2889,10 +3056,10 @@ index 0000000000000000000000000000000000000000..2cec92eb2053f7f6e77bab3f15821a7c
 +#endif
 diff --git a/src/libopensc/iasecc-chipdoc-sm.h b/src/libopensc/iasecc-chipdoc-sm.h
 new file mode 100644
-index 0000000000000000000000000000000000000000..1f5adb6779292c6338e8e23cab264ad75f92aa63
+index 0000000000000000000000000000000000000000..3e23ccd6715a2938f1184bd6b29fcfd467580c42
 --- /dev/null
 +++ b/src/libopensc/iasecc-chipdoc-sm.h
-@@ -0,0 +1,103 @@
+@@ -0,0 +1,107 @@
 +/* SPDX-License-Identifier: LGPL-2.1-or-later */
 +#ifndef OPENSC_IASECC_CHIPDOC_SM_H
 +#define OPENSC_IASECC_CHIPDOC_SM_H
@@ -2913,6 +3080,10 @@ index 0000000000000000000000000000000000000000..1f5adb6779292c6338e8e23cab264ad7
 + * PIN status reflects a live managed proof, never a cached credential/count. */
 +int iasecc_chipdoc_channel_supported(struct sc_card *card);
 +int iasecc_chipdoc_channel_pin_status(struct sc_card *card, int *logged_in);
++
++/* Public discovery for the shared ATR, including native key/PIN metadata.
++ * Does not open a channel, query/verify a PIN or install operation routing. */
++int iasecc_chipdoc_detect(struct sc_card *card, struct sc_card_driver *driver);
 +
 +/* Explicit internal controller; not wired to public PKCS15/PKCS11 yet.
 + * Adds exactly one sc_lock (nested callers retain theirs), resets once,
@@ -3514,18 +3685,19 @@ index 1d9f0d27df479b716dcd5f2e726b7f2c0cb996cc..bd9dfc2c0ced109b1495fbf25d182699
  void iasecc_sdo_free_fields(struct sc_card *, struct iasecc_sdo *);
  void iasecc_sdo_free(struct sc_card *, struct iasecc_sdo *);
 diff --git a/src/libopensc/iasecc.h b/src/libopensc/iasecc.h
-index 2e5408e981aaab61a799ec4ef509a63e82c8ac9f..86191aa0a6c76900539e5afba87c85b03c19765f 100644
+index 2e5408e981aaab61a799ec4ef509a63e82c8ac9f..ecee313c6aa8ab9af448dd18140d5414f6124bb8 100644
 --- a/src/libopensc/iasecc.h
 +++ b/src/libopensc/iasecc.h
-@@ -25,6 +25,7 @@
+@@ -25,6 +25,8 @@
  #include "libopensc/errors.h"
  #include "libopensc/types.h"
  #include "libopensc/iasecc-sdo.h"
 +#include "libopensc/iasecc-chipdoc.h"
++#include "libopensc/cards.h"
  
  #define ISO7812_PAN_SN_TAG	0x5A
  
-@@ -132,6 +133,17 @@ struct sc_card_cache {
+@@ -132,6 +134,17 @@ struct sc_card_cache {
  	int valid;
  };
  
@@ -3543,7 +3715,7 @@ index 2e5408e981aaab61a799ec4ef509a63e82c8ac9f..86191aa0a6c76900539e5afba87c85b0
  struct iasecc_private_data {
  	struct iasecc_version version;
  	struct iasecc_io_buffer_sizes max_sizes;
-@@ -143,6 +155,29 @@ struct iasecc_private_data {
+@@ -143,6 +156,45 @@ struct iasecc_private_data {
  	struct iasecc_se_info *se_info;
  
  	struct sc_card_cache cache;
@@ -3570,7 +3742,23 @@ index 2e5408e981aaab61a799ec4ef509a63e82c8ac9f..86191aa0a6c76900539e5afba87c85b0
 +		card->drv_data && ((const struct iasecc_private_data *)card->drv_data)->chipdoc_enabled;
 +}
 +struct sc_pkcs15_card;
++struct sc_pkcs15_object;
++int iasecc_chipdoc_pkcs15_validate(struct sc_pkcs15_card *p15, struct sc_pkcs15_object **key);
 +int iasecc_chipdoc_pkcs15_activate(struct sc_pkcs15_card *p15);
++
++/* The existing Amos ATR match alone is insufficient: only the Generic PKI
++ * application used by the JCOP3 patch needs these PKCS#15/session defaults. */
++static inline int
++iasecc_chipdoc_jcop3(const struct sc_card *card, const struct sc_aid *aid)
++{
++	static const unsigned char generic_aid[] = {
++		0xE8, 0x28, 0xBD, 0x08, 0x0F, 0xD2, 0x50,
++		0x47, 0x65, 0x6E, 0x65, 0x72, 0x69, 0x63
++	};
++	return card && card->driver && card->driver->short_name &&
++			!strcmp(card->driver->short_name, "iasecc") && card->type == SC_CARD_TYPE_IASECC_AMOS &&
++			aid && aid->len == sizeof(generic_aid) && !memcmp(aid->value, generic_aid, sizeof(generic_aid));
++}
 +
  #endif
 diff --git a/src/libopensc/iso7816.c b/src/libopensc/iso7816.c
@@ -4803,24 +4991,17 @@ index dfc297fc3d6c95ad2294d01dbf91c5789cefa3c0..d351512cdfad9a2f3d98ee8f574d38b3
  #define SC_PIN_ENCODING_ASCII	0
  #define SC_PIN_ENCODING_BCD	1
 diff --git a/src/libopensc/pkcs15-iasecc.c b/src/libopensc/pkcs15-iasecc.c
-index 1b987fbea7bd0f17389f4bd7fec193c9d6572b08..cde22fbbf6ded67aa9677f8f9d6cf8b45bab1c43 100644
+index 1b987fbea7bd0f17389f4bd7fec193c9d6572b08..e32af39deb0d0a06b1a3a65d5f0caca534e0be91 100644
 --- a/src/libopensc/pkcs15-iasecc.c
 +++ b/src/libopensc/pkcs15-iasecc.c
-@@ -144,8 +144,128 @@ _iasecc_cpx_fixup_prkdf(struct sc_pkcs15_card *p15card)
+@@ -144,8 +144,121 @@ _iasecc_cpx_fixup_prkdf(struct sc_pkcs15_card *p15card)
  }
  
  
 +static int
 +_iasecc_is_chipdoc(struct sc_pkcs15_card *p15card)
 +{
-+	static const unsigned char generic_aid[] = {
-+		0xE8, 0x28, 0xBD, 0x08, 0x0F, 0xD2, 0x50,
-+		0x47, 0x65, 0x6E, 0x65, 0x72, 0x69, 0x63
-+	};
-+
-+	return p15card->card->type == SC_CARD_TYPE_IASECC_AMOS && p15card->app &&
-+			p15card->app->aid.len == sizeof(generic_aid) &&
-+			!memcmp(p15card->app->aid.value, generic_aid, sizeof(generic_aid));
++	return p15card->app && iasecc_chipdoc_jcop3(p15card->card, &p15card->app->aid);
 +}
 +
 +/* ChipDoc's AODF describes global CHV 1 with path 0001, but that EF is
@@ -4936,7 +5117,7 @@ index 1b987fbea7bd0f17389f4bd7fec193c9d6572b08..cde22fbbf6ded67aa9677f8f9d6cf8b4
   * - Gemalto cards
   * - CPx: fixup algo_refs from the prkey
   */
-@@ -168,6 +288,13 @@ _iasecc_parse_df(struct sc_pkcs15_card *p15card, struct sc_pkcs15_df *df)
+@@ -168,6 +281,13 @@ _iasecc_parse_df(struct sc_pkcs15_card *p15card, struct sc_pkcs15_df *df)
  	rv = sc_pkcs15_parse_df(p15card, df);
  	LOG_TEST_RET(ctx, rv, "DF parse error");
  
@@ -4950,7 +5131,7 @@ index 1b987fbea7bd0f17389f4bd7fec193c9d6572b08..cde22fbbf6ded67aa9677f8f9d6cf8b4
  	switch(p15card->card->type) {
  		/* enumerate the IASECC cards that need a fixup of the keyInfo */
  		case SC_CARD_TYPE_IASECC_GEMALTO:
-@@ -256,8 +383,12 @@ sc_pkcs15emu_iasecc_init (struct sc_pkcs15_card *p15card, struct sc_aid *aid)
+@@ -256,8 +376,12 @@ sc_pkcs15emu_iasecc_init (struct sc_pkcs15_card *p15card, struct sc_aid *aid)
  	LOG_FUNC_CALLED(ctx);
  
  	rv = sc_pkcs15_bind_internal(p15card, aid);
@@ -5092,7 +5273,7 @@ index 038e49b3128e831a020f226a685020a9674e2d49..eb8c6ebb2fe5886df19340847c3e8334
  				break;
  			revalidated_cached_pin = 1;
 diff --git a/src/libopensc/pkcs15.c b/src/libopensc/pkcs15.c
-index 40958aa1c929ade32683b9022defbaf1b4713eae..a97f678133d150d974c4a95916fa8af66e416055 100644
+index 40958aa1c929ade32683b9022defbaf1b4713eae..3628b031765df65303fddad02d5b41e06069ae9c 100644
 --- a/src/libopensc/pkcs15.c
 +++ b/src/libopensc/pkcs15.c
 @@ -31,6 +31,7 @@
@@ -5103,11 +5284,20 @@ index 40958aa1c929ade32683b9022defbaf1b4713eae..a97f678133d150d974c4a95916fa8af6
  #include "common/libscdl.h"
  #include "common/compat_strlcat.h"
  #include "common/compat_strlcpy.h"
-@@ -1398,6 +1399,15 @@ sc_pkcs15_bind(struct sc_card *card, struct sc_aid *aid,
+@@ -1327,7 +1328,7 @@ sc_pkcs15_bind(struct sc_card *card, struct sc_aid *aid,
+ 	struct sc_pkcs15_card *p15card = NULL;
+ 	struct sc_context *ctx;
+ 	scconf_block *conf_block = NULL;
+-	int r, emu_first, enable_emu;
++	int r, emu_first, enable_emu, chipdoc_jcop3 = 0;
+ 	const char *use_file_cache;
+ 	const char *pin_protected_certificate, *private_certificate;
+ 
+@@ -1398,10 +1399,35 @@ sc_pkcs15_bind(struct sc_card *card, struct sc_aid *aid,
  		LOG_FUNC_RETURN(ctx, r);
  	}
  
-+	/* This explicit candidate uses native directories only. A failed bind or
++	/* This measured profile uses native directories only. A failed bind or
 +	 * post-bind validation must not recover through a synthetic IAS profile. */
 +	if (iasecc_chipdoc_configured(card)) {
 +		p15card->opts.use_file_cache = SC_PKCS15_OPTS_CACHE_NO_FILES;
@@ -5116,10 +5306,31 @@ index 40958aa1c929ade32683b9022defbaf1b4713eae..a97f678133d150d974c4a95916fa8af6
 +		if (r < 0) goto error;
 +		goto done;
 +	}
++	/* Enumerate only the existing Amos candidates, under the same lock that
++	 * native bind uses. Other IAS/ECC applications keep their original order
++	 * and cache policy. Honour explicit framework options for JCOP3 too. */
++	if (card->type == SC_CARD_TYPE_IASECC_AMOS && card->driver && card->driver->short_name &&
++			!strcmp(card->driver->short_name, "iasecc")) {
++		const struct sc_app_info *app;
++		if (card->app_count < 0)
++			sc_enum_apps(card);
++		app = sc_find_app(card, aid);
++		chipdoc_jcop3 = app && iasecc_chipdoc_jcop3(card, &app->aid);
++		if (chipdoc_jcop3) {
++			p15card->opts.use_pin_cache = scconf_get_bool(conf_block, "use_pin_caching", 0);
++			if (!scconf_find_list(conf_block, "use_file_caching"))
++				p15card->opts.use_file_cache = SC_PKCS15_OPTS_CACHE_NO_FILES;
++		}
++	}
  	enable_emu = scconf_get_bool(conf_block, "enable_pkcs15_emulation", 1);
  	if (enable_emu) {
  		sc_log(ctx, "PKCS#15 emulation enabled");
-@@ -1424,6 +1434,10 @@ sc_pkcs15_bind(struct sc_card *card, struct sc_aid *aid,
+-		emu_first = scconf_get_bool(conf_block, "try_emulation_first", 0);
++		emu_first = scconf_get_bool(conf_block, "try_emulation_first", chipdoc_jcop3);
+ 		if (emu_first || sc_pkcs15_is_emulation_only(card)) {
+ 			r = sc_pkcs15_bind_synthetic(p15card, aid);
+ 			if (r == SC_SUCCESS)
+@@ -1424,6 +1450,10 @@ sc_pkcs15_bind(struct sc_card *card, struct sc_aid *aid,
  			goto error;
  	}
  done:
@@ -5131,7 +5342,7 @@ index 40958aa1c929ade32683b9022defbaf1b4713eae..a97f678133d150d974c4a95916fa8af6
  	sc_unlock(card);
  	LOG_FUNC_RETURN(ctx, SC_SUCCESS);
 diff --git a/src/pkcs11/framework-pkcs15.c b/src/pkcs11/framework-pkcs15.c
-index 81fff3e06a3627fbc2903d418c583640bb2b08fa..8388f4dbd530dcee4fc6a4710ed5a7d1408fe4ee 100644
+index 81fff3e06a3627fbc2903d418c583640bb2b08fa..c8b387ab3c96ff542d5e58de1cd3335b547a1cec 100644
 --- a/src/pkcs11/framework-pkcs15.c
 +++ b/src/pkcs11/framework-pkcs15.c
 @@ -40,6 +40,7 @@
@@ -5142,7 +5353,15 @@ index 81fff3e06a3627fbc2903d418c583640bb2b08fa..8388f4dbd530dcee4fc6a4710ed5a7d1
  #ifdef USE_PKCS15_INIT
  #include "pkcs15init/pkcs15-init.h"
  #endif
-@@ -287,6 +288,11 @@ pkcs15_bind(struct sc_pkcs11_card *p11card, struct sc_app_info *app_info)
+@@ -69,6 +70,7 @@ struct pkcs15_fw_data {
+ 	struct pkcs15_any_object *	objects[MAX_OBJECTS];
+ 	unsigned int			num_objects;
+ 	unsigned int			locked;
++	int lock_login;
+ 	unsigned char *user_puk;
+ 	unsigned int user_puk_len;
+ };
+@@ -287,6 +289,11 @@ pkcs15_bind(struct sc_pkcs11_card *p11card, struct sc_app_info *app_info)
  	sc_log(context, "Bind PKCS#15 '%s' application", app_info ? app_info->label : "<anonymous>");
  	if (!p11card)
  		return CKR_TOKEN_NOT_RECOGNIZED;
@@ -5154,7 +5373,22 @@ index 81fff3e06a3627fbc2903d418c583640bb2b08fa..8388f4dbd530dcee4fc6a4710ed5a7d1
  	for (idx=0; idx<SC_PKCS11_FRAMEWORK_DATA_MAX_NUM; idx++)
  		if (!p11card->fws_data[idx])
  			break;
-@@ -494,6 +500,9 @@ __pkcs15_delete_object(struct pkcs15_fw_data *fw_data, struct pkcs15_any_object
+@@ -302,6 +309,14 @@ pkcs15_bind(struct sc_pkcs11_card *p11card, struct sc_app_info *app_info)
+ 		sc_log(context, "sc_pkcs15_bind failed: %d", rc);
+ 		return sc_to_cryptoki_error(rc, NULL);
+ 	}
++	fw_data->lock_login = sc_pkcs11_conf.lock_login;
++	if (fw_data->p15_card->app && iasecc_chipdoc_jcop3(p11card->card, &fw_data->p15_card->app->aid)) {
++		scconf_block *block = sc_get_conf_block(p11card->card->ctx, "pkcs11", NULL, 1);
++		/* JCOP3 needs its reservation to survive between API calls. Keep the
++		 * default per binding; changing the global setting affects other cards.
++		 * An explicit atomic/lock_login configuration keeps its old meaning. */
++		fw_data->lock_login = scconf_get_bool(block, "lock_login", 1);
++	}
+ 
+ 	/* Mechanisms are registered globally per card. Checking
+ 	 * p11card->nmechanisms avoids registering the same mechanisms twice for a
+@@ -494,6 +509,9 @@ __pkcs15_delete_object(struct pkcs15_fw_data *fw_data, struct pkcs15_any_object
  }
  #endif
  
@@ -5164,7 +5398,7 @@ index 81fff3e06a3627fbc2903d418c583640bb2b08fa..8388f4dbd530dcee4fc6a4710ed5a7d1
  CK_RV C_GetTokenInfo(CK_SLOT_ID slotID, CK_TOKEN_INFO_PTR pInfo)
  {
  	struct sc_pkcs11_slot *slot;
-@@ -509,6 +518,7 @@ CK_RV C_GetTokenInfo(CK_SLOT_ID slotID, CK_TOKEN_INFO_PTR pInfo)
+@@ -509,6 +527,7 @@ CK_RV C_GetTokenInfo(CK_SLOT_ID slotID, CK_TOKEN_INFO_PTR pInfo)
  	if (rv != CKR_OK)
  		return rv;
  	sc_log(context, "C_GetTokenInfo(%lx)", slotID);
@@ -5172,7 +5406,7 @@ index 81fff3e06a3627fbc2903d418c583640bb2b08fa..8388f4dbd530dcee4fc6a4710ed5a7d1
  
  	rv = slot_get_token(slotID, &slot);
  	if (rv != CKR_OK)   {
-@@ -548,7 +558,18 @@ CK_RV C_GetTokenInfo(CK_SLOT_ID slotID, CK_TOKEN_INFO_PTR pInfo)
+@@ -548,7 +567,18 @@ CK_RV C_GetTokenInfo(CK_SLOT_ID slotID, CK_TOKEN_INFO_PTR pInfo)
  			goto out;
  		}
  
@@ -5192,7 +5426,7 @@ index 81fff3e06a3627fbc2903d418c583640bb2b08fa..8388f4dbd530dcee4fc6a4710ed5a7d1
  
  		if (pin_info->tries_left >= 0) {
  			if (pin_info->tries_left == 1 || pin_info->max_tries == 1)
-@@ -570,6 +591,7 @@ out:
+@@ -570,6 +600,7 @@ out:
  		sc_log(context, "C_GetTokenInfo(%lx) returns %s", slotID, name);
  	else
  		sc_log(context, "C_GetTokenInfo(%lx) returns 0x%08lX", slotID, rv);
@@ -5200,7 +5434,7 @@ index 81fff3e06a3627fbc2903d418c583640bb2b08fa..8388f4dbd530dcee4fc6a4710ed5a7d1
  	sc_pkcs11_unlock();
  
  	return rv;
-@@ -858,8 +880,18 @@ pkcs15_create_pkcs11_objects(struct pkcs15_fw_data *fw_data, int p15_type, const
+@@ -858,8 +889,18 @@ pkcs15_create_pkcs11_objects(struct pkcs15_fw_data *fw_data, int p15_type, const
  	if (rv >= 0)
  		sc_log(context, "Found %d %s%s", count, name, (count == 1)? "" : "s");
  
@@ -5220,7 +5454,7 @@ index 81fff3e06a3627fbc2903d418c583640bb2b08fa..8388f4dbd530dcee4fc6a4710ed5a7d1
  
  	return count;
  }
-@@ -1105,7 +1137,8 @@ pkcs15_init_slot(struct sc_pkcs15_card *p15card, struct sc_pkcs11_slot *slot,
+@@ -1105,7 +1146,8 @@ pkcs15_init_slot(struct sc_pkcs15_card *p15card, struct sc_pkcs11_slot *slot,
  	if (auth != NULL)
  		slot->token_info.flags |= CKF_USER_PIN_INITIALIZED;
  
@@ -5230,7 +5464,7 @@ index 81fff3e06a3627fbc2903d418c583640bb2b08fa..8388f4dbd530dcee4fc6a4710ed5a7d1
  		slot->token_info.flags |= CKF_PROTECTED_AUTHENTICATION_PATH;
  
  	if (p15card->card->caps & SC_CARD_CAP_RNG && p15card->card->ops->get_challenge != NULL)
-@@ -1120,6 +1153,8 @@ pkcs15_init_slot(struct sc_pkcs15_card *p15card, struct sc_pkcs11_slot *slot,
+@@ -1120,6 +1162,8 @@ pkcs15_init_slot(struct sc_pkcs15_card *p15card, struct sc_pkcs11_slot *slot,
  	if (atrblock) {
  		write_protected = scconf_get_bool(atrblock, "read_only", write_protected);
  	}
@@ -5239,7 +5473,7 @@ index 81fff3e06a3627fbc2903d418c583640bb2b08fa..8388f4dbd530dcee4fc6a4710ed5a7d1
  	if (write_protected) {
  		slot->token_info.flags |= CKF_WRITE_PROTECTED;
  	}
-@@ -1328,9 +1363,39 @@ _is_slot_auth_object(struct sc_pkcs15_auth_info *pin_info)
+@@ -1328,9 +1372,39 @@ _is_slot_auth_object(struct sc_pkcs15_auth_info *pin_info)
  	return 1;
  }
  
@@ -5279,7 +5513,7 @@ index 81fff3e06a3627fbc2903d418c583640bb2b08fa..8388f4dbd530dcee4fc6a4710ed5a7d1
  	struct pkcs15_fw_data *fw_data = NULL;
  	struct sc_pkcs15_card *p15card = NULL;
  	struct sc_pkcs15_object *pin_obj = NULL;
-@@ -1359,8 +1424,21 @@ int slot_get_logged_in_state(struct sc_pkcs11_slot *slot)
+@@ -1359,8 +1433,21 @@ int slot_get_logged_in_state(struct sc_pkcs11_slot *slot)
  	pin_info = (struct sc_pkcs15_auth_info *)pin_obj->data;
  	if (!pin_info)
  		goto out;
@@ -5302,7 +5536,7 @@ index 81fff3e06a3627fbc2903d418c583640bb2b08fa..8388f4dbd530dcee4fc6a4710ed5a7d1
  out:
  	return logged_in;
  }
-@@ -1765,6 +1843,8 @@ pkcs15_login(struct sc_pkcs11_slot *slot, CK_USER_TYPE userType,
+@@ -1765,6 +1852,8 @@ pkcs15_login(struct sc_pkcs11_slot *slot, CK_USER_TYPE userType,
  	p11card = slot->p11card;
  
  	fw_data = (struct pkcs15_fw_data *) p11card->fws_data[slot->fw_data_idx];
@@ -5311,7 +5545,34 @@ index 81fff3e06a3627fbc2903d418c583640bb2b08fa..8388f4dbd530dcee4fc6a4710ed5a7d1
  	if (!fw_data)
  		return sc_to_cryptoki_error(SC_ERROR_INTERNAL, "C_Login");
  	p15card = fw_data->p15_card;
-@@ -1963,6 +2043,12 @@ pkcs15_logout(struct sc_pkcs11_slot *slot)
+@@ -1788,7 +1877,7 @@ pkcs15_login(struct sc_pkcs11_slot *slot, CK_USER_TYPE userType,
+ 		 * accept any PIN, and lock the card if required */
+ 		if (rc == SC_ERROR_OBJECT_NOT_FOUND)   {
+ 			rc = 0;
+-			if (sc_pkcs11_conf.lock_login)
++			if (fw_data->lock_login)
+ 				rc = lock_card(fw_data);
+ 
+ 			if (sc_pkcs11_conf.pin_unblock_style == SC_PKCS11_PIN_UNBLOCK_SO_LOGGED_INITPIN)   {
+@@ -1833,7 +1922,7 @@ pkcs15_login(struct sc_pkcs11_slot *slot, CK_USER_TYPE userType,
+ 		 */
+ 		/* For a while, used only to unblock User PIN. */
+ 		rc = 0;
+-		if (sc_pkcs11_conf.lock_login)
++		if (fw_data->lock_login)
+ 			rc = lock_card(fw_data);
+ 		sc_log(context, "context specific login returns %d", rc);
+ 		return sc_to_cryptoki_error(rc, "C_Login");
+@@ -1859,7 +1948,7 @@ pkcs15_login(struct sc_pkcs11_slot *slot, CK_USER_TYPE userType,
+ 	 * before the crypto operation that requires the assertion
+ 	 */
+ 	if (userType != CKU_CONTEXT_SPECIFIC) {
+-		if (sc_pkcs11_conf.lock_login && (rc = lock_card(fw_data)) < 0)   {
++		if (fw_data->lock_login && (rc = lock_card(fw_data)) < 0)   {
+ 			return sc_to_cryptoki_error(rc, "C_Login");
+ 		}
+ 	}
+@@ -1963,6 +2052,12 @@ pkcs15_logout(struct sc_pkcs11_slot *slot)
  	fw_data->user_puk_len = 0;
  
  	sc_pkcs15_pincache_clear(fw_data->p15_card);
@@ -5324,7 +5585,16 @@ index 81fff3e06a3627fbc2903d418c583640bb2b08fa..8388f4dbd530dcee4fc6a4710ed5a7d1
  
  #if defined(SW_PIN_LOGOUT_ONLY) && SW_PIN_LOGOUT_ONLY == 1
  	sc_log(context, "Clearing PIN state without calling sc_logout()");
-@@ -4319,6 +4405,11 @@ pkcs15_prkey_sign(struct sc_pkcs11_session *session, void *obj,
+@@ -1976,7 +2071,7 @@ pkcs15_logout(struct sc_pkcs11_slot *slot)
+ 	if (rc != SC_SUCCESS)
+ 		ret = sc_to_cryptoki_error(rc, "C_Logout");
+ 
+-	if (sc_pkcs11_conf.lock_login) {
++	if (fw_data->lock_login) {
+ 		rc = unlock_card(fw_data);
+ 		if (rc != SC_SUCCESS)
+ 			ret = sc_to_cryptoki_error(rc, "C_Logout");
+@@ -4319,6 +4414,11 @@ pkcs15_prkey_sign(struct sc_pkcs11_session *session, void *obj,
  	if (prkey == NULL)
  		return CKR_KEY_FUNCTION_NOT_PERMITTED;
  
@@ -5336,7 +5606,7 @@ index 81fff3e06a3627fbc2903d418c583640bb2b08fa..8388f4dbd530dcee4fc6a4710ed5a7d1
  	switch (pMechanism->mechanism) {
  	case CKM_RSA_PKCS:
  		flags = SC_ALGORITHM_RSA_PAD_PKCS1_TYPE_01 | SC_ALGORITHM_RSA_HASH_NONE;
-@@ -6511,6 +6602,8 @@ register_mechanisms(struct sc_pkcs11_card *p11card)
+@@ -6511,6 +6611,8 @@ register_mechanisms(struct sc_pkcs11_card *p11card)
  	sc_pkcs11_register_generic_mechanisms(p11card);
  
  	mech_info.flags = CKF_HW | CKF_SIGN | CKF_DECRYPT;
@@ -5658,6 +5928,804 @@ index 5607a04c65eabc5332c1b30f5b435c6d6a72780c..9e6ed89c1868f072b53b3bf6712a3939
  
  	/* Terminate active sessions */
  	sc_pkcs11_close_all_sessions(id);
+diff --git a/src/tests/unittests/Makefile.am b/src/tests/unittests/Makefile.am
+index 96ace285692754743c7b147b16eb2c1878b17ef5..973305014f4cc26abb1af1ff20696caf0f764896 100644
+--- a/src/tests/unittests/Makefile.am
++++ b/src/tests/unittests/Makefile.am
+@@ -56,11 +56,12 @@ compression_LDADD = $(LDADD) $(OPTIONAL_ZLIB_LIBS)
+ endif
+ 
+ if ENABLE_OPENSSL
+-noinst_PROGRAMS += sm
+-TESTS += sm
++noinst_PROGRAMS += sm iasecc-detection
++TESTS += sm iasecc-detection
+ 
+ sm_SOURCES = sm.c
+ sm_LDADD = $(top_builddir)/src/sm/libsm.la $(LDADD)
++iasecc_detection_SOURCES = iasecc-detection.c
+ endif
+ 
+ 
+diff --git a/src/tests/unittests/iasecc-detection.c b/src/tests/unittests/iasecc-detection.c
+new file mode 100644
+index 0000000000000000000000000000000000000000..bd3542142be6e7ec43b6734494b5e7c5ef3484b5
+--- /dev/null
++++ b/src/tests/unittests/iasecc-detection.c
+@@ -0,0 +1,773 @@
++/* SPDX-License-Identifier: LGPL-2.1-or-later
++ * Exercise real driver dispatch and PKCS#15 bind with a simulated reader.
++ * Fixtures contain public metadata only; no PIN, signing or channel setup.
++ */
++#include "torture.h"
++#include "libopensc/internal.h"
++#include "libopensc/iasecc.h"
++#include "libopensc/pkcs15.h"
++#include <openssl/opensslv.h>
++#include <openssl/ec.h>
++#include <openssl/obj_mac.h>
++#include <openssl/err.h>
++
++struct fixture {
++	struct sc_context *ctx;
++	struct sc_card *card;
++	struct sc_pkcs15_card *p15;
++	struct sc_reader reader;
++	struct sc_reader_operations reader_ops;
++	struct sc_card_driver *saved_drivers[SC_MAX_CARD_DRIVERS];
++	struct sc_card_driver *iasecc;
++	struct sc_card_driver fallback;
++	struct sc_card_operations fallback_ops;
++	unsigned int commands, metadata_commands, locks, unlocks, resets;
++	unsigned int fail_step, sw, control_size, initial_size;
++	int lock_error, unlock_error, bad_point;
++	unsigned char curve, control[256], initial[137], directory[64];
++	size_t directory_size, prkey_size, pin_size;
++	unsigned char *prkey, *pin;
++	int native_objects;
++	const unsigned char *file_data;
++	size_t file_size;
++};
++
++static const unsigned char tokeninfo[] = {0x30, 7, 2, 1, 0, 3, 2, 0, 0};
++static const unsigned char empty_odf[] = {0, 0};
++static const unsigned char native_odf[] = {
++	0xA0, 6, 0x30, 4, 4, 2, 0x50, 0x33,
++	0xA8, 6, 0x30, 4, 4, 2, 0x50, 0x34
++};
++
++static int select_public_file(struct sc_card *, const struct sc_path *, struct sc_file **);
++
++static int transmit_metadata(struct fixture *f, struct sc_apdu *apdu)
++{
++	unsigned char fcp[] = {0x62, 10, 0x82, 1, 1, 0x83, 2, 0, 0, 0x80, 1, 0};
++	struct sc_card view = {.reader = &f->reader, .lock_count = 1};
++	struct sc_path path = {0};
++	struct sc_file *file;
++	size_t size;
++	unsigned int offset;
++	int rv;
++
++	assert_true(++f->metadata_commands < 64);
++	apdu->sw1 = 0x90;
++	apdu->sw2 = 0;
++	if (apdu->ins == 0xA4) {
++		if (apdu->p1 == 4) {
++			sc_format_path("5015", &path);
++		} else {
++			assert_true(apdu->datalen <= sizeof(path.value));
++			memcpy(path.value, apdu->data, apdu->datalen);
++			path.len = apdu->datalen;
++		}
++		rv = select_public_file(&view, &path, &file);
++		if (rv) {
++			apdu->sw1 = 0x6A;
++			apdu->sw2 = 0x82;
++			apdu->resplen = 0;
++			return SC_SUCCESS;
++		}
++		assert_true(file->size <= 255);
++		fcp[4] = file->type == SC_FILE_TYPE_DF ? 0x38 : 1;
++		fcp[7] = path.value[path.len - 2];
++		fcp[8] = path.value[path.len - 1];
++		fcp[11] = (unsigned char)file->size;
++		if (apdu->le) {
++			assert_true(apdu->resplen >= sizeof(fcp));
++			memcpy(apdu->resp, fcp, sizeof(fcp));
++			apdu->resplen = sizeof(fcp);
++		} else {
++			apdu->resplen = 0;
++		}
++		sc_file_free(file);
++	} else {
++		assert_int_equal(apdu->ins, 0xB0); /* Public metadata reads only. */
++		offset = (apdu->p1 << 8) | apdu->p2;
++		assert_true(offset <= f->file_size);
++		size = f->file_size - offset;
++		if (size > apdu->le)
++			size = apdu->le;
++		assert_true(apdu->resplen >= size);
++		memcpy(apdu->resp, f->file_data + offset, size);
++		apdu->resplen = size;
++	}
++	return SC_SUCCESS;
++}
++
++static int reader_success(struct sc_reader *reader)
++{
++	(void)reader;
++	return SC_SUCCESS;
++}
++
++static int reader_lock(struct sc_reader *reader)
++{
++	struct fixture *f = reader->drv_data;
++	f->locks++;
++	return f->lock_error;
++}
++
++static int reader_unlock(struct sc_reader *reader)
++{
++	struct fixture *f = reader->drv_data;
++	f->unlocks++;
++	return f->unlock_error;
++}
++
++static int reader_reset(struct sc_reader *reader, int cold)
++{
++	struct fixture *f = reader->drv_data;
++	(void)cold;
++	f->resets++;
++	return SC_SUCCESS;
++}
++
++static int reader_transmit(struct sc_reader *reader, struct sc_apdu *apdu)
++{
++	struct fixture *f = reader->drv_data;
++	const struct iasecc_chipdoc_profile *p = iasecc_chipdoc_profile(IASECC_CHIPDOC_CR_RSA2048);
++	unsigned int flags = SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP | SC_APDU_FLAGS_NO_SM;
++
++	assert_int_equal(apdu->cla, 0);
++	if (f->commands == 3)
++		return transmit_metadata(f, apdu);
++	assert_int_equal(apdu->flags & flags, flags);
++	assert_int_equal(f->locks, 1);
++	assert_int_equal(f->unlocks, 0);
++	switch (++f->commands) {
++	case 1:
++		assert_int_equal(apdu->ins, 0xA4);
++		assert_int_equal(apdu->p1, 4);
++		assert_int_equal(apdu->p2, 0x0C);
++		assert_int_equal(apdu->lc, p->aid_len);
++		assert_memory_equal(apdu->data, p->aid, p->aid_len);
++		apdu->resplen = 0;
++		break;
++	case 2:
++		assert_int_equal(apdu->ins, 0xA4);
++		assert_int_equal(apdu->p1, 2);
++		assert_int_equal(apdu->p2, 0);
++		assert_int_equal(apdu->lc, 2);
++		assert_memory_equal(apdu->data, "\xD0\x04", 2);
++		assert_int_equal(apdu->le, 256);
++		assert_true(apdu->resplen >= f->control_size);
++		memcpy(apdu->resp, f->control, f->control_size);
++		apdu->resplen = f->control_size;
++		break;
++	case 3:
++		assert_int_equal(apdu->ins, 0xB0);
++		assert_int_equal(apdu->p1, 0);
++		assert_int_equal(apdu->p2, 0);
++		assert_int_equal(apdu->lc, 0);
++		assert_int_equal(apdu->le, 137);
++		assert_true(apdu->resplen >= f->initial_size);
++		memcpy(apdu->resp, f->initial, f->initial_size);
++		apdu->resp[2] = f->curve;
++		if (f->bad_point)
++			memset(apdu->resp + 5, 0, 132);
++		apdu->resplen = f->initial_size;
++		break;
++	default:
++		fail_msg("Unexpected command during discovery (no PIN, setup or retry is allowed)");
++	}
++	if (f->commands == f->fail_step) {
++		if (!f->sw)
++			return SC_ERROR_TRANSMIT_FAILED;
++		apdu->sw1 = f->sw >> 8;
++		apdu->sw2 = f->sw & 0xFF;
++	} else {
++		apdu->sw1 = 0x90;
++		apdu->sw2 = 0;
++	}
++	return SC_SUCCESS;
++}
++
++static int fallback_match(struct sc_card *card)
++{
++	card->type = -1;
++	return 1;
++}
++
++static int card_success(struct sc_card *card)
++{
++	(void)card;
++	return SC_SUCCESS;
++}
++
++static int select_public_file(struct sc_card *card, const struct sc_path *path, struct sc_file **out)
++{
++	struct fixture *f = card->reader->drv_data;
++	unsigned int fid = path->len >= 2 ? (path->value[path->len - 2] << 8) | path->value[path->len - 1] : 0;
++
++	assert_true(card->lock_count > 0);
++	if (out)
++		*out = NULL;
++	switch (fid) {
++	case 0x5015:
++		f->file_data = NULL;
++		f->file_size = 0;
++		break;
++	case 0x3F00:
++		f->file_data = NULL;
++		f->file_size = 0;
++		break;
++	case 0x2F00:
++		f->file_data = f->directory;
++		f->file_size = f->directory_size;
++		break;
++	case 0x5032:
++		f->file_data = tokeninfo;
++		f->file_size = sizeof(tokeninfo);
++		break;
++	case 0x5031:
++		f->file_data = f->native_objects ? native_odf : empty_odf;
++		f->file_size = f->native_objects ? sizeof(native_odf) : sizeof(empty_odf);
++		break;
++	case 0x5033:
++		f->file_data = f->prkey;
++		f->file_size = f->prkey_size;
++		break;
++	case 0x5034:
++		f->file_data = f->pin;
++		f->file_size = f->pin_size;
++		break;
++	default:
++		return SC_ERROR_FILE_NOT_FOUND;
++	}
++	if (out) {
++		*out = sc_file_new();
++		assert_non_null(*out);
++		(*out)->path = *path;
++		(*out)->size = f->file_size;
++		(*out)->type = fid == 0x5015 ? SC_FILE_TYPE_DF : SC_FILE_TYPE_WORKING_EF;
++		(*out)->ef_structure = SC_FILE_EF_TRANSPARENT;
++	}
++	return SC_SUCCESS;
++}
++
++static void encode_objects(struct fixture *f, unsigned int key_reference, unsigned int bits,
++		unsigned int pin_reference)
++{
++	struct sc_pkcs15_prkey_info info = {0};
++	struct sc_pkcs15_auth_info auth = {0};
++	struct sc_pkcs15_object key = {0}, pin = {0};
++
++	info.native = 1;
++	info.key_reference = key_reference;
++	info.modulus_length = bits;
++	info.usage = SC_PKCS15_PRKEY_USAGE_SIGN;
++	info.id.len = 1;
++	info.id.value[0] = 1;
++	info.path.count = -1;
++	key.type = SC_PKCS15_TYPE_PRKEY_RSA;
++	key.data = &info;
++	key.auth_id = info.id;
++	auth.auth_id = info.id;
++	auth.auth_type = SC_PKCS15_PIN_AUTH_TYPE_PIN;
++	auth.auth_method = SC_AC_CHV;
++	auth.attrs.pin.reference = pin_reference;
++	auth.attrs.pin.min_length = 6;
++	auth.attrs.pin.max_length = auth.attrs.pin.stored_length = 14;
++	auth.attrs.pin.type = SC_PKCS15_PIN_TYPE_UTF8;
++	auth.attrs.pin.flags = SC_PKCS15_PIN_FLAG_CASE_SENSITIVE | SC_PKCS15_PIN_FLAG_INITIALIZED;
++	auth.path.count = -1;
++	pin.type = SC_PKCS15_TYPE_AUTH_PIN;
++	pin.data = &auth;
++	free(f->prkey);
++	free(f->pin);
++	f->prkey = f->pin = NULL;
++	assert_int_equal(sc_pkcs15_encode_prkdf_entry(f->ctx, &key, &f->prkey, &f->prkey_size), SC_SUCCESS);
++	assert_int_equal(sc_pkcs15_encode_aodf_entry(f->ctx, &pin, &f->pin, &f->pin_size), SC_SUCCESS);
++}
++
++static void directory_aid(struct fixture *f, const unsigned char *aid, size_t size)
++{
++	assert_true(size + 10 <= sizeof(f->directory));
++	f->directory_size = size + 10;
++	f->directory[0] = 0x61;
++	f->directory[1] = (unsigned char)(size + 8);
++	f->directory[2] = 0x4F;
++	f->directory[3] = (unsigned char)size;
++	memcpy(f->directory + 4, aid, size);
++	memcpy(f->directory + 4 + size, "\x51\x04\x3F\x00\x50\x15", 6);
++}
++
++static int read_public_file(struct sc_card *card, unsigned int offset, unsigned char *out,
++		size_t size, unsigned long *flags)
++{
++	struct fixture *f = card->reader->drv_data;
++	(void)flags;
++	assert_true(card->lock_count > 0);
++	assert_true(offset <= f->file_size);
++	if (size > f->file_size - offset)
++		size = f->file_size - offset;
++	memcpy(out, f->file_data + offset, size);
++	return (int)size;
++}
++
++static void configure(struct fixture *f, const char *text)
++{
++	scconf_free(f->ctx->conf);
++	f->ctx->conf = NULL;
++	memset(f->ctx->conf_blocks, 0, sizeof(f->ctx->conf_blocks));
++	if (text) {
++		scconf_block **blocks;
++		f->ctx->conf = scconf_new(NULL);
++		assert_non_null(f->ctx->conf);
++		assert_int_equal(scconf_parse_string(f->ctx->conf, text), 1);
++		blocks = scconf_find_blocks(f->ctx->conf, NULL, "app", "default");
++		assert_non_null(blocks);
++		f->ctx->conf_blocks[0] = blocks[0];
++		free(blocks);
++		assert_non_null(f->ctx->conf_blocks[0]);
++	}
++}
++
++static int setup(void **state)
++{
++	struct fixture *f = calloc(1, sizeof(*f));
++	const struct iasecc_chipdoc_profile *p = iasecc_chipdoc_profile(IASECC_CHIPDOC_CR_RSA2048);
++	const unsigned char control[] = {0x62, 10, 0x82, 1, 1, 0x83, 2, 0xD0, 4, 0x80, 1, 137};
++	EC_GROUP *group;
++	unsigned char point[133];
++
++	assert_non_null(f);
++	assert_int_equal(sc_establish_context(&f->ctx, "iasecc-detection"), SC_SUCCESS);
++	f->ctx->debug = 0;
++	configure(f, NULL);
++	memcpy(f->saved_drivers, f->ctx->card_drivers, sizeof(f->saved_drivers));
++	for (unsigned int i = 0; f->ctx->card_drivers[i]; i++)
++		if (!strcmp(f->ctx->card_drivers[i]->short_name, "iasecc"))
++			f->iasecc = f->ctx->card_drivers[i];
++	assert_non_null(f->iasecc);
++	f->fallback_ops = *sc_get_iso7816_driver()->ops;
++	f->fallback_ops.match_card = fallback_match;
++	f->fallback_ops.init = card_success;
++	f->fallback_ops.finish = card_success;
++	f->fallback_ops.select_file = select_public_file;
++	f->fallback_ops.read_binary = read_public_file;
++	f->fallback.name = f->fallback.short_name = "test-fallback";
++	f->fallback.ops = &f->fallback_ops;
++	memset(f->ctx->card_drivers, 0, sizeof(f->ctx->card_drivers));
++	f->ctx->card_drivers[0] = f->iasecc;
++	f->ctx->card_drivers[1] = &f->fallback;
++	f->reader_ops.connect = f->reader_ops.disconnect = reader_success;
++	f->reader_ops.transmit = reader_transmit;
++	f->reader_ops.lock = reader_lock;
++	f->reader_ops.unlock = reader_unlock;
++	f->reader_ops.reset = reader_reset;
++	f->reader.ctx = f->ctx;
++	f->reader.ops = &f->reader_ops;
++	f->reader.name = "Simulated IAS/ECC reader";
++	f->reader.drv_data = f;
++	f->reader.active_protocol = SC_PROTO_T1;
++	f->reader.max_send_size = 255;
++	f->reader.max_recv_size = 512;
++	memcpy(f->reader.atr.value, p->atr, p->atr_len);
++	f->reader.atr.len = p->atr_len;
++	memcpy(f->control, control, sizeof(control));
++	f->control_size = sizeof(control);
++	f->initial_size = sizeof(f->initial);
++	f->curve = p->curve_selector;
++	directory_aid(f, p->aid, p->aid_len);
++	encode_objects(f, 0x91, 2048, 1);
++	f->native_objects = 1;
++	/* The curve generator is a deterministic public fixture, not a keypair. */
++	group = EC_GROUP_new_by_curve_name(NID_secp521r1);
++	assert_non_null(group);
++	assert_int_equal(EC_POINT_point2oct(group, EC_GROUP_get0_generator(group),
++			POINT_CONVERSION_UNCOMPRESSED, point, sizeof(point), NULL), sizeof(point));
++	memcpy(f->initial + 5, point + 1, 132);
++	EC_GROUP_free(group);
++	*state = f;
++	return 0;
++}
++
++static int teardown(void **state)
++{
++	struct fixture *f = *state;
++	if (f->p15)
++		sc_pkcs15_unbind(f->p15);
++	if (f->card)
++		sc_disconnect_card(f->card);
++	memcpy(f->ctx->card_drivers, f->saved_drivers, sizeof(f->saved_drivers));
++	assert_int_equal(sc_release_context(f->ctx), SC_SUCCESS);
++	free(f->prkey);
++	free(f->pin);
++	free(f);
++	return 0;
++}
++
++static void connect_as(struct fixture *f, int chipdoc, unsigned int commands)
++{
++	assert_int_equal(sc_connect_card(&f->reader, &f->card), SC_SUCCESS);
++	assert_ptr_equal(f->card->driver, chipdoc ? f->iasecc : &f->fallback);
++	assert_int_equal(f->commands, commands);
++	assert_int_equal(f->resets, 0);
++	assert_int_equal(f->card->lock_count, 0);
++	assert_int_equal(f->locks, f->unlocks);
++	if (!chipdoc) {
++		assert_null(f->card->drv_data);
++		assert_int_equal(f->card->algorithm_count, 0);
++		assert_false(f->card->caps & SC_CARD_CAP_APDU_EXT);
++	}
++}
++
++#if OPENSSL_VERSION_NUMBER >= 0x30000000L && !defined(LIBRESSL_VERSION_NUMBER)
++static void detect_jcop4(void **state)
++{
++	struct fixture *f = *state;
++	connect_as(f, 1, 3);
++	assert_true(iasecc_chipdoc_configured(f->card));
++	assert_int_equal(f->card->type, SC_CARD_TYPE_IASECC_CHIPDOC);
++	assert_int_equal(f->card->algorithm_count, 1);
++	assert_int_equal(f->card->algorithms[0].key_length, 2048);
++	assert_int_equal(f->card->algorithms[0].flags,
++			SC_ALGORITHM_RSA_PAD_PKCS1_TYPE_01 | SC_ALGORITHM_RSA_HASH_SHA256);
++	assert_true(f->metadata_commands > 0);
++	/* Discovery must not retain temporary applications, objects or routing. */
++	assert_int_equal(f->card->app_count, -1);
++	assert_null(((struct iasecc_private_data *)f->card->drv_data)->chipdoc_routing);
++}
++
++static void bind_jcop4(void **state)
++{
++	struct fixture *f = *state;
++	connect_as(f, 1, 3);
++	assert_int_equal(sc_pkcs15_bind(f->card, NULL, &f->p15), SC_SUCCESS);
++	assert_false(f->p15->flags & SC_PKCS15_CARD_FLAG_EMULATED);
++	assert_false(f->p15->opts.use_pin_cache);
++	assert_int_equal(f->p15->opts.use_file_cache, SC_PKCS15_OPTS_CACHE_NO_FILES);
++	assert_non_null(((struct iasecc_private_data *)f->card->drv_data)->chipdoc_routing);
++	assert_int_equal(f->commands, 3);
++	assert_int_equal(f->resets, 0);
++}
++
++static void reject_missing_key(void **state)
++{
++	struct fixture *f = *state;
++	f->native_objects = 0;
++	connect_as(f, 0, 3);
++	assert_true(f->metadata_commands > 0);
++}
++
++static void reject_other_key(void **state)
++{
++	struct fixture *f = *state;
++	encode_objects(f, 0x92, 2048, 1);
++	connect_as(f, 0, 3);
++}
++
++static void reject_other_key_size(void **state)
++{
++	struct fixture *f = *state;
++	encode_objects(f, 0x91, 3072, 1);
++	connect_as(f, 0, 3);
++}
++
++static void reject_other_pin(void **state)
++{
++	struct fixture *f = *state;
++	encode_objects(f, 0x91, 2048, 2);
++	connect_as(f, 0, 3);
++}
++
++static void reject_other_application(void **state)
++{
++	struct fixture *f = *state;
++	f->directory[4] ^= 1;
++	connect_as(f, 0, 3);
++}
++
++static void reject_duplicate_application(void **state)
++{
++	struct fixture *f = *state;
++	assert_true(2 * f->directory_size <= sizeof(f->directory));
++	memcpy(f->directory + f->directory_size, f->directory, f->directory_size);
++	f->directory_size *= 2;
++	connect_as(f, 0, 3);
++}
++
++static void reject_duplicate_key(void **state)
++{
++	struct fixture *f = *state;
++	unsigned char *two = realloc(f->prkey, 2 * f->prkey_size);
++	assert_non_null(two);
++	f->prkey = two;
++	memcpy(f->prkey + f->prkey_size, f->prkey, f->prkey_size);
++	f->prkey_size *= 2;
++	connect_as(f, 0, 3);
++}
++
++static void reject_duplicate_pin(void **state)
++{
++	struct fixture *f = *state;
++	unsigned char *two = realloc(f->pin, 2 * f->pin_size);
++	assert_non_null(two);
++	f->pin = two;
++	memcpy(f->pin + f->pin_size, f->pin, f->pin_size);
++	f->pin_size *= 2;
++	connect_as(f, 0, 3);
++}
++
++static void reject_shared_atr(void **state)
++{
++	struct fixture *f = *state;
++	f->fail_step = 1;
++	f->sw = 0x6A82;
++	connect_as(f, 0, 1);
++}
++
++static void reject_control(void **state)
++{
++	struct fixture *f = *state;
++	f->control[7] = 0xD1;
++	connect_as(f, 0, 2);
++}
++
++static void reject_control_size(void **state)
++{
++	struct fixture *f = *state;
++	f->control[11] = 136;
++	connect_as(f, 0, 2);
++}
++
++static void reject_curve(void **state)
++{
++	struct fixture *f = *state;
++	f->curve = 0x18; /* The observed selector is decimal 18, not hexadecimal. */
++	connect_as(f, 0, 3);
++}
++
++static void reject_short_read(void **state)
++{
++	struct fixture *f = *state;
++	f->initial_size--;
++	connect_as(f, 0, 3);
++}
++
++static void reject_point(void **state)
++{
++	struct fixture *f = *state;
++	f->bad_point = 1;
++	connect_as(f, 0, 3);
++	assert_int_equal(ERR_peek_error(), 0);
++}
++
++static void preserve_crypto_errors(void **state)
++{
++	struct fixture *f = *state;
++	unsigned long previous;
++	ERR_raise(ERR_LIB_USER, 1);
++	previous = ERR_peek_error();
++	assert_true(previous != 0);
++	f->bad_point = 1;
++	connect_as(f, 0, 3);
++	assert_int_equal(ERR_get_error(), previous);
++	assert_int_equal(ERR_get_error(), 0);
++}
++
++static void reject_reader_lock(void **state)
++{
++	struct fixture *f = *state;
++	f->lock_error = SC_ERROR_READER_LOCKED;
++	assert_int_equal(sc_connect_card(&f->reader, &f->card), SC_SUCCESS);
++	assert_ptr_equal(f->card->driver, &f->fallback);
++	assert_int_equal(f->locks, 1);
++	assert_int_equal(f->unlocks, 0);
++	assert_int_equal(f->commands, 0);
++	assert_int_equal(f->resets, 0);
++}
++
++static void reject_reader_unlock(void **state)
++{
++	struct fixture *f = *state;
++	f->unlock_error = SC_ERROR_READER_LOCKED;
++	connect_as(f, 0, 3);
++}
++
++static void reject_transport(void **state)
++{
++	struct fixture *f = *state;
++	/* The public dispatcher must not retry failed discovery commands. */
++	for (unsigned int step = 1; step <= 3; step++) {
++		f->fail_step = step;
++		connect_as(f, 0, step);
++		sc_disconnect_card(f->card);
++		f->card = NULL;
++		f->commands = f->locks = f->unlocks = 0;
++	}
++}
++
++static void reject_retry_status(void **state)
++{
++	struct fixture *f = *state;
++	f->fail_step = 1;
++	f->sw = 0x6C00;
++	connect_as(f, 0, 1);
++}
++
++static void reject_get_response(void **state)
++{
++	struct fixture *f = *state;
++	f->fail_step = 1;
++	f->sw = 0x6101;
++	connect_as(f, 0, 1);
++}
++
++static void explicit_profile(void **state)
++{
++	struct fixture *f = *state;
++	configure(f, "app default { card_driver iasecc { chipdoc_profile = cr-rsa2048; } }");
++	connect_as(f, 1, 0); /* Existing opt-in remains available without a new probe. */
++}
++
++static void explicit_auto(void **state)
++{
++	struct fixture *f = *state;
++	configure(f, "app default { card_driver iasecc { chipdoc_profile = auto; } }");
++	connect_as(f, 1, 3);
++}
++#endif
++
++static void unrelated_atr(void **state)
++{
++	struct fixture *f = *state;
++	f->reader.atr.len = 2;
++	f->reader.atr.value[0] = 0x3B;
++	f->reader.atr.value[1] = 0;
++	connect_as(f, 0, 0);
++}
++
++static void disabled_profile(void **state)
++{
++	struct fixture *f = *state;
++	configure(f, "app default { card_driver iasecc { chipdoc_profile = none; } }");
++	connect_as(f, 0, 0);
++}
++
++static void unsupported_transport(void **state)
++{
++	struct fixture *f = *state;
++	f->reader.max_recv_size = 256;
++	connect_as(f, 0, 0);
++}
++
++static void unsupported_protocol(void **state)
++{
++	struct fixture *f = *state;
++	f->reader.active_protocol = SC_PROTO_T0;
++	connect_as(f, 0, 0);
++}
++
++static void prepare_bind(struct fixture *f, int type, int generic)
++{
++	const unsigned char aid[] = {0xE8, 0x28, 0xBD, 0x08, 0x0F, 0xD2, 0x50,
++		0x47, 0x65, 0x6E, 0x65, 0x72, 0x69, 0x63};
++	/* Obtain a normal core-owned card; substitute only its file I/O. The real
++	 * PKCS#15 parser and IAS/ECC emulator operate on the public fixtures. */
++	f->reader.atr.len = 2;
++	f->reader.atr.value[1] = 0;
++	assert_int_equal(sc_connect_card(&f->reader, &f->card), SC_SUCCESS);
++	f->card->driver = f->iasecc;
++	f->card->type = type;
++	f->native_objects = 0;
++	directory_aid(f, aid, sizeof(aid));
++	if (!generic)
++		f->directory[4] = 0xA0;
++}
++
++static void bind_jcop3(void **state)
++{
++	struct fixture *f = *state;
++	prepare_bind(f, SC_CARD_TYPE_IASECC_AMOS, 1);
++	assert_int_equal(sc_pkcs15_bind(f->card, NULL, &f->p15), SC_SUCCESS);
++	assert_non_null(f->p15->app);
++	assert_true(f->p15->flags & SC_PKCS15_CARD_FLAG_EMULATED);
++	assert_non_null(f->p15->ops.parse_df);
++	assert_false(f->p15->opts.use_pin_cache);
++	assert_int_equal(f->p15->opts.use_file_cache, SC_PKCS15_OPTS_CACHE_NO_FILES);
++	assert_int_equal(f->commands, 0);
++}
++
++static void bind_other_application(void **state)
++{
++	struct fixture *f = *state;
++	prepare_bind(f, SC_CARD_TYPE_IASECC_AMOS, 0);
++	assert_int_equal(sc_pkcs15_bind(f->card, NULL, &f->p15), SC_SUCCESS);
++	assert_false(f->p15->flags & SC_PKCS15_CARD_FLAG_EMULATED);
++	assert_true(f->p15->opts.use_pin_cache);
++}
++
++static void bind_other_iasecc(void **state)
++{
++	struct fixture *f = *state;
++	prepare_bind(f, SC_CARD_TYPE_IASECC_SAGEM, 1);
++	assert_int_equal(sc_pkcs15_bind(f->card, NULL, &f->p15), SC_SUCCESS);
++	assert_false(f->p15->flags & SC_PKCS15_CARD_FLAG_EMULATED);
++	assert_true(f->p15->opts.use_pin_cache);
++}
++
++static void bind_other_driver(void **state)
++{
++	struct fixture *f = *state;
++	prepare_bind(f, SC_CARD_TYPE_IASECC_AMOS, 1);
++	f->card->driver = &f->fallback;
++	assert_int_equal(sc_pkcs15_bind(f->card, NULL, &f->p15), SC_SUCCESS);
++	assert_false(f->p15->flags & SC_PKCS15_CARD_FLAG_EMULATED);
++	assert_true(f->p15->opts.use_pin_cache);
++}
++
++static void bind_explicit_options(void **state)
++{
++	struct fixture *f = *state;
++	configure(f, "app default { framework pkcs15 { use_pin_caching = yes; try_emulation_first = no; } }");
++	prepare_bind(f, SC_CARD_TYPE_IASECC_AMOS, 1);
++	assert_int_equal(sc_pkcs15_bind(f->card, NULL, &f->p15), SC_SUCCESS);
++	assert_false(f->p15->flags & SC_PKCS15_CARD_FLAG_EMULATED);
++	assert_true(f->p15->opts.use_pin_cache);
++}
++
++int main(void)
++{
++	const struct CMUnitTest tests[] = {
++#if OPENSSL_VERSION_NUMBER >= 0x30000000L && !defined(LIBRESSL_VERSION_NUMBER)
++		cmocka_unit_test_setup_teardown(detect_jcop4, setup, teardown),
++		cmocka_unit_test_setup_teardown(bind_jcop4, setup, teardown),
++		cmocka_unit_test_setup_teardown(reject_missing_key, setup, teardown),
++		cmocka_unit_test_setup_teardown(reject_other_key, setup, teardown),
++		cmocka_unit_test_setup_teardown(reject_other_key_size, setup, teardown),
++		cmocka_unit_test_setup_teardown(reject_other_pin, setup, teardown),
++		cmocka_unit_test_setup_teardown(reject_other_application, setup, teardown),
++		cmocka_unit_test_setup_teardown(reject_duplicate_application, setup, teardown),
++		cmocka_unit_test_setup_teardown(reject_duplicate_key, setup, teardown),
++		cmocka_unit_test_setup_teardown(reject_duplicate_pin, setup, teardown),
++		cmocka_unit_test_setup_teardown(reject_shared_atr, setup, teardown),
++		cmocka_unit_test_setup_teardown(reject_control, setup, teardown),
++		cmocka_unit_test_setup_teardown(reject_control_size, setup, teardown),
++		cmocka_unit_test_setup_teardown(reject_curve, setup, teardown),
++		cmocka_unit_test_setup_teardown(reject_short_read, setup, teardown),
++		cmocka_unit_test_setup_teardown(reject_point, setup, teardown),
++		cmocka_unit_test_setup_teardown(preserve_crypto_errors, setup, teardown),
++		cmocka_unit_test_setup_teardown(reject_reader_lock, setup, teardown),
++		cmocka_unit_test_setup_teardown(reject_reader_unlock, setup, teardown),
++		cmocka_unit_test_setup_teardown(reject_transport, setup, teardown),
++		cmocka_unit_test_setup_teardown(reject_retry_status, setup, teardown),
++		cmocka_unit_test_setup_teardown(reject_get_response, setup, teardown),
++		cmocka_unit_test_setup_teardown(explicit_profile, setup, teardown),
++		cmocka_unit_test_setup_teardown(explicit_auto, setup, teardown),
++#endif
++		cmocka_unit_test_setup_teardown(unrelated_atr, setup, teardown),
++		cmocka_unit_test_setup_teardown(disabled_profile, setup, teardown),
++		cmocka_unit_test_setup_teardown(unsupported_transport, setup, teardown),
++		cmocka_unit_test_setup_teardown(unsupported_protocol, setup, teardown),
++		cmocka_unit_test_setup_teardown(bind_jcop3, setup, teardown),
++		cmocka_unit_test_setup_teardown(bind_other_application, setup, teardown),
++		cmocka_unit_test_setup_teardown(bind_other_iasecc, setup, teardown),
++		cmocka_unit_test_setup_teardown(bind_other_driver, setup, teardown),
++		cmocka_unit_test_setup_teardown(bind_explicit_options, setup, teardown),
++	};
++	return cmocka_run_group_tests(tests, NULL, NULL);
++}
 diff --git a/src/tools/pkcs11-tool.c b/src/tools/pkcs11-tool.c
 index 2ad1933827aa7a244c4109e02ef0166fda97efb9..12563445b2b4181f3ab593586aa5b0657f627c0c 100644
 --- a/src/tools/pkcs11-tool.c
