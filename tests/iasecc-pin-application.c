@@ -143,13 +143,10 @@ int main(void)
 	struct sc_pin_cmd_data pin = {0};
 	struct iasecc_pin_policy policy = {0};
 	const unsigned char synthetic_pin[] = "1234";
-	char path[] = "/tmp/jcop3-pin-application-XXXXXX", trace[4096];
-	FILE *file;
-	size_t length;
-	int fd = mkstemp(path), rv;
-	if (fd < 0) return 1;
-	close(fd);
+	int rv;
 	card.ctx = &ctx;
+	struct sc_card_driver driver = {.short_name = "iasecc"};
+	card.driver = &driver;
 	card.type = SC_CARD_TYPE_IASECC_AMOS;
 	card.ops = &ops;
 	card.drv_data = &prv;
@@ -170,24 +167,21 @@ int main(void)
 	unsetenv("OPENSC_JCOP3_POST_LOGIN_SELECT");
 	unsetenv("OPENSC_JCOP3_PIN_STATUS_IN_PLACE");
 	rv = iasecc_pin_verify(&card, &pin);
-	check("control: root VERIFY succeeds but subsequent ChipDoc RSA returns 6982",
-			rv == 0 && chv_verified && !rsa_authorized && verifies == 1 && selects == 0 &&
-			sign_after_select(&card) == SC_ERROR_SECURITY_STATUS_NOT_SATISFIED && !forbidden);
+	check("detected JCOP3 selects Generic PKI before VERIFY and permits RSA without environment",
+			rv == 0 && chv_verified && rsa_authorized && verifies == 1 && selects == 1 &&
+			sign_after_select(&card) == 256 && !forbidden);
+	/* A previously verified hash must not bypass a new explicit VERIFY. */
+	chv_verified = 1; rsa_authorized = selected_chipdoc = 0;
+	check("seed synthetic legacy verified-PIN hash", !iasecc_chv_cache_verified(&card, &pin));
+	rv = iasecc_pin_verify(&card, &pin);
+	check("automatic JCOP3 repeats physical VERIFY despite old hash and logged-in CHV",
+			rv == 0 && verifies == 2 && rsa_authorized && sign_after_select(&card) == 256);
 	reset_run(&card, &pin);
 	setenv("OPENSC_JCOP3_PIN_STATUS_IN_PLACE", "yes", 1);
-	setenv("OPENSC_API_TRACE_FILE", path, 1);
 	rv = iasecc_pin_verify(&card, &pin);
 	check("candidate verifies in ChipDoc after peer root selection and permits subsequent RSA",
 			rv == 0 && selects == 1 && verifies == 1 && metadata == 2 && statuses == 1 &&
 			rsa_authorized && sign_after_select(&card) == 256 && signatures == 1 && !forbidden);
-	file = fopen(path, "r");
-	length = file ? fread(trace, 1, sizeof(trace) - 1, file) : 0;
-	if (file) fclose(file);
-	trace[length] = 0;
-	check("public application selection is traced before VERIFY without credentials",
-			strstr(trace, "PRE_VERIFY_SELECT session=0x0 rv=0x0 a=0x3 b=0x0\nCARD_PIN_VERIFY") &&
-			!strstr(trace, "1234") && !strstr(trace, "PIN_VERIFY_CACHED"));
-	unsetenv("OPENSC_API_TRACE_FILE");
 	reset_run(&card, &pin);
 	select_error = SC_ERROR_TRANSMIT_FAILED;
 	rv = iasecc_pin_verify(&card, &pin);
@@ -215,10 +209,10 @@ int main(void)
 			rv == 0 && statuses == 1 && !selects && !verifies && !metadata && !forbidden);
 	pin.pin1.len = sizeof(synthetic_pin) - 1;
 	policy.read_verify_only = 1;
-	for (int variant = 0; variant < 9; variant++) {
+	for (int variant = 0; variant < 11; variant++) {
 		reset_run(&card, &pin);
 		switch (variant) {
-		case 0: setenv("OPENSC_JCOP3_PIN_STATUS_IN_PLACE", "no", 1); break;
+		case 0: card.driver = NULL; break;
 		case 1: card.type = SC_CARD_TYPE_IASECC_SAGEM; break;
 		case 2: pin.pin_reference |= IASECC_OBJECT_REF_LOCAL; break;
 		case 3: pin.pin_reference = 2; break;
@@ -227,12 +221,16 @@ int main(void)
 		case 6: app.aid.value[0] ^= 1; break;
 		case 7: app.aid.len--; break;
 		case 8: policy.read_verify_only = 0; break;
+		case 9: card.type = SC_CARD_TYPE_IASECC_CHIPDOC; break;
+		case 10: driver.short_name = "iso7816"; break;
 		}
 		rv = iasecc_chipdoc_select_for_verify(&card, &pin, &policy);
 		char label[100];
 		snprintf(label, sizeof(label), "application selection excludes profile variant %d without card commands", variant);
 		check(label, rv == 0 && !selects && !verifies && !metadata && !forbidden);
 		setenv("OPENSC_JCOP3_PIN_STATUS_IN_PLACE", "yes", 1);
+		driver.short_name = "iasecc";
+		card.driver = &driver;
 		card.type = SC_CARD_TYPE_IASECC_AMOS;
 		pin.pin_reference = 1;
 		pin.cmd = SC_PIN_CMD_VERIFY;
@@ -243,6 +241,5 @@ int main(void)
 	}
 	reset_run(&card, &pin);
 	unsetenv("OPENSC_JCOP3_PIN_STATUS_IN_PLACE");
-	unlink(path);
 	return failures ? 1 : 0;
 }

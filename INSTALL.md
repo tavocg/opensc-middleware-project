@@ -2,8 +2,9 @@
 
 **Una misma biblioteca sirve para JCOP3 y JCOP4.** La compilación genera
 `opensc-pkcs11.so`; al copiarla o descargarla se llama `libjcop3p11.so`.
-`LIBASEP11` permite elegirla en el firmador instalado. La configuración
-selecciona el perfil de la tarjeta; no hay que recompilar al cambiar de generación.
+`LIBASEP11` permite elegirla en el firmador instalado. El código actualizado
+detecta la tarjeta y su tratamiento de PIN automáticamente; no necesita
+configuración de perfil ni variables de activación al cambiar de generación.
 
 Los ejemplos son para GNU/Linux con Bash, `firmador` instalado y un lector
 con su servicio PC/SC operativo. El soporte probado incluye JCOP3 Generic
@@ -49,6 +50,9 @@ sistema. Para ejecutar las regresiones de software, sin lector ni PIN:
 make test/iasecc JOBS="$(nproc)"
 ```
 
+Las pruebas de detección requieren además `cmocka` (`libcmocka-dev` en
+Debian/Ubuntu). El entorno Nix ya lo incluye.
+
 Nix es opcional para compilar localmente: si lo usas, puedes entrar en
 `nix develop` en lugar de instalar las dependencias de desarrollo del sistema.
 
@@ -58,14 +62,13 @@ Desde la raíz del proyecto, después de compilar:
 
 ```bash
 JCOP_PREFIX="$HOME/.local/lib/libjcop3p11"
-mkdir -p "$JCOP_PREFIX/lib" "$JCOP_PREFIX/config"
+mkdir -p "$JCOP_PREFIX/lib"
 cp build/opensc/src/pkcs11/.libs/opensc-pkcs11.so "$JCOP_PREFIX/lib/libjcop3p11.so"
 cp -a build/opensc/src/libopensc/.libs/libopensc.so* "$JCOP_PREFIX/lib/"
-cp config/jcop3.conf config/jcop4.conf "$JCOP_PREFIX/config/"
 ```
 
 Conserva también `libopensc`: el módulo PKCS#11 la necesita. No mezcles
-bibliotecas o configuraciones de compilaciones distintas.
+bibliotecas de compilaciones distintas.
 
 ## Abrir firmador con la misma biblioteca
 
@@ -74,7 +77,6 @@ Cierra otras instancias del firmador. Para la copia instalada en tu usuario:
 ```bash
 JCOP_MODULE="$HOME/.local/lib/libjcop3p11/lib/libjcop3p11.so"
 JCOP_CORE="$HOME/.local/lib/libjcop3p11/lib"
-JCOP_CONFIG="$HOME/.local/lib/libjcop3p11/config"
 ```
 
 O, para usar directamente tu compilación sin copiar archivos, ejecuta desde
@@ -83,33 +85,20 @@ la raíz del proyecto:
 ```bash
 JCOP_MODULE="$PWD/build/opensc/src/pkcs11/.libs/opensc-pkcs11.so"
 JCOP_CORE="$PWD/build/opensc/src/libopensc/.libs"
-JCOP_CONFIG="$PWD/config"
 ```
 
-Elige **uno** de los siguientes comandos según la tarjeta. Ambos cargan
-exactamente el mismo `JCOP_MODULE`.
-
-JCOP3:
+Para ambas tarjetas, con la biblioteca compilada del código actualizado:
 
 ```bash
-LIBASEP11="$JCOP_MODULE" LD_LIBRARY_PATH="$JCOP_CORE" \
-  OPENSC_CONF="$JCOP_CONFIG/jcop3.conf" OPENSC_DEBUG=0 \
-  OPENSC_JCOP3_PIN_STATUS_IN_PLACE=yes firmador
+LIBASEP11="$JCOP_MODULE" LD_LIBRARY_PATH="$JCOP_CORE" firmador
 ```
 
-JCOP4 RSA 2048:
-
-```bash
-LIBASEP11="$JCOP_MODULE" LD_LIBRARY_PATH="$JCOP_CORE" \
-  OPENSC_CONF="$JCOP_CONFIG/jcop4.conf" OPENSC_DEBUG=0 firmador
-```
-
-La asignación va **antes** del comando: `LIBASEP11=/ruta/biblioteca.so firmador`.
-Usa una terminal sin trazas ni opciones experimentales de sesiones anteriores.
-`OPENSC_CONF` es necesario: activa el perfil y las opciones comprobadas de
-cada tarjeta. JCOP3 usa `lock_login` y puede hacer esperar a otros clientes
-PC/SC mientras el firmador mantiene la reserva; JCOP4 controla su propia
-transacción y la cierra tras firmar.
+Desde el repositorio también puedes usar `make firmador/auto`, que limpia
+el entorno heredado y evita configuraciones externas usando `/dev/null`.
+No se necesita `chipdoc_profile` ni `OPENSC_JCOP3_PIN_STATUS_IN_PLACE`.
+Las variables `LIBASEP11` y `LD_LIBRARY_PATH` indican qué bibliotecas cargar,
+sin elegir el tipo de tarjeta. Los defaults de JCOP3 mantienen la reserva
+entre llamadas de login/firma; JCOP4 controla su transacción nativa.
 
 Abre el PDF, selecciona el certificado de firma, introduce el PIN en el
 diálogo y guarda otra copia. Para probar otra firma puedes partir de nuevo
@@ -162,8 +151,10 @@ usando una etiqueta publicada. Para la última versión **estable** puedes usar
 el workflow actual publica versiones experimentales, por eso el ejemplo
 principal consulta la lista de releases.
 
-Después de extraer, usa los comandos de `LIBASEP11` anteriores o el lanzador
-incluido, que prepara la configuración y limpia opciones de diagnóstico heredadas:
+Las releases anteriores pueden requerir sus configuraciones incluidas;
+la autodetección descrita arriba corresponde al código actualizado. Para
+un paquete anterior, su lanzador selecciona la configuración de esa versión
+y limpia opciones de diagnóstico heredadas:
 
 ```bash
 "$HOME/.local/lib/libjcop3p11/bin/firmador-jcop" jcop3

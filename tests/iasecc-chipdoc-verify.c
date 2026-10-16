@@ -114,7 +114,7 @@ int main(void)
 		case 2: d.cmd = SC_PIN_CMD_GET_INFO; break;
 		case 3: d.flags = SC_PIN_CMD_USE_PINPAD; break;
 		case 4: d.flags = SC_PIN_CMD_NEED_PADDING; break;
-		case 5: d.flags = SC_PIN_CMD_STATUS_ONLY; break;
+		case 5: d.flags = IASECC_PIN_STATUS_ONLY; break;
 		case 6: d.pin_reference = 2; break;
 		case 7: d.pin_type = SC_AC_AUT; break; /* Never reinterpret key authentication8. */
 		case 8: d.puk_reference = 1; break;

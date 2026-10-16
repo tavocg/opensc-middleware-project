@@ -44,6 +44,7 @@
               openssl
               pcsclite
               zlib
+              cmocka # native driver detection tests with a synthetic provider
             ];
           };
         });

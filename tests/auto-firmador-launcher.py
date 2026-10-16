@@ -28,24 +28,19 @@ root = pathlib.Path(__file__).resolve().parents[1]
 assert len(sys.argv) == 1
 assert os.environ["OPENSC_CONF"] == "/dev/null"
 assert os.environ["OPENSC_DEBUG"] == "0"
-assert os.environ["OPENSC_JCOP3_PIN_STATUS_IN_PLACE"] == "yes"
+assert "OPENSC_JCOP3_PIN_STATUS_IN_PLACE" not in os.environ
+assert "OPENSC_API_TRACE_FILE" not in os.environ
 assert os.environ["LIBASEP11"] == str(root/"build/opensc/src/pkcs11/.libs/opensc-pkcs11.so")
 assert os.environ["LD_LIBRARY_PATH"] == str(root/"build/opensc/src/pkcs11/.libs")+":"+str(root/"build/opensc/src/libopensc/.libs")
-allowed = {"PATH", "HOME", "USER", "LOGNAME", "LANG", "LC_ALL", "LC_CTYPE", "DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY", "DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_DATA_DIRS", "XDG_CONFIG_DIRS", "SSL_CERT_FILE", "SSL_CERT_DIR", "NIX_SSL_CERT_FILE", "TZ", "LD_LIBRARY_PATH", "LIBASEP11", "OPENSC_CONF", "OPENSC_DEBUG", "OPENSC_API_TRACE_FILE", "OPENSC_JCOP3_PIN_STATUS_IN_PLACE"}
+allowed = {"PATH", "HOME", "USER", "LOGNAME", "LANG", "LC_ALL", "LC_CTYPE", "DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY", "DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_DATA_DIRS", "XDG_CONFIG_DIRS", "SSL_CERT_FILE", "SSL_CERT_DIR", "NIX_SSL_CERT_FILE", "TZ", "LD_LIBRARY_PATH", "LIBASEP11", "OPENSC_CONF", "OPENSC_DEBUG"}
 assert set(os.environ) <= allowed, set(os.environ)-allowed
 assert os.environ["DISPLAY"] == "fixture-display"
 assert os.environ["WAYLAND_DISPLAY"] == "fixture-wayland"
 assert os.environ["SSL_CERT_FILE"] == "fixture-trust-store"
 assert resource.getrlimit(resource.RLIMIT_CORE)[0] == 0
-trace = pathlib.Path(os.environ["OPENSC_API_TRACE_FILE"])
-assert trace.stat().st_mode & 0o777 == 0o600
-assert trace.parent.stat().st_mode & 0o777 == 0o700
-assert not list(trace.parent.glob("*.conf"))
 with (root/"calls").open("a") as output:
     output.write("invoked\\n")
 (root/"environment.json").write_text(json.dumps(dict(os.environ)))
-with trace.open("a") as output:
-    output.write("C_GetSlotList session=0x0 rv=0x0 a=0x0 b=0x0\\n")
 print("fake GUI output remains visible")
 sys.exit(int((root/"exit-status").read_text()))
 ''')
@@ -60,7 +55,7 @@ sys.exit(int((root/"exit-status").read_text()))
                "JAVA_TOOL_OPTIONS": "private-old-options", "_JAVA_OPTIONS": "private-old-options",
                "JDK_JAVA_OPTIONS": "private-old-options", "OPENSSL_CONF": "private-old-crypto"}
         for expected in (0, 17):
-            # Neither an absent flag nor a conflicting inherited flag may lose the correction.
+            # Old flags are discarded; automatic PIN handling lives in the driver.
             env.pop("OPENSC_JCOP3_PIN_STATUS_IN_PLACE", None)
             if expected == 17:
                 env["OPENSC_JCOP3_PIN_STATUS_IN_PLACE"] = "no"
@@ -83,13 +78,15 @@ sys.exit(int((root/"exit-status").read_text()))
             assert "signature_verification" not in values
             statuses.add(values["firmador_exit_status"])
             assert "private-old" not in report.read_text()
-            assert (report.parent/"api.log").read_text().count("C_GetSlotList") == 1
+            assert not (report.parent/"api.log").exists()
+            assert not list(report.parent.glob("*.conf"))
+            assert report.parent.stat().st_mode & 0o777 == 0o700
         assert statuses == {"0", "17"}
         print("PASS local module/core and normal autodetection without a .conf")
-        print("PASS launcher explicitly enables JCOP3 physical status/fresh VERIFY with absent or conflicting inherited flag")
+        print("PASS launcher never needs or forwards a JCOP3 activation flag")
         print("PASS desktop/trust store preserved and inherited diagnostics/Java options removed")
         print("PASS one GUI call without arguments, visible output and exit0/17 propagated")
-        print("PASS private reports/API metadata, no signature claim, core dumps disabled")
+        print("PASS private reports without obsolete API traces, no signature claim, core dumps disabled")
         for args, expected in [(["--cli"], 2), (["--pin", "dummy"], 2)]:
             completed = subprocess.run(["bash", str(launcher), *args], env=env, capture_output=True)
             assert completed.returncode == expected

@@ -78,30 +78,26 @@ firmador. El lanzador no recibe documentos ni PIN por argumentos, no crea
 y un entorno limitado que conserva el escritorio y los certificados de
 confianza. No hereda opciones Java o experimentos de diagnósticos previos.
 
-El lanzador establece explícitamente `OPENSC_JCOP3_PIN_STATUS_IN_PLACE=yes`:
-la biblioteca limita esta corrección a Amos/Generic PKI y CHV global 1.
-Consulta el estado físico sin reseleccionar archivos cuando la política ya
-está disponible, y realiza VERIFY real en la aplicación antes de firmar,
-sin reutilizar el atajo de hash de PIN. Evita que las consultas de token o
-sesión de Java pierdan el permiso RSA de JCOP3 después del login. JCOP4 usa
-su recorrido nativo y queda fuera de esa condición.
+OpenSC aplica automáticamente el tratamiento de cada tarjeta: para
+JCOP3 Amos/Generic PKI y CHV global 1, las consultas de estado conservan la
+selección cuando la política ya está disponible y cada VERIFY explícito
+llega a la tarjeta, seleccionando la aplicación cuando corresponde. JCOP4
+se reconoce por descubrimiento público ATR/AID/D004 y metadatos nativos.
+No necesita `chipdoc_profile`, `card_drivers` ni variables `OPENSC_JCOP3_*`.
+Las variables antiguas ya no activan ni desactivan ese tratamiento.
 
-No hace falta pasar esa variable a `make`: el entorno del llamador se limpia
-y el lanzador la fija. La revisión inicial de `firmador/auto` la descartaba;
-los informes JCOP3 mostraron login correcto y rechazo `6982` al firmar, con
-reselecciones durante consultas de estado. La corrección del lanzador pasó
-pruebas de software; falta confirmar una firma JCOP3 con esta revisión.
-El informe ahora incluye `jcop3_pin_status=in_place_physical_query` y
-`jcop3_verify=fresh_verify`; esas marcas describen la configuración, y los
-eventos `PIN_STATUS_IN_PLACE`, `PRE_VERIFY_SELECT` y `CARD_PIN_VERIFY` permiten
-comprobar el recorrido que tomó la biblioteca en JCOP3.
+La biblioteca también funciona con sus valores predeterminados si no existe
+ningún `opensc.conf`; `/dev/null` solo aísla los lanzadores de configuraciones
+externas. `LIBASEP11` y las rutas de bibliotecas siguen indicando al firmador
+qué biblioteca cargar, sin seleccionar un tipo de tarjeta.
 
-Guarda `report.txt` y `api.log` en `local/auto-firmador-api-*/`, con directorio
-`0700` y archivos `0600`. La traza existente solo contiene nombres fijos de
-API y metadatos numéricos, sin PIN, PDF, certificados o firmas. El estado de
-salida del firmador se propaga al comando; salir con estado cero no acredita
-firma ni cierre de tarjeta. La GUI permite varias operaciones y no tiene la
-cuota de una firma ni el timeout del helper `sign/auto`.
+Guarda `report.txt` en `local/auto-firmador-api-*/`, con directorio `0700` y
+archivo `0600`. La versión sincronizada retiró las trazas experimentales de
+API: el lanzador ya no genera `api.log` ni configura `OPENSC_API_TRACE_FILE`.
+El informe describe el modo y el estado de salida de la GUI, sin datos del
+PIN, PDF, certificados o firmas. Salir con estado cero no acredita firma ni
+cierre de tarjeta. La GUI permite varias operaciones y no tiene la cuota de
+una firma ni el timeout del helper `sign/auto`.
 
 El lanzador se comprueba sin Java, GUI ni tarjeta con:
 
@@ -121,3 +117,17 @@ realizado, fallos de login/firma/cierre, firma corrupta, objetos ambiguos,
 entrada PIN inválida, cancelación y restauración de terminal. También prueba
 el lanzador con comandos simulados, entorno vacío, permisos y propagación de
 errores. Estas pruebas no sustituyen ejecutar `sign/auto` con cada tarjeta.
+
+La detección y el bind reales, con un proveedor sintético que devuelve
+NO_SERVICE y lectores simulados, se comprueban con:
+
+```bash
+nix develop -c make test/iasecc-detection
+```
+
+La suite `make test/iasecc` incluye esta prueba y los casos de PIN automático,
+selección, errores y perfiles excluidos. Las pruebas antiguas dedicadas a
+trazas o experimentos de sesión retirados ya no forman parte del runner; se
+conservan como referencia histórica. Los adaptadores de contexto por defecto
+y la telemetría del decoder para herramientas de diagnóstico independientes
+están en `tools/`, fuera del código de libOpenSC.

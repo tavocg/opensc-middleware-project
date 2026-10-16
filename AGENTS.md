@@ -9,6 +9,68 @@ transporte simulado. PIN/GUI también los ejecuta el usuario. Esto sustituye
 la autorización anterior de hardware por el agente; conservar límites de
 cada diagnóstico y privacidad. Git sigue autorizado pero .git solo lectura.
 
+**Última revisión: árboles OpenSC iguales y tratamiento automático JCOP3/4.**
+Usuario autorizó igualar ../opensc y vendor/opensc y eliminar requisitos de
+.conf/variables de activación. Principal e381572/vendor cf0fd80e5 limpios;
+hermano HEAD dbdf7b390 con solo shell.nix local sin seguimiento. Se trasladó
+limpieza completa e855d3a9d..dbdf7b390 y .gitignore al vendor (elimina trazas,
+experimentos y deduplica canal). Sobre esa base ambos tienen las mismas
+correcciones automáticas: iasecc.h publica solo helper/flag internos;
+pkcs15-pin.c detecta driver iasecc/Amos/GenericPKI/CHV1 global/MF para estado
+físico sin reselección y sin caché de login/intentos; driver usa política pública
+conocida o devuelve NOT_SUPPORTED para inicialización completa. card-iasecc.c
+identifica aplicación enumerada/driver/tipo/CHV1, evita atajo de hash para
+VERIFY explícito y selecciona GenericPKI tras política antesVERIFY cuando C9
+read_verify_only. No consulta getenv para activar/desactivar; variables viejas
+no tienen efecto. JCOP4 conserva descubrimiento público/nativo y límites.
+
+Regresión real de la limpieza corregida en ambos: MSE tenía prv=NULL antes
+de decidir si APPLICATION ya estaba seleccionada; cargar card->drv_data antes
+de esa decisión restaura ambos recorridos. Encontrada por firma PKCS15 con
+AID explícito, error SM_NOT_INITIALIZED antesPSO. Un renglón funcional adicional,
+sin nuevo APDU/perfil/fallback/reintentos. Hermanos sincronizados con aprobación
+de escritura fuera del workspace; 801 archivos seguidos iguales byteporbyte y
+permisos (inventarioSHA25664684445ab2a8c26237614fb2b5e1ffc25951ab2c19a57c6722eee1e2426bb57).
+.git/historia/build/configure generados y shell.nix local se conservan aparte;
+no se copió archivo local ni se escribió en .git. Hermano cambia 4fuentes;
+vendor incorpora además limpieza original de 25 archivos y .gitignore.
+
+Compilación completa0 más incremental MSE0. test/iasecc-detection nuevo usa
+cmocka (añadido al devShell) y proveedor sintético NO_SERVICE compilado sin
+libPCSC real: 33 casos PASS driver dispatch/native bind, configureNULL/defaults,
+rechazos/legacy explícito/perfiles ajenos. Tests JCOP3 adaptados a activación
+sin entorno, con variable obsoleta no/yes, driver/tipo/AID/PIN/path ajenos,
+estado/reintentos físicos/errores, VERIFY real pese hash anterior y aplicación
+antesVERIFY. Tests JCOP4 reales de canal/bootstrap/transacción/PIN/firma/PKCS15/
+routing/init/PKCS11 y ambos mecanismos pasan con transporte/RSA/PIN software.
+Helpers público/firma PTY y test/auto-sign18PASS pasan. Launcherauto7PASS sin
+flag ni traza; heredados/observador/módulos software pasan. Suite integrada
+se detuvo únicamente en prueba antigua de variable NO_SIGN_FALLBACK retirada:
+se adaptó al comportamiento estándar de pkcs11-tool y se ejecutó todo el tramo
+restante0. Logs ignorados local/auto-native-build.log, -tests.log, -chipdoc-tests.log,
+-module-tests.log, -final-tests.log, -suite.log (359 líneasPASS), -launcher-tests.log
+(299 líneasPASS); final-tests61líneasPASS incluye repeticiones/no conteo de casos.
+Sin hardware/PCSCreal/lector/tarjeta/PINreal/GUI/Java ni publicación poragente;
+no nueva firma física, no ASan/portabilidad en esta revisión.
+
+Adaptadores standalone/defaultlibctx/telemetría decoder eliminados del vendor
+se conservan ahora en tools/ para diagnósticos y fixtures; driver usa helpers
+_ex/contexto explícito. Tests de getters/helpers retirados leen estado interno
+del fixture y validan operación de producción. Runner deja de ejecutar tests
+históricos de trazas/sessionexperiments eliminados, conserva casosfuncionales.
+No se restablecieron trazas en producción. pkcs11-tool recupera fallback estándar;
+helper sign/auto sigue con una Login/Sign sin fallback y tests de error pasan.
+
+firmador/auto no genera .conf/api.log ni variables de activación; reporte solo
+modo/commit/exit y marca api_trace unavailable. Env limpio/rutas/LIBASEP11 y
+OPENSC_CONF=/dev/null aíslan bibliotecas/config ajena, no eligen tarjeta.
+README/INSTALL/docs/auto-sign.md actualizados; releases viejas pueden conservar
+sus requisitos propios. Bash/shellcheck/diffcheck tresárboles pasaron.
+Exportador/parche/meta/diagrama siguen ligados a HEADcf0fd80e5: requieren commit
+vendor primero por usuario, luego export y commit raíz con pointer/pruebas/tools/
+scripts/flake/docs/AGENTS. Hay script nuevo scripts/test-iasecc-detection.sh:
+no basta gitadd-u raíz. No reempaquetado ni publicación. GitRO vigente.
+
 **Última revisión: firmador/auto JCOP3 corregido en el lanzador.**
 Principal cef0756/OpenSC cf0fd80e5 limpios al comenzar. Usuario reportó JCOP4
 funciona y JCOP3 falla, incluso pasando OPENSC_JCOP3_PIN_STATUS_IN_PLACE=yes

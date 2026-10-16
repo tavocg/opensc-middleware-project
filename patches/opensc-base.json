@@ -2,11 +2,11 @@
   "schema": 1,
   "upstream": "https://github.com/OpenSC/OpenSC.git",
   "base_commit": "fc27ee8768cb882fceb99535dce8b6a966534dcb",
-  "patched_commit": "cf0fd80e580a7bfc0490851165436dca98236fbb",
-  "patched_tree": "1d74bd669d886b512d678a4c6cf87b6a9eab9c24",
+  "patched_commit": "8462f8b9af0aa468b9e31da849560a9448d0760b",
+  "patched_tree": "e54f458c14c3dfed2e2c815c19075b287bbfad5f",
   "patch_file": "opensc-jcop3-jcop4.diff",
-  "patch_sha256": "3febf478e12276a12b7e1dbd37b3b945928db82f40419b7f046e41425d6c295e",
-  "files": 41,
-  "added_lines": 5470,
-  "deleted_lines": 89
+  "patch_sha256": "b63471d5b86795842f716ca524e1c72a04480bc07e2af56d711aada20d84d831",
+  "files": 34,
+  "added_lines": 4935,
+  "deleted_lines": 85
 }

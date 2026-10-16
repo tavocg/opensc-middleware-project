@@ -166,7 +166,7 @@ static void provider_checks(void)
 	assert(!jcop4_sm_init(&sm, &peer.derived.keys));
 	assert(!jcop4_sm_seal_policy_ex(test_provider.libctx, &sm, (unsigned char[]){0,0xb0,0,0}, NULL, 0, 1, 137,
 		header, body, sizeof(body), &written, JCOP4_SM_LE_SHORT) && written == 13);
-	assert(!jcop4_sm_open_report_policy_ex(test_provider.libctx, &sm, response, received, plain, sizeof(plain), &written, &sw, JCOP4_SM_OUTER_9000, NULL));
+	assert(!jcop4_sm_open_report_policy_ex(test_provider.libctx, &sm, response, received, plain, sizeof(plain), &written, &sw, JCOP4_SM_OUTER_9000));
 	assert(written == 137 && sw == 0x9000 && !memcmp(plain, initial_saved, 137)); jcop4_sm_invalidate(&sm);
 	assert(EVP_set_default_properties(NULL, NULL) == 1);
 	puts("PASS private libctx performs EC/ECDH/KDF/AES/CMAC and protected decode while global provider policy denies algorithms; independent ciphertext/MAC remains valid");

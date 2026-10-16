@@ -271,60 +271,15 @@ int main(void)
 			selections == 1 && metadata_queries == 1 && mse_queries == 1 && signature_queries == 1 &&
 			!forbidden_commands);
 
-	/* Diagnostic scenarios use only simulated transport and no PIN. */
-	char trace_path[] = "/tmp/jcop3-sign-stages-XXXXXX";
-	char trace[2048], error_line[128];
-	int trace_fd = mkstemp(trace_path);
-	if (trace_fd < 0) return 1;
-	close(trace_fd);
-	setenv("OPENSC_API_TRACE_FILE", trace_path, 1);
-	reset_transport();
-	result = fixture_compute_signature(&p15card, &key, flags, digest_info, sizeof(digest_info),
-			signature, sizeof(signature), NULL);
-	read_trace(trace_path, trace, sizeof(trace));
-	check("successful trace reports selection, MSE, card result and compute without extra commands",
-			result == 256 && selections == 1 && metadata_queries == 1 && mse_queries == 1 &&
-			signature_queries == 1 && !forbidden_commands && !revalidation_queries &&
-			strstr(trace, "KEY_SELECT ") && strstr(trace, "KEY_MSE ") &&
-			strstr(trace, "CARD_KEY_DOCP ") && strstr(trace, "CARD_MSE session=0x0 rv=0x0 a=0x9000 ") &&
-			strstr(trace, "CARD_SIGN_AT session=0x0 rv=0x0 a=0x9000 b=0x0\n") &&
-			strstr(trace, "KEY_COMPUTE session=0x0 rv=0x100 "));
-	clear_trace(trace_path);
-	reset_transport();
-	reject_mse = 1;
-	result = fixture_compute_signature(&p15card, &key, flags, digest_info, sizeof(digest_info),
-			signature, sizeof(signature), NULL);
-	read_trace(trace_path, trace, sizeof(trace));
-	snprintf(error_line, sizeof(error_line), "KEY_MSE session=0x0 rv=0x%lX ", (unsigned long)result);
-	check("failed MSE trace stops before computing or revalidating", result < 0 &&
-			!signature_queries && !forbidden_commands && !revalidation_queries &&
-			strstr(trace, error_line) && !strstr(trace, "KEY_COMPUTE ") &&
-			strstr(trace, "CARD_KEY_DOCP ") && strstr(trace, "a=0x6A80 ") &&
-			!strstr(trace, "CARD_SIGN_AT ") && !strstr(trace, "KEY_REVALIDATE "));
-	clear_trace(trace_path);
-	reset_transport();
-	reject_security_status = 1;
-	result = fixture_compute_signature(&p15card, &key, flags, digest_info, sizeof(digest_info),
-			signature, sizeof(signature), NULL);
-	read_trace(trace_path, trace, sizeof(trace));
-	snprintf(error_line, sizeof(error_line), "CARD_SIGN_AT session=0x0 rv=0x%lX a=0x6982 b=0x0\n",
-			(unsigned long)SC_ERROR_SECURITY_STATUS_NOT_SATISFIED);
-	check("card security rejection reports status and blocked revalidation without repeating RSA",
-			result == SC_ERROR_SECURITY_STATUS_NOT_SATISFIED && signature_queries == 1 &&
-			revalidation_queries == 1 && !forbidden_commands && strstr(trace, error_line) &&
-			strstr(trace, "KEY_COMPUTE ") && strstr(trace, "KEY_REVALIDATE "));
-	clear_trace(trace_path);
-	reset_transport();
-	reject_select = 1;
-	result = fixture_compute_signature(&p15card, &key, flags, digest_info, sizeof(digest_info),
-			signature, sizeof(signature), NULL);
-	read_trace(trace_path, trace, sizeof(trace));
-	snprintf(error_line, sizeof(error_line), "KEY_SELECT session=0x0 rv=0x%lX ", (unsigned long)result);
-	check("selection rejection trace never reaches MSE or crypto", result == SC_ERROR_SECURITY_STATUS_NOT_SATISFIED &&
-			!metadata_queries && !mse_queries && !signature_queries && !forbidden_commands &&
-			revalidation_queries == 1 && strstr(trace, error_line) && !strstr(trace, "KEY_MSE ") &&
-			!strstr(trace, "KEY_COMPUTE ") && !strstr(trace, "CARD_SIGN_AT "));
-	unsetenv("OPENSC_API_TRACE_FILE");
-	unlink(trace_path);
+	/* Preserve functional failure propagation after removal of debug traces. */
+	reset_transport(); reject_mse = 1;
+	result = fixture_compute_signature(&p15card, &key, flags, digest_info, sizeof(digest_info), signature, sizeof(signature), NULL);
+	check("MSE failure stops before signing or revalidation", result < 0 && !signature_queries && !revalidation_queries && !forbidden_commands);
+	reset_transport(); reject_security_status = 1;
+	result = fixture_compute_signature(&p15card, &key, flags, digest_info, sizeof(digest_info), signature, sizeof(signature), NULL);
+	check("card rejection propagates without another RSA", result == SC_ERROR_SECURITY_STATUS_NOT_SATISFIED && signature_queries == 1 && revalidation_queries == 1 && !forbidden_commands);
+	reset_transport(); reject_select = 1;
+	result = fixture_compute_signature(&p15card, &key, flags, digest_info, sizeof(digest_info), signature, sizeof(signature), NULL);
+	check("selection failure stops before metadata MSE or signing", result == SC_ERROR_SECURITY_STATUS_NOT_SATISFIED && !metadata_queries && !mse_queries && !signature_queries && revalidation_queries == 1 && !forbidden_commands);
 	return failures ? 1 : 0;
 }

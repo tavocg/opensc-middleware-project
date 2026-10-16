@@ -1,3 +1,15 @@
+diff --git a/.gitignore b/.gitignore
+index cc11c7f4743dfe325acb08944a33b80bb96e7e62..1282d7caa987a13b8bd7900598e105424334337d 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -143,6 +143,7 @@ src/tests/unittests/sm
+ src/tests/unittests/check_macro_reference_loop
+ src/tests/unittests/decode_ecdsa_signature
+ src/tests/unittests/hextobin
++src/tests/unittests/iasecc-detection
+ 
+ src/tests/fuzzing/fuzz_asn1_print
+ src/tests/fuzzing/fuzz_asn1_sig_value
 diff --git a/etc/opensc.conf.example.in b/etc/opensc.conf.example.in
 index 3781f48a3de62eb20e302600562d89687a9a1b74..e94a75eb7137d6367717f9dfaa8d18f6280d46af 100644
 --- a/etc/opensc.conf.example.in
@@ -21,14 +33,14 @@ index 3781f48a3de62eb20e302600562d89687a9a1b74..e94a75eb7137d6367717f9dfaa8d18f6
  		# CAN is required to establish connection
  		# with the card. When using contact reader
 diff --git a/src/libopensc/Makefile.am b/src/libopensc/Makefile.am
-index 2b91c358a5b34b58f6b5314a99d65c19f964212f..237f80549470165e79c60811429ececbd05070c8 100644
+index 2b91c358a5b34b58f6b5314a99d65c19f964212f..e79abfd6a49e13b3dde296bfcb4bad73267aef34 100644
 --- a/src/libopensc/Makefile.am
 +++ b/src/libopensc/Makefile.am
 @@ -15,6 +15,11 @@ noinst_HEADERS = cards.h ctbcs.h internal.h muscle.h muscle-filesystem.h \
  	jpki.h sc-ossl-compat.h card-npa.h card-openpgp.h \
  	card-eoi.h card-dtrust.h card-srbeid.h ccid-types.h reader-tr03119.h \
  	card-cac-common.h card-cardos-common.h
-+noinst_HEADERS += api-trace.h iasecc-chipdoc.h iasecc-chipdoc-sm.h \
++noinst_HEADERS += iasecc-chipdoc.h iasecc-chipdoc-sm.h \
 +	iasecc-chipdoc-pkcs15.h iasecc-chipdoc-transaction.h \
 +	iasecc-chipdoc-routing.h iasecc-chipdoc-init.h jcop4-dh-control.h \
 +	jcop4-channel-kdf.h jcop4-channel-primitives.h jcop4-channel-agreement.h \
@@ -67,118 +79,11 @@ index abefdedefcf5547af131226bae8a36f499e8d6e2..0febeb05ec8a69e6eb55e63f894d119a
  	card-sc-hsm.obj card-dnie.obj card-isoApplet.obj pkcs15-coolkey.obj \
  	card-masktech.obj card-gids.obj card-jpki.obj \
  	card-npa.obj card-esteid2018.obj card-esteid2025.obj card-idprime.obj \
-diff --git a/src/libopensc/api-trace.h b/src/libopensc/api-trace.h
-new file mode 100644
-index 0000000000000000000000000000000000000000..7b839a136654fa1b90c897038272baf78853c632
---- /dev/null
-+++ b/src/libopensc/api-trace.h
-@@ -0,0 +1,93 @@
-+/* Temporary opt-in diagnostics: fixed events and numeric metadata only.
-+ * Never pass PINs, attributes, data buffers, lengths of PINs or APDUs.
-+ * The launcher supplies a private, pre-created file. No card commands are
-+ * issued here and logging failures must not affect the operation.
-+ */
-+#ifndef OPENSC_API_TRACE_H
-+#define OPENSC_API_TRACE_H
-+
-+#include <errno.h>
-+#include <stdio.h>
-+#include <stdlib.h>
-+
-+enum sc_api_trace_event {
-+	SC_API_OPEN_SESSION,
-+	SC_API_CLOSE_SESSION,
-+	SC_API_CLOSE_ALL_SESSIONS,
-+	SC_API_SESSION_INFO,
-+	SC_API_LOGIN,
-+	SC_API_LOGOUT,
-+	SC_API_SIGN_INIT,
-+	SC_API_SIGN,
-+	SC_API_SIGN_UPDATE,
-+	SC_API_SIGN_FINAL,
-+	SC_API_GET_ATTRIBUTE,
-+	SC_API_FIND_INIT,
-+	SC_API_PIN_STATUS,
-+	SC_API_SIGN_KEY,
-+	SC_API_KEY_SELECT,
-+	SC_API_KEY_MSE,
-+	SC_API_KEY_COMPUTE,
-+	SC_API_KEY_REVALIDATE,
-+	SC_API_CARD_SIGN_AT,
-+	SC_API_CARD_KEY_DOCP,
-+	SC_API_CARD_MSE,
-+	SC_API_SESSION_LOGIN_STATE,
-+	SC_API_TOKEN_INFO_BEGIN,
-+	SC_API_TOKEN_INFO,
-+	SC_API_TOKEN_PIN_STATUS,
-+	SC_API_CARD_SELECT,
-+	SC_API_CARD_PIN_INFO_BEGIN,
-+	SC_API_CARD_PIN_INFO,
-+	SC_API_CARD_LOCK,
-+	SC_API_CARD_RESET,
-+	SC_API_TOKEN_PIN_CACHED,
-+	SC_API_POST_LOGIN_STATUS_BEGIN,
-+	SC_API_POST_LOGIN_STATUS,
-+	SC_API_POST_LOGIN_SELECT_BEGIN,
-+	SC_API_POST_LOGIN_SELECT,
-+	SC_API_PIN_STATUS_IN_PLACE,
-+	SC_API_CARD_PIN_VERIFY,
-+	SC_API_CARD_PIN_VERIFY_CACHED,
-+	SC_API_SLOT_INFO_BEGIN,
-+	SC_API_SLOT_INFO,
-+	SC_API_CARD_PRESENCE,
-+	SC_API_SLOT_TOKEN_REMOVED,
-+	SC_API_PIN_APDU_BUILD,
-+	SC_API_PIN_TRANSMIT,
-+	SC_API_PRE_VERIFY_SELECT
-+};
-+
-+static inline void
-+sc_api_metadata_trace(enum sc_api_trace_event event, unsigned long session,
-+		unsigned long rv, unsigned long a, unsigned long b)
-+{
-+	static const char *names[] = {
-+			"C_OpenSession", "C_CloseSession", "C_CloseAllSessions", "C_GetSessionInfo",
-+			"C_Login", "C_Logout", "C_SignInit", "C_Sign", "C_SignUpdate", "C_SignFinal",
-+			"C_GetAttributeValue", "C_FindObjectsInit", "PIN_STATUS", "SIGN_KEY",
-+			"KEY_SELECT", "KEY_MSE", "KEY_COMPUTE", "KEY_REVALIDATE", "CARD_SIGN_AT",
-+			"CARD_KEY_DOCP", "CARD_MSE", "SESSION_LOGIN_STATE",
-+			"C_GetTokenInfo_BEGIN", "C_GetTokenInfo", "TOKEN_PIN_STATUS",
-+			"CARD_SELECT", "CARD_PIN_INFO_BEGIN", "CARD_PIN_INFO", "CARD_LOCK", "CARD_RESET",
-+			"TOKEN_PIN_CACHED", "POST_LOGIN_STATUS_BEGIN", "POST_LOGIN_STATUS",
-+			"POST_LOGIN_SELECT_BEGIN", "POST_LOGIN_SELECT", "PIN_STATUS_IN_PLACE",
-+			"CARD_PIN_VERIFY", "CARD_PIN_VERIFY_CACHED",
-+			"C_GetSlotInfo_BEGIN", "C_GetSlotInfo", "CARD_PRESENCE", "SLOT_TOKEN_REMOVED",
-+			"PIN_APDU_BUILD", "PIN_TRANSMIT", "PRE_VERIFY_SELECT"};
-+	int saved_errno = errno;
-+	const char *path = getenv("OPENSC_API_TRACE_FILE");
-+	FILE *file;
-+
-+	if (path && *path && (unsigned int)event < sizeof(names) / sizeof(names[0])) {
-+		file = fopen(path, "a");
-+		if (file) {
-+			fprintf(file, "%s session=0x%lX rv=0x%lX a=0x%lX b=0x%lX\n",
-+					names[event], session, rv, a, b);
-+			fclose(file);
-+		}
-+	}
-+	errno = saved_errno;
-+}
-+
-+#endif
 diff --git a/src/libopensc/card-iasecc.c b/src/libopensc/card-iasecc.c
-index 23f80aee5d6524372bb0718fbdc50ede699024cd..eb781edd8030b36ed0f5f0a39c2ce3de92e1142c 100644
+index 23f80aee5d6524372bb0718fbdc50ede699024cd..1bc000ecea5e020e5cb5c78ad3e722373d60b574 100644
 --- a/src/libopensc/card-iasecc.c
 +++ b/src/libopensc/card-iasecc.c
-@@ -39,6 +39,7 @@
- #include <openssl/x509v3.h>
- 
- #include "internal.h"
-+#include "api-trace.h"
- #include "asn1.h"
- #include "cardctl.h"
- #include "opensc.h"
-@@ -49,6 +50,8 @@
+@@ -49,6 +49,8 @@
  #include "gp.h"
  
  #include "iasecc.h"
@@ -187,7 +92,7 @@ index 23f80aee5d6524372bb0718fbdc50ede699024cd..eb781edd8030b36ed0f5f0a39c2ce3de
  
  #define IASECC_CARD_DEFAULT_FLAGS ( 0			\
  		| SC_ALGORITHM_ONBOARD_KEY_GEN		\
-@@ -136,13 +139,17 @@ struct iasecc_pin_policy {
+@@ -136,13 +138,17 @@ struct iasecc_pin_policy {
  	int stored_length;
  	int tries_maximum;
  	int tries_remaining;
@@ -205,7 +110,7 @@ index 23f80aee5d6524372bb0718fbdc50ede699024cd..eb781edd8030b36ed0f5f0a39c2ce3de
  static int iasecc_pin_get_policy (struct sc_card *card, struct sc_pin_cmd_data *data, struct iasecc_pin_policy *pin);
  static int iasecc_pin_get_status(struct sc_card *card, struct sc_pin_cmd_data *data);
  static int iasecc_pin_get_info(struct sc_card *card, struct sc_pin_cmd_data *data);
-@@ -353,6 +360,10 @@ iasecc_match_card(struct sc_card *card)
+@@ -353,6 +359,10 @@ iasecc_match_card(struct sc_card *card)
  {
  	struct sc_context *ctx = card->ctx;
  	int i;
@@ -216,7 +121,7 @@ index 23f80aee5d6524372bb0718fbdc50ede699024cd..eb781edd8030b36ed0f5f0a39c2ce3de
  
  	i = _sc_match_atr(card, iasecc_known_atrs, &card->type);
  	if (i < 0)   {
-@@ -626,6 +637,8 @@ iasecc_init(struct sc_card *card)
+@@ -626,6 +636,8 @@ iasecc_init(struct sc_card *card)
  	struct iasecc_private_data *private_data = NULL;
  	int rv = SC_ERROR_NO_CARD_SUPPORT;
  	void *old_drv_data = card->drv_data;
@@ -225,47 +130,7 @@ index 23f80aee5d6524372bb0718fbdc50ede699024cd..eb781edd8030b36ed0f5f0a39c2ce3de
  
  	LOG_FUNC_CALLED(ctx);
  	private_data = (struct iasecc_private_data *) calloc(1, sizeof(struct iasecc_private_data));
-@@ -855,6 +868,24 @@ iasecc_emulate_fcp(struct sc_context *ctx, struct sc_apdu *apdu)
- }
- 
- 
-+/* Only classify fixed public selection targets. Never log path bytes/lengths. */
-+static unsigned long
-+iasecc_trace_selection_target(const struct sc_path *path)
-+{
-+	static const unsigned char root[] = {0xF0,0x49,0x61,0x73,0x45,0x63,0x63,0x52,0x6F,0x6F,0x74};
-+	static const unsigned char chipdoc[] = {0xE8,0x28,0xBD,0x08,0x0F,0xD2,0x50,0x47,0x65,0x6E,0x65,0x72,0x69,0x63};
-+	if (path->type == SC_PATH_TYPE_DF_NAME) {
-+		if (path->len == sizeof(root) && !memcmp(path->value, root, sizeof(root)))
-+			return 2;
-+		if (path->len == sizeof(chipdoc) && !memcmp(path->value, chipdoc, sizeof(chipdoc)))
-+			return 3;
-+		return 4;
-+	}
-+	if (path->len == 2 && path->value[0] == 0x3F && !path->value[1])
-+		return 1;
-+	return 0;
-+}
-+
- /* TODO: redesign using of cache
-  * TODO: do not keep intermediate results in 'file_out' argument */
- static int
-@@ -1000,8 +1031,14 @@ iasecc_select_file(struct sc_card *card, const struct sc_path *path,
- 			apdu.le = 256;
- 
- 			rv = sc_transmit_apdu(card, &apdu);
-+			if (card->type == SC_CARD_TYPE_IASECC_AMOS && rv < 0)
-+				sc_api_metadata_trace(SC_API_CARD_SELECT, 0, (unsigned long)rv,
-+						iasecc_trace_selection_target(&lpath), 0);
- 			LOG_TEST_GOTO_ERR(ctx, rv, "APDU transmit failed");
- 			rv = sc_check_sw(card, apdu.sw1, apdu.sw2);
-+			if (card->type == SC_CARD_TYPE_IASECC_AMOS)
-+				sc_api_metadata_trace(SC_API_CARD_SELECT, 0, (unsigned long)rv,
-+						iasecc_trace_selection_target(&lpath), (apdu.sw1 << 8) | apdu.sw2);
- 			if (rv == SC_ERROR_INCORRECT_PARAMETERS &&
- 					lpath.type == SC_PATH_TYPE_DF_NAME && apdu.p2 == 0x00)   {
- 				sc_log(ctx, "Warning: SC_ERROR_INCORRECT_PARAMETERS for SC_PATH_TYPE_DF_NAME, try again with P2=0x0C");
-@@ -1097,10 +1134,10 @@ iasecc_process_fci(struct sc_card *card, struct sc_file *file,
+@@ -1097,10 +1109,10 @@ iasecc_process_fci(struct sc_card *card, struct sc_file *file,
  		 const unsigned char *buf, size_t buflen)
  {
  	struct sc_context *ctx = card->ctx;
@@ -279,7 +144,7 @@ index 23f80aee5d6524372bb0718fbdc50ede699024cd..eb781edd8030b36ed0f5f0a39c2ce3de
  	unsigned char ops_DF[7] = {
  		SC_AC_OP_DELETE, 0xFF, SC_AC_OP_ACTIVATE, SC_AC_OP_DEACTIVATE, 0xFF, SC_AC_OP_CREATE, 0xFF
  	};
-@@ -1147,40 +1184,38 @@ iasecc_process_fci(struct sc_card *card, struct sc_file *file,
+@@ -1147,40 +1159,38 @@ iasecc_process_fci(struct sc_card *card, struct sc_file *file,
  	}
  
  	sc_log(ctx, "ACLs(%zu) '%s'", taglen, sc_dump_hex(acls, taglen));
@@ -338,7 +203,7 @@ index 23f80aee5d6524372bb0718fbdc50ede699024cd..eb781edd8030b36ed0f5f0a39c2ce3de
  	}
  
  	LOG_FUNC_RETURN(ctx, 0);
-@@ -1386,14 +1421,41 @@ iasecc_get_challenge(struct sc_card *card, u8 * rnd, size_t len)
+@@ -1386,14 +1396,41 @@ iasecc_get_challenge(struct sc_card *card, u8 * rnd, size_t len)
  }
  
  
@@ -380,7 +245,7 @@ index 23f80aee5d6524372bb0718fbdc50ede699024cd..eb781edd8030b36ed0f5f0a39c2ce3de
  	if (!card->ef_atr || !card->ef_atr->aid.len)
  		return SC_SUCCESS;
  
-@@ -1415,8 +1477,12 @@ iasecc_finish(struct sc_card *card)
+@@ -1415,8 +1452,12 @@ iasecc_finish(struct sc_card *card)
  	struct sc_context *ctx = card->ctx;
  	struct iasecc_private_data *private_data = (struct iasecc_private_data *)card->drv_data;
  	struct iasecc_se_info *se_info = private_data->se_info, *next;
@@ -393,7 +258,7 @@ index 23f80aee5d6524372bb0718fbdc50ede699024cd..eb781edd8030b36ed0f5f0a39c2ce3de
  
  	sc_invalidate_cache(card);
  
-@@ -1430,7 +1496,7 @@ iasecc_finish(struct sc_card *card)
+@@ -1430,7 +1471,7 @@ iasecc_finish(struct sc_card *card)
  	free(card->drv_data);
  	card->drv_data = NULL;
  
@@ -402,16 +267,13 @@ index 23f80aee5d6524372bb0718fbdc50ede699024cd..eb781edd8030b36ed0f5f0a39c2ce3de
  }
  
  
-@@ -1492,10 +1558,31 @@ iasecc_check_sw(struct sc_card *card, unsigned int sw1, unsigned int sw2)
+@@ -1492,10 +1533,28 @@ iasecc_check_sw(struct sc_card *card, unsigned int sw1, unsigned int sw2)
  }
  
  
 +static int
 +iasecc_is_chipdoc_signing_key(struct sc_card *card, const struct sc_security_env *env)
 +{
-+	static const unsigned char aid[] = {
-+		0xE8,0x28,0xBD,0x08,0x0F,0xD2,0x50,0x47,0x65,0x6E,0x65,0x72,0x69,0x63
-+	};
 +	struct iasecc_private_data *prv = card->drv_data;
 +	const struct sc_path *path;
 +
@@ -422,8 +284,8 @@ index 23f80aee5d6524372bb0718fbdc50ede699024cd..eb781edd8030b36ed0f5f0a39c2ce3de
 +			(env->key_ref[0] & ~IASECC_OBJECT_REF_LOCAL) != 3)
 +		return 0;
 +	path = &prv->cache.current_df->path;
-+	return path->type == SC_PATH_TYPE_DF_NAME && path->len == sizeof(aid) &&
-+			!memcmp(path->value, aid, sizeof(aid));
++	return path->type == SC_PATH_TYPE_DF_NAME && path->len == IASECC_CHIPDOC_GENERIC_AID_LEN &&
++			!memcmp(path->value, IASECC_CHIPDOC_GENERIC_AID, IASECC_CHIPDOC_GENERIC_AID_LEN);
 +}
 +
  static unsigned
@@ -435,7 +297,7 @@ index 23f80aee5d6524372bb0718fbdc50ede699024cd..eb781edd8030b36ed0f5f0a39c2ce3de
      const struct sc_supported_algo_info *info = NULL;
      int ii;
  
-@@ -1516,7 +1603,22 @@ iasecc_get_algorithm(struct sc_context *ctx, const struct sc_security_env *env,
+@@ -1516,7 +1575,22 @@ iasecc_get_algorithm(struct sc_context *ctx, const struct sc_security_env *env,
          sc_log(ctx, "cannot find IAS/ECC algorithm (operation:%X,mechanism:%X)", operation, mechanism);
      }
  
@@ -459,7 +321,7 @@ index 23f80aee5d6524372bb0718fbdc50ede699024cd..eb781edd8030b36ed0f5f0a39c2ce3de
  }
  
  
-@@ -1666,6 +1768,7 @@ iasecc_set_security_env(struct sc_card *card,
+@@ -1666,6 +1740,7 @@ iasecc_set_security_env(struct sc_card *card,
  	unsigned algo_ref;
  	struct sc_apdu apdu;
  	unsigned sign_meth, sign_ref, auth_meth, auth_ref;
@@ -467,7 +329,7 @@ index 23f80aee5d6524372bb0718fbdc50ede699024cd..eb781edd8030b36ed0f5f0a39c2ce3de
  	unsigned long aflags;
  	unsigned char cse_crt_at[] = {
  		0x84, 0x01, 0xFF,
-@@ -1683,6 +1786,7 @@ iasecc_set_security_env(struct sc_card *card,
+@@ -1683,6 +1758,7 @@ iasecc_set_security_env(struct sc_card *card,
  		0x80, 0x01, (IASECC_ALGORITHM_RSA_PKCS_DECRYPT | IASECC_ALGORITHM_SHA1)
  	};
  	int rv, operation = env->operation;
@@ -475,7 +337,7 @@ index 23f80aee5d6524372bb0718fbdc50ede699024cd..eb781edd8030b36ed0f5f0a39c2ce3de
  
  	/* TODO: take algorithm references from 5032, not from header file. */
  	LOG_FUNC_CALLED(ctx);
-@@ -1692,21 +1796,32 @@ iasecc_set_security_env(struct sc_card *card,
+@@ -1692,21 +1768,30 @@ iasecc_set_security_env(struct sc_card *card,
  	memset(&sdo, 0, sizeof(sdo));
  	sdo.sdo_class = IASECC_SDO_CLASS_RSA_PRIVATE;
  	sdo.sdo_ref  = env->key_ref[0] & ~IASECC_OBJECT_REF_LOCAL;
@@ -491,8 +353,6 @@ index 23f80aee5d6524372bb0718fbdc50ede699024cd..eb781edd8030b36ed0f5f0a39c2ce3de
 +	 */
 +	rv = chipdoc ? iasecc_sdo_get_tagged_data(card, IASECC_DOCP_TAG, &sdo) :
 +			iasecc_sdo_get_data(card, &sdo);
-+	if (chipdoc)
-+		sc_api_metadata_trace(SC_API_CARD_KEY_DOCP, 0, (unsigned long)rv, sdo.sdo_ref, 0);
 +	if (rv >= 0) {
 +		if (sdo.docp.size.size < 2 || (chipdoc && sdo.docp.size.size != 2)) {
 +			rv = SC_ERROR_INVALID_DATA;
@@ -521,7 +381,7 @@ index 23f80aee5d6524372bb0718fbdc50ede699024cd..eb781edd8030b36ed0f5f0a39c2ce3de
  	aflags = env->algorithm_flags;
  
  	if (!(aflags & SC_ALGORITHM_RSA_PAD_PKCS1_TYPE_01))
-@@ -1743,27 +1858,27 @@ iasecc_set_security_env(struct sc_card *card,
+@@ -1743,27 +1828,27 @@ iasecc_set_security_env(struct sc_card *card,
  			LOG_TEST_RET(ctx, SC_ERROR_INVALID_ARGUMENTS, "Need RSA_PKCS1 specified");
  
  		if (env->algorithm_flags & SC_ALGORITHM_RSA_HASH_SHA256)   {
@@ -554,7 +414,7 @@ index 23f80aee5d6524372bb0718fbdc50ede699024cd..eb781edd8030b36ed0f5f0a39c2ce3de
  			if (!algo_ref)
  				LOG_TEST_RET(ctx, SC_ERROR_NOT_SUPPORTED, "Card application do not supports SIGNATURE:SHA1_RSA_PKCS");
  
-@@ -1790,7 +1905,7 @@ iasecc_set_security_env(struct sc_card *card,
+@@ -1790,7 +1875,7 @@ iasecc_set_security_env(struct sc_card *card,
  		apdu.lc = sizeof(cse_crt_dst);
  		break;
  	case SC_SEC_OPERATION_AUTHENTICATE:
@@ -563,7 +423,7 @@ index 23f80aee5d6524372bb0718fbdc50ede699024cd..eb781edd8030b36ed0f5f0a39c2ce3de
  		if (!algo_ref)
  			LOG_TEST_RET(ctx, SC_ERROR_NOT_SUPPORTED, "Application do not supports SIGNATURE:RSA_PKCS");
  
-@@ -1803,9 +1918,9 @@ iasecc_set_security_env(struct sc_card *card,
+@@ -1803,9 +1888,9 @@ iasecc_set_security_env(struct sc_card *card,
  		apdu.lc = sizeof(cse_crt_at);
  		break;
  	case SC_SEC_OPERATION_DECIPHER:
@@ -576,97 +436,26 @@ index 23f80aee5d6524372bb0718fbdc50ede699024cd..eb781edd8030b36ed0f5f0a39c2ce3de
  		if (!algo_ref)
  			LOG_TEST_RET(ctx, SC_ERROR_NOT_SUPPORTED, "Application do not supports DECIPHER:RSA_PKCS");
  
-@@ -1824,6 +1939,8 @@ iasecc_set_security_env(struct sc_card *card,
- 	rv = sc_transmit_apdu(card, &apdu);
- 	LOG_TEST_RET(ctx, rv, "APDU transmit failed");
- 	rv = sc_check_sw(card, apdu.sw1, apdu.sw2);
-+	sc_api_metadata_trace(SC_API_CARD_MSE, 0, (unsigned long)rv,
-+			((unsigned long)apdu.sw1 << 8) | apdu.sw2, operation);
- 	LOG_TEST_RET(ctx, rv, "MSE restore error");
- 
- 	prv->security_env = *env;
-@@ -1918,6 +2035,113 @@ iasecc_pin_get_status(struct sc_card *card, struct sc_pin_cmd_data *data)
+@@ -1918,6 +2003,52 @@ iasecc_pin_get_status(struct sc_card *card, struct sc_pin_cmd_data *data)
  }
  
  
 +static int
-+iasecc_chipdoc_post_login_probe(struct sc_card *card,
-+		const struct sc_pin_cmd_data *verified, const struct iasecc_pin_policy *policy)
-+{
-+	static const unsigned char aid[] = {
-+		0xE8,0x28,0xBD,0x08,0x0F,0xD2,0x50,0x47,0x65,0x6E,0x65,0x72,0x69,0x63
-+	};
-+	const char *experiment = getenv("OPENSC_JCOP3_POST_LOGIN_STATUS");
-+	const char *select_experiment = getenv("OPENSC_JCOP3_POST_LOGIN_SELECT");
-+	struct sc_pin_cmd_data status;
-+	struct sc_path root;
-+	int query_status = experiment && !strcmp(experiment, "yes");
-+	int query_select = select_experiment && !strcmp(select_experiment, "yes");
-+	int i, rv;
-+
-+	/* Temporary experiment, called only after an actual successful VERIFY.
-+	 * Isolate either one empty VERIFY or one root SELECT. No policy reads,
-+	 * credential copies or retries. The two experiments cannot be combined.
-+	 * The parsed policy marker is deliberately not assigned a meaning.
-+	 */
-+	if ((!query_status && !query_select) ||
-+			card->type != SC_CARD_TYPE_IASECC_AMOS || !policy->read_verify_only ||
-+			verified->cmd != SC_PIN_CMD_VERIFY || verified->pin_type != SC_AC_CHV ||
-+			verified->pin_reference != 1)
-+		return SC_SUCCESS;
-+	for (i = 0; i < card->app_count && i < SC_MAX_CARD_APPS; i++) {
-+		if (card->app[i] && card->app[i]->aid.len == sizeof(aid) &&
-+				!memcmp(card->app[i]->aid.value, aid, sizeof(aid)))
-+			break;
-+	}
-+	if (i >= card->app_count || i >= SC_MAX_CARD_APPS)
-+		return SC_SUCCESS;
-+	if (query_status && query_select)
-+		return SC_ERROR_INVALID_ARGUMENTS;
-+	if (query_select) {
-+		/* Same root AID selected by the observed MF/GET INFO path. */
-+		sc_format_path("F0496173456363526F6F74", &root);
-+		root.type = SC_PATH_TYPE_DF_NAME;
-+		sc_api_metadata_trace(SC_API_POST_LOGIN_SELECT_BEGIN, 0, 0, 2, 0);
-+		rv = iasecc_select_file(card, &root, NULL);
-+		sc_api_metadata_trace(SC_API_POST_LOGIN_SELECT, 0, (unsigned long)rv, 2, 0);
-+		return rv;
-+	}
-+
-+	memset(&status, 0, sizeof(status));
-+	status.cmd = SC_PIN_CMD_GET_INFO;
-+	status.pin_type = SC_AC_CHV;
-+	status.pin_reference = 1;
-+	sc_api_metadata_trace(SC_API_POST_LOGIN_STATUS_BEGIN, 0, 0, 1, 0);
-+	rv = iasecc_pin_get_status(card, &status);
-+	sc_api_metadata_trace(SC_API_POST_LOGIN_STATUS, 0, (unsigned long)rv,
-+			status.pin1.logged_in, 0);
-+	return rv;
-+}
-+
-+
-+static int
 +iasecc_chipdoc_fresh_verify(struct sc_card *card, const struct sc_pin_cmd_data *data)
 +{
-+	static const unsigned char aid[] = {
-+		0xE8,0x28,0xBD,0x08,0x0F,0xD2,0x50,0x47,0x65,0x6E,0x65,0x72,0x69,0x63
-+	};
-+	const char *experiment = getenv("OPENSC_JCOP3_PIN_STATUS_IN_PLACE");
 +	int i;
 +
 +	/* Empty VERIFY can still report an authenticated CHV after a root
 +	 * selection has invalidated permission for the observed RSA operation.
-+	 * In the opt-in candidate, an explicit VERIFY must reach the card;
++	 * For this detected profile, an explicit VERIFY must reach the card;
 +	 * neither consult nor populate the legacy verified-PIN hash shortcut.
 +	 * The normal policy read/validation remains before the actual VERIFY.
 +	 */
-+	if (!experiment || strcmp(experiment, "yes") ||
-+			card->type != SC_CARD_TYPE_IASECC_AMOS || data->cmd != SC_PIN_CMD_VERIFY ||
++	if (!card || !data || data->cmd != SC_PIN_CMD_VERIFY ||
 +			data->pin_type != SC_AC_CHV || data->pin_reference != 1)
 +		return 0;
 +	for (i = 0; i < card->app_count && i < SC_MAX_CARD_APPS; i++)
-+		if (card->app[i] && card->app[i]->aid.len == sizeof(aid) &&
-+				!memcmp(card->app[i]->aid.value, aid, sizeof(aid)))
++		if (card->app[i] && iasecc_chipdoc_jcop3(card, &card->app[i]->aid))
 +			return 1;
 +	return 0;
 +}
@@ -684,14 +473,15 @@ index 23f80aee5d6524372bb0718fbdc50ede699024cd..eb781edd8030b36ed0f5f0a39c2ce3de
 +
 +	/* A different client can select the IAS root while this application's
 +	 * PIN dialog is open. Root VERIFY may succeed without restoring the
-+	 * observed RSA permission. In the opt-in candidate, establish ChipDoc
++	 * observed RSA permission. For this detected profile, establish ChipDoc
 +	 * after all root/policy selections and before the actual VERIFY. Never
 +	 * recover by replaying a PIN after a failed signature.
 +	 */
-+	sc_format_path("E828BD080FD25047656E65726963", &path);
++	sc_format_path("", &path);
++	path.len = IASECC_CHIPDOC_GENERIC_AID_LEN;
++	memcpy(path.value, IASECC_CHIPDOC_GENERIC_AID, path.len);
 +	path.type = SC_PATH_TYPE_DF_NAME;
 +	rv = iasecc_select_file(card, &path, NULL);
-+	sc_api_metadata_trace(SC_API_PRE_VERIFY_SELECT, 0, (unsigned long)rv, 3, 0);
 +	return rv;
 +}
 +
@@ -699,7 +489,7 @@ index 23f80aee5d6524372bb0718fbdc50ede699024cd..eb781edd8030b36ed0f5f0a39c2ce3de
  static int
  iasecc_pin_verify(struct sc_card *card, struct sc_pin_cmd_data *data)
  {
-@@ -1927,6 +2151,7 @@ iasecc_pin_verify(struct sc_card *card, struct sc_pin_cmd_data *data)
+@@ -1927,6 +2058,7 @@ iasecc_pin_verify(struct sc_card *card, struct sc_pin_cmd_data *data)
  	struct sc_pin_cmd_data pin_cmd;
  	struct iasecc_pin_policy policy;
  	int tries_before_verify = -1;
@@ -707,21 +497,16 @@ index 23f80aee5d6524372bb0718fbdc50ede699024cd..eb781edd8030b36ed0f5f0a39c2ce3de
  	int rv;
  
  	LOG_FUNC_CALLED(ctx);
-@@ -1966,9 +2191,11 @@ iasecc_pin_verify(struct sc_card *card, struct sc_pin_cmd_data *data)
+@@ -1966,7 +2098,7 @@ iasecc_pin_verify(struct sc_card *card, struct sc_pin_cmd_data *data)
  		LOG_FUNC_RETURN(ctx, rv);
  
  	if (!rv)   {
 -		if (pin_cmd.pin1.logged_in & SC_PIN_STATE_LOGGED_IN)
--			if (iasecc_chv_cache_is_verified(card, &pin_cmd))
 +		if (!fresh_verify && (pin_cmd.pin1.logged_in & SC_PIN_STATE_LOGGED_IN))
-+			if (iasecc_chv_cache_is_verified(card, &pin_cmd)) {
-+				sc_api_metadata_trace(SC_API_CARD_PIN_VERIFY_CACHED, 0, 0, reference, 0);
+ 			if (iasecc_chv_cache_is_verified(card, &pin_cmd))
  				LOG_FUNC_RETURN(ctx, SC_SUCCESS);
-+			}
  	}
- 	else if (rv != SC_ERROR_SECURITY_STATUS_NOT_SATISFIED)   {
- 		LOG_FUNC_RETURN(ctx, rv);
-@@ -1986,7 +2213,11 @@ iasecc_pin_verify(struct sc_card *card, struct sc_pin_cmd_data *data)
+@@ -1986,6 +2118,9 @@ iasecc_pin_verify(struct sc_card *card, struct sc_pin_cmd_data *data)
  			iasecc_set_pin_padding(&pin_cmd, &pin_cmd.pin1, policy.stored_length);
  	}
  
@@ -729,11 +514,9 @@ index 23f80aee5d6524372bb0718fbdc50ede699024cd..eb781edd8030b36ed0f5f0a39c2ce3de
 +	LOG_TEST_RET(ctx, rv, "Cannot select ChipDoc before VERIFY");
 +
  	rv = iasecc_chv_verify(card, &pin_cmd, policy.scbs);
-+	sc_api_metadata_trace(SC_API_CARD_PIN_VERIFY, 0, (unsigned long)rv, reference, 0);
  
  	/*
- 	 * Detect and log PIN-pads which don't handle variable-length PIN - special case where they
-@@ -2003,7 +2234,11 @@ iasecc_pin_verify(struct sc_card *card, struct sc_pin_cmd_data *data)
+@@ -2003,7 +2138,10 @@ iasecc_pin_verify(struct sc_card *card, struct sc_pin_cmd_data *data)
  
  	LOG_TEST_RET(ctx, rv, "PIN CHV verification error");
  
@@ -742,11 +525,10 @@ index 23f80aee5d6524372bb0718fbdc50ede699024cd..eb781edd8030b36ed0f5f0a39c2ce3de
 +		rv = iasecc_chv_cache_verified(card, &pin_cmd);
 +		LOG_TEST_RET(ctx, rv, "Cannot record verified CHV");
 +	}
-+	rv = iasecc_chipdoc_post_login_probe(card, &pin_cmd, &policy);
  
  	LOG_FUNC_RETURN(ctx, rv);
  }
-@@ -2071,6 +2306,7 @@ iasecc_pin_get_policy (struct sc_card *card, struct sc_pin_cmd_data *data, struc
+@@ -2071,6 +2209,7 @@ iasecc_pin_get_policy (struct sc_card *card, struct sc_pin_cmd_data *data, struc
  	sc_log(ctx, "iasecc_pin_get_policy() sdo.docp.size.size %zu", sdo.docp.size.size);
  
  	memcpy(pin->scbs, sdo.docp.scbs, sizeof(pin->scbs));
@@ -754,31 +536,26 @@ index 23f80aee5d6524372bb0718fbdc50ede699024cd..eb781edd8030b36ed0f5f0a39c2ce3de
  
  	pin->min_length = (sdo.data.chv.size_min.value ? *sdo.data.chv.size_min.value : -1);
  	pin->max_length = (sdo.data.chv.size_max.value ? *sdo.data.chv.size_max.value : -1);
-@@ -2101,6 +2337,9 @@ iasecc_pin_get_policy (struct sc_card *card, struct sc_pin_cmd_data *data, struc
- 		rv = iasecc_select_file(card, &save_current_ef->path, NULL);
+@@ -2102,6 +2241,10 @@ iasecc_pin_get_policy (struct sc_card *card, struct sc_pin_cmd_data *data, struc
  		LOG_TEST_GOTO_ERR(ctx, rv, "Cannot return to saved EF");
  	}
+ 
 +	if (card->type == SC_CARD_TYPE_IASECC_AMOS && data->pin_reference == 1)
 +		prv->chipdoc_pin_max_tries = pin->read_verify_only && pin->tries_maximum > 0
 +				? pin->tries_maximum : 0;
- 
++
  err:
  	sc_file_free(save_current_df);
-@@ -2114,11 +2353,23 @@ static int
- iasecc_pin_get_info(struct sc_card *card, struct sc_pin_cmd_data *data)
- {
- 	struct sc_context *ctx = card->ctx;
-+	struct iasecc_private_data *prv = card->drv_data;
- 	struct iasecc_pin_policy policy;
- 	int rv;
+ 	sc_file_free(save_current_ef);
+@@ -2119,6 +2262,17 @@ iasecc_pin_get_info(struct sc_card *card, struct sc_pin_cmd_data *data)
  
  	LOG_FUNC_CALLED(ctx);
  	sc_log(ctx, "iasecc_pin_get_info(card:%p)", card);
-+	if (card->type == SC_CARD_TYPE_IASECC_AMOS)
-+		sc_api_metadata_trace(SC_API_CARD_PIN_INFO_BEGIN, 0, 0, data->pin_reference, 0);
-+	if (data->flags & SC_PIN_CMD_STATUS_ONLY) {
-+		if (card->type != SC_CARD_TYPE_IASECC_AMOS || data->pin_type != SC_AC_CHV ||
-+				data->pin_reference != 1 || !prv || prv->chipdoc_pin_max_tries <= 0)
++	if (data->flags & IASECC_PIN_STATUS_ONLY) {
++		struct iasecc_private_data *prv = card->drv_data;
++		struct sc_pin_cmd_data verify = *data;
++		verify.cmd = SC_PIN_CMD_VERIFY;
++		if (!iasecc_chipdoc_fresh_verify(card, &verify) || !prv || prv->chipdoc_pin_max_tries <= 0)
 +			return SC_ERROR_NOT_SUPPORTED;
 +		rv = iasecc_pin_get_status(card, data);
 +		if (rv == SC_SUCCESS)
@@ -788,21 +565,7 @@ index 23f80aee5d6524372bb0718fbdc50ede699024cd..eb781edd8030b36ed0f5f0a39c2ce3de
  
  	/*
  	 * Get PIN status first and thereafter update with info from PIN policy, when available.
-@@ -2127,9 +2378,13 @@ iasecc_pin_get_info(struct sc_card *card, struct sc_pin_cmd_data *data)
- 	 * policy takes precedence.
- 	 */
- 	rv = iasecc_pin_get_status(card, data);
-+	if (card->type == SC_CARD_TYPE_IASECC_AMOS)
-+		sc_api_metadata_trace(SC_API_CARD_PIN_INFO, 0, (unsigned long)rv, data->pin1.logged_in, 1);
- 	LOG_TEST_RET(ctx, rv, "Failed to get PIN status");
- 
- 	rv = iasecc_pin_get_policy(card, data, &policy);
-+	if (card->type == SC_CARD_TYPE_IASECC_AMOS)
-+		sc_api_metadata_trace(SC_API_CARD_PIN_INFO, 0, (unsigned long)rv, data->pin1.logged_in, 2);
- 	LOG_TEST_RET(ctx, rv, "Failed to get PIN policy");
- 
- 	/*
-@@ -2302,6 +2557,13 @@ iasecc_pin_change(struct sc_card *card, struct sc_pin_cmd_data *data)
+@@ -2302,6 +2456,13 @@ iasecc_pin_change(struct sc_card *card, struct sc_pin_cmd_data *data)
  		LOG_FUNC_RETURN(ctx, SC_ERROR_NOT_SUPPORTED);
  	}
  
@@ -816,7 +579,7 @@ index 23f80aee5d6524372bb0718fbdc50ede699024cd..eb781edd8030b36ed0f5f0a39c2ce3de
  	/*
  	 * Verify the original PIN. This would normally not be needed since it is implicitly done
  	 * by the card when executing a PIN change command. But we must go through our verification
-@@ -2374,6 +2636,9 @@ iasecc_pin_reset(struct sc_card *card, struct sc_pin_cmd_data *data)
+@@ -2374,6 +2535,9 @@ iasecc_pin_reset(struct sc_card *card, struct sc_pin_cmd_data *data)
  	rv = iasecc_pin_get_policy(card, data, &policy);
  	LOG_TEST_RET(ctx, rv, "Failed to get PIN policy");
  
@@ -826,20 +589,7 @@ index 23f80aee5d6524372bb0718fbdc50ede699024cd..eb781edd8030b36ed0f5f0a39c2ce3de
  	scb = policy.scbs[IASECC_ACLS_CHV_RESET];
  	do   {
  		unsigned need_all = scb & IASECC_SCB_METHOD_NEED_ALL ? 1 : 0;
-@@ -3357,8 +3622,12 @@ iasecc_compute_signature_at(struct sc_card *card,
- 	apdu.le = 0x100;
- 
- 	rv = sc_transmit_apdu(card, &apdu);
-+	if (rv < 0)
-+		sc_api_metadata_trace(SC_API_CARD_SIGN_AT, 0, (unsigned long)rv, 0, 0);
- 	LOG_TEST_RET(ctx, rv, "APDU transmit failed");
- 	rv = sc_check_sw(card, apdu.sw1, apdu.sw2);
-+	sc_api_metadata_trace(SC_API_CARD_SIGN_AT, 0, (unsigned long)rv,
-+			((unsigned long)apdu.sw1 << 8) | apdu.sw2, 0);
- 	LOG_TEST_RET(ctx, rv, "Compute signature failed");
- 
- 	do   {
-@@ -3586,6 +3855,33 @@ iasecc_get_free_reference(struct sc_card *card, struct iasecc_ctl_get_free_refer
+@@ -3586,6 +3750,33 @@ iasecc_get_free_reference(struct sc_card *card, struct iasecc_ctl_get_free_refer
  }
  
  
@@ -873,43 +623,13 @@ index 23f80aee5d6524372bb0718fbdc50ede699024cd..eb781edd8030b36ed0f5f0a39c2ce3de
  static struct sc_card_driver *
  sc_get_driver(void)
  {
-@@ -3629,6 +3925,7 @@ sc_get_driver(void)
+@@ -3629,6 +3820,7 @@ sc_get_driver(void)
  	/*	delete_record: Not implemented	*/
  
  	iasecc_ops.read_public_key = iasecc_read_public_key;
 +	iasecc_ops.card_reader_lock_obtained = iasecc_card_reader_lock_obtained;
  
  	return &iasecc_drv;
- }
-diff --git a/src/libopensc/card.c b/src/libopensc/card.c
-index 7ff9d3a8afbd48eb7d940f18449b60f2a8a604eb..70cd52df47c339f638a7ba8b73706d718825133f 100644
---- a/src/libopensc/card.c
-+++ b/src/libopensc/card.c
-@@ -32,6 +32,7 @@
- #include "reader-tr03119.h"
- #include "internal.h"
- #include "asn1.h"
-+#include "api-trace.h"
- #include "common/compat_strlcpy.h"
- 
- #ifdef ENABLE_SM
-@@ -441,6 +442,8 @@ int sc_reset(sc_card_t *card, int do_cold_reset)
- 		return r;
- 
- 	r = card->reader->ops->reset(card->reader, do_cold_reset);
-+	if (card->type == SC_CARD_TYPE_IASECC_AMOS)
-+		sc_api_metadata_trace(SC_API_CARD_RESET, 0, (unsigned long)r, !!do_cold_reset, 0);
- 
- 	r2 = sc_mutex_unlock(card->ctx, card->mutex);
- 	if (r2 != SC_SUCCESS) {
-@@ -498,6 +501,8 @@ int sc_lock(sc_card_t *card)
- 		if (SC_SUCCESS != card->ops->card_reader_lock_obtained(card, was_reset))
- 			sc_log(card->ctx, "card_reader_lock_obtained failed");
- 	}
-+	if (card->type == SC_CARD_TYPE_IASECC_AMOS && (reader_lock_obtained || r || was_reset))
-+		sc_api_metadata_trace(SC_API_CARD_LOCK, 0, (unsigned long)r, was_reset, reader_lock_obtained);
- 
- 	LOG_FUNC_RETURN(card->ctx, r);
  }
 diff --git a/src/libopensc/cards.h b/src/libopensc/cards.h
 index 43df71a70f68b4d1a63c20f13952b375b33a73a5..c8354cf34def946582b5fb3fa6108c49e388df5e 100644
@@ -925,10 +645,10 @@ index 43df71a70f68b4d1a63c20f13952b375b33a73a5..c8354cf34def946582b5fb3fa6108c49
  	SC_CARD_TYPE_SC_HSM = 26000,
 diff --git a/src/libopensc/iasecc-chipdoc-bind.c b/src/libopensc/iasecc-chipdoc-bind.c
 new file mode 100644
-index 0000000000000000000000000000000000000000..583d533603480ee3afeed64a9ad36a6969ddea79
+index 0000000000000000000000000000000000000000..3659ccb514e8a739d3a1c8d01c26d0db1ae7df26
 --- /dev/null
 +++ b/src/libopensc/iasecc-chipdoc-bind.c
-@@ -0,0 +1,63 @@
+@@ -0,0 +1,65 @@
 +/* SPDX-License-Identifier: LGPL-2.1-or-later
 + * Native post-bind activation of the explicit measured profile. */
 +#ifdef HAVE_CONFIG_H
@@ -954,6 +674,8 @@ index 0000000000000000000000000000000000000000..583d533603480ee3afeed64a9ad36a69
 +		return SC_ERROR_NOT_SUPPORTED;
 +	if (p15->flags & SC_PKCS15_CARD_FLAG_EMULATED)
 +		return SC_ERROR_NOT_SUPPORTED;
++	/* Both queries also enumerate their DF: the object list is populated
++	 * lazily and the pinned key/PIN scan below reads it directly. */
 +	int count = sc_pkcs15_get_objects(p15, SC_PKCS15_TYPE_PRKEY_RSA, objects, 32);
 +	if (count < 0)
 +		return count;
@@ -1136,10 +858,10 @@ index 0000000000000000000000000000000000000000..58d3cf3518411da4f0678d3aa06b15d5
 +#endif
 diff --git a/src/libopensc/iasecc-chipdoc-pkcs15.h b/src/libopensc/iasecc-chipdoc-pkcs15.h
 new file mode 100644
-index 0000000000000000000000000000000000000000..8284f2fbfda2792920d77e1a9d8e5f803bf8f393
+index 0000000000000000000000000000000000000000..935242ad685bd821d056aaff76801544293f6276
 --- /dev/null
 +++ b/src/libopensc/iasecc-chipdoc-pkcs15.h
-@@ -0,0 +1,149 @@
+@@ -0,0 +1,135 @@
 +/* SPDX-License-Identifier: LGPL-2.1-or-later
 + * Select the measured profile from already decoded public PKCS#15 objects.
 + * No discovery, certificate/credential bytes, card I/O or authentication.
@@ -1274,27 +996,13 @@ index 0000000000000000000000000000000000000000..8284f2fbfda2792920d77e1a9d8e5f80
 +	operation->selects_application = info->path.aid.len != 0;
 +	return SC_SUCCESS;
 +}
-+
-+/* Explicit private opt-in, no I/O/algorithm announcement/driver binding.
-+ * All validation precedes mutation. A caller enabling this operation must
-+ * keep caching disabled through authentication/signing; no saved PIN is read
-+ * or cleared, and failed validation leaves every option/object unchanged. */
-+static inline int
-+iasecc_chipdoc_pkcs15_disable_pin_cache(struct sc_pkcs15_card *p15,
-+		const struct sc_pkcs15_object *key, struct iasecc_chipdoc_pkcs15_operation *operation)
-+{
-+	int rv = iasecc_chipdoc_pkcs15_operation(p15, key, operation);
-+	if (!rv)
-+		p15->opts.use_pin_cache = 0;
-+	return rv;
-+}
 +#endif
 diff --git a/src/libopensc/iasecc-chipdoc-routing.h b/src/libopensc/iasecc-chipdoc-routing.h
 new file mode 100644
-index 0000000000000000000000000000000000000000..bfc9f4f2baece17c65b400112f8c4408219f5b77
+index 0000000000000000000000000000000000000000..1fe3629accfd99a5399634b708dd29434c3025cb
 --- /dev/null
 +++ b/src/libopensc/iasecc-chipdoc-routing.h
-@@ -0,0 +1,407 @@
+@@ -0,0 +1,389 @@
 +/* SPDX-License-Identifier: LGPL-2.1-or-later
 + * Explicit per-card routing after native objects are decoded. No automatic
 + * discovery/configuration/init, capability or mechanism announcement. Callers
@@ -1416,7 +1124,7 @@ index 0000000000000000000000000000000000000000..bfc9f4f2baece17c65b400112f8c4408
 +			data->apdu || data->pin2.data || data->pin2.len)
 +		return SC_ERROR_NOT_SUPPORTED;
 +	if (data->cmd == SC_PIN_CMD_GET_INFO) {
-+		if ((data->flags && data->flags != SC_PIN_CMD_STATUS_ONLY) || data->pin1.data || data->pin1.len)
++		if (data->flags || data->pin1.data || data->pin1.len)
 +			return SC_ERROR_INVALID_ARGUMENTS;
 +		rv = iasecc_chipdoc_channel_pin_status(card, &data->pin1.logged_in);
 +		if (rv) {
@@ -1627,11 +1335,6 @@ index 0000000000000000000000000000000000000000..bfc9f4f2baece17c65b400112f8c4408
 +static inline int
 +iasecc_chipdoc_routing_install(struct sc_pkcs15_card *p15, const struct sc_pkcs15_object *key)
 +{
-+#if defined(IASECC_CHIPDOC_NO_CRYPTO)
-+	(void)p15;
-+	(void)key;
-+	return SC_ERROR_NOT_SUPPORTED;
-+#else
 +	struct iasecc_chipdoc_pkcs15_operation op;
 +	struct sc_card *card = p15 ? p15->card : NULL;
 +	int rv = iasecc_chipdoc_channel_supported(card);
@@ -1687,27 +1390,14 @@ index 0000000000000000000000000000000000000000..bfc9f4f2baece17c65b400112f8c4408
 +	p15->ops.clear = chipdoc_route_clear;
 +	*card->ops = b->filtered;
 +	return SC_SUCCESS;
-+#endif
-+}
-+static inline int
-+iasecc_chipdoc_routing_last_report(struct sc_card *card, struct iasecc_chipdoc_routing_report *report)
-+{
-+	if (!report)
-+		return SC_ERROR_INVALID_ARGUMENTS;
-+	memset(report, 0, sizeof(*report));
-+	struct iasecc_chipdoc_routing *b = chipdoc_route(card);
-+	if (!b)
-+		return SC_ERROR_NOT_ALLOWED;
-+	*report = b->last;
-+	return SC_SUCCESS;
 +}
 +#endif
 diff --git a/src/libopensc/iasecc-chipdoc-sm.c b/src/libopensc/iasecc-chipdoc-sm.c
 new file mode 100644
-index 0000000000000000000000000000000000000000..eda81843bc2182f20db5672766e7bc4fc018a83b
+index 0000000000000000000000000000000000000000..f138ba72ba242644a3707db1d7378ace4647c345
 --- /dev/null
 +++ b/src/libopensc/iasecc-chipdoc-sm.c
-@@ -0,0 +1,1346 @@
+@@ -0,0 +1,1332 @@
 +/* SPDX-License-Identifier: LGPL-2.1-or-later
 + * Bounded anonymous channel transport for the measured ChipDoc profile.
 + * Public profile discovery and private typed PIN/signature operations;
@@ -1808,6 +1498,155 @@ index 0000000000000000000000000000000000000000..eda81843bc2182f20db5672766e7bc4f
 +		return SC_ERROR_NOT_SUPPORTED;
 +	*data = prv;
 +	return SC_SUCCESS;
++}
++
++/* Common entry contract of the typed channel operations: caller-owned report,
++ * iasecc driver only and the pending-reset flag from the card's local state. */
++static int
++chipdoc_entry(struct sc_card *card, struct iasecc_chipdoc_channel_report *report)
++{
++	if (!report)
++		return SC_ERROR_INVALID_ARGUMENTS;
++	memset(report, 0, sizeof(*report));
++	if (!card || !card->driver || !card->driver->short_name || strcmp(card->driver->short_name, "iasecc"))
++		return SC_ERROR_NOT_SUPPORTED;
++	if (card->drv_data) {
++		struct iasecc_private_data *prv = card->drv_data;
++		report->reset_required = prv->chipdoc_transaction.active || prv->chipdoc_session.channel ||
++			prv->chipdoc_recovery_required;
++	}
++	return SC_SUCCESS;
++}
++
++/* Resolve the card's owned transaction. A failed readiness check is a dead
++ * session and invalidates it; a foreign live transaction is left alone. */
++static int
++chipdoc_channel_owned(struct sc_card *card, struct iasecc_private_data **prv_out)
++{
++	struct iasecc_private_data *prv = NULL;
++	int rv = chipdoc_ready(card, &prv);
++	if (rv) {
++		iasecc_chipdoc_invalidate_card(card);
++		return rv;
++	}
++	if (!iasecc_chipdoc_transaction_owns(card, prv))
++		return SC_ERROR_NOT_ALLOWED;
++	*prv_out = prv;
++	return SC_SUCCESS;
++}
++
++/* Verify the attached channel against its owner, phase and, when nonzero,
++ * its exact SSC counter. A local phase mismatch leaves the session for its
++ * owner; any identity or counter mismatch is a reset condition. */
++static int
++chipdoc_channel_live(struct sc_card *card, struct iasecc_private_data *prv,
++		enum iasecc_chipdoc_phase phase, unsigned int ssc_counter,
++		struct chipdoc_crypto **crypto_out, uint64_t *generation_out)
++{
++	unsigned char expected[16] = {0};
++	struct chipdoc_crypto *crypto;
++	if (prv->chipdoc_session.phase != phase || !prv->chipdoc_session.channel ||
++			prv->chipdoc_session.clear_channel != chipdoc_crypto_clear)
++		return SC_ERROR_SM_NOT_INITIALIZED;
++	crypto = prv->chipdoc_session.channel;
++	expected[15] = ssc_counter;
++	if (!chipdoc_provider_matches(card, &crypto->provider) || crypto->card != card ||
++			crypto->reader != card->reader || crypto->generation != prv->chipdoc_session.generation ||
++			crypto->sm.phase != JCOP4_SM_IDLE ||
++			(ssc_counter && CRYPTO_memcmp(crypto->sm.keys.ssc, expected, sizeof(expected))))
++		return SC_ERROR_CARD_RESET;
++	*crypto_out = crypto;
++	*generation_out = prv->chipdoc_session.generation;
++	return SC_SUCCESS;
++}
++
++/* Managed signing operations only. A phase mismatch is a local error; a
++ * stale provider/SSC/owner is an invalid session, never an invitation to retry. */
++static int
++chipdoc_signing_ready(struct sc_card *card, enum iasecc_chipdoc_phase phase,
++		unsigned int counter, struct iasecc_private_data **data)
++{
++	struct iasecc_private_data *prv = NULL;
++	struct chipdoc_crypto *crypto;
++	uint64_t generation;
++	int rv;
++	if (!card || !card->driver || !card->driver->short_name || strcmp(card->driver->short_name, "iasecc"))
++		return SC_ERROR_NOT_SUPPORTED;
++	rv = chipdoc_channel_owned(card, &prv);
++	if (rv)
++		return rv;
++	rv = chipdoc_channel_live(card, prv, phase, counter, &crypto, &generation);
++	if (rv == SC_ERROR_SM_NOT_INITIALIZED)
++		return rv;
++	if (rv) {
++		iasecc_chipdoc_invalidate_card(card);
++		return rv;
++	}
++	*data = prv;
++	return SC_SUCCESS;
++}
++
++/* Shared measured VERIFY transport: seal, one CASE4 command through the
++ * normal dispatcher, then the strict authenticated response policy. The empty
++ * query and the PIN verify differ only in phase/SSC, inner data and the status
++ * handling kept in their callers. Only an authenticated empty response is
++ * accepted: response bytes are a protocol violation, never data to return. */
++static int
++chipdoc_verify_exchange(struct sc_card *card, struct iasecc_private_data *prv,
++		struct chipdoc_crypto *crypto, uint64_t generation,
++		const unsigned char *data, size_t data_size, unsigned int *sw,
++		struct iasecc_chipdoc_channel_report *report)
++{
++	const unsigned char command[4] = {0, 0x20, 0, 1};
++	unsigned char header[4], body[29], response[258], plain[256];
++	size_t written = 0, size, plain_size = 0;
++	sc_apdu_t apdu;
++	int rv, result = SC_ERROR_SM_ENCRYPT_FAILED;
++	if (jcop4_sm_seal_policy_ex(crypto->provider.libctx, &crypto->sm, command, data, data_size,
++			0, 0, header, body, sizeof(body), &written, JCOP4_SM_LE_SHORT) ||
++			written != (data_size ? 29u : 10u))
++		goto out;
++	sc_format_apdu(card, &apdu, SC_APDU_CASE_4_SHORT, 0x20, 0, 1);
++	apdu.cla = header[0];
++	apdu.data = body;
++	apdu.lc = apdu.datalen = written;
++	apdu.le = 256;
++	apdu.resp = response;
++	apdu.resplen = 256;
++	apdu.flags |= SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP | SC_APDU_FLAGS_NO_SM;
++	report->commands = 1;
++	report->reset_required = 1;
++	rv = sc_transmit_apdu(card, &apdu);
++	report->transport = rv;
++	result = rv;
++	if (rv < 0)
++		goto out;
++	if (prv->chipdoc_session.channel != crypto || prv->chipdoc_session.generation != generation ||
++			!iasecc_chipdoc_transaction_owns(card, prv) || !chipdoc_provider_matches(card, &crypto->provider)) {
++		result = SC_ERROR_CARD_RESET;
++		goto out;
++	}
++	result = SC_ERROR_UNKNOWN_DATA_RECEIVED;
++	if (apdu.resplen > 256)
++		goto out;
++	size = apdu.resplen;
++	response[size++] = apdu.sw1;
++	response[size++] = apdu.sw2;
++	result = SC_ERROR_SM_AUTHENTICATION_FAILED;
++	if (jcop4_sm_open_report_policy_ex(crypto->provider.libctx, &crypto->sm, response, size, plain,
++			sizeof(plain), &plain_size, sw, JCOP4_SM_OUTER_9000_OR_MATCHING_63CX))
++		goto out;
++	report->authenticated = 1;
++	report->sw = *sw;
++	result = plain_size ? SC_ERROR_INVALID_DATA : SC_SUCCESS;
++out:
++	sc_mem_clear(header, sizeof(header));
++	sc_mem_clear(body, sizeof(body));
++	sc_mem_clear(response, sizeof(response));
++	sc_mem_clear(plain, sizeof(plain));
++	if (result)
++		iasecc_chipdoc_invalidate_card(card);
++	return result;
 +}
 +
 +int
@@ -1987,7 +1826,8 @@ index 0000000000000000000000000000000000000000..eda81843bc2182f20db5672766e7bc4f
 +	struct iasecc_private_data *prv = NULL;
 +	sc_apdu_t apdu;
 +	int rv, cse;
-+	static const unsigned char mse[] = {0, 0x22, 0x41, 0xA4, 12, 0x80, 10, 4, 0, 0x7F, 0, 7, 2, 2, 3, 2, 2};
++	static const unsigned char mse[] = JCOP4_CA_MSE_BYTES;
++	static const unsigned char ga_prefix[] = JCOP4_CA_GA_PREFIX_BYTES;
 +	if (!received)
 +		return SC_ERROR_INVALID_ARGUMENTS;
 +	*received = 0;
@@ -2001,8 +1841,9 @@ index 0000000000000000000000000000000000000000..eda81843bc2182f20db5672766e7bc4f
 +			return SC_ERROR_NOT_ALLOWED;
 +		cse = SC_APDU_CASE_3_SHORT;
 +	} else if (x->step == 1) {
-+		if (size != 144 || memcmp(wire, "\x10\x86\0\0\x8b\x7c\x81\x88\x80\x81\x85", 11) ||
-+				!jcop4_p521_public_valid(wire + 11, 133))
++		if (size != sizeof(ga_prefix) + JCOP4_P521_POINT_SIZE ||
++				memcmp(wire, ga_prefix, sizeof(ga_prefix)) ||
++				!jcop4_p521_public_valid(wire + sizeof(ga_prefix), JCOP4_P521_POINT_SIZE))
 +			return SC_ERROR_NOT_ALLOWED;
 +		cse = SC_APDU_CASE_3_SHORT;
 +	} else {
@@ -2101,7 +1942,6 @@ index 0000000000000000000000000000000000000000..eda81843bc2182f20db5672766e7bc4f
 +	unsigned int sw;
 +	uint64_t generation;
 +	sc_apdu_t apdu;
-+	struct jcop4_sm_decode_report decoded;
 +	int rv, result;
 +	if (!report)
 +		return SC_ERROR_INVALID_ARGUMENTS;
@@ -2161,7 +2001,7 @@ index 0000000000000000000000000000000000000000..eda81843bc2182f20db5672766e7bc4f
 +	response[size++] = apdu.sw1;
 +	response[size++] = apdu.sw2;
 +	result = SC_ERROR_SM_AUTHENTICATION_FAILED;
-+	if (jcop4_sm_open_report_policy_ex(crypto->provider.libctx, &crypto->sm, response, size, plain, sizeof(plain), &plain_size, &sw, JCOP4_SM_OUTER_9000, &decoded))
++	if (jcop4_sm_open_report_policy_ex(crypto->provider.libctx, &crypto->sm, response, size, plain, sizeof(plain), &plain_size, &sw, JCOP4_SM_OUTER_9000))
 +		goto out;
 +	report->authenticated = 1;
 +	report->sw = sw;
@@ -2450,101 +2290,43 @@ index 0000000000000000000000000000000000000000..eda81843bc2182f20db5672766e7bc4f
 +{
 +	struct iasecc_private_data *prv = NULL;
 +	struct chipdoc_crypto *crypto;
-+	unsigned char header[4], body[10], response[258], plain[256];
-+	const unsigned char query[4] = {0, 0x20, 0, 1};
-+	size_t written = 0, size, plain_size;
 +	unsigned int sw;
 +	uint64_t generation;
-+	struct sc_apdu apdu;
-+	struct jcop4_sm_decode_report decoded;
-+	int rv, result = SC_ERROR_SM_ENCRYPT_FAILED;
++	int rv;
 +	if (tries_left)
 +		*tries_left = -1;
-+	if (!report)
-+		return SC_ERROR_INVALID_ARGUMENTS;
-+	memset(report, 0, sizeof(*report));
-+	if (!card || !card->driver || !card->driver->short_name || strcmp(card->driver->short_name, "iasecc"))
-+		return SC_ERROR_NOT_SUPPORTED;
-+	if (card->drv_data)
-+		report->reset_required = (((struct iasecc_private_data *)card->drv_data)->chipdoc_session.channel != NULL ||
-+					  ((struct iasecc_private_data *)card->drv_data)->chipdoc_transaction.active ||
-+					  ((struct iasecc_private_data *)card->drv_data)->chipdoc_recovery_required);
++	rv = chipdoc_entry(card, report);
++	if (rv)
++		return rv;
 +	if (!tries_left || reference != 1)
 +		return SC_ERROR_INVALID_ARGUMENTS;
-+	rv = chipdoc_ready(card, &prv);
-+	if (rv) {
-+		iasecc_chipdoc_invalidate_card(card);
++	rv = chipdoc_channel_owned(card, &prv);
++	if (rv)
 +		return rv;
-+	}
-+	if (!iasecc_chipdoc_transaction_owns(card, prv))
-+		return SC_ERROR_NOT_ALLOWED;
-+	if (prv->chipdoc_session.phase != IASECC_CHIPDOC_MF || !prv->chipdoc_session.channel ||
-+			prv->chipdoc_session.clear_channel != chipdoc_crypto_clear)
-+		return SC_ERROR_SM_NOT_INITIALIZED;
-+	crypto = prv->chipdoc_session.channel;
-+	generation = prv->chipdoc_session.generation;
-+	if (!chipdoc_provider_matches(card, &crypto->provider) || crypto->card != card || crypto->reader != card->reader ||
-+			crypto->generation != generation || crypto->sm.phase != JCOP4_SM_IDLE) {
-+		result = SC_ERROR_CARD_RESET;
-+		goto out;
-+	}
++	rv = chipdoc_channel_live(card, prv, IASECC_CHIPDOC_MF, 0, &crypto, &generation);
++	if (rv == SC_ERROR_SM_NOT_INITIALIZED)
++		return rv;
++	if (rv)
++		goto fail;
 +	/* Empty inner VERIFY: MAC only, no credential/DO87/DO97. */
-+	if (jcop4_sm_seal_policy_ex(crypto->provider.libctx, &crypto->sm, query, NULL, 0, 0, 0,
-+			    header, body, sizeof(body), &written, JCOP4_SM_LE_SHORT) ||
-+			written != sizeof(body))
-+		goto out;
-+	sc_format_apdu(card, &apdu, SC_APDU_CASE_4_SHORT, 0x20, 0, 1);
-+	apdu.cla = header[0];
-+	apdu.data = body;
-+	apdu.lc = apdu.datalen = written;
-+	apdu.le = 256;
-+	apdu.resp = response;
-+	apdu.resplen = 256;
-+	apdu.flags |= SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP | SC_APDU_FLAGS_NO_SM;
-+	report->commands = 1;
-+	report->reset_required = 1;
-+	rv = sc_transmit_apdu(card, &apdu);
-+	report->transport = rv;
-+	result = rv;
-+	if (rv < 0)
-+		goto out;
-+	if (prv->chipdoc_session.channel != crypto || prv->chipdoc_session.generation != generation ||
-+			!iasecc_chipdoc_transaction_owns(card, prv) || !chipdoc_provider_matches(card, &crypto->provider)) {
-+		result = SC_ERROR_CARD_RESET;
-+		goto out;
-+	}
-+	result = SC_ERROR_UNKNOWN_DATA_RECEIVED;
-+	if (apdu.resplen > 256)
-+		goto out;
-+	size = apdu.resplen;
-+	response[size++] = apdu.sw1;
-+	response[size++] = apdu.sw2;
-+	result = SC_ERROR_SM_AUTHENTICATION_FAILED;
-+	if (jcop4_sm_open_report_policy_ex(crypto->provider.libctx, &crypto->sm, response, size, plain,
-+			    sizeof(plain), &plain_size, &sw, JCOP4_SM_OUTER_9000_OR_MATCHING_63CX, &decoded))
-+		goto out;
-+	report->authenticated = 1;
-+	report->sw = sw;
-+	result = SC_ERROR_INVALID_DATA;
-+	if (plain_size)
-+		goto out;
-+	result = SC_ERROR_SECURITY_STATUS_NOT_SATISFIED;
++	rv = chipdoc_verify_exchange(card, prv, crypto, generation, NULL, 0, &sw, report);
++	if (rv)
++		return rv;
++	rv = SC_ERROR_SECURITY_STATUS_NOT_SATISFIED;
 +	if ((sw & 0xFFF0) != 0x63C0)
-+		goto out;
++		goto fail;
 +	*tries_left = sw & 15;
 +	if (!*tries_left) {
-+		result = SC_ERROR_AUTH_METHOD_BLOCKED;
-+		goto out;
++		rv = SC_ERROR_AUTH_METHOD_BLOCKED;
++		goto fail;
 +	}
-+	result = iasecc_chipdoc_record(&prv->chipdoc_session, generation, IASECC_CHIPDOC_RESPONSE_QUERY, sw, 0, 0);
-+out:
-+	sc_mem_clear(header, sizeof(header));
-+	sc_mem_clear(body, sizeof(body));
-+	sc_mem_clear(response, sizeof(response));
-+	sc_mem_clear(plain, sizeof(plain));
-+	if (result)
-+		iasecc_chipdoc_invalidate_card(card);
-+	return result;
++	rv = iasecc_chipdoc_record(&prv->chipdoc_session, generation, IASECC_CHIPDOC_RESPONSE_QUERY, sw, 0, 0);
++	if (rv)
++		goto fail;
++	return SC_SUCCESS;
++fail:
++	iasecc_chipdoc_invalidate_card(card);
++	return rv;
 +}
 +
 +int
@@ -2553,24 +2335,14 @@ index 0000000000000000000000000000000000000000..eda81843bc2182f20db5672766e7bc4f
 +{
 +	struct iasecc_private_data *prv = NULL;
 +	struct chipdoc_crypto *crypto;
-+	const unsigned char verify[4] = {0, 0x20, 0, 1}, expected_ssc[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6};
-+	unsigned char header[4], body[29], response[258], plain[256];
-+	size_t written = 0, size, plain_size;
 +	unsigned int sw;
 +	uint64_t generation;
-+	struct sc_apdu apdu;
-+	struct jcop4_sm_decode_report decoded;
-+	int rv, result = SC_ERROR_SM_ENCRYPT_FAILED;
++	int rv;
 +	if (tries_left)
 +		*tries_left = -1;
-+	if (!report)
-+		return SC_ERROR_INVALID_ARGUMENTS;
-+	memset(report, 0, sizeof(*report));
-+	if (!card || !card->driver || !card->driver->short_name || strcmp(card->driver->short_name, "iasecc"))
-+		return SC_ERROR_NOT_SUPPORTED;
-+	prv = card->drv_data;
-+	if (prv)
-+		report->reset_required = prv->chipdoc_transaction.active || prv->chipdoc_session.channel || prv->chipdoc_recovery_required;
++	rv = chipdoc_entry(card, report);
++	if (rv)
++		return rv;
 +	if (!data || !tries_left)
 +		return SC_ERROR_INVALID_ARGUMENTS;
 +	if (data->cmd != SC_PIN_CMD_VERIFY)
@@ -2578,13 +2350,9 @@ index 0000000000000000000000000000000000000000..eda81843bc2182f20db5672766e7bc4f
 +	if (data->flags || data->pin_type != SC_AC_CHV || data->pin_reference != 1 || data->puk_reference ||
 +			data->apdu || data->pin2.data || data->pin2.len || data->pin1.encoding != SC_PIN_ENCODING_ASCII)
 +		return SC_ERROR_INVALID_ARGUMENTS;
-+	rv = chipdoc_ready(card, &prv);
-+	if (rv) {
-+		iasecc_chipdoc_invalidate_card(card);
++	rv = chipdoc_channel_owned(card, &prv);
++	if (rv)
 +		return rv;
-+	}
-+	if (!iasecc_chipdoc_transaction_owns(card, prv))
-+		return SC_ERROR_NOT_ALLOWED;
 +	if (prv->chipdoc_transaction.pin.minimum != 6 || prv->chipdoc_transaction.pin.maximum != 14 ||
 +			prv->chipdoc_transaction.pin.format != SC_PKCS15_PIN_TYPE_UTF8 ||
 +			prv->chipdoc_transaction.pin.flags != (SC_PKCS15_PIN_FLAG_CASE_SENSITIVE | SC_PKCS15_PIN_FLAG_INITIALIZED))
@@ -2594,122 +2362,45 @@ index 0000000000000000000000000000000000000000..eda81843bc2182f20db5672766e7bc4f
 +		return SC_ERROR_INVALID_ARGUMENTS;
 +	if (!data->pin1.data || data->pin1.len < 6 || data->pin1.len > 14)
 +		return SC_ERROR_INVALID_PIN_LENGTH;
-+	if (prv->chipdoc_session.phase != IASECC_CHIPDOC_PIN_AVAILABLE || !prv->chipdoc_session.channel ||
-+			prv->chipdoc_session.clear_channel != chipdoc_crypto_clear)
-+		return SC_ERROR_SM_NOT_INITIALIZED;
-+	crypto = prv->chipdoc_session.channel;
-+	generation = prv->chipdoc_session.generation;
-+	if (!chipdoc_provider_matches(card, &crypto->provider) || crypto->card != card || crypto->reader != card->reader ||
-+			crypto->generation != generation || crypto->sm.phase != JCOP4_SM_IDLE ||
-+			CRYPTO_memcmp(crypto->sm.keys.ssc, expected_ssc, sizeof(expected_ssc))) {
-+		result = SC_ERROR_CARD_RESET;
-+		goto out;
-+	}
++	rv = chipdoc_channel_live(card, prv, IASECC_CHIPDOC_PIN_AVAILABLE, 6, &crypto, &generation);
++	if (rv == SC_ERROR_SM_NOT_INITIALIZED)
++		return rv;
++	if (rv)
++		goto fail;
 +	/* No normalization/truncation/hash/credential padding or persistent copy.
 +	 * The caller's borrowed bytes are read only after all session checks. */
 +	for (size_t i = 0; i < data->pin1.len; i++)
 +		if (data->pin1.data[i] < 0x20 || data->pin1.data[i] > 0x7E)
 +			return SC_ERROR_INVALID_ARGUMENTS;
-+	if (jcop4_sm_seal_policy_ex(crypto->provider.libctx, &crypto->sm, verify, data->pin1.data, data->pin1.len,
-+			    0, 0, header, body, sizeof(body), &written, JCOP4_SM_LE_SHORT) ||
-+			written != sizeof(body))
-+		goto out;
 +	/* Only encrypted DO87 and MAC reach the transport. Seal already cleans
 +	 * its plaintext/padding temporary; caller remains owner of its input. */
-+	sc_format_apdu(card, &apdu, SC_APDU_CASE_4_SHORT, 0x20, 0, 1);
-+	apdu.cla = header[0];
-+	apdu.data = body;
-+	apdu.lc = apdu.datalen = written;
-+	apdu.le = 256;
-+	apdu.resp = response;
-+	apdu.resplen = 256;
-+	apdu.flags |= SC_APDU_FLAGS_NO_RETRY_WL | SC_APDU_FLAGS_NO_GET_RESP | SC_APDU_FLAGS_NO_SM;
-+	report->commands = 1;
-+	report->reset_required = 1;
-+	rv = sc_transmit_apdu(card, &apdu);
-+	report->transport = rv;
-+	result = rv;
-+	if (rv < 0)
-+		goto out;
-+	if (prv->chipdoc_session.channel != crypto || prv->chipdoc_session.generation != generation ||
-+			!iasecc_chipdoc_transaction_owns(card, prv) || !chipdoc_provider_matches(card, &crypto->provider)) {
-+		result = SC_ERROR_CARD_RESET;
-+		goto out;
-+	}
-+	result = SC_ERROR_UNKNOWN_DATA_RECEIVED;
-+	if (apdu.resplen > 256)
-+		goto out;
-+	size = apdu.resplen;
-+	response[size++] = apdu.sw1;
-+	response[size++] = apdu.sw2;
-+	result = SC_ERROR_SM_AUTHENTICATION_FAILED;
-+	if (jcop4_sm_open_report_policy_ex(crypto->provider.libctx, &crypto->sm, response, size, plain,
-+			    sizeof(plain), &plain_size, &sw, JCOP4_SM_OUTER_9000_OR_MATCHING_63CX, &decoded))
-+		goto out;
-+	report->authenticated = 1;
-+	report->sw = sw;
-+	result = SC_ERROR_INVALID_DATA;
-+	if (plain_size)
-+		goto out;
++	rv = chipdoc_verify_exchange(card, prv, crypto, generation, data->pin1.data, data->pin1.len, &sw, report);
++	if (rv)
++		return rv;
 +	if ((sw & 0xFFF0) == 0x63C0) {
 +		*tries_left = sw & 15;
-+		result = *tries_left ? SC_ERROR_PIN_CODE_INCORRECT : SC_ERROR_AUTH_METHOD_BLOCKED;
-+		goto out;
++		rv = *tries_left ? SC_ERROR_PIN_CODE_INCORRECT : SC_ERROR_AUTH_METHOD_BLOCKED;
++		goto fail;
 +	}
 +	if (sw == 0x6983) {
-+		result = SC_ERROR_AUTH_METHOD_BLOCKED;
-+		goto out;
++		rv = SC_ERROR_AUTH_METHOD_BLOCKED;
++		goto fail;
 +	}
 +	if (sw == 0x6982) {
-+		result = SC_ERROR_SECURITY_STATUS_NOT_SATISFIED;
-+		goto out;
++		rv = SC_ERROR_SECURITY_STATUS_NOT_SATISFIED;
++		goto fail;
 +	}
 +	if (sw != 0x9000) {
-+		result = SC_ERROR_CARD_CMD_FAILED;
-+		goto out;
++		rv = SC_ERROR_CARD_CMD_FAILED;
++		goto fail;
 +	}
-+	result = iasecc_chipdoc_record(&prv->chipdoc_session, generation, IASECC_CHIPDOC_RESPONSE_LOGIN, sw, 0, 0);
-+out:
-+	sc_mem_clear(header, sizeof(header));
-+	sc_mem_clear(body, sizeof(body));
-+	sc_mem_clear(response, sizeof(response));
-+	sc_mem_clear(plain, sizeof(plain));
-+	if (result)
-+		iasecc_chipdoc_invalidate_card(card);
-+	return result;
-+}
-+
-+/* Managed signing operations only. A phase mismatch is a local error; a
-+ * stale provider/SSC/owner is an invalid session, never an invitation to retry. */
-+static int
-+chipdoc_signing_ready(struct sc_card *card, enum iasecc_chipdoc_phase phase,
-+		unsigned int counter, struct iasecc_private_data **data)
-+{
-+	struct iasecc_private_data *prv = NULL;
-+	unsigned char expected[16] = {0};
-+	int rv;
-+	if (!card || !card->driver || !card->driver->short_name || strcmp(card->driver->short_name, "iasecc"))
-+		return SC_ERROR_NOT_SUPPORTED;
-+	rv = chipdoc_ready(card, &prv);
-+	if (rv) {
-+		iasecc_chipdoc_invalidate_card(card);
-+		return rv;
-+	}
-+	if (!iasecc_chipdoc_transaction_owns(card, prv))
-+		return SC_ERROR_NOT_ALLOWED;
-+	if (prv->chipdoc_session.phase != phase || !prv->chipdoc_session.channel ||
-+			prv->chipdoc_session.clear_channel != chipdoc_crypto_clear)
-+		return SC_ERROR_SM_NOT_INITIALIZED;
-+	struct chipdoc_crypto *crypto = prv->chipdoc_session.channel;
-+	expected[15] = counter;
-+	if (!chipdoc_provider_matches(card, &crypto->provider) || crypto->card != card || crypto->reader != card->reader ||
-+			crypto->generation != prv->chipdoc_session.generation || crypto->sm.phase != JCOP4_SM_IDLE ||
-+			CRYPTO_memcmp(crypto->sm.keys.ssc, expected, sizeof(expected))) {
-+		iasecc_chipdoc_invalidate_card(card);
-+		return SC_ERROR_CARD_RESET;
-+	}
-+	*data = prv;
++	rv = iasecc_chipdoc_record(&prv->chipdoc_session, generation, IASECC_CHIPDOC_RESPONSE_LOGIN, sw, 0, 0);
++	if (rv)
++		goto fail;
 +	return SC_SUCCESS;
++fail:
++	iasecc_chipdoc_invalidate_card(card);
++	return rv;
 +}
 +
 +/* Three fixed call sites below; not an arbitrary-command or plaintext API. */
@@ -2726,7 +2417,6 @@ index 0000000000000000000000000000000000000000..eda81843bc2182f20db5672766e7bc4f
 +	unsigned int sw;
 +	uint64_t generation;
 +	struct sc_apdu apdu;
-+	struct jcop4_sm_decode_report decoded;
 +	int rv, result = SC_ERROR_SM_ENCRYPT_FAILED;
 +	report->authenticated = 0;
 +	report->sw = 0;
@@ -2777,7 +2467,7 @@ index 0000000000000000000000000000000000000000..eda81843bc2182f20db5672766e7bc4f
 +							    ? JCOP4_SM_OUTER_PSO_STATUS_6A82
 +							    : JCOP4_SM_OUTER_9000;
 +	if (jcop4_sm_open_report_policy_ex(crypto->provider.libctx, &crypto->sm, response, size, plain, capacity,
-+			    plain_size, &sw, policy, &decoded))
++			    plain_size, &sw, policy))
 +		goto out;
 +	report->authenticated = 1;
 +	report->sw = sw;
@@ -2804,14 +2494,9 @@ index 0000000000000000000000000000000000000000..eda81843bc2182f20db5672766e7bc4f
 +	const unsigned char select[4] = {0, 0xA4, 4, 0x0C};
 +	const struct iasecc_chipdoc_profile *profile = iasecc_chipdoc_profile(IASECC_CHIPDOC_CR_RSA2048);
 +	int rv;
-+	if (!report)
-+		return SC_ERROR_INVALID_ARGUMENTS;
-+	memset(report, 0, sizeof(*report));
-+	if (!card || !card->driver || !card->driver->short_name || strcmp(card->driver->short_name, "iasecc"))
-+		return SC_ERROR_NOT_SUPPORTED;
-+	prv = card->drv_data;
-+	if (prv)
-+		report->reset_required = prv->chipdoc_transaction.active || prv->chipdoc_session.channel || prv->chipdoc_recovery_required;
++	rv = chipdoc_entry(card, report);
++	if (rv)
++		return rv;
 +	rv = chipdoc_signing_ready(card, IASECC_CHIPDOC_LOGGED_IN, 8, &prv);
 +	if (rv)
 +		return rv;
@@ -2838,14 +2523,9 @@ index 0000000000000000000000000000000000000000..eda81843bc2182f20db5672766e7bc4f
 +	const unsigned char mse[4] = {0, 0x22, 0x81, 0xB6}, mse_data[4] = {0x91, 2, 0x28, 0x91};
 +	const struct iasecc_chipdoc_profile *profile = iasecc_chipdoc_profile(IASECC_CHIPDOC_CR_RSA2048);
 +	int rv;
-+	if (!report)
-+		return SC_ERROR_INVALID_ARGUMENTS;
-+	memset(report, 0, sizeof(*report));
-+	if (!card || !card->driver || !card->driver->short_name || strcmp(card->driver->short_name, "iasecc"))
-+		return SC_ERROR_NOT_SUPPORTED;
-+	prv = card->drv_data;
-+	if (prv)
-+		report->reset_required = prv->chipdoc_transaction.active || prv->chipdoc_session.channel || prv->chipdoc_recovery_required;
++	rv = chipdoc_entry(card, report);
++	if (rv)
++		return rv;
 +	if (!env)
 +		return SC_ERROR_INVALID_ARGUMENTS;
 +	if (se_num || env->flags != (SC_SEC_ENV_ALG_PRESENT | SC_SEC_ENV_KEY_REF_PRESENT) ||
@@ -2857,6 +2537,7 @@ index 0000000000000000000000000000000000000000..eda81843bc2182f20db5672766e7bc4f
 +	for (size_t i = 0; i < SC_SEC_ENV_MAX_PARAMS; i++)
 +		if (env->params[i].param_type || env->params[i].value || env->params[i].value_len)
 +			return SC_ERROR_NOT_SUPPORTED;
++	prv = card->drv_data;
 +	int selected = prv && prv->chipdoc_session.phase == IASECC_CHIPDOC_APPLICATION;
 +	rv = chipdoc_signing_ready(card, selected ? IASECC_CHIPDOC_APPLICATION : IASECC_CHIPDOC_LOGGED_IN,
 +			selected ? 10 : 8, &prv);
@@ -2891,14 +2572,9 @@ index 0000000000000000000000000000000000000000..eda81843bc2182f20db5672766e7bc4f
 +	size_t size;
 +	const unsigned char pso[4] = {0, 0x2A, 0x9E, 0x9A};
 +	int rv, closed;
-+	if (!report)
-+		return SC_ERROR_INVALID_ARGUMENTS;
-+	memset(report, 0, sizeof(*report));
-+	if (!card || !card->driver || !card->driver->short_name || strcmp(card->driver->short_name, "iasecc"))
-+		return SC_ERROR_NOT_SUPPORTED;
-+	prv = card->drv_data;
-+	if (prv)
-+		report->channel.reset_required = prv->chipdoc_transaction.active || prv->chipdoc_session.channel || prv->chipdoc_recovery_required;
++	rv = chipdoc_entry(card, &report->channel);
++	if (rv)
++		return rv;
 +	if (!in || in_len != 32 || !out)
 +		return SC_ERROR_INVALID_ARGUMENTS;
 +	if (out_len < 256)
@@ -3685,7 +3361,7 @@ index 1d9f0d27df479b716dcd5f2e726b7f2c0cb996cc..bd9dfc2c0ced109b1495fbf25d182699
  void iasecc_sdo_free_fields(struct sc_card *, struct iasecc_sdo *);
  void iasecc_sdo_free(struct sc_card *, struct iasecc_sdo *);
 diff --git a/src/libopensc/iasecc.h b/src/libopensc/iasecc.h
-index 2e5408e981aaab61a799ec4ef509a63e82c8ac9f..ecee313c6aa8ab9af448dd18140d5414f6124bb8 100644
+index 2e5408e981aaab61a799ec4ef509a63e82c8ac9f..0b05b131dcfa34b4e8d9204d9a6b24e55039c52a 100644
 --- a/src/libopensc/iasecc.h
 +++ b/src/libopensc/iasecc.h
 @@ -25,6 +25,8 @@
@@ -3715,11 +3391,11 @@ index 2e5408e981aaab61a799ec4ef509a63e82c8ac9f..ecee313c6aa8ab9af448dd18140d5414
  struct iasecc_private_data {
  	struct iasecc_version version;
  	struct iasecc_io_buffer_sizes max_sizes;
-@@ -143,6 +156,45 @@ struct iasecc_private_data {
+@@ -143,6 +156,49 @@ struct iasecc_private_data {
  	struct iasecc_se_info *se_info;
  
  	struct sc_card_cache cache;
-+	/* Public fixed policy only; never cache login state or remaining tries here. */
++	/* Public fixed policy only; never cache login state or remaining tries. */
 +	int chipdoc_pin_max_tries;
 +	/* Inactive until the separate ChipDoc adapter is connected to this driver. */
 +	enum iasecc_chipdoc_profile_id chipdoc_profile;
@@ -3746,61 +3422,31 @@ index 2e5408e981aaab61a799ec4ef509a63e82c8ac9f..ecee313c6aa8ab9af448dd18140d5414
 +int iasecc_chipdoc_pkcs15_validate(struct sc_pkcs15_card *p15, struct sc_pkcs15_object **key);
 +int iasecc_chipdoc_pkcs15_activate(struct sc_pkcs15_card *p15);
 +
++/* Internal request: query current CHV state without changing selection. */
++#define IASECC_PIN_STATUS_ONLY 0x0008
++
++/* Generic PKI application AID shared by the Amos JCOP3 personalization. */
++#define IASECC_CHIPDOC_GENERIC_AID "\xE8\x28\xBD\x08\x0F\xD2\x50\x47\x65\x6E\x65\x72\x69\x63"
++#define IASECC_CHIPDOC_GENERIC_AID_LEN 14
++
 +/* The existing Amos ATR match alone is insufficient: only the Generic PKI
 + * application used by the JCOP3 patch needs these PKCS#15/session defaults. */
 +static inline int
 +iasecc_chipdoc_jcop3(const struct sc_card *card, const struct sc_aid *aid)
 +{
-+	static const unsigned char generic_aid[] = {
-+		0xE8, 0x28, 0xBD, 0x08, 0x0F, 0xD2, 0x50,
-+		0x47, 0x65, 0x6E, 0x65, 0x72, 0x69, 0x63
-+	};
 +	return card && card->driver && card->driver->short_name &&
 +			!strcmp(card->driver->short_name, "iasecc") && card->type == SC_CARD_TYPE_IASECC_AMOS &&
-+			aid && aid->len == sizeof(generic_aid) && !memcmp(aid->value, generic_aid, sizeof(generic_aid));
++			aid && aid->len == IASECC_CHIPDOC_GENERIC_AID_LEN &&
++			!memcmp(aid->value, IASECC_CHIPDOC_GENERIC_AID, IASECC_CHIPDOC_GENERIC_AID_LEN);
 +}
 +
  #endif
-diff --git a/src/libopensc/iso7816.c b/src/libopensc/iso7816.c
-index f2a7c6e2d506c539eadf68dd736fdddcaacb5d1d..66c264b369c4d996e0336460efc947398f7d9039 100644
---- a/src/libopensc/iso7816.c
-+++ b/src/libopensc/iso7816.c
-@@ -28,6 +28,7 @@
- #include "asn1.h"
- #include "iso7816.h"
- #include "sm/sm-iso.h"
-+#include "api-trace.h"
- 
- void
- iso7816_fixup_transceive_length(const struct sc_card *card,
-@@ -1302,6 +1303,9 @@ iso7816_pin_cmd(struct sc_card *card, struct sc_pin_cmd_data *data)
- 	 */
- 	if (data->apdu == NULL) {
- 		r = iso7816_build_pin_apdu(card, &local_apdu, data, sbuf, sizeof(sbuf));
-+		if (data->cmd == SC_PIN_CMD_VERIFY)
-+			sc_api_metadata_trace(SC_API_PIN_APDU_BUILD, 0, (unsigned long)r,
-+					data->pin_reference, 0);
- 		if (r < 0)
- 			return r;
- 		data->apdu = &local_apdu;
-@@ -1333,6 +1337,11 @@ iso7816_pin_cmd(struct sc_card *card, struct sc_pin_cmd_data *data)
- 		}
- 	}
- 
-+	/* Fixed result metadata only; never trace the credential or its length. */
-+	if (data->cmd == SC_PIN_CMD_VERIFY)
-+		sc_api_metadata_trace(SC_API_PIN_TRANSMIT, 0, (unsigned long)r,
-+				data->pin_reference, r < 0 ? 0 : ((unsigned long)apdu->sw1 << 8) | apdu->sw2);
-+
- 	/* Don't pass references to local variables up to the caller. */
- 	if (data->apdu == &local_apdu)
- 		data->apdu = NULL;
 diff --git a/src/libopensc/jcop4-channel-agreement.h b/src/libopensc/jcop4-channel-agreement.h
 new file mode 100644
-index 0000000000000000000000000000000000000000..a5447421c73849977661ff86aba45dd1d4f3c6e4
+index 0000000000000000000000000000000000000000..0b018c4d3e6802630c7af9373a9d89090657a322
 --- /dev/null
 +++ b/src/libopensc/jcop4-channel-agreement.h
-@@ -0,0 +1,202 @@
+@@ -0,0 +1,194 @@
 +/* SPDX-License-Identifier: LGPL-2.1-or-later */
 +/* Offline candidate anonymous CA/P-521/AES128 preparation.
 + * Does not establish/authenticate a channel, send APDU or handle a PIN.
@@ -3953,17 +3599,10 @@ index 0000000000000000000000000000000000000000..a5447421c73849977661ff86aba45dd1
 +	return result;
 +}
 +
-+static inline int
-+jcop4_ca_prepare_key(EVP_PKEY *local, const unsigned char *peer,
-+		size_t size, struct jcop4_ca_pending *pending)
-+{
-+	return jcop4_ca_prepare_key_ex(NULL, local, peer, size, pending);
-+}
-+static inline int
-+jcop4_ca_prepare(const unsigned char *peer, size_t size, struct jcop4_ca_pending *pending)
-+{
-+	return jcop4_ca_prepare_ex(NULL, peer, size, pending);
-+}
++/* Canonical wire bytes shared by the transport validator so the accepted
++ * commands cannot drift from the constructed ones. */
++#define JCOP4_CA_MSE_BYTES {0x00, 0x22, 0x41, 0xA4, 0x0C, 0x80, 0x0A, 0x04, 0x00, 0x7F, 0x00, 0x07, 0x02, 0x02, 0x03, 0x02, 0x02}
++#define JCOP4_CA_GA_PREFIX_BYTES {0x10, 0x86, 0x00, 0x00, 0x8B, 0x7C, 0x81, 0x88, 0x80, 0x81, 0x85}
 +
 +/* Candidate wire bytes for the reviewed plain transport path, not a sender.
 + * MSE/GA constructor Le=0 (absent), serializer copies CLA unchanged. Other
@@ -3971,8 +3610,7 @@ index 0000000000000000000000000000000000000000..a5447421c73849977661ff86aba45dd1
 +static inline int
 +jcop4_ca_build_mse(unsigned char *out, size_t capacity, size_t *written)
 +{
-+	static const unsigned char candidate[] = {0, 0x22, 0x41, 0xA4, 0x0C,
-+			0x80, 0x0A, 4, 0, 0x7F, 0, 7, 2, 2, 3, 2, 2};
++	static const unsigned char candidate[] = JCOP4_CA_MSE_BYTES;
 +	if (!written)
 +		return 1;
 +	*written = 0;
@@ -3988,7 +3626,7 @@ index 0000000000000000000000000000000000000000..a5447421c73849977661ff86aba45dd1
 +		unsigned char *out, size_t capacity, size_t *written)
 +{
 +	/* Lc139, 7C length136, 80 length133, SEC1 prefix04; no trailing Le. */
-+	static const unsigned char prefix[] = {0x10, 0x86, 0, 0, 0x8B, 0x7C, 0x81, 0x88, 0x80, 0x81, 0x85};
++	static const unsigned char prefix[] = JCOP4_CA_GA_PREFIX_BYTES;
 +	unsigned char candidate[sizeof(prefix) + JCOP4_P521_POINT_SIZE];
 +	if (!written)
 +		return 1;
@@ -4005,10 +3643,10 @@ index 0000000000000000000000000000000000000000..a5447421c73849977661ff86aba45dd1
 +#endif
 diff --git a/src/libopensc/jcop4-channel-confirmation.h b/src/libopensc/jcop4-channel-confirmation.h
 new file mode 100644
-index 0000000000000000000000000000000000000000..87247c55133c469fb606d5790bbfb7cc8ff699d8
+index 0000000000000000000000000000000000000000..63e4baeb8dd64aa07cd30b33a6c0066c4e327b14
 --- /dev/null
 +++ b/src/libopensc/jcop4-channel-confirmation.h
-@@ -0,0 +1,198 @@
+@@ -0,0 +1,179 @@
 +/* SPDX-License-Identifier: LGPL-2.1-or-later */
 +/* Candidate no-PIN confirmation sequence, transport supplied by the caller.
 + * No PC/SC, reader discovery, Idopte or credential API in this component.
@@ -4154,7 +3792,7 @@ index 0000000000000000000000000000000000000000..87247c55133c469fb606d5790bbfb7cc
 +	if (report->transport)
 +		goto out;
 +	report->outcome = JCOP4_CA_PROTECTED_RESPONSE_FAILED;
-+	if (received > sizeof(response) || jcop4_sm_open_report_policy_ex(libctx, &channel, response, received, plain, sizeof(plain), &plain_size, &inner_sw, JCOP4_SM_OUTER_9000, NULL))
++	if (received > sizeof(response) || jcop4_sm_open_report_policy_ex(libctx, &channel, response, received, plain, sizeof(plain), &plain_size, &inner_sw, JCOP4_SM_OUTER_9000))
 +		goto out;
 +	report->authenticated_response = 1;
 +	report->sw = inner_sw;
@@ -4185,25 +3823,6 @@ index 0000000000000000000000000000000000000000..87247c55133c469fb606d5790bbfb7cc
 +	OPENSSL_cleanse(body, sizeof(body));
 +	OPENSSL_cleanse(plain, sizeof(plain));
 +	return result;
-+}
-+
-+/* Standalone default-context compatibility. A retained channel from _ex
-+ * must continue using its original libctx; this function stores no provider. */
-+static inline int
-+jcop4_ca_confirm_d004_session(const unsigned char *initial, size_t initial_size,
-+		enum jcop4_ca_outer_le outer_le, jcop4_ca_exchange exchange, void *context,
-+		struct jcop4_ca_probe_report *report, struct jcop4_sm_channel *confirmed)
-+{
-+	return jcop4_ca_confirm_d004_session_ex(NULL, initial, initial_size, outer_le, exchange, context, report, confirmed);
-+}
-+
-+/* Existing hardware probe never retains a channel or exposes session keys. */
-+static inline int
-+jcop4_ca_confirm_d004(const unsigned char *initial, size_t initial_size,
-+		enum jcop4_ca_outer_le outer_le, jcop4_ca_exchange exchange, void *context,
-+		struct jcop4_ca_probe_report *report)
-+{
-+	return jcop4_ca_confirm_d004_session(initial, initial_size, outer_le, exchange, context, report, NULL);
 +}
 +
 +#endif
@@ -4256,10 +3875,10 @@ index 0000000000000000000000000000000000000000..d7e58927b50562355f9e911088fbdffa
 +#endif
 diff --git a/src/libopensc/jcop4-channel-kdf.h b/src/libopensc/jcop4-channel-kdf.h
 new file mode 100644
-index 0000000000000000000000000000000000000000..7f6524d9236ac273ecb2319a45f432870430e669
+index 0000000000000000000000000000000000000000..698f60c09c21180048d9f051a42c1f4c2159f0dc
 --- /dev/null
 +++ b/src/libopensc/jcop4-channel-kdf.h
-@@ -0,0 +1,68 @@
+@@ -0,0 +1,60 @@
 +/* SPDX-License-Identifier: LGPL-2.1-or-later */
 +/* Offline candidate for the reviewed anonymous CA/AES128 branch.
 + * No card I/O, key agreement, PIN handling or secure messaging here. */
@@ -4319,21 +3938,13 @@ index 0000000000000000000000000000000000000000..7f6524d9236ac273ecb2319a45f43287
 +	return result;
 +}
 +
-+/* Standalone helpers retain their default-context API. OpenSC must use _ex. */
-+static inline int
-+jcop4_ca_aes128_kdf(const unsigned char *secret, size_t size,
-+		struct jcop4_channel_keys *keys)
-+{
-+	return jcop4_ca_aes128_kdf_ex(NULL, secret, size, keys);
-+}
-+
 +#endif
 diff --git a/src/libopensc/jcop4-channel-messages.h b/src/libopensc/jcop4-channel-messages.h
 new file mode 100644
-index 0000000000000000000000000000000000000000..fbeee436ed8c607b9f2accbca832daaba0918c8b
+index 0000000000000000000000000000000000000000..93d13d4ce929af744438ae660cdd83a46aa3bab9
 --- /dev/null
 +++ b/src/libopensc/jcop4-channel-messages.h
-@@ -0,0 +1,406 @@
+@@ -0,0 +1,279 @@
 +/* SPDX-License-Identifier: LGPL-2.1-or-later */
 +/* Candidate codec for the reviewed AES128/IV=AES(Kenc,SSC)/MAC8 branch.
 + * Does not serialize transport Lc/Le, perform card I/O or establish a channel.
@@ -4383,12 +3994,6 @@ index 0000000000000000000000000000000000000000..fbeee436ed8c607b9f2accbca832daab
 +{
 +	const unsigned char zero[16] = {0};
 +	return jcop4_sm_aes128_cbc_ex(libctx, 1, key, zero, ssc, 16, iv, 16);
-+}
-+
-+static inline int
-+jcop4_sm_ssc_iv(const unsigned char key[16], const unsigned char ssc[16], unsigned char iv[16])
-+{
-+	return jcop4_sm_ssc_iv_ex(NULL, key, ssc, iv);
 +}
 +
 +static inline int
@@ -4526,92 +4131,12 @@ index 0000000000000000000000000000000000000000..fbeee436ed8c607b9f2accbca832daab
 +	return result;
 +}
 +
-+/* The caller owns libctx and must retain the same context for the channel.
-+ * NULL is the explicit standalone default, never retry after _ex failure. */
-+static inline int
-+jcop4_sm_seal_policy(struct jcop4_sm_channel *channel, const unsigned char header[4],
-+		const unsigned char *data, size_t data_size, int has_le, unsigned int le,
-+		unsigned char protected_header[4], unsigned char *body, size_t capacity, size_t *written,
-+		enum jcop4_sm_le_encoding encoding)
-+{
-+	return jcop4_sm_seal_policy_ex(NULL, channel, header, data, data_size, has_le, le,
-+			protected_header, body, capacity, written, encoding);
-+}
-+
-+/* Existing callers retain the exact original short DO97 encoding. */
-+static inline int
-+jcop4_sm_seal(struct jcop4_sm_channel *channel, const unsigned char header[4],
-+		const unsigned char *data, size_t data_size, int has_le, unsigned int le,
-+		unsigned char protected_header[4], unsigned char *body, size_t capacity, size_t *written)
-+{
-+	return jcop4_sm_seal_policy(channel, header, data, data_size, has_le, le,
-+			protected_header, body, capacity, written, JCOP4_SM_LE_SHORT);
-+}
-+
-+/* Fixed diagnostic enums only: no response bytes, status, lengths or keys.
-+ * MAC verification is separate from acceptance (padding/capacity may fail).
-+ * A pre-MAC structural observation is not authenticated card information. */
-+enum jcop4_sm_decode_result {
-+	JCOP4_SM_DECODE_ARGUMENT,
-+	JCOP4_SM_DECODE_SIZE,
-+	JCOP4_SM_DECODE_OUTER_SW,
-+	JCOP4_SM_DECODE_SSC,
-+	JCOP4_SM_DECODE_CIPHER_TLV,
-+	JCOP4_SM_DECODE_STATUS_TLV,
-+	JCOP4_SM_DECODE_MAC_TLV,
-+	JCOP4_SM_DECODE_MAC,
-+	JCOP4_SM_DECODE_DECRYPT,
-+	JCOP4_SM_DECODE_PADDING,
-+	JCOP4_SM_DECODE_CAPACITY,
-+	JCOP4_SM_DECODE_OK,
-+	JCOP4_SM_DECODE_STATUS_MISMATCH
-+};
 +/* Explicit opt-ins for observed response families. No policy accepts a bare
 + * status or bypasses MAC/structure validation. The PSO policy accepts only
 + * the complete status-only16-byte error envelope, never signature data. */
 +enum jcop4_sm_outer_policy { JCOP4_SM_OUTER_9000,
 +	JCOP4_SM_OUTER_9000_OR_MATCHING_63CX,
 +	JCOP4_SM_OUTER_PSO_STATUS_6A82 };
-+enum jcop4_sm_mac_result { JCOP4_SM_MAC_NOT_CHECKED,
-+	JCOP4_SM_MAC_FAILED,
-+	JCOP4_SM_MAC_VERIFIED };
-+struct jcop4_sm_decode_report {
-+	enum jcop4_sm_decode_result result;
-+	enum jcop4_sm_mac_result mac;
-+};
-+static inline const char *
-+jcop4_sm_decode_name(enum jcop4_sm_decode_result result)
-+{
-+	switch (result) {
-+	case JCOP4_SM_DECODE_ARGUMENT:
-+		return "invalid_arguments_or_state";
-+	case JCOP4_SM_DECODE_SIZE:
-+		return "response_size_invalid";
-+	case JCOP4_SM_DECODE_OUTER_SW:
-+		return "outer_sw_not_9000";
-+	case JCOP4_SM_DECODE_SSC:
-+		return "ssc_overflow";
-+	case JCOP4_SM_DECODE_CIPHER_TLV:
-+		return "encrypted_object_invalid";
-+	case JCOP4_SM_DECODE_STATUS_TLV:
-+		return "status_object_invalid_or_unsupported";
-+	case JCOP4_SM_DECODE_MAC_TLV:
-+		return "mac_object_invalid_or_trailing_data";
-+	case JCOP4_SM_DECODE_MAC:
-+		return "mac_verification_failed";
-+	case JCOP4_SM_DECODE_DECRYPT:
-+		return "decryption_failed";
-+	case JCOP4_SM_DECODE_PADDING:
-+		return "padding_invalid";
-+	case JCOP4_SM_DECODE_CAPACITY:
-+		return "plaintext_capacity_exceeded";
-+	case JCOP4_SM_DECODE_OK:
-+		return "accepted";
-+	case JCOP4_SM_DECODE_STATUS_MISMATCH:
-+		return "authenticated_status_outer_mismatch";
-+	}
-+	return "unknown_local_result";
-+}
 +
 +/* Conservative response subset: optional encrypted87/01, then99/2,8E/8,
 + * physical SW9000 by default. The explicit PIN-query policy additionally
@@ -4622,14 +4147,13 @@ index 0000000000000000000000000000000000000000..fbeee436ed8c607b9f2accbca832daab
 +static inline int
 +jcop4_sm_open_report_policy_ex(OSSL_LIB_CTX *libctx, struct jcop4_sm_channel *channel, const unsigned char *response,
 +		size_t size, unsigned char *plain, size_t capacity, size_t *written, unsigned int *sw,
-+		enum jcop4_sm_outer_policy policy, struct jcop4_sm_decode_report *report)
++		enum jcop4_sm_outer_policy policy)
 +{
 +	unsigned char next[16] = {0}, iv[16] = {0};
 +	unsigned char authenticated[JCOP4_SM_CRYPTO_LIMIT] = {0}, decrypted[JCOP4_SM_CRYPTO_LIMIT] = {0};
 +	const unsigned char *ciphertext = NULL, *status = NULL, *tag = NULL;
 +	size_t offset = 0, cipher_size = 0, length = 0, auth_end = 0, auth_size = 0, plain_size = 0;
 +	unsigned int inner_sw = 0, outer_sw = 0;
-+	struct jcop4_sm_decode_report local = {JCOP4_SM_DECODE_ARGUMENT, JCOP4_SM_MAC_NOT_CHECKED};
 +	int result = 1;
 +	if (written)
 +		*written = 0;
@@ -4639,24 +4163,19 @@ index 0000000000000000000000000000000000000000..fbeee436ed8c607b9f2accbca832daab
 +			(policy != JCOP4_SM_OUTER_9000 && policy != JCOP4_SM_OUTER_9000_OR_MATCHING_63CX &&
 +					policy != JCOP4_SM_OUTER_PSO_STATUS_6A82))
 +		goto out;
-+	local.result = JCOP4_SM_DECODE_SIZE;
 +	if (size < 2 || size > JCOP4_SM_CRYPTO_LIMIT - 32)
 +		goto out;
-+	local.result = JCOP4_SM_DECODE_OUTER_SW;
 +	outer_sw = (unsigned int)response[size - 2] * 256 + response[size - 1];
 +	if (policy == JCOP4_SM_OUTER_PSO_STATUS_6A82) {
 +		if (outer_sw != 0x6A82 || size != 16 || response[0] != 0x99)
 +			goto out;
 +	} else if (outer_sw != 0x9000 && !(policy == JCOP4_SM_OUTER_9000_OR_MATCHING_63CX && (outer_sw & 0xFFF0) == 0x63C0))
 +		goto out;
-+	local.result = JCOP4_SM_DECODE_SIZE;
 +	if (size < 16)
 +		goto out;
-+	local.result = JCOP4_SM_DECODE_SSC;
 +	if (jcop4_sm_next_ssc(channel->keys.ssc, next))
 +		goto out;
 +	if (response[0] == 0x87) {
-+		local.result = JCOP4_SM_DECODE_CIPHER_TLV;
 +		if (jcop4_sm_take_tlv(response, size - 2, &offset, 0x87, &ciphertext, &length) ||
 +				length < 17 || ciphertext[0] != 1 || (length - 1) % 16 ||
 +				length - 1 > JCOP4_SM_DATA_LIMIT + 16)
@@ -4664,36 +4183,27 @@ index 0000000000000000000000000000000000000000..fbeee436ed8c607b9f2accbca832daab
 +		ciphertext++;
 +		cipher_size = length - 1;
 +	}
-+	local.result = JCOP4_SM_DECODE_STATUS_TLV;
 +	if (jcop4_sm_take_tlv(response, size - 2, &offset, 0x99, &status, &length) || length != 2)
 +		goto out;
 +	auth_end = offset;
-+	local.result = JCOP4_SM_DECODE_MAC_TLV;
 +	if (jcop4_sm_take_tlv(response, size - 2, &offset, 0x8E, &tag, &length) || length != 8 || offset != size - 2)
 +		goto out;
 +	memcpy(authenticated, next, 16);
 +	memcpy(authenticated + 16, response, auth_end);
-+	local.result = JCOP4_SM_DECODE_MAC;
-+	local.mac = JCOP4_SM_MAC_FAILED;
 +	if (jcop4_sm_pad(authenticated, 16 + auth_end, authenticated, sizeof(authenticated), &auth_size) ||
 +			jcop4_sm_verify_mac8_ex(libctx, channel->keys.mac, authenticated, auth_size, tag))
 +		goto out;
-+	local.mac = JCOP4_SM_MAC_VERIFIED;
 +	inner_sw = (unsigned int)status[0] * 256 + status[1];
-+	local.result = JCOP4_SM_DECODE_STATUS_MISMATCH;
 +	if (outer_sw != 0x9000 && inner_sw != outer_sw)
 +		goto out;
 +	/* Nothing reaches the caller before MAC, padding and capacity all pass. */
 +	if (cipher_size) {
-+		local.result = JCOP4_SM_DECODE_DECRYPT;
 +		if (jcop4_sm_ssc_iv_ex(libctx, channel->keys.encryption, next, iv) ||
 +				jcop4_sm_aes128_cbc_ex(libctx, 0, channel->keys.encryption, iv, ciphertext, cipher_size, decrypted, sizeof(decrypted)))
 +			goto out;
-+		local.result = JCOP4_SM_DECODE_PADDING;
 +		if (jcop4_sm_unpad(decrypted, cipher_size, &plain_size))
 +			goto out;
 +	}
-+	local.result = JCOP4_SM_DECODE_CAPACITY;
 +	if (plain_size > JCOP4_SM_DATA_LIMIT || plain_size > capacity)
 +		goto out;
 +	if (plain_size)
@@ -4702,11 +4212,8 @@ index 0000000000000000000000000000000000000000..fbeee436ed8c607b9f2accbca832daab
 +	*sw = inner_sw;
 +	memcpy(channel->keys.ssc, next, 16);
 +	channel->phase = JCOP4_SM_IDLE;
-+	local.result = JCOP4_SM_DECODE_OK;
 +	result = 0;
 +out:
-+	if (report)
-+		*report = local;
 +	if (result)
 +		jcop4_sm_invalidate(channel);
 +	OPENSSL_cleanse(next, sizeof(next));
@@ -4716,36 +4223,13 @@ index 0000000000000000000000000000000000000000..fbeee436ed8c607b9f2accbca832daab
 +	return result;
 +}
 +
-+static inline int
-+jcop4_sm_open_report_policy(struct jcop4_sm_channel *channel, const unsigned char *response,
-+		size_t size, unsigned char *plain, size_t capacity, size_t *written, unsigned int *sw,
-+		enum jcop4_sm_outer_policy policy, struct jcop4_sm_decode_report *report)
-+{
-+	return jcop4_sm_open_report_policy_ex(NULL, channel, response, size, plain, capacity, written, sw, policy, report);
-+}
-+
-+/* Existing callers retain precisely the same strict outer9000 policy. */
-+static inline int
-+jcop4_sm_open_report(struct jcop4_sm_channel *channel, const unsigned char *response,
-+		size_t size, unsigned char *plain, size_t capacity, size_t *written, unsigned int *sw,
-+		struct jcop4_sm_decode_report *report)
-+{
-+	return jcop4_sm_open_report_policy(channel, response, size, plain, capacity, written, sw, JCOP4_SM_OUTER_9000, report);
-+}
-+static inline int
-+jcop4_sm_open(struct jcop4_sm_channel *channel, const unsigned char *response,
-+		size_t size, unsigned char *plain, size_t capacity, size_t *written, unsigned int *sw)
-+{
-+	return jcop4_sm_open_report(channel, response, size, plain, capacity, written, sw, NULL);
-+}
-+
 +#endif
 diff --git a/src/libopensc/jcop4-channel-primitives.h b/src/libopensc/jcop4-channel-primitives.h
 new file mode 100644
-index 0000000000000000000000000000000000000000..90464c94006efb4393c6405121d69d4f1dceeede
+index 0000000000000000000000000000000000000000..90654391e5d7786af433fcd9ad9d874d23dac205
 --- /dev/null
 +++ b/src/libopensc/jcop4-channel-primitives.h
-@@ -0,0 +1,172 @@
+@@ -0,0 +1,152 @@
 +/* SPDX-License-Identifier: LGPL-2.1-or-later */
 +/* Offline candidate primitives. No APDU, PIN, card I/O or channel lifecycle.
 + * CBC decryption/unpadding are NOT authentication: callers must verify the
@@ -4897,26 +4381,6 @@ index 0000000000000000000000000000000000000000..90464c94006efb4393c6405121d69d4f
 +	return result;
 +}
 +
-+/* Default-context compatibility for standalone helpers, never a fallback. */
-+static inline int
-+jcop4_sm_aes128_cbc(int encrypt, const unsigned char key[16], const unsigned char iv[16],
-+		const unsigned char *input, size_t size, unsigned char *output, size_t capacity)
-+{
-+	return jcop4_sm_aes128_cbc_ex(NULL, encrypt, key, iv, input, size, output, capacity);
-+}
-+static inline int
-+jcop4_sm_cmac(const unsigned char key[16], const unsigned char *input,
-+		size_t size, unsigned char output[16])
-+{
-+	return jcop4_sm_cmac_ex(NULL, key, input, size, output);
-+}
-+static inline int
-+jcop4_sm_verify_mac8(const unsigned char key[16], const unsigned char *input,
-+		size_t size, const unsigned char received[8])
-+{
-+	return jcop4_sm_verify_mac8_ex(NULL, key, input, size, received);
-+}
-+
 +#endif
 diff --git a/src/libopensc/jcop4-dh-control.h b/src/libopensc/jcop4-dh-control.h
 new file mode 100644
@@ -4977,19 +4441,6 @@ index 0000000000000000000000000000000000000000..2a60d5a0fe1008b961196eec26eed75b
 +	return descriptor == 1 && fid == 1 && length == 1;
 +}
 +#endif
-diff --git a/src/libopensc/opensc.h b/src/libopensc/opensc.h
-index dfc297fc3d6c95ad2294d01dbf91c5789cefa3c0..d351512cdfad9a2f3d98ee8f574d38b3f1ca4ebc 100644
---- a/src/libopensc/opensc.h
-+++ b/src/libopensc/opensc.h
-@@ -421,6 +421,8 @@ typedef struct sc_reader {
- #define SC_PIN_CMD_USE_PINPAD		0x0001
- #define SC_PIN_CMD_NEED_PADDING		0x0002
- #define SC_PIN_CMD_IMPLICIT_CHANGE	0x0004
-+/* GET_INFO only: driver must explicitly support a query without selection or policy reads. */
-+#define SC_PIN_CMD_STATUS_ONLY		0x0008
- 
- #define SC_PIN_ENCODING_ASCII	0
- #define SC_PIN_ENCODING_BCD	1
 diff --git a/src/libopensc/pkcs15-iasecc.c b/src/libopensc/pkcs15-iasecc.c
 index 1b987fbea7bd0f17389f4bd7fec193c9d6572b08..e32af39deb0d0a06b1a3a65d5f0caca534e0be91 100644
 --- a/src/libopensc/pkcs15-iasecc.c
@@ -5145,34 +4596,28 @@ index 1b987fbea7bd0f17389f4bd7fec193c9d6572b08..e32af39deb0d0a06b1a3a65d5f0caca5
  	LOG_FUNC_RETURN(ctx, rv);
  }
 diff --git a/src/libopensc/pkcs15-pin.c b/src/libopensc/pkcs15-pin.c
-index 77ef8bbe2138b51761c7952f9ae60af54ae473a0..3472d4d5989484f9f5da592c5dd7a93a08fd955d 100644
+index 77ef8bbe2138b51761c7952f9ae60af54ae473a0..fd4565e75dcebf194ef2e6065eacc7c1cbac8153 100644
 --- a/src/libopensc/pkcs15-pin.c
 +++ b/src/libopensc/pkcs15-pin.c
-@@ -27,6 +27,7 @@
- #include <stdio.h>
- 
+@@ -29,6 +29,7 @@
  #include "internal.h"
-+#include "api-trace.h"
  #include "asn1.h"
  #include "pkcs15.h"
++#include "iasecc.h"
  #include "ui/notify.h"
-@@ -683,6 +684,27 @@ out:
+ 
+ int _sc_pkcs15_verify_pin(struct sc_pkcs15_card *, struct sc_pkcs15_object *,
+@@ -683,6 +684,21 @@ out:
  	LOG_FUNC_RETURN(ctx, r);
  }
  
-+/* Candidate ChipDoc correction, opt-in until repeated queries and recovery
-+ * have been checked in hardware. Only this driver/profile implements the flag.
-+ */
++/* Detected Amos/Generic PKI global CHV1: preserve selection during status
++ * queries. Unknown policy still takes the original full initialization path. */
 +static int chipdoc_pin_status_in_place(struct sc_pkcs15_card *p15card,
 +		struct sc_pkcs15_auth_info *info)
 +{
-+	static const unsigned char aid[] = {
-+		0xE8,0x28,0xBD,0x08,0x0F,0xD2,0x50,0x47,0x65,0x6E,0x65,0x72,0x69,0x63
-+	};
-+	const char *mode = getenv("OPENSC_JCOP3_PIN_STATUS_IN_PLACE");
-+	return mode && !strcmp(mode, "yes") && p15card->card->type == SC_CARD_TYPE_IASECC_AMOS &&
-+			p15card->app && p15card->app->aid.len == sizeof(aid) &&
-+			!memcmp(p15card->app->aid.value, aid, sizeof(aid)) &&
++	return p15card && p15card->app && info &&
++			iasecc_chipdoc_jcop3(p15card->card, &p15card->app->aid) &&
 +			info->auth_type == SC_PKCS15_PIN_AUTH_TYPE_PIN && info->auth_method == SC_AC_CHV &&
 +			info->attrs.pin.reference == 1 &&
 +			!(info->attrs.pin.flags & (SC_PKCS15_PIN_FLAG_LOCAL | SC_PKCS15_PIN_FLAG_SO_PIN |
@@ -5184,7 +4629,7 @@ index 77ef8bbe2138b51761c7952f9ae60af54ae473a0..3472d4d5989484f9f5da592c5dd7a93a
  int sc_pkcs15_get_pin_info(struct sc_pkcs15_card *p15card,
  			 struct sc_pkcs15_object *pin_obj)
  {
-@@ -695,13 +717,43 @@ int sc_pkcs15_get_pin_info(struct sc_pkcs15_card *p15card,
+@@ -695,13 +711,41 @@ int sc_pkcs15_get_pin_info(struct sc_pkcs15_card *p15card,
  	LOG_FUNC_CALLED(ctx);
  
  	r = sc_lock(card);
@@ -5206,10 +4651,8 @@ index 77ef8bbe2138b51761c7952f9ae60af54ae473a0..3472d4d5989484f9f5da592c5dd7a93a
 +		data.cmd = SC_PIN_CMD_GET_INFO;
 +		data.pin_type = pin_info->auth_method;
 +		data.pin_reference = pin_info->attrs.pin.reference;
-+		data.flags = SC_PIN_CMD_STATUS_ONLY;
++		data.flags = IASECC_PIN_STATUS_ONLY;
 +		r = sc_pin_cmd(card, &data);
-+		sc_api_metadata_trace(SC_API_PIN_STATUS_IN_PLACE, 0, (unsigned long)r,
-+				r == SC_SUCCESS ? data.pin1.logged_in : SC_PIN_STATE_UNKNOWN, 1);
 +		/* Before the observed policy is known, retain the full initialization
 +		 * query. After real VERIFY it is available; no reselection is needed.
 +		 */
@@ -5229,49 +4672,6 @@ index 77ef8bbe2138b51761c7952f9ae60af54ae473a0..3472d4d5989484f9f5da592c5dd7a93a
  
  	/* the path in the pin object is optional */
  	if ((pin_info->path.len > 0) || ((pin_info->path.aid.len > 0))) {
-diff --git a/src/libopensc/pkcs15-sec.c b/src/libopensc/pkcs15-sec.c
-index 038e49b3128e831a020f226a685020a9674e2d49..eb8c6ebb2fe5886df19340847c3e833448444930 100644
---- a/src/libopensc/pkcs15-sec.c
-+++ b/src/libopensc/pkcs15-sec.c
-@@ -31,6 +31,7 @@
- #endif
- 
- #include "internal.h"
-+#include "api-trace.h"
- #include "pkcs15.h"
- #include "pkcs11/pkcs11.h"
- 
-@@ -142,22 +143,28 @@ static int use_key(struct sc_pkcs15_card *p15card,
- 	do {
- 		if (path.len != 0 || path.aid.len != 0) {
- 			r = select_key_file(p15card, obj, senv);
-+			sc_api_metadata_trace(SC_API_KEY_SELECT, 0, (unsigned long)r, senv->operation, 0);
- 			if (r < 0) {
- 				sc_log(p15card->card->ctx,
- 						"Unable to select private key file");
- 			}
- 		}
--		if (r == SC_SUCCESS)
-+		if (r == SC_SUCCESS) {
- 			r = sc_set_security_env(p15card->card, senv, 0);
-+			sc_api_metadata_trace(SC_API_KEY_MSE, 0, (unsigned long)r, senv->operation, 0);
-+		}
- 
--		if (r == SC_SUCCESS)
-+		if (r == SC_SUCCESS) {
- 			r = card_command(p15card->card, in, inlen, out, outlen);
-+			sc_api_metadata_trace(SC_API_KEY_COMPUTE, 0, (unsigned long)r, senv->operation, 0);
-+		}
- 
- 		if (revalidated_cached_pin)
- 			/* only re-validate once */
- 			break;
- 		if (r == SC_ERROR_SECURITY_STATUS_NOT_SATISFIED) {
- 			r = sc_pkcs15_pincache_revalidate(p15card, obj);
-+			sc_api_metadata_trace(SC_API_KEY_REVALIDATE, 0, (unsigned long)r, senv->operation, 0);
- 			if (r < 0)
- 				break;
- 			revalidated_cached_pin = 1;
 diff --git a/src/libopensc/pkcs15.c b/src/libopensc/pkcs15.c
 index 40958aa1c929ade32683b9022defbaf1b4713eae..3628b031765df65303fddad02d5b41e06069ae9c 100644
 --- a/src/libopensc/pkcs15.c
@@ -5342,7 +4742,7 @@ index 40958aa1c929ade32683b9022defbaf1b4713eae..3628b031765df65303fddad02d5b41e0
  	sc_unlock(card);
  	LOG_FUNC_RETURN(ctx, SC_SUCCESS);
 diff --git a/src/pkcs11/framework-pkcs15.c b/src/pkcs11/framework-pkcs15.c
-index 81fff3e06a3627fbc2903d418c583640bb2b08fa..c8b387ab3c96ff542d5e58de1cd3335b547a1cec 100644
+index 81fff3e06a3627fbc2903d418c583640bb2b08fa..82a1e768f29e64bdc259fae42a6c25b9e3634475 100644
 --- a/src/pkcs11/framework-pkcs15.c
 +++ b/src/pkcs11/framework-pkcs15.c
 @@ -40,6 +40,7 @@
@@ -5388,53 +4788,7 @@ index 81fff3e06a3627fbc2903d418c583640bb2b08fa..c8b387ab3c96ff542d5e58de1cd3335b
  
  	/* Mechanisms are registered globally per card. Checking
  	 * p11card->nmechanisms avoids registering the same mechanisms twice for a
-@@ -494,6 +509,9 @@ __pkcs15_delete_object(struct pkcs15_fw_data *fw_data, struct pkcs15_any_object
- }
- #endif
- 
-+static int pkcs15_chipdoc_session_state(struct sc_pkcs15_card *,
-+		struct sc_pkcs15_auth_info *, int);
-+
- CK_RV C_GetTokenInfo(CK_SLOT_ID slotID, CK_TOKEN_INFO_PTR pInfo)
- {
- 	struct sc_pkcs11_slot *slot;
-@@ -509,6 +527,7 @@ CK_RV C_GetTokenInfo(CK_SLOT_ID slotID, CK_TOKEN_INFO_PTR pInfo)
- 	if (rv != CKR_OK)
- 		return rv;
- 	sc_log(context, "C_GetTokenInfo(%lx)", slotID);
-+	sc_api_metadata_trace(SC_API_TOKEN_INFO_BEGIN, 0, CKR_OK, slotID, 0);
- 
- 	rv = slot_get_token(slotID, &slot);
- 	if (rv != CKR_OK)   {
-@@ -548,7 +567,18 @@ CK_RV C_GetTokenInfo(CK_SLOT_ID slotID, CK_TOKEN_INFO_PTR pInfo)
- 			goto out;
- 		}
- 
--		sc_pkcs15_get_pin_info(p15card, auth);
-+		if (pkcs15_chipdoc_session_state(p15card, pin_info, slot->login_user)) {
-+			/* Experimental: flags below use cached public retry metadata.
-+			 * This is not a new physical PIN-status observation.
-+			 */
-+			sc_api_metadata_trace(SC_API_TOKEN_PIN_CACHED, 0, CKR_OK,
-+					SC_PIN_STATE_UNKNOWN, (CK_ULONG)slot->login_user);
-+		} else {
-+			/* Preserve the existing behavior: the PIN-query result does not set rv. */
-+			int pin_rv = sc_pkcs15_get_pin_info(p15card, auth);
-+			sc_api_metadata_trace(SC_API_TOKEN_PIN_STATUS, 0, (CK_RV)pin_rv,
-+					pin_info->logged_in, (CK_ULONG)slot->login_user);
-+		}
- 
- 		if (pin_info->tries_left >= 0) {
- 			if (pin_info->tries_left == 1 || pin_info->max_tries == 1)
-@@ -570,6 +600,7 @@ out:
- 		sc_log(context, "C_GetTokenInfo(%lx) returns %s", slotID, name);
- 	else
- 		sc_log(context, "C_GetTokenInfo(%lx) returns 0x%08lX", slotID, rv);
-+	sc_api_metadata_trace(SC_API_TOKEN_INFO, 0, rv, slotID, 0);
- 	sc_pkcs11_unlock();
- 
- 	return rv;
-@@ -858,8 +889,18 @@ pkcs15_create_pkcs11_objects(struct pkcs15_fw_data *fw_data, int p15_type, const
+@@ -858,8 +873,18 @@ pkcs15_create_pkcs11_objects(struct pkcs15_fw_data *fw_data, int p15_type, const
  	if (rv >= 0)
  		sc_log(context, "Found %d %s%s", count, name, (count == 1)? "" : "s");
  
@@ -5454,7 +4808,7 @@ index 81fff3e06a3627fbc2903d418c583640bb2b08fa..c8b387ab3c96ff542d5e58de1cd3335b
  
  	return count;
  }
-@@ -1105,7 +1146,8 @@ pkcs15_init_slot(struct sc_pkcs15_card *p15card, struct sc_pkcs11_slot *slot,
+@@ -1105,7 +1130,8 @@ pkcs15_init_slot(struct sc_pkcs15_card *p15card, struct sc_pkcs11_slot *slot,
  	if (auth != NULL)
  		slot->token_info.flags |= CKF_USER_PIN_INITIALIZED;
  
@@ -5464,7 +4818,7 @@ index 81fff3e06a3627fbc2903d418c583640bb2b08fa..c8b387ab3c96ff542d5e58de1cd3335b
  		slot->token_info.flags |= CKF_PROTECTED_AUTHENTICATION_PATH;
  
  	if (p15card->card->caps & SC_CARD_CAP_RNG && p15card->card->ops->get_challenge != NULL)
-@@ -1120,6 +1162,8 @@ pkcs15_init_slot(struct sc_pkcs15_card *p15card, struct sc_pkcs11_slot *slot,
+@@ -1120,6 +1146,8 @@ pkcs15_init_slot(struct sc_pkcs15_card *p15card, struct sc_pkcs11_slot *slot,
  	if (atrblock) {
  		write_protected = scconf_get_bool(atrblock, "read_only", write_protected);
  	}
@@ -5473,39 +4827,7 @@ index 81fff3e06a3627fbc2903d418c583640bb2b08fa..c8b387ab3c96ff542d5e58de1cd3335b
  	if (write_protected) {
  		slot->token_info.flags |= CKF_WRITE_PROTECTED;
  	}
-@@ -1328,9 +1372,39 @@ _is_slot_auth_object(struct sc_pkcs15_auth_info *pin_info)
- 	return 1;
- }
- 
-+/* Isolated experiment, disabled by default. C_Login still verifies the PIN;
-+ * subsequent physical PIN queries from C_GetSessionInfo and C_GetTokenInfo
-+ * are suppressed. Token flags then use cached public retry metadata.
-+ * Returning UNKNOWN leaves session state governed by slot->login_user,
-+ * without claiming that the physical card's status was read.
-+ */
-+static int
-+pkcs15_chipdoc_session_state(struct sc_pkcs15_card *p15card,
-+		struct sc_pkcs15_auth_info *pin_info, int login_user)
-+{
-+	static const unsigned char generic_aid[] = {
-+		0xE8, 0x28, 0xBD, 0x08, 0x0F, 0xD2, 0x50,
-+		0x47, 0x65, 0x6E, 0x65, 0x72, 0x69, 0x63
-+	};
-+	const char *mode = getenv("OPENSC_JCOP3_SESSION_STATE");
-+
-+	return mode && !strcmp(mode, "yes") && login_user == CKU_USER &&
-+			p15card && p15card->card && p15card->app && pin_info &&
-+			p15card->card->type == SC_CARD_TYPE_IASECC_AMOS &&
-+			p15card->app->aid.len == sizeof(generic_aid) &&
-+			!memcmp(p15card->app->aid.value, generic_aid, sizeof(generic_aid)) &&
-+			pin_info->auth_type == SC_PKCS15_PIN_AUTH_TYPE_PIN &&
-+			pin_info->auth_method == SC_AC_CHV && pin_info->attrs.pin.reference == 1 &&
-+			!(pin_info->attrs.pin.flags & (SC_PKCS15_PIN_FLAG_LOCAL |
-+			SC_PKCS15_PIN_FLAG_SO_PIN | SC_PKCS15_PIN_FLAG_UNBLOCKING_PIN)) &&
-+			pin_info->path.type == SC_PATH_TYPE_FILE_ID && !pin_info->path.aid.len &&
-+			pin_info->path.len == 2 && pin_info->path.value[0] == 0x3F && !pin_info->path.value[1];
-+}
-+
+@@ -1331,6 +1359,7 @@ _is_slot_auth_object(struct sc_pkcs15_auth_info *pin_info)
  int slot_get_logged_in_state(struct sc_pkcs11_slot *slot)
  {
  	int logged_in = SC_PIN_STATE_UNKNOWN;
@@ -5513,19 +4835,12 @@ index 81fff3e06a3627fbc2903d418c583640bb2b08fa..c8b387ab3c96ff542d5e58de1cd3335b
  	struct pkcs15_fw_data *fw_data = NULL;
  	struct sc_pkcs15_card *p15card = NULL;
  	struct sc_pkcs15_object *pin_obj = NULL;
-@@ -1359,8 +1433,21 @@ int slot_get_logged_in_state(struct sc_pkcs11_slot *slot)
+@@ -1359,8 +1388,14 @@ int slot_get_logged_in_state(struct sc_pkcs11_slot *slot)
  	pin_info = (struct sc_pkcs15_auth_info *)pin_obj->data;
  	if (!pin_info)
  		goto out;
 -	sc_pkcs15_get_pin_info(p15card, pin_obj);
-+	if (pkcs15_chipdoc_session_state(p15card, pin_info, slot->login_user)) {
-+		sc_api_metadata_trace(SC_API_SESSION_LOGIN_STATE, 0, CKR_OK,
-+				SC_PIN_STATE_UNKNOWN, (CK_ULONG)slot->login_user);
-+		return SC_PIN_STATE_UNKNOWN;
-+	}
 +	pin_rv = sc_pkcs15_get_pin_info(p15card, pin_obj);
-+	sc_api_metadata_trace(SC_API_PIN_STATUS, 0, (CK_RV)pin_rv,
-+			pin_info->logged_in, (CK_ULONG)slot->login_user);
  	logged_in = pin_info->logged_in & ~SC_PIN_STATE_NEEDS_CHANGE;
 +	if (iasecc_chipdoc_configured(p15card->card) &&
 +			(pin_rv < 0 || logged_in != SC_PIN_STATE_LOGGED_IN)) {
@@ -5536,7 +4851,7 @@ index 81fff3e06a3627fbc2903d418c583640bb2b08fa..c8b387ab3c96ff542d5e58de1cd3335b
  out:
  	return logged_in;
  }
-@@ -1765,6 +1852,8 @@ pkcs15_login(struct sc_pkcs11_slot *slot, CK_USER_TYPE userType,
+@@ -1765,6 +1800,8 @@ pkcs15_login(struct sc_pkcs11_slot *slot, CK_USER_TYPE userType,
  	p11card = slot->p11card;
  
  	fw_data = (struct pkcs15_fw_data *) p11card->fws_data[slot->fw_data_idx];
@@ -5545,7 +4860,7 @@ index 81fff3e06a3627fbc2903d418c583640bb2b08fa..c8b387ab3c96ff542d5e58de1cd3335b
  	if (!fw_data)
  		return sc_to_cryptoki_error(SC_ERROR_INTERNAL, "C_Login");
  	p15card = fw_data->p15_card;
-@@ -1788,7 +1877,7 @@ pkcs15_login(struct sc_pkcs11_slot *slot, CK_USER_TYPE userType,
+@@ -1788,7 +1825,7 @@ pkcs15_login(struct sc_pkcs11_slot *slot, CK_USER_TYPE userType,
  		 * accept any PIN, and lock the card if required */
  		if (rc == SC_ERROR_OBJECT_NOT_FOUND)   {
  			rc = 0;
@@ -5554,7 +4869,7 @@ index 81fff3e06a3627fbc2903d418c583640bb2b08fa..c8b387ab3c96ff542d5e58de1cd3335b
  				rc = lock_card(fw_data);
  
  			if (sc_pkcs11_conf.pin_unblock_style == SC_PKCS11_PIN_UNBLOCK_SO_LOGGED_INITPIN)   {
-@@ -1833,7 +1922,7 @@ pkcs15_login(struct sc_pkcs11_slot *slot, CK_USER_TYPE userType,
+@@ -1833,7 +1870,7 @@ pkcs15_login(struct sc_pkcs11_slot *slot, CK_USER_TYPE userType,
  		 */
  		/* For a while, used only to unblock User PIN. */
  		rc = 0;
@@ -5563,7 +4878,7 @@ index 81fff3e06a3627fbc2903d418c583640bb2b08fa..c8b387ab3c96ff542d5e58de1cd3335b
  			rc = lock_card(fw_data);
  		sc_log(context, "context specific login returns %d", rc);
  		return sc_to_cryptoki_error(rc, "C_Login");
-@@ -1859,7 +1948,7 @@ pkcs15_login(struct sc_pkcs11_slot *slot, CK_USER_TYPE userType,
+@@ -1859,7 +1896,7 @@ pkcs15_login(struct sc_pkcs11_slot *slot, CK_USER_TYPE userType,
  	 * before the crypto operation that requires the assertion
  	 */
  	if (userType != CKU_CONTEXT_SPECIFIC) {
@@ -5572,7 +4887,7 @@ index 81fff3e06a3627fbc2903d418c583640bb2b08fa..c8b387ab3c96ff542d5e58de1cd3335b
  			return sc_to_cryptoki_error(rc, "C_Login");
  		}
  	}
-@@ -1963,6 +2052,12 @@ pkcs15_logout(struct sc_pkcs11_slot *slot)
+@@ -1963,6 +2000,12 @@ pkcs15_logout(struct sc_pkcs11_slot *slot)
  	fw_data->user_puk_len = 0;
  
  	sc_pkcs15_pincache_clear(fw_data->p15_card);
@@ -5585,7 +4900,7 @@ index 81fff3e06a3627fbc2903d418c583640bb2b08fa..c8b387ab3c96ff542d5e58de1cd3335b
  
  #if defined(SW_PIN_LOGOUT_ONLY) && SW_PIN_LOGOUT_ONLY == 1
  	sc_log(context, "Clearing PIN state without calling sc_logout()");
-@@ -1976,7 +2071,7 @@ pkcs15_logout(struct sc_pkcs11_slot *slot)
+@@ -1976,7 +2019,7 @@ pkcs15_logout(struct sc_pkcs11_slot *slot)
  	if (rc != SC_SUCCESS)
  		ret = sc_to_cryptoki_error(rc, "C_Logout");
  
@@ -5594,19 +4909,7 @@ index 81fff3e06a3627fbc2903d418c583640bb2b08fa..c8b387ab3c96ff542d5e58de1cd3335b
  		rc = unlock_card(fw_data);
  		if (rc != SC_SUCCESS)
  			ret = sc_to_cryptoki_error(rc, "C_Logout");
-@@ -4319,6 +4414,11 @@ pkcs15_prkey_sign(struct sc_pkcs11_session *session, void *obj,
- 	if (prkey == NULL)
- 		return CKR_KEY_FUNCTION_NOT_PERMITTED;
- 
-+	/* Public key metadata only, after resolving alternative key objects. */
-+	sc_api_metadata_trace(SC_API_SIGN_KEY, session->handle, CKR_OK,
-+			(CK_ULONG)prkey->prv_info->key_reference,
-+			(CK_ULONG)prkey->prv_info->modulus_length);
-+
- 	switch (pMechanism->mechanism) {
- 	case CKM_RSA_PKCS:
- 		flags = SC_ALGORITHM_RSA_PAD_PKCS1_TYPE_01 | SC_ALGORITHM_RSA_HASH_NONE;
-@@ -6511,6 +6611,8 @@ register_mechanisms(struct sc_pkcs11_card *p11card)
+@@ -6511,6 +6554,8 @@ register_mechanisms(struct sc_pkcs11_card *p11card)
  	sc_pkcs11_register_generic_mechanisms(p11card);
  
  	mech_info.flags = CKF_HW | CKF_SIGN | CKF_DECRYPT;
@@ -5648,29 +4951,8 @@ index 1d893d61814d650162a9da8664f284c174b7ef18..43392fc5b191c154eaafc150e720c8fe
  	}
  
  	return rv;
-diff --git a/src/pkcs11/pkcs11-global.c b/src/pkcs11/pkcs11-global.c
-index c2ddc4c36549975781130a2248702b9fa5fc89f6..42d6db076d536bbbbf8af083d6e28da484c690c6 100644
---- a/src/pkcs11/pkcs11-global.c
-+++ b/src/pkcs11/pkcs11-global.c
-@@ -629,6 +629,7 @@ CK_RV C_GetSlotInfo(CK_SLOT_ID slotID, CK_SLOT_INFO_PTR pInfo)
- 		return rv;
- 
- 	sc_log(context, "C_GetSlotInfo(0x%lx)", slotID);
-+	sc_api_metadata_trace(SC_API_SLOT_INFO_BEGIN, 0, CKR_OK, slotID, 0);
- 
- 	if (sc_pkcs11_conf.init_sloppy) {
- 		/* Most likely virtual_slots is empty and has not
-@@ -674,6 +675,8 @@ CK_RV C_GetSlotInfo(CK_SLOT_ID slotID, CK_SLOT_INFO_PTR pInfo)
- 		sc_log(context, "C_GetSlotInfo(0x%lx) = %s", slotID, name);
- 	else
- 		sc_log(context, "C_GetSlotInfo(0x%lx) = 0x%08lX", slotID, rv);
-+	sc_api_metadata_trace(SC_API_SLOT_INFO, 0, rv, slotID,
-+			rv == CKR_OK ? pInfo->flags : 0);
- 	sc_pkcs11_unlock();
- 	return rv;
- }
 diff --git a/src/pkcs11/pkcs11-object.c b/src/pkcs11/pkcs11-object.c
-index c166811ce166e02834d24a1a3d3906c0875d5556..0b1993495b7c6d5d0587d2a8b71c728cab5ad591 100644
+index c166811ce166e02834d24a1a3d3906c0875d5556..78c1b6af1d9c2b336bfdd882fb70d6e27eb20c3b 100644
 --- a/src/pkcs11/pkcs11-object.c
 +++ b/src/pkcs11/pkcs11-object.c
 @@ -24,6 +24,7 @@
@@ -5681,23 +4963,7 @@ index c166811ce166e02834d24a1a3d3906c0875d5556..0b1993495b7c6d5d0587d2a8b71c728c
  
  static void sc_find_release(sc_pkcs11_operation_t *operation);
  
-@@ -297,6 +298,7 @@ out:
- 		sc_log(context, "C_GetAttributeValue(hSession=0x%lx, hObject=0x%lx) = 0x%lx",
-                         hSession, hObject, rv);
- 
-+	sc_api_metadata_trace(SC_API_GET_ATTRIBUTE, hSession, rv, hObject, 0);
- 	sc_pkcs11_unlock();
- 	return rv;
- }
-@@ -452,6 +454,7 @@ C_FindObjectsInit(CK_SESSION_HANDLE hSession,	/* the session's handle */
- 	sc_log(context, "%d matching objects\n", operation->num_handles);
- 
- out:
-+	sc_api_metadata_trace(SC_API_FIND_INIT, hSession, rv, 0, 0);
- 	sc_pkcs11_unlock();
- 	return rv;
- }
-@@ -679,6 +682,13 @@ C_SignInit(CK_SESSION_HANDLE hSession,		/* the session's handle */
+@@ -679,6 +680,13 @@ C_SignInit(CK_SESSION_HANDLE hSession,		/* the session's handle */
  		rv = CKR_KEY_TYPE_INCONSISTENT;
  		goto out;
  	}
@@ -5711,40 +4977,8 @@ index c166811ce166e02834d24a1a3d3906c0875d5556..0b1993495b7c6d5d0587d2a8b71c728c
  
  	rv = object->ops->get_attribute(session, object, &sign_attribute);
  	if (rv != CKR_OK || !can_sign) {
-@@ -695,6 +705,7 @@ C_SignInit(CK_SESSION_HANDLE hSession,		/* the session's handle */
- 
- out:
- 	SC_LOG_RV("C_SignInit() = %s", rv);
-+	sc_api_metadata_trace(SC_API_SIGN_INIT, hSession, rv, pMechanism->mechanism, hKey);
- 	sc_pkcs11_unlock();
- 	return rv;
- }
-@@ -743,6 +754,7 @@ C_Sign(CK_SESSION_HANDLE hSession,		/* the session's handle */
- 
- out:
- 	SC_LOG_RV("C_Sign() = %s", rv);
-+	sc_api_metadata_trace(SC_API_SIGN, hSession, rv, pSignature != NULL, 0);
- 	sc_pkcs11_unlock();
- 	return rv;
- }
-@@ -765,6 +777,7 @@ C_SignUpdate(CK_SESSION_HANDLE hSession,	/* the session's handle */
- 		rv = sc_pkcs11_sign_update(session, pPart, ulPartLen);
- 
- 	SC_LOG_RV("C_SignUpdate() = %s", rv);
-+	sc_api_metadata_trace(SC_API_SIGN_UPDATE, hSession, rv, 0, 0);
- 	sc_pkcs11_unlock();
- 	return rv;
- }
-@@ -807,6 +820,7 @@ C_SignFinal(CK_SESSION_HANDLE hSession,		/* the session's handle */
- 
- out:
- 	SC_LOG_RV("C_SignFinal() = %s", rv);
-+	sc_api_metadata_trace(SC_API_SIGN_FINAL, hSession, rv, pSignature != NULL, 0);
- 	sc_pkcs11_unlock();
- 	return rv;
- }
 diff --git a/src/pkcs11/pkcs11-session.c b/src/pkcs11/pkcs11-session.c
-index c6de3bf7dca0128be65a2873b73ae7f19de3c9e7..20226790e1f77eb466592ae22a3033ee4325bca9 100644
+index c6de3bf7dca0128be65a2873b73ae7f19de3c9e7..fef88bda2e60dae4945884dcb1d9ad6acb2ddb95 100644
 --- a/src/pkcs11/pkcs11-session.c
 +++ b/src/pkcs11/pkcs11-session.c
 @@ -26,6 +26,7 @@
@@ -5755,15 +4989,7 @@ index c6de3bf7dca0128be65a2873b73ae7f19de3c9e7..20226790e1f77eb466592ae22a3033ee
  
  CK_RV get_session(CK_SESSION_HANDLE hSession, struct sc_pkcs11_session **session)
  {
-@@ -95,6 +96,7 @@ CK_RV C_OpenSession(CK_SLOT_ID slotID,	/* the slot's ID */
- 
- out:
- 	SC_LOG_RV("C_OpenSession() = %s", rv);
-+	sc_api_metadata_trace(SC_API_OPEN_SESSION, rv == CKR_OK ? *phSession : 0, rv, slotID, flags);
- 	sc_pkcs11_unlock();
- 	return rv;
- }
-@@ -105,6 +107,8 @@ static CK_RV sc_pkcs11_close_session(CK_SESSION_HANDLE hSession)
+@@ -105,6 +106,8 @@ static CK_RV sc_pkcs11_close_session(CK_SESSION_HANDLE hSession)
  {
  	struct sc_pkcs11_slot *slot;
  	struct sc_pkcs11_session *session;
@@ -5772,7 +4998,7 @@ index c6de3bf7dca0128be65a2873b73ae7f19de3c9e7..20226790e1f77eb466592ae22a3033ee
  
  	sc_log(context, "real C_CloseSession(0x%lx)", hSession);
  
-@@ -116,14 +120,17 @@ static CK_RV sc_pkcs11_close_session(CK_SESSION_HANDLE hSession)
+@@ -116,14 +119,17 @@ static CK_RV sc_pkcs11_close_session(CK_SESSION_HANDLE hSession)
  	 * we log out */
  	slot = session->slot;
  	slot->nsessions--;
@@ -5792,7 +5018,7 @@ index c6de3bf7dca0128be65a2873b73ae7f19de3c9e7..20226790e1f77eb466592ae22a3033ee
  		}
  	}
  	for (size_t i = 0; i < SC_PKCS11_OPERATION_MAX; i++)
-@@ -132,7 +139,7 @@ static CK_RV sc_pkcs11_close_session(CK_SESSION_HANDLE hSession)
+@@ -132,7 +138,7 @@ static CK_RV sc_pkcs11_close_session(CK_SESSION_HANDLE hSession)
  	if (list_delete(&sessions, session) != 0)
  		sc_log(context, "Could not delete session from list!");
  	free(session);
@@ -5801,31 +5027,7 @@ index c6de3bf7dca0128be65a2873b73ae7f19de3c9e7..20226790e1f77eb466592ae22a3033ee
  }
  
  /* Internal version of C_CloseAllSessions that gets called with
-@@ -165,6 +172,7 @@ CK_RV C_CloseSession(CK_SESSION_HANDLE hSession)
- 
- 	rv = sc_pkcs11_close_session(hSession);
- 
-+	sc_api_metadata_trace(SC_API_CLOSE_SESSION, hSession, rv, 0, 0);
- 	sc_pkcs11_unlock();
- 	return rv;
- }
-@@ -187,6 +195,7 @@ CK_RV C_CloseAllSessions(CK_SLOT_ID slotID)
- 	rv = sc_pkcs11_close_all_sessions(slotID);
- 
- out:
-+	sc_api_metadata_trace(SC_API_CLOSE_ALL_SESSIONS, 0, rv, slotID, 0);
- 	sc_pkcs11_unlock();
- 	return rv;
- }
-@@ -304,6 +313,7 @@ out:
- 		sc_log(context, "C_GetSessionInfo(0x%lx) = %s", hSession, name);
- 	else
- 		sc_log(context, "C_GetSessionInfo(0x%lx) = 0x%lx", hSession, rv);
-+	sc_api_metadata_trace(SC_API_SESSION_INFO, hSession, rv, rv == CKR_OK ? pInfo->state : CK_UNAVAILABLE_INFORMATION, 0);
- 	sc_pkcs11_unlock();
- 	return rv;
- }
-@@ -353,6 +363,18 @@ CK_RV C_Login(CK_SESSION_HANDLE hSession,	/* the session's handle */
+@@ -353,6 +359,18 @@ CK_RV C_Login(CK_SESSION_HANDLE hSession,	/* the session's handle */
  	sc_log(context, "C_Login(0x%lx, %lu)", hSession, userType);
  
  	slot = session->slot;
@@ -5844,36 +5046,8 @@ index c6de3bf7dca0128be65a2873b73ae7f19de3c9e7..20226790e1f77eb466592ae22a3033ee
  
  	if (!(slot->token_info.flags & CKF_USER_PIN_INITIALIZED) && userType == CKU_USER) {
  		rv = CKR_USER_PIN_NOT_INITIALIZED;
-@@ -398,6 +420,7 @@ CK_RV C_Login(CK_SESSION_HANDLE hSession,	/* the session's handle */
- 	}
- 
- out:
-+	sc_api_metadata_trace(SC_API_LOGIN, hSession, rv, userType, 0);
- 	sc_pkcs11_unlock();
- 	return rv;
- }
-@@ -446,6 +469,7 @@ CK_RV C_Logout(CK_SESSION_HANDLE hSession)
- 		rv = CKR_USER_NOT_LOGGED_IN;
- 
- out:
-+	sc_api_metadata_trace(SC_API_LOGOUT, hSession, rv, 0, 0);
- 	sc_pkcs11_unlock();
- 	return rv;
- }
-diff --git a/src/pkcs11/sc-pkcs11.h b/src/pkcs11/sc-pkcs11.h
-index cce02d0961616ae4f088683052bc78d4d07096a3..e232facc673e61488bd0a0ce59aa382cbb4a704d 100644
---- a/src/pkcs11/sc-pkcs11.h
-+++ b/src/pkcs11/sc-pkcs11.h
-@@ -31,6 +31,7 @@
- #include "pkcs11.h"
- #include "pkcs11-opensc.h"
- #include "pkcs11-display.h"
-+#include "libopensc/api-trace.h"
- 
- #ifdef __cplusplus
- extern "C" {
 diff --git a/src/pkcs11/slot.c b/src/pkcs11/slot.c
-index 5607a04c65eabc5332c1b30f5b435c6d6a72780c..9e6ed89c1868f072b53b3bf6712a39393b0eebf8 100644
+index 5607a04c65eabc5332c1b30f5b435c6d6a72780c..999ee580d971f0ec58e103310a1247a55b0c3cbe 100644
 --- a/src/pkcs11/slot.c
 +++ b/src/pkcs11/slot.c
 @@ -219,7 +219,7 @@ card_detect(sc_reader_t *reader, void **reader_states)
@@ -5885,15 +5059,7 @@ index 5607a04c65eabc5332c1b30f5b435c6d6a72780c..9e6ed89c1868f072b53b3bf6712a3939
  
  	sc_log(context, "%s: Detecting smart card", reader->name);
  	/* Check if someone inserted a card */
-@@ -241,6 +241,7 @@ card_detect(sc_reader_t *reader, void **reader_states)
- 
- again:
- 	rc = sc_detect_card_presence(reader);
-+	sc_api_metadata_trace(SC_API_CARD_PRESENCE, 0, (CK_RV)rc, 0, 0);
- 	if (rc < 0) {
- 		sc_log(context, "%s: failed, %s", reader->name, sc_strerror(rc));
- 		return sc_to_cryptoki_error(rc, NULL);
-@@ -251,7 +252,9 @@ again:
+@@ -251,7 +251,9 @@ again:
  		return CKR_TOKEN_NOT_PRESENT;
  	}
  
@@ -5904,7 +5070,7 @@ index 5607a04c65eabc5332c1b30f5b435c6d6a72780c..9e6ed89c1868f072b53b3bf6712a3939
  		sc_log(context, "%s: card present, no change detected", reader->name);
  		return CKR_OK;
  	}
-@@ -259,12 +262,13 @@ again:
+@@ -259,12 +261,13 @@ again:
  	/* If the card was changed, disconnect the current one */
  	if (rc & SC_READER_CARD_CHANGED) {
  		sc_log(context, "%s: Card changed", reader->name);
@@ -5919,15 +5085,6 @@ index 5607a04c65eabc5332c1b30f5b435c6d6a72780c..9e6ed89c1868f072b53b3bf6712a3939
  			return CKR_TOKEN_NOT_PRESENT;
  		}
  		goto again;
-@@ -534,6 +538,8 @@ CK_RV slot_token_removed(CK_SLOT_ID id)
- 		return rv;
- 
- 	token_was_present = (slot->slot_info.flags & CKF_TOKEN_PRESENT);
-+	sc_api_metadata_trace(SC_API_SLOT_TOKEN_REMOVED, 0, CKR_OK, id,
-+			token_was_present ? 1 : 0);
- 
- 	/* Terminate active sessions */
- 	sc_pkcs11_close_all_sessions(id);
 diff --git a/src/tests/unittests/Makefile.am b/src/tests/unittests/Makefile.am
 index 96ace285692754743c7b147b16eb2c1878b17ef5..973305014f4cc26abb1af1ff20696caf0f764896 100644
 --- a/src/tests/unittests/Makefile.am
@@ -6726,19 +5883,3 @@ index 0000000000000000000000000000000000000000..bd3542142be6e7ec43b6734494b5e7c5
 +	};
 +	return cmocka_run_group_tests(tests, NULL, NULL);
 +}
-diff --git a/src/tools/pkcs11-tool.c b/src/tools/pkcs11-tool.c
-index 2ad1933827aa7a244c4109e02ef0166fda97efb9..12563445b2b4181f3ab593586aa5b0657f627c0c 100644
---- a/src/tools/pkcs11-tool.c
-+++ b/src/tools/pkcs11-tool.c
-@@ -2737,6 +2737,11 @@ static void sign_data(CK_SLOT_ID slot, CK_SESSION_HANDLE session,
- 				util_fatal("malloc() failure\n");
- 			rv = p11->C_Sign(session, in_buffer, sz, sig_buffer, &sig_len);
- 		}
-+		if (rv != CKR_OK) {
-+			const char *stop = getenv("OPENSC_PKCS11_TOOL_NO_SIGN_FALLBACK");
-+			if (stop && !strcmp(stop, "yes"))
-+				p11_fatal("C_Sign", rv);
-+		}
- 	}
- 
- 	if (rv != CKR_OK)   {

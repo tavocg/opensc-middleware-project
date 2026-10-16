@@ -2,6 +2,13 @@
 #define IASECC_CHIPDOC_PKCS15_FIXTURE
 #include "iasecc-chipdoc-pkcs15.c"
 #include "libopensc/iasecc-chipdoc-routing.h"
+static int fixture_last_report(struct sc_card *card, struct iasecc_chipdoc_routing_report *report)
+{
+	struct iasecc_chipdoc_routing *route = chipdoc_route(card);
+	if (!route || !report) return SC_ERROR_NOT_ALLOWED;
+	*report = route->last;
+	return 0;
+}
 static unsigned int metadata_reads, metadata_selects, owner_clears;
 static struct sc_card_operations original_operations;
 static int idle_read(struct sc_card *card, unsigned int offset, unsigned char *out, size_t size, unsigned long *flags)
@@ -29,7 +36,7 @@ static void install(void)
 }
 static void status(int expected)
 {
-	struct sc_pin_cmd_data data = {0}; data.cmd = SC_PIN_CMD_GET_INFO; data.flags = SC_PIN_CMD_STATUS_ONLY;
+	struct sc_pin_cmd_data data = {0}; data.cmd = SC_PIN_CMD_GET_INFO; data.flags = 0;
 	data.pin_type = SC_AC_CHV; data.pin_reference = 1; unsigned int before = physical;
 	assert(!sc_pin_cmd(&test_card,&data) && data.pin1.logged_in == expected && data.pin1.tries_left == -1 && !data.pin1.max_tries);
 	assert(data.pin1.min_length == 6 && data.pin1.max_length == 14 && physical == before);
@@ -73,7 +80,7 @@ int main(void)
 		assert(sc_pkcs15_compute_signature(&p15,&native_key,rsa_algorithm.flags,digest,32,output,256,NULL) == 256); verify_rsa(output);
 		assert(physical == 12 && signing_calls == 3 && !reader_reserved && !test_card.lock_count && !native_pin.content.value);
 		assert(!frontend_pins && !frontend_selects && !frontend_mses && !frontend_psos); /* No fixture routing callbacks used. */
-		assert(!iasecc_chipdoc_routing_last_report(&test_card,&report) && report.operation == IASECC_CHIPDOC_ROUTE_SIGN && report.result == 256 && report.close.complete);
+		assert(!fixture_last_report(&test_card,&report) && report.operation == IASECC_CHIPDOC_ROUTE_SIGN && report.result == 256 && report.close.complete);
 		status(SC_PIN_STATE_LOGGED_OUT); assert(!card_ops.logout(&test_card) && resets == 2);
 		memcpy(output,untouched,256);
 		assert(sc_pkcs15_compute_signature(&p15,&native_key,rsa_algorithm.flags,digest,32,output,256,NULL) == SC_ERROR_SECURITY_STATUS_NOT_SATISFIED);
@@ -118,13 +125,13 @@ int main(void)
 		failure_stage = step; failure_mode = 3; memcpy(output,untouched,256);
 		assert(sc_pkcs15_compute_signature(&p15,&native_key,rsa_algorithm.flags,digest,32,output,256,NULL) == SC_ERROR_SECURITY_STATUS_NOT_SATISFIED);
 		assert(credential_attempts == 1 && physical == (unsigned int)(9+step) && !reader_reserved && !test_card.lock_count && !native_pin.content.value);
-		assert(!memcmp(output,untouched,256) && !frontend_pins && !iasecc_chipdoc_routing_last_report(&test_card,&report) && report.close.complete);
+		assert(!memcmp(output,untouched,256) && !frontend_pins && !fixture_last_report(&test_card,&report) && report.close.complete);
 		destroy_routing();
 	}
 	routing_defaults(1); install(); verify_sw = 0x63C6;
 	assert(sc_pkcs15_verify_pin(&p15,&native_pin,fictitious_pin,6) == SC_ERROR_PIN_CODE_INCORRECT);
 	assert(credential_attempts == 1 && physical == 9 && !reader_reserved && !native_pin.content.value);
-	assert(!iasecc_chipdoc_routing_last_report(&test_card,&report) && report.channel.authenticated && report.channel.sw == 0x63C6 && report.close.complete); destroy_routing();
+	assert(!fixture_last_report(&test_card,&report) && report.channel.authenticated && report.channel.sw == 0x63C6 && report.close.complete); destroy_routing();
 	puts("PASS installed routing closes every native PIN/select/MSE/PSO failure without cached revalidation or partial output; numeric report retains authenticated error and managed cleanup");
 	for (int fault = 0; fault < 3; fault++) {
 		routing_defaults(1); install(); assert(!sc_pkcs15_verify_pin(&p15,&native_pin,fictitious_pin,6));

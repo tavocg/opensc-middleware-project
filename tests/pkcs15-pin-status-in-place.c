@@ -34,7 +34,7 @@ int sc_pin_cmd(struct sc_card *card, struct sc_pin_cmd_data *data)
 	if (data->pin1.data || data->pin1.len || data->pin2.data || data->pin2.len ||
 			data->cmd != SC_PIN_CMD_GET_INFO)
 		return SC_ERROR_INVALID_ARGUMENTS;
-	if (data->flags & SC_PIN_CMD_STATUS_ONLY) {
+	if (data->flags & IASECC_PIN_STATUS_ONLY) {
 		status_queries++;
 		if (status_unsupported) return SC_ERROR_NOT_SUPPORTED;
 	}
@@ -63,6 +63,8 @@ int main(void)
 	struct sc_pkcs15_object obj = {0};
 	int rv;
 	card.ctx = &ctx;
+	struct sc_card_driver driver = {.short_name = "iasecc"};
+	card.driver = &driver;
 	card.type = SC_CARD_TYPE_IASECC_AMOS;
 	app.aid.len = sizeof(aid);
 	memcpy(app.aid.value, aid, sizeof(aid));
@@ -79,8 +81,8 @@ int main(void)
 	original = info;
 	unsetenv("OPENSC_JCOP3_PIN_STATUS_IN_PLACE");
 	rv = sc_pkcs15_get_pin_info(&p15, &obj);
-	check("default query preserves path selection and full driver info",
-			rv == 0 && selections == 1 && queries == 1 && !status_queries && locks == 1 && unlocks == 1);
+	check("detected JCOP3 queries physical state without reselection or environment flag",
+			rv == 0 && !selections && queries == 1 && status_queries == 1 && locks == 1 && unlocks == 1);
 	clear_counts();
 	setenv("OPENSC_JCOP3_PIN_STATUS_IN_PLACE", "yes", 1);
 	rv = sc_pkcs15_get_pin_info(&p15, &obj);
@@ -116,11 +118,12 @@ int main(void)
 	clear_counts();
 	setenv("OPENSC_JCOP3_PIN_STATUS_IN_PLACE", "no", 1);
 	rv = sc_pkcs15_get_pin_info(&p15, &obj);
-	check("candidate requires exact opt-in", rv == 0 && selections == 1 && !status_queries);
+	check("legacy environment value cannot disable automatic handling", rv == 0 && !selections && status_queries == 1);
 	setenv("OPENSC_JCOP3_PIN_STATUS_IN_PLACE", "yes", 1);
-	for (int variant = 0; variant < 12; variant++) {
+	for (int variant = 0; variant < 15; variant++) {
 		info = original;
 		card.type = SC_CARD_TYPE_IASECC_AMOS;
+		card.driver = &driver; driver.short_name = "iasecc";
 		p15.app = &app;
 		memcpy(app.aid.value, aid, sizeof(aid));
 		clear_counts();
@@ -137,6 +140,9 @@ int main(void)
 		case 9: p15.app = NULL; break;
 		case 10: info.attrs.pin.flags = SC_PKCS15_PIN_FLAG_SO_PIN; break;
 		case 11: info.attrs.pin.flags = SC_PKCS15_PIN_FLAG_UNBLOCKING_PIN; break;
+		case 12: card.type = SC_CARD_TYPE_IASECC_CHIPDOC; break;
+		case 13: card.driver = NULL; break;
+		case 14: driver.short_name = "iso7816"; break;
 		}
 		int excluded = !chipdoc_pin_status_in_place(&p15, &info);
 		rv = sc_pkcs15_get_pin_info(&p15, &obj);

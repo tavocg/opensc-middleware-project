@@ -4,6 +4,11 @@
 #include "libopensc/iasecc-chipdoc-routing.h"
 #include <assert.h>
 #include <stdio.h>
+/* Routing callbacks must never execute when backend availability fails. */
+void iasecc_chipdoc_invalidate_card(struct sc_card *card) { (void)card; abort(); }
+int sc_unlock(struct sc_card *card) { (void)card; abort(); }
+int sc_reset(struct sc_card *card, int cold) { (void)card; (void)cold; abort(); }
+void sc_mem_clear(void *data, size_t size) { (void)data; (void)size; abort(); }
 int main(void)
 {
 	struct sc_card card = {0}; struct iasecc_private_data prv = {0};

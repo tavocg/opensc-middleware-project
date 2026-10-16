@@ -83,7 +83,8 @@ static void frontend_defaults(int with_aid)
 static void enable(void)
 {
 	struct iasecc_chipdoc_pkcs15_operation operation;
-	assert(!iasecc_chipdoc_pkcs15_disable_pin_cache(&p15,&native_key,&operation));
+	assert(!iasecc_chipdoc_pkcs15_operation(&p15,&native_key,&operation));
+	p15.opts.use_pin_cache = 0; /* Explicit software routing; production bind sets this. */
 	assert(operation.pin == &native_pin && operation.algorithm_flags == rsa_algorithm.flags && !p15.opts.use_pin_cache);
 	assert(!physical && !reader_locks && !resets); /* No binding/IO/algorithm changes. */
 }
@@ -115,7 +116,9 @@ int main(void)
 	for (int with_aid = 0; with_aid < 2; with_aid++) for (int digest_info = 0; digest_info < 2; digest_info++) {
 		frontend_defaults(with_aid); enable(); authenticate(); memcpy(output,untouched,256); watched_output = output;
 		unsigned long flags = SC_ALGORITHM_RSA_PAD_PKCS1_TYPE_01|(digest_info ? SC_ALGORITHM_RSA_HASH_NONE : SC_ALGORITHM_RSA_HASH_SHA256);
-		assert(sc_pkcs15_compute_signature(&p15,&native_key,flags,digest_info ? input : digest,digest_info ? 51 : 32,output,256,NULL) == 256);
+		int sign_result = sc_pkcs15_compute_signature(&p15,&native_key,flags,digest_info ? input : digest,digest_info ? 51 : 32,output,256,NULL);
+		if (sign_result != 256) fprintf(stderr,"frontend signature result=%d aid=%d digestinfo=%d select=%u mse=%u pso=%u phase=%d\n",sign_result,with_aid,digest_info,frontend_selects,frontend_mses,frontend_psos,test_prv.chipdoc_session.phase);
+		assert(sign_result == 256);
 		assert(frontend_selects == (unsigned int)with_aid && frontend_mses == 1 && frontend_psos == 1 && signing_calls == 3 && physical == 12);
 		assert(frontend_environment.flags == (SC_SEC_ENV_ALG_PRESENT|SC_SEC_ENV_KEY_REF_PRESENT) && frontend_environment.key_ref[0] == 0x91);
 		assert(frontend_environment.algorithm_flags == rsa_algorithm.flags && frontend_environment.key_size_bits == 2048);
@@ -135,7 +138,7 @@ int main(void)
 		case 11: key->path.aid.value[0] ^= 1; break;
 		}
 		struct iasecc_chipdoc_pkcs15_operation operation, empty = {0}; memset(&operation,0xA5,sizeof(operation));
-		assert(iasecc_chipdoc_pkcs15_disable_pin_cache(&p15,&native_key,&operation) < 0 && p15.opts.use_pin_cache == 1);
+		assert(iasecc_chipdoc_pkcs15_operation(&p15,&native_key,&operation) < 0 && p15.opts.use_pin_cache == 1);
 		assert(!memcmp(&operation,&empty,sizeof(operation)) && !physical && !reader_locks);
 		native_pin.content.value = NULL; native_pin.content.len = 0;
 	}

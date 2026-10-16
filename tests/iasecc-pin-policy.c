@@ -84,6 +84,11 @@ int main(void)
 
 	ctx.app_name = "iasecc-pin-policy-regression";
 	card.ctx = &ctx;
+	struct sc_card_driver driver = {.short_name = "iasecc"};
+	struct sc_app_info app = {0};
+	card.driver = &driver; card.app_count = 1; card.app[0] = &app;
+	app.aid.len = IASECC_CHIPDOC_GENERIC_AID_LEN;
+	memcpy(app.aid.value, IASECC_CHIPDOC_GENERIC_AID, app.aid.len);
 	card.type = SC_CARD_TYPE_IASECC_AMOS;
 	card.drv_data = &private_data;
 	card.ops = &operations;
@@ -94,7 +99,7 @@ int main(void)
 	data.pin_type = SC_AC_CHV;
 	data.pin_reference = 1;
 	data.cmd = SC_PIN_CMD_GET_INFO;
-	data.flags = SC_PIN_CMD_STATUS_ONLY;
+	data.flags = IASECC_PIN_STATUS_ONLY;
 	result = iasecc_pin_get_info(&card, &data);
 	if (result != SC_ERROR_NOT_SUPPORTED || status_queries || metadata_queries) {
 		fprintf(stderr, "FAIL uninitialized policy refuses status-only before card commands\n");
@@ -108,7 +113,7 @@ int main(void)
 	} else {
 		puts("PASS driver reads ChipDoc retry counts");
 	}
-	data.flags = SC_PIN_CMD_STATUS_ONLY;
+	data.flags = IASECC_PIN_STATUS_ONLY;
 	status_state = SC_PIN_STATE_LOGGED_IN;
 	status_tries = -1;
 	result = iasecc_pin_get_info(&card, &data);

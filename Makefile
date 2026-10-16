@@ -483,3 +483,7 @@ firmador/auto:
 
 test/auto-firmador-launcher:
 	@python3 tests/auto-firmador-launcher.py
+
+.PHONY: test/iasecc-detection
+test/iasecc-detection:
+	@bash scripts/test-iasecc-detection.sh

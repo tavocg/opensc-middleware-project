@@ -1,7 +1,18 @@
 {
   "base": "fc27ee8768cb882fceb99535dce8b6a966534dcb",
-  "target": "cf0fd80e580a7bfc0490851165436dca98236fbb",
+  "target": "8462f8b9af0aa468b9e31da849560a9448d0760b",
   "files": [
+    {
+      "path": ".gitignore",
+      "added": 1,
+      "deleted": 0,
+      "added_file": false,
+      "scopes": [
+        3,
+        4
+      ],
+      "functions": []
+    },
     {
       "path": "etc/opensc.conf.example.in",
       "added": 11,
@@ -35,30 +46,9 @@
       "functions": []
     },
     {
-      "path": "src/libopensc/api-trace.h",
-      "added": 93,
-      "deleted": 0,
-      "added_file": true,
-      "scopes": [
-        3,
-        4
-      ],
-      "functions": [
-        {
-          "name": "sc_api_metadata_trace",
-          "new": true,
-          "scopes": [
-            3,
-            4
-          ],
-          "edges": []
-        }
-      ]
-    },
-    {
       "path": "src/libopensc/card-iasecc.c",
-      "added": 348,
-      "deleted": 51,
+      "added": 242,
+      "deleted": 50,
       "added_file": false,
       "scopes": [
         3,
@@ -94,33 +84,6 @@
             {
               "file": "src/libopensc/iasecc-chipdoc-init.h",
               "function": "iasecc_chipdoc_initialize",
-              "kind": "call"
-            }
-          ]
-        },
-        {
-          "name": "iasecc_trace_selection_target",
-          "new": true,
-          "scopes": [
-            3
-          ],
-          "edges": []
-        },
-        {
-          "name": "iasecc_select_file",
-          "new": false,
-          "scopes": [
-            3
-          ],
-          "edges": [
-            {
-              "file": "src/libopensc/api-trace.h",
-              "function": "sc_api_metadata_trace",
-              "kind": "call"
-            },
-            {
-              "file": "src/libopensc/card-iasecc.c",
-              "function": "iasecc_trace_selection_target",
               "kind": "call"
             }
           ]
@@ -221,27 +184,8 @@
           ],
           "edges": [
             {
-              "file": "src/libopensc/api-trace.h",
-              "function": "sc_api_metadata_trace",
-              "kind": "call"
-            },
-            {
               "file": "src/libopensc/card-iasecc.c",
               "function": "iasecc_is_chipdoc_signing_key",
-              "kind": "call"
-            }
-          ]
-        },
-        {
-          "name": "iasecc_chipdoc_post_login_probe",
-          "new": true,
-          "scopes": [
-            3
-          ],
-          "edges": [
-            {
-              "file": "src/libopensc/api-trace.h",
-              "function": "sc_api_metadata_trace",
               "kind": "call"
             }
           ]
@@ -252,7 +196,13 @@
           "scopes": [
             3
           ],
-          "edges": []
+          "edges": [
+            {
+              "file": "src/libopensc/iasecc.h",
+              "function": "iasecc_chipdoc_jcop3",
+              "kind": "call"
+            }
+          ]
         },
         {
           "name": "iasecc_chipdoc_select_for_verify",
@@ -261,11 +211,6 @@
             3
           ],
           "edges": [
-            {
-              "file": "src/libopensc/api-trace.h",
-              "function": "sc_api_metadata_trace",
-              "kind": "call"
-            },
             {
               "file": "src/libopensc/card-iasecc.c",
               "function": "iasecc_chipdoc_fresh_verify",
@@ -280,16 +225,6 @@
             3
           ],
           "edges": [
-            {
-              "file": "src/libopensc/api-trace.h",
-              "function": "sc_api_metadata_trace",
-              "kind": "call"
-            },
-            {
-              "file": "src/libopensc/card-iasecc.c",
-              "function": "iasecc_chipdoc_post_login_probe",
-              "kind": "call"
-            },
             {
               "file": "src/libopensc/card-iasecc.c",
               "function": "iasecc_chipdoc_fresh_verify",
@@ -318,8 +253,8 @@
           ],
           "edges": [
             {
-              "file": "src/libopensc/api-trace.h",
-              "function": "sc_api_metadata_trace",
+              "file": "src/libopensc/card-iasecc.c",
+              "function": "iasecc_chipdoc_fresh_verify",
               "kind": "call"
             }
           ]
@@ -339,20 +274,6 @@
             3
           ],
           "edges": []
-        },
-        {
-          "name": "iasecc_compute_signature_at",
-          "new": false,
-          "scopes": [
-            3
-          ],
-          "edges": [
-            {
-              "file": "src/libopensc/api-trace.h",
-              "function": "sc_api_metadata_trace",
-              "kind": "call"
-            }
-          ]
         },
         {
           "name": "iasecc_card_reader_lock_obtained",
@@ -385,45 +306,6 @@
       ]
     },
     {
-      "path": "src/libopensc/card.c",
-      "added": 5,
-      "deleted": 0,
-      "added_file": false,
-      "scopes": [
-        3
-      ],
-      "functions": [
-        {
-          "name": "sc_reset",
-          "new": false,
-          "scopes": [
-            3
-          ],
-          "edges": [
-            {
-              "file": "src/libopensc/api-trace.h",
-              "function": "sc_api_metadata_trace",
-              "kind": "call"
-            }
-          ]
-        },
-        {
-          "name": "sc_lock",
-          "new": false,
-          "scopes": [
-            3
-          ],
-          "edges": [
-            {
-              "file": "src/libopensc/api-trace.h",
-              "function": "sc_api_metadata_trace",
-              "kind": "call"
-            }
-          ]
-        }
-      ]
-    },
-    {
       "path": "src/libopensc/cards.h",
       "added": 1,
       "deleted": 0,
@@ -435,7 +317,7 @@
     },
     {
       "path": "src/libopensc/iasecc-chipdoc-bind.c",
-      "added": 63,
+      "added": 65,
       "deleted": 0,
       "added_file": true,
       "scopes": [
@@ -611,7 +493,7 @@
     },
     {
       "path": "src/libopensc/iasecc-chipdoc-pkcs15.h",
-      "added": 149,
+      "added": 135,
       "deleted": 0,
       "added_file": true,
       "scopes": [
@@ -650,26 +532,12 @@
               "kind": "call"
             }
           ]
-        },
-        {
-          "name": "iasecc_chipdoc_pkcs15_disable_pin_cache",
-          "new": true,
-          "scopes": [
-            4
-          ],
-          "edges": [
-            {
-              "file": "src/libopensc/iasecc-chipdoc-pkcs15.h",
-              "function": "iasecc_chipdoc_pkcs15_operation",
-              "kind": "call"
-            }
-          ]
         }
       ]
     },
     {
       "path": "src/libopensc/iasecc-chipdoc-routing.h",
-      "added": 407,
+      "added": 389,
       "deleted": 0,
       "added_file": true,
       "scopes": [
@@ -1127,26 +995,12 @@
               "kind": "call"
             }
           ]
-        },
-        {
-          "name": "iasecc_chipdoc_routing_last_report",
-          "new": true,
-          "scopes": [
-            4
-          ],
-          "edges": [
-            {
-              "file": "src/libopensc/iasecc-chipdoc-routing.h",
-              "function": "chipdoc_route",
-              "kind": "call"
-            }
-          ]
         }
       ]
     },
     {
       "path": "src/libopensc/iasecc-chipdoc-sm.c",
-      "added": 1346,
+      "added": 1332,
       "deleted": 0,
       "added_file": true,
       "scopes": [
@@ -1212,6 +1066,115 @@
             {
               "file": "src/libopensc/iasecc-chipdoc-sm.c",
               "function": "chipdoc_platform_ready",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "name": "chipdoc_entry",
+          "new": true,
+          "scopes": [
+            4
+          ],
+          "edges": []
+        },
+        {
+          "name": "chipdoc_channel_owned",
+          "new": true,
+          "scopes": [
+            4
+          ],
+          "edges": [
+            {
+              "file": "src/libopensc/card-iasecc.c",
+              "function": "iasecc_chipdoc_invalidate_card",
+              "kind": "call"
+            },
+            {
+              "file": "src/libopensc/iasecc-chipdoc-sm.c",
+              "function": "chipdoc_ready",
+              "kind": "call"
+            },
+            {
+              "file": "src/libopensc/iasecc-chipdoc-transaction.h",
+              "function": "iasecc_chipdoc_transaction_owns",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "name": "chipdoc_channel_live",
+          "new": true,
+          "scopes": [
+            4
+          ],
+          "edges": [
+            {
+              "file": "src/libopensc/iasecc-chipdoc-sm.c",
+              "function": "chipdoc_provider_matches",
+              "kind": "call"
+            },
+            {
+              "file": "src/libopensc/iasecc-chipdoc-sm.c",
+              "function": "chipdoc_crypto_clear",
+              "kind": "reference"
+            }
+          ]
+        },
+        {
+          "name": "chipdoc_signing_ready",
+          "new": true,
+          "scopes": [
+            4
+          ],
+          "edges": [
+            {
+              "file": "src/libopensc/card-iasecc.c",
+              "function": "iasecc_chipdoc_invalidate_card",
+              "kind": "call"
+            },
+            {
+              "file": "src/libopensc/iasecc-chipdoc-sm.c",
+              "function": "chipdoc_channel_owned",
+              "kind": "call"
+            },
+            {
+              "file": "src/libopensc/iasecc-chipdoc-sm.c",
+              "function": "chipdoc_channel_live",
+              "kind": "call"
+            }
+          ]
+        },
+        {
+          "name": "chipdoc_verify_exchange",
+          "new": true,
+          "scopes": [
+            4
+          ],
+          "edges": [
+            {
+              "file": "src/libopensc/card-iasecc.c",
+              "function": "iasecc_chipdoc_invalidate_card",
+              "kind": "call"
+            },
+            {
+              "file": "src/libopensc/iasecc-chipdoc-sm.c",
+              "function": "chipdoc_provider_matches",
+              "kind": "call"
+            },
+            {
+              "file": "src/libopensc/iasecc-chipdoc-transaction.h",
+              "function": "iasecc_chipdoc_transaction_owns",
+              "kind": "call"
+            },
+            {
+              "file": "src/libopensc/jcop4-channel-messages.h",
+              "function": "jcop4_sm_seal_policy_ex",
+              "kind": "call"
+            },
+            {
+              "file": "src/libopensc/jcop4-channel-messages.h",
+              "function": "jcop4_sm_open_report_policy_ex",
               "kind": "call"
             }
           ]
@@ -1569,37 +1532,27 @@
             },
             {
               "file": "src/libopensc/iasecc-chipdoc-sm.c",
-              "function": "chipdoc_provider_matches",
+              "function": "chipdoc_entry",
               "kind": "call"
             },
             {
               "file": "src/libopensc/iasecc-chipdoc-sm.c",
-              "function": "chipdoc_crypto_clear",
-              "kind": "reference"
-            },
-            {
-              "file": "src/libopensc/iasecc-chipdoc-sm.c",
-              "function": "chipdoc_ready",
+              "function": "chipdoc_channel_owned",
               "kind": "call"
             },
             {
-              "file": "src/libopensc/iasecc-chipdoc-transaction.h",
-              "function": "iasecc_chipdoc_transaction_owns",
+              "file": "src/libopensc/iasecc-chipdoc-sm.c",
+              "function": "chipdoc_channel_live",
+              "kind": "call"
+            },
+            {
+              "file": "src/libopensc/iasecc-chipdoc-sm.c",
+              "function": "chipdoc_verify_exchange",
               "kind": "call"
             },
             {
               "file": "src/libopensc/iasecc-chipdoc.h",
               "function": "iasecc_chipdoc_record",
-              "kind": "call"
-            },
-            {
-              "file": "src/libopensc/jcop4-channel-messages.h",
-              "function": "jcop4_sm_seal_policy_ex",
-              "kind": "call"
-            },
-            {
-              "file": "src/libopensc/jcop4-channel-messages.h",
-              "function": "jcop4_sm_open_report_policy_ex",
               "kind": "call"
             }
           ]
@@ -1618,71 +1571,27 @@
             },
             {
               "file": "src/libopensc/iasecc-chipdoc-sm.c",
-              "function": "chipdoc_provider_matches",
+              "function": "chipdoc_entry",
               "kind": "call"
             },
             {
               "file": "src/libopensc/iasecc-chipdoc-sm.c",
-              "function": "chipdoc_crypto_clear",
-              "kind": "reference"
-            },
-            {
-              "file": "src/libopensc/iasecc-chipdoc-sm.c",
-              "function": "chipdoc_ready",
+              "function": "chipdoc_channel_owned",
               "kind": "call"
             },
             {
-              "file": "src/libopensc/iasecc-chipdoc-transaction.h",
-              "function": "iasecc_chipdoc_transaction_owns",
+              "file": "src/libopensc/iasecc-chipdoc-sm.c",
+              "function": "chipdoc_channel_live",
+              "kind": "call"
+            },
+            {
+              "file": "src/libopensc/iasecc-chipdoc-sm.c",
+              "function": "chipdoc_verify_exchange",
               "kind": "call"
             },
             {
               "file": "src/libopensc/iasecc-chipdoc.h",
               "function": "iasecc_chipdoc_record",
-              "kind": "call"
-            },
-            {
-              "file": "src/libopensc/jcop4-channel-messages.h",
-              "function": "jcop4_sm_seal_policy_ex",
-              "kind": "call"
-            },
-            {
-              "file": "src/libopensc/jcop4-channel-messages.h",
-              "function": "jcop4_sm_open_report_policy_ex",
-              "kind": "call"
-            }
-          ]
-        },
-        {
-          "name": "chipdoc_signing_ready",
-          "new": true,
-          "scopes": [
-            4
-          ],
-          "edges": [
-            {
-              "file": "src/libopensc/card-iasecc.c",
-              "function": "iasecc_chipdoc_invalidate_card",
-              "kind": "call"
-            },
-            {
-              "file": "src/libopensc/iasecc-chipdoc-sm.c",
-              "function": "chipdoc_provider_matches",
-              "kind": "call"
-            },
-            {
-              "file": "src/libopensc/iasecc-chipdoc-sm.c",
-              "function": "chipdoc_crypto_clear",
-              "kind": "reference"
-            },
-            {
-              "file": "src/libopensc/iasecc-chipdoc-sm.c",
-              "function": "chipdoc_ready",
-              "kind": "call"
-            },
-            {
-              "file": "src/libopensc/iasecc-chipdoc-transaction.h",
-              "function": "iasecc_chipdoc_transaction_owns",
               "kind": "call"
             }
           ]
@@ -1740,6 +1649,11 @@
             },
             {
               "file": "src/libopensc/iasecc-chipdoc-sm.c",
+              "function": "chipdoc_entry",
+              "kind": "call"
+            },
+            {
+              "file": "src/libopensc/iasecc-chipdoc-sm.c",
               "function": "chipdoc_signing_ready",
               "kind": "call"
             },
@@ -1770,6 +1684,11 @@
             {
               "file": "src/libopensc/card-iasecc.c",
               "function": "iasecc_chipdoc_invalidate_card",
+              "kind": "call"
+            },
+            {
+              "file": "src/libopensc/iasecc-chipdoc-sm.c",
+              "function": "chipdoc_entry",
               "kind": "call"
             },
             {
@@ -1814,6 +1733,11 @@
             {
               "file": "src/libopensc/card-iasecc.c",
               "function": "iasecc_chipdoc_invalidate_card",
+              "kind": "call"
+            },
+            {
+              "file": "src/libopensc/iasecc-chipdoc-sm.c",
+              "function": "chipdoc_entry",
               "kind": "call"
             },
             {
@@ -2106,7 +2030,7 @@
     },
     {
       "path": "src/libopensc/iasecc.h",
-      "added": 52,
+      "added": 56,
       "deleted": 0,
       "added_file": false,
       "scopes": [
@@ -2135,33 +2059,8 @@
       ]
     },
     {
-      "path": "src/libopensc/iso7816.c",
-      "added": 9,
-      "deleted": 0,
-      "added_file": false,
-      "scopes": [
-        3
-      ],
-      "functions": [
-        {
-          "name": "iso7816_pin_cmd",
-          "new": false,
-          "scopes": [
-            3
-          ],
-          "edges": [
-            {
-              "file": "src/libopensc/api-trace.h",
-              "function": "sc_api_metadata_trace",
-              "kind": "call"
-            }
-          ]
-        }
-      ]
-    },
-    {
       "path": "src/libopensc/jcop4-channel-agreement.h",
-      "added": 202,
+      "added": 194,
       "deleted": 0,
       "added_file": true,
       "scopes": [
@@ -2233,34 +2132,6 @@
           ]
         },
         {
-          "name": "jcop4_ca_prepare_key",
-          "new": true,
-          "scopes": [
-            4
-          ],
-          "edges": [
-            {
-              "file": "src/libopensc/jcop4-channel-agreement.h",
-              "function": "jcop4_ca_prepare_key_ex",
-              "kind": "call"
-            }
-          ]
-        },
-        {
-          "name": "jcop4_ca_prepare",
-          "new": true,
-          "scopes": [
-            4
-          ],
-          "edges": [
-            {
-              "file": "src/libopensc/jcop4-channel-agreement.h",
-              "function": "jcop4_ca_prepare_ex",
-              "kind": "call"
-            }
-          ]
-        },
-        {
           "name": "jcop4_ca_build_mse",
           "new": true,
           "scopes": [
@@ -2286,7 +2157,7 @@
     },
     {
       "path": "src/libopensc/jcop4-channel-confirmation.h",
-      "added": 198,
+      "added": 179,
       "deleted": 0,
       "added_file": true,
       "scopes": [
@@ -2346,34 +2217,6 @@
               "kind": "call"
             }
           ]
-        },
-        {
-          "name": "jcop4_ca_confirm_d004_session",
-          "new": true,
-          "scopes": [
-            4
-          ],
-          "edges": [
-            {
-              "file": "src/libopensc/jcop4-channel-confirmation.h",
-              "function": "jcop4_ca_confirm_d004_session_ex",
-              "kind": "call"
-            }
-          ]
-        },
-        {
-          "name": "jcop4_ca_confirm_d004",
-          "new": true,
-          "scopes": [
-            4
-          ],
-          "edges": [
-            {
-              "file": "src/libopensc/jcop4-channel-confirmation.h",
-              "function": "jcop4_ca_confirm_d004_session",
-              "kind": "call"
-            }
-          ]
         }
       ]
     },
@@ -2404,7 +2247,7 @@
     },
     {
       "path": "src/libopensc/jcop4-channel-kdf.h",
-      "added": 68,
+      "added": 60,
       "deleted": 0,
       "added_file": true,
       "scopes": [
@@ -2418,26 +2261,12 @@
             4
           ],
           "edges": []
-        },
-        {
-          "name": "jcop4_ca_aes128_kdf",
-          "new": true,
-          "scopes": [
-            4
-          ],
-          "edges": [
-            {
-              "file": "src/libopensc/jcop4-channel-kdf.h",
-              "function": "jcop4_ca_aes128_kdf_ex",
-              "kind": "call"
-            }
-          ]
         }
       ]
     },
     {
       "path": "src/libopensc/jcop4-channel-messages.h",
-      "added": 406,
+      "added": 279,
       "deleted": 0,
       "added_file": true,
       "scopes": [
@@ -2476,20 +2305,6 @@
             {
               "file": "src/libopensc/jcop4-channel-primitives.h",
               "function": "jcop4_sm_aes128_cbc_ex",
-              "kind": "call"
-            }
-          ]
-        },
-        {
-          "name": "jcop4_sm_ssc_iv",
-          "new": true,
-          "scopes": [
-            4
-          ],
-          "edges": [
-            {
-              "file": "src/libopensc/jcop4-channel-messages.h",
-              "function": "jcop4_sm_ssc_iv_ex",
               "kind": "call"
             }
           ]
@@ -2555,42 +2370,6 @@
           ]
         },
         {
-          "name": "jcop4_sm_seal_policy",
-          "new": true,
-          "scopes": [
-            4
-          ],
-          "edges": [
-            {
-              "file": "src/libopensc/jcop4-channel-messages.h",
-              "function": "jcop4_sm_seal_policy_ex",
-              "kind": "call"
-            }
-          ]
-        },
-        {
-          "name": "jcop4_sm_seal",
-          "new": true,
-          "scopes": [
-            4
-          ],
-          "edges": [
-            {
-              "file": "src/libopensc/jcop4-channel-messages.h",
-              "function": "jcop4_sm_seal_policy",
-              "kind": "call"
-            }
-          ]
-        },
-        {
-          "name": "jcop4_sm_decode_name",
-          "new": true,
-          "scopes": [
-            4
-          ],
-          "edges": []
-        },
-        {
           "name": "jcop4_sm_open_report_policy_ex",
           "new": true,
           "scopes": [
@@ -2638,54 +2417,12 @@
               "kind": "call"
             }
           ]
-        },
-        {
-          "name": "jcop4_sm_open_report_policy",
-          "new": true,
-          "scopes": [
-            4
-          ],
-          "edges": [
-            {
-              "file": "src/libopensc/jcop4-channel-messages.h",
-              "function": "jcop4_sm_open_report_policy_ex",
-              "kind": "call"
-            }
-          ]
-        },
-        {
-          "name": "jcop4_sm_open_report",
-          "new": true,
-          "scopes": [
-            4
-          ],
-          "edges": [
-            {
-              "file": "src/libopensc/jcop4-channel-messages.h",
-              "function": "jcop4_sm_open_report_policy",
-              "kind": "call"
-            }
-          ]
-        },
-        {
-          "name": "jcop4_sm_open",
-          "new": true,
-          "scopes": [
-            4
-          ],
-          "edges": [
-            {
-              "file": "src/libopensc/jcop4-channel-messages.h",
-              "function": "jcop4_sm_open_report",
-              "kind": "call"
-            }
-          ]
         }
       ]
     },
     {
       "path": "src/libopensc/jcop4-channel-primitives.h",
-      "added": 172,
+      "added": 152,
       "deleted": 0,
       "added_file": true,
       "scopes": [
@@ -2745,48 +2482,6 @@
               "kind": "call"
             }
           ]
-        },
-        {
-          "name": "jcop4_sm_aes128_cbc",
-          "new": true,
-          "scopes": [
-            4
-          ],
-          "edges": [
-            {
-              "file": "src/libopensc/jcop4-channel-primitives.h",
-              "function": "jcop4_sm_aes128_cbc_ex",
-              "kind": "call"
-            }
-          ]
-        },
-        {
-          "name": "jcop4_sm_cmac",
-          "new": true,
-          "scopes": [
-            4
-          ],
-          "edges": [
-            {
-              "file": "src/libopensc/jcop4-channel-primitives.h",
-              "function": "jcop4_sm_cmac_ex",
-              "kind": "call"
-            }
-          ]
-        },
-        {
-          "name": "jcop4_sm_verify_mac8",
-          "new": true,
-          "scopes": [
-            4
-          ],
-          "edges": [
-            {
-              "file": "src/libopensc/jcop4-channel-primitives.h",
-              "function": "jcop4_sm_verify_mac8_ex",
-              "kind": "call"
-            }
-          ]
         }
       ]
     },
@@ -2808,16 +2503,6 @@
           "edges": []
         }
       ]
-    },
-    {
-      "path": "src/libopensc/opensc.h",
-      "added": 2,
-      "deleted": 0,
-      "added_file": false,
-      "scopes": [
-        3
-      ],
-      "functions": []
     },
     {
       "path": "src/libopensc/pkcs15-iasecc.c",
@@ -2936,7 +2621,7 @@
     },
     {
       "path": "src/libopensc/pkcs15-pin.c",
-      "added": 53,
+      "added": 45,
       "deleted": 1,
       "added_file": false,
       "scopes": [
@@ -2949,7 +2634,13 @@
           "scopes": [
             3
           ],
-          "edges": []
+          "edges": [
+            {
+              "file": "src/libopensc/iasecc.h",
+              "function": "iasecc_chipdoc_jcop3",
+              "kind": "call"
+            }
+          ]
         },
         {
           "name": "sc_pkcs15_get_pin_info",
@@ -2959,40 +2650,8 @@
           ],
           "edges": [
             {
-              "file": "src/libopensc/api-trace.h",
-              "function": "sc_api_metadata_trace",
-              "kind": "call"
-            },
-            {
               "file": "src/libopensc/pkcs15-pin.c",
               "function": "chipdoc_pin_status_in_place",
-              "kind": "call"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "path": "src/libopensc/pkcs15-sec.c",
-      "added": 9,
-      "deleted": 2,
-      "added_file": false,
-      "scopes": [
-        3,
-        4
-      ],
-      "functions": [
-        {
-          "name": "use_key",
-          "new": false,
-          "scopes": [
-            3,
-            4
-          ],
-          "edges": [
-            {
-              "file": "src/libopensc/api-trace.h",
-              "function": "sc_api_metadata_trace",
               "kind": "call"
             }
           ]
@@ -3036,8 +2695,8 @@
     },
     {
       "path": "src/pkcs11/framework-pkcs15.c",
-      "added": 110,
-      "deleted": 8,
+      "added": 52,
+      "deleted": 7,
       "added_file": false,
       "scopes": [
         3,
@@ -3059,26 +2718,6 @@
             {
               "file": "src/libopensc/iasecc.h",
               "function": "iasecc_chipdoc_jcop3",
-              "kind": "call"
-            }
-          ]
-        },
-        {
-          "name": "C_GetTokenInfo",
-          "new": false,
-          "scopes": [
-            3,
-            4
-          ],
-          "edges": [
-            {
-              "file": "src/libopensc/api-trace.h",
-              "function": "sc_api_metadata_trace",
-              "kind": "call"
-            },
-            {
-              "file": "src/pkcs11/framework-pkcs15.c",
-              "function": "pkcs15_chipdoc_session_state",
               "kind": "call"
             }
           ]
@@ -3112,14 +2751,6 @@
           ]
         },
         {
-          "name": "pkcs15_chipdoc_session_state",
-          "new": true,
-          "scopes": [
-            3
-          ],
-          "edges": []
-        },
-        {
           "name": "slot_get_logged_in_state",
           "new": false,
           "scopes": [
@@ -3128,18 +2759,8 @@
           ],
           "edges": [
             {
-              "file": "src/libopensc/api-trace.h",
-              "function": "sc_api_metadata_trace",
-              "kind": "call"
-            },
-            {
               "file": "src/libopensc/iasecc.h",
               "function": "iasecc_chipdoc_configured",
-              "kind": "call"
-            },
-            {
-              "file": "src/pkcs11/framework-pkcs15.c",
-              "function": "pkcs15_chipdoc_session_state",
               "kind": "call"
             }
           ]
@@ -3168,21 +2789,6 @@
             {
               "file": "src/libopensc/iasecc.h",
               "function": "iasecc_chipdoc_configured",
-              "kind": "call"
-            }
-          ]
-        },
-        {
-          "name": "pkcs15_prkey_sign",
-          "new": false,
-          "scopes": [
-            3,
-            4
-          ],
-          "edges": [
-            {
-              "file": "src/libopensc/api-trace.h",
-              "function": "sc_api_metadata_trace",
               "kind": "call"
             }
           ]
@@ -3229,35 +2835,8 @@
       ]
     },
     {
-      "path": "src/pkcs11/pkcs11-global.c",
-      "added": 3,
-      "deleted": 0,
-      "added_file": false,
-      "scopes": [
-        3,
-        4
-      ],
-      "functions": [
-        {
-          "name": "C_GetSlotInfo",
-          "new": false,
-          "scopes": [
-            3,
-            4
-          ],
-          "edges": [
-            {
-              "file": "src/libopensc/api-trace.h",
-              "function": "sc_api_metadata_trace",
-              "kind": "call"
-            }
-          ]
-        }
-      ]
-    },
-    {
       "path": "src/pkcs11/pkcs11-object.c",
-      "added": 14,
+      "added": 8,
       "deleted": 0,
       "added_file": false,
       "scopes": [
@@ -3265,36 +2844,6 @@
         4
       ],
       "functions": [
-        {
-          "name": "C_GetAttributeValue",
-          "new": false,
-          "scopes": [
-            3,
-            4
-          ],
-          "edges": [
-            {
-              "file": "src/libopensc/api-trace.h",
-              "function": "sc_api_metadata_trace",
-              "kind": "call"
-            }
-          ]
-        },
-        {
-          "name": "C_FindObjectsInit",
-          "new": false,
-          "scopes": [
-            3,
-            4
-          ],
-          "edges": [
-            {
-              "file": "src/libopensc/api-trace.h",
-              "function": "sc_api_metadata_trace",
-              "kind": "call"
-            }
-          ]
-        },
         {
           "name": "C_SignInit",
           "new": false,
@@ -3304,58 +2853,8 @@
           ],
           "edges": [
             {
-              "file": "src/libopensc/api-trace.h",
-              "function": "sc_api_metadata_trace",
-              "kind": "call"
-            },
-            {
               "file": "src/libopensc/iasecc.h",
               "function": "iasecc_chipdoc_configured",
-              "kind": "call"
-            }
-          ]
-        },
-        {
-          "name": "C_Sign",
-          "new": false,
-          "scopes": [
-            3,
-            4
-          ],
-          "edges": [
-            {
-              "file": "src/libopensc/api-trace.h",
-              "function": "sc_api_metadata_trace",
-              "kind": "call"
-            }
-          ]
-        },
-        {
-          "name": "C_SignUpdate",
-          "new": false,
-          "scopes": [
-            3,
-            4
-          ],
-          "edges": [
-            {
-              "file": "src/libopensc/api-trace.h",
-              "function": "sc_api_metadata_trace",
-              "kind": "call"
-            }
-          ]
-        },
-        {
-          "name": "C_SignFinal",
-          "new": false,
-          "scopes": [
-            3,
-            4
-          ],
-          "edges": [
-            {
-              "file": "src/libopensc/api-trace.h",
-              "function": "sc_api_metadata_trace",
               "kind": "call"
             }
           ]
@@ -3364,7 +2863,7 @@
     },
     {
       "path": "src/pkcs11/pkcs11-session.c",
-      "added": 27,
+      "added": 21,
       "deleted": 3,
       "added_file": false,
       "scopes": [
@@ -3372,21 +2871,6 @@
         4
       ],
       "functions": [
-        {
-          "name": "C_OpenSession",
-          "new": false,
-          "scopes": [
-            3,
-            4
-          ],
-          "edges": [
-            {
-              "file": "src/libopensc/api-trace.h",
-              "function": "sc_api_metadata_trace",
-              "kind": "call"
-            }
-          ]
-        },
         {
           "name": "sc_pkcs11_close_session",
           "new": false,
@@ -3403,51 +2887,6 @@
           ]
         },
         {
-          "name": "C_CloseSession",
-          "new": false,
-          "scopes": [
-            3,
-            4
-          ],
-          "edges": [
-            {
-              "file": "src/libopensc/api-trace.h",
-              "function": "sc_api_metadata_trace",
-              "kind": "call"
-            }
-          ]
-        },
-        {
-          "name": "C_CloseAllSessions",
-          "new": false,
-          "scopes": [
-            3,
-            4
-          ],
-          "edges": [
-            {
-              "file": "src/libopensc/api-trace.h",
-              "function": "sc_api_metadata_trace",
-              "kind": "call"
-            }
-          ]
-        },
-        {
-          "name": "C_GetSessionInfo",
-          "new": false,
-          "scopes": [
-            3,
-            4
-          ],
-          "edges": [
-            {
-              "file": "src/libopensc/api-trace.h",
-              "function": "sc_api_metadata_trace",
-              "kind": "call"
-            }
-          ]
-        },
-        {
           "name": "C_Login",
           "new": false,
           "scopes": [
@@ -3456,28 +2895,8 @@
           ],
           "edges": [
             {
-              "file": "src/libopensc/api-trace.h",
-              "function": "sc_api_metadata_trace",
-              "kind": "call"
-            },
-            {
               "file": "src/libopensc/iasecc.h",
               "function": "iasecc_chipdoc_configured",
-              "kind": "call"
-            }
-          ]
-        },
-        {
-          "name": "C_Logout",
-          "new": false,
-          "scopes": [
-            3,
-            4
-          ],
-          "edges": [
-            {
-              "file": "src/libopensc/api-trace.h",
-              "function": "sc_api_metadata_trace",
               "kind": "call"
             }
           ]
@@ -3485,19 +2904,8 @@
       ]
     },
     {
-      "path": "src/pkcs11/sc-pkcs11.h",
-      "added": 1,
-      "deleted": 0,
-      "added_file": false,
-      "scopes": [
-        3,
-        4
-      ],
-      "functions": []
-    },
-    {
       "path": "src/pkcs11/slot.c",
-      "added": 9,
+      "added": 6,
       "deleted": 3,
       "added_file": false,
       "scopes": [
@@ -3512,28 +2920,7 @@
             3,
             4
           ],
-          "edges": [
-            {
-              "file": "src/libopensc/api-trace.h",
-              "function": "sc_api_metadata_trace",
-              "kind": "call"
-            }
-          ]
-        },
-        {
-          "name": "slot_token_removed",
-          "new": false,
-          "scopes": [
-            3,
-            4
-          ],
-          "edges": [
-            {
-              "file": "src/libopensc/api-trace.h",
-              "function": "sc_api_metadata_trace",
-              "kind": "call"
-            }
-          ]
+          "edges": []
         }
       ]
     },
@@ -4513,25 +3900,6 @@
               "kind": "reference"
             }
           ]
-        }
-      ]
-    },
-    {
-      "path": "src/tools/pkcs11-tool.c",
-      "added": 5,
-      "deleted": 0,
-      "added_file": false,
-      "scopes": [
-        3
-      ],
-      "functions": [
-        {
-          "name": "sign_data",
-          "new": false,
-          "scopes": [
-            3
-          ],
-          "edges": []
         }
       ]
     }
